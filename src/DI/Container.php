@@ -31,7 +31,7 @@ class Container
      * @param string $class
      * @param mixed ...$parameters
      */
-    public function __construct(string $class, ...$parameters)
+    public function __construct(string $class, $parameters = [])
     {
         $this->class = $class;
         $this->constructorParams = $parameters;
@@ -56,8 +56,8 @@ class Container
     public function __call($method, $params)
     {
         return $this->resolveDependency === true ?
-            $this->__withInjection($this->class, $method, $params) :
-            $this->__withoutInjection($this->class, $method, $params);
+            $this->__withInjection($this->class, $method, $params[0]) :
+            $this->__withoutInjection($this->class, $method, $params[0]);
     }
 
     /**
@@ -71,7 +71,7 @@ class Container
     private function __withoutInjection($class, $method, $params): mixed
     {
         return call_user_func_array(
-            ($method === 'closure' && $class instanceof Closure) ?
+            ($method === 'handle' && $class instanceof Closure) ?
                 $class :
                 [new $this->class(), $method],
             $params
@@ -95,24 +95,20 @@ class Container
                 $this->__resolveParameters(new ReflectionFunction($class), $this->constructorParams)
             );
         }
+        return $this->__callClass(new ReflectionClass($class), $method, $params);
+    }
 
-        $classAsset = new ReflectionClass($class);
-        $constructor = $classAsset->getConstructor();
-        if (is_null($constructor)) {
-            return call_user_func_array(
-                [new $class(), $method],
-                $this->__resolveParameters(new ReflectionMethod($class, $method), $params)
-            );
-        }
+    private function __callClass($class, $method, $params)
+    {
+        $constructor = $class->getConstructor();
         return call_user_func_array(
             [
-                call_user_func_array(
-                    [$classAsset, 'newInstance'],
-                    $this->__resolveParameters($constructor, $this->constructorParams)
-                ),
+                is_null($constructor) ?
+                    $class->newInstance() :
+                    $class->newInstanceArgs($this->__resolveParameters($constructor, $this->constructorParams)),
                 $method
             ],
-            $this->__resolveParameters(new ReflectionMethod($class, $method), $params)
+            $this->__resolveParameters(new ReflectionMethod($class->getName(), $method), $params)
         );
     }
 
@@ -133,10 +129,10 @@ class Container
             $instance = $this->__resolveDependency($parameter, $parameters, $skipValue);
             if ($instance !== $skipValue) {
                 $instanceCount++;
-                array_splice($parameters, $key, 0, [$instance]);
+                $parameters[$parameter->getName()] = $instance;
             } elseif (!isset($values[$key - $instanceCount]) &&
                 $parameter->isDefaultValueAvailable()) {
-                array_splice($parameters, $key, 0, [$parameter->getDefaultValue()]);
+                $parameters[$parameter->getName()] = $parameter->getDefaultValue();
             }
         }
         return $parameters;
@@ -157,6 +153,7 @@ class Container
             ? new ReflectionClass($parameter->getType()->getName())
             : null;
         if ($class && !$this->__alreadyExist($class->name, $parameters)) {
+            $constants = $class->getConstants();
             return $parameter->isDefaultValueAvailable()
                 ? null
                 : $class->newInstance();
