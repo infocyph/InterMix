@@ -98,7 +98,16 @@ class Container
         return $this->__callClass(new ReflectionClass($class), $method, $params);
     }
 
-    private function __callClass($class, $method, $params)
+    /**
+     * Call Class & Method
+     *
+     * @param $class
+     * @param $method
+     * @param $params
+     * @return mixed
+     * @throws ReflectionException
+     */
+    private function __callClass($class, $method, $params): mixed
     {
         $constructor = $class->getConstructor();
         return call_user_func_array(
@@ -125,17 +134,20 @@ class Container
         $instanceCount = 0;
         $values = array_values($parameters);
         $skipValue = new stdClass();
+        $processed = [];
         foreach ($reflector->getParameters() as $key => $parameter) {
             $instance = $this->__resolveDependency($parameter, $parameters, $skipValue);
             if ($instance !== $skipValue) {
                 $instanceCount++;
-                $parameters[$parameter->getName()] = $instance;
+                $processed[$parameter->getName()] = $instance;
             } elseif (!isset($values[$key - $instanceCount]) &&
                 $parameter->isDefaultValueAvailable()) {
-                $parameters[$parameter->getName()] = $parameter->getDefaultValue();
+                $processed[$parameter->getName()] = $parameter->getDefaultValue();
+            } else {
+                $processed[$parameter->getName()] = $parameters[$parameter->getName()];
             }
         }
-        return $parameters;
+        return $processed;
     }
 
     /**
@@ -153,10 +165,23 @@ class Container
             ? new ReflectionClass($parameter->getType()->getName())
             : null;
         if ($class && !$this->__alreadyExist($class->name, $parameters)) {
-            $constants = $class->getConstants();
-            return $parameter->isDefaultValueAvailable()
-                ? null
-                : $class->newInstance();
+            $constructor = $class->getConstructor();
+            $constants = $class->getConstant('callOn');
+            if (!$parameter->isDefaultValueAvailable()) {
+                $instance = is_null($constructor) ?
+                    $class->newInstance() :
+                    $class->newInstanceArgs($this->__resolveParameters($constructor, []));
+                if ($constants && $class->hasMethod($constants)) {
+                    $method = new ReflectionMethod($class->getName(), $constants);
+                    $method->setAccessible(true);
+                    $method->invokeArgs(
+                        $instance,
+                        $this->__resolveParameters($method, [])
+                    );
+                }
+                return $instance;
+            }
+            return null;
         }
         return $skipValue;
     }
