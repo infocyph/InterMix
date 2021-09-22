@@ -1,2 +1,2 @@
 # OOF
-Object Oriented Factory!
+Object-Oriented Factory!
