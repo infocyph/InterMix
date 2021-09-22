@@ -24,7 +24,6 @@ final class Container
     private static string $class;
     private array $constructorParams;
     private array $functionReference = [];
-    private array $resolvedClasses;
     private stdClass $stdClass;
 
     /**
@@ -56,17 +55,7 @@ final class Container
     }
 
     /**
-     * Get list of methods resolved
-     *
-     * @return array
-     */
-    public function __getResolvedClasses(): array
-    {
-        return array_keys($this->resolvedClasses);
-    }
-
-    /**
-     * Class Method Resolver
+     * Class Method Resolver with dependency Injection
      *
      * @param $method
      * @param $parameters
@@ -175,14 +164,9 @@ final class Container
      */
     private function __resolveParameters(ReflectionFunctionAbstract $reflector, array $suppliedParameters, string $type = 'method'): array
     {
-        $id = $reflector->class . '::' . $reflector->getShortName();
-        if (isset($this->resolvedClasses[$id])) {
-            throw new Exception("Infinite Recursion Loop!");
-        }
-        $this->resolvedClasses[$id] = $reflector->class;
-        $values = array_values($suppliedParameters);
         $processed = [];
         $instanceCount = 0;
+        $values = array_values($suppliedParameters);
         foreach ($reflector->getParameters() as $key => $classParameter) {
             $instance = $this->__resolveDependency($classParameter, $suppliedParameters, $type);
             switch (true) {
@@ -213,23 +197,23 @@ final class Container
     {
         $class = $this->resolveClassOrParameter($parameter, $type);
         if ($class && !$this->__alreadyExist($class->name, $parameters)) {
+            if ($parameter->isDefaultValueAvailable()) {
+                return null;
+            }
             $constructor = $class->getConstructor();
             $constants = $class->getConstant('callOn');
-            if (!$parameter->isDefaultValueAvailable()) {
-                $instance = is_null($constructor) ?
-                    $class->newInstance() :
-                    $class->newInstanceArgs($this->__resolveParameters($constructor, [], 'constructor'));
-                if ($constants && $class->hasMethod($constants)) {
-                    $method = new ReflectionMethod($class->getName(), $constants);
-                    $method->setAccessible(true);
-                    $method->invokeArgs(
-                        $instance,
-                        $this->__resolveParameters($method, [])
-                    );
-                }
-                return $instance;
+            $instance = is_null($constructor) ?
+                $class->newInstance() :
+                $class->newInstanceArgs($this->__resolveParameters($constructor, [], 'constructor'));
+            if ($constants && $class->hasMethod($constants)) {
+                $method = new ReflectionMethod($class->getName(), $constants);
+                $method->setAccessible(true);
+                $method->invokeArgs(
+                    $instance,
+                    $this->__resolveParameters($method, [])
+                );
             }
-            return null;
+            return $instance;
         }
         return $this->stdClass;
     }
@@ -246,13 +230,8 @@ final class Container
         return match (true) {
             $parameter->getType() && !$parameter->getType()->isBuiltin() => new ReflectionClass($parameter->getType()->getName()),
 
-            $type === 'constructor' &&
-            isset($this->functionReference['constructor'][$parameter]) &&
-            class_exists($this->functionReference['constructor'][$parameter], false) => new ReflectionClass($this->functionReference['constructor'][$parameter]),
-
-            $type === 'method' &&
-            isset($this->functionReference['method'][$parameter]) &&
-            class_exists($this->functionReference['method'][$parameter], false) => new ReflectionClass($this->functionReference['method'][$parameter]),
+            isset($this->functionReference[$type][$parameter]) &&
+            class_exists($this->functionReference[$type][$parameter], false) => new ReflectionClass($this->functionReference[$type][$parameter]),
 
             isset($this->functionReference['common'][$parameter]) &&
             class_exists($this->functionReference['common'][$parameter], false) => new ReflectionClass($this->functionReference['common'][$parameter]),
