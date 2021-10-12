@@ -21,7 +21,7 @@ trait Requirement
      * @return self
      * @throws Exception
      */
-    final public static function instance(array $constraints = null): Requirement
+    final public static function instance(array $constraints = null): static
     {
         self::__checkRequirements($constraints);
 

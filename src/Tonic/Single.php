@@ -20,7 +20,7 @@ trait Single
      * @return self
      * @throws Exception
      */
-    final public static function instance(array $constraints = null): Single
+    final public static function instance(array $constraints = null): static
     {
         self::__checkRequirements($constraints);
 

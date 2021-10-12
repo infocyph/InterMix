@@ -12,6 +12,7 @@ use ReflectionException;
 use ReflectionFunction;
 use ReflectionFunctionAbstract;
 use ReflectionMethod;
+use ReflectionNamedType;
 use ReflectionParameter;
 use stdClass;
 
@@ -30,12 +31,12 @@ final class Container
      * Set Class & Constructor parameters.
      *
      * @param string $class
-     * @param ...$parameters
+     * @param $parameters
      */
-    public function __construct(string $class, ...$parameters)
+    public function __construct(string $class, $parameters)
     {
         self::$class = $class;
-        $this->constructorParams = $this->__flatten($parameters);
+        $this->constructorParams = $parameters;
         $this->stdClass = new stdClass();
     }
 
@@ -77,6 +78,21 @@ final class Container
     public static function __callStatic($method, $parameters)
     {
         return self::__withoutInjection(self::$class, $method, self::__flatten($parameters));
+    }
+
+    /**
+     * Set resource for parameter to Class Method resolver
+     *
+     * @param string $parameterType
+     * @param array $parameterResource
+     * @throws Exception
+     */
+    public function __registerAlias(string $parameterType, array $parameterResource)
+    {
+        if (!in_array($parameterType, ['constructor', 'method', 'common'])) {
+            throw new Exception("$parameterType is invalid!");
+        }
+        $this->functionReference[$parameterType] = $parameterResource;
     }
 
     /**
@@ -146,7 +162,13 @@ final class Container
             [
                 is_null($constructor) ?
                     $class->newInstance() :
-                    $class->newInstanceArgs($this->__resolveParameters($constructor, $this->constructorParams, 'constructor')),
+                    call_user_func_array(
+                        [
+                            $class,
+                            'newInstance'
+                        ],
+                        $this->__resolveParameters($constructor, $this->constructorParams)
+                    ),
                 $method
             ],
             $this->__resolveParameters(new ReflectionMethod($class->getName(), $method), $params)
@@ -168,18 +190,19 @@ final class Container
         $instanceCount = 0;
         $values = array_values($suppliedParameters);
         foreach ($reflector->getParameters() as $key => $classParameter) {
-            $instance = $this->__resolveDependency($classParameter, $suppliedParameters, $type);
-            switch (true) {
-                case $instance !== $this->stdClass:
-                    $instanceCount++;
-                    $processed[$classParameter->getName()] = $instance;
-                    break;
-                case !isset($values[$key - $instanceCount]) && $classParameter->isDefaultValueAvailable():
-                    $processed[$classParameter->getName()] = $classParameter->getDefaultValue();
-                    break;
-                default:
-                    $processed[$classParameter->getName()] = $suppliedParameters[$classParameter->getName()];
-            }
+            $instance = $this->__resolveDependency($classParameter, $processed, $type);
+            $processed[$classParameter->getName()] = match (true) {
+                $instance !== $this->stdClass
+                => [$instance, $instanceCount++][0],
+
+                !isset($values[$key - $instanceCount]) && $classParameter->isDefaultValueAvailable()
+                => $classParameter->getDefaultValue(),
+
+                default => $suppliedParameters[$classParameter->getName()] ??
+                    throw new Exception(
+                        "Resolution failed: '{$classParameter->getName()}' of $reflector->class::{$reflector->getShortName()}()!"
+                    )
+            };
         }
         return $processed;
     }
@@ -195,7 +218,7 @@ final class Container
      */
     private function __resolveDependency(ReflectionParameter $parameter, $parameters, $type): ?object
     {
-        $class = $this->resolveClassOrParameter($parameter, $type);
+        $class = $this->resolveClass($parameter, $type);
         if ($class && !$this->__alreadyExist($class->name, $parameters)) {
             if ($parameter->isDefaultValueAvailable()) {
                 return null;
@@ -219,25 +242,61 @@ final class Container
     }
 
     /**
+     * Check & get Reflection instance
      *
      * @param $parameter
-     * @param $type
+     * @param $methodType
      * @return ReflectionClass|null
      * @throws ReflectionException
      */
-    private function resolveClassOrParameter($parameter, $type): ?ReflectionClass
+    private function resolveClass($parameter, $methodType): ?ReflectionClass
     {
+        $type = $parameter->getType();
+        $name = $parameter->getName();
         return match (true) {
-            $parameter->getType() && !$parameter->getType()->isBuiltin() => new ReflectionClass($parameter->getType()->getName()),
+            $type instanceof ReflectionNamedType && !$type->isBuiltin()
+            => new ReflectionClass($this->getClassName($parameter, $type->getName())),
 
-            isset($this->functionReference[$type][$parameter]) &&
-            class_exists($this->functionReference[$type][$parameter], false) => new ReflectionClass($this->functionReference[$type][$parameter]),
+            $this->check($methodType, $name)
+            => new ReflectionClass($this->functionReference[$methodType][$name]),
 
-            isset($this->functionReference['common'][$parameter]) &&
-            class_exists($this->functionReference['common'][$parameter], false) => new ReflectionClass($this->functionReference['common'][$parameter]),
+            $this->check('common', $name)
+            => new ReflectionClass($this->functionReference['common'][$name]),
 
-            default => null,
+            default => null
         };
+    }
+
+    /**
+     * Check if specific class exists
+     *
+     * @param $type
+     * @param $name
+     * @return bool
+     */
+    private function check($type, $name): bool
+    {
+        return isset($this->functionReference[$type][$name]) &&
+            class_exists($this->functionReference[$type][$name], false);
+    }
+
+    /**
+     * Get the class name for given type
+     *
+     * @param $parameter
+     * @param $name
+     * @return string
+     */
+    private function getClassName($parameter, $name): string
+    {
+        if (!is_null($class = $parameter->getDeclaringClass())) {
+            return match (true) {
+                $name === 'self' => $class->getName(),
+                $name === 'parent' && ($parent = $class->getParentClass()) => $parent->getName(),
+                default => $name
+            };
+        }
+        return $name;
     }
 
     /**

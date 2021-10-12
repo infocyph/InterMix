@@ -11,7 +11,7 @@ trait Multi
 
     use Common;
 
-    private static $instances = [];
+    private static array $instances = [];
 
     /**
      * Creates a new instance of a class flagged with a key.
@@ -21,7 +21,7 @@ trait Multi
      * @return self
      * @throws Exception
      */
-    final public static function instance(string $key,array $constraints = null): Multi
+    final public static function instance(string $key,array $constraints = null): static
     {
         self::__checkRequirements($constraints);
 

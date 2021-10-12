@@ -11,9 +11,9 @@ trait Limit
 
     use Common;
 
-    private static $instances = [];
+    private static array $instances = [];
 
-    public static $limit = 2;
+    public static int $limit = 2;
 
     /**
      * Creates a new instance of a class flagged with a key.
@@ -23,7 +23,7 @@ trait Limit
      * @return self
      * @throws Exception
      */
-    final public static function instance(string $key,array $constraints = null): Limit
+    final public static function instance(string $key,array $constraints = null): static
     {
         self::__checkRequirements($constraints);
 
