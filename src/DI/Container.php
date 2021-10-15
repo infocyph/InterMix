@@ -23,9 +23,13 @@ use stdClass;
 final class Container
 {
     private static string $class;
+    private string $dynClass;
     private array $constructorParams;
     private array $functionReference = [];
     private stdClass $stdClass;
+    private array $classOrClosure;
+    private bool $enableParameterPassing = false;
+    private bool $allowPrivateMethodAccess = false;
 
     /**
      * Set Class & Constructor parameters.
@@ -40,19 +44,62 @@ final class Container
         $this->stdClass = new stdClass();
     }
 
+    public function registerClass(string $classOrClosure, array $parameters = [])
+    {
+        $this->classOrClosure[$classOrClosure]['constructor'] = [
+            'on' => '__constructor',
+            'params' => $parameters
+        ];
+        return $this;
+    }
+
+    public function registerMethod(string $class, $method, array $parameters = [])
+    {
+        if (!isset($this->classOrClosure[$class])) {
+            throw new Exception("Class not registered!");
+        }
+        if ($class instanceof Closure) {
+            throw new Exception("Method not allowed in Closure!");
+        }
+        $this->classOrClosure[$class]['method'] = [
+            'on' => $method,
+            'params' => $parameters
+        ];
+        return $this;
+    }
+
+    public function enableParameterPass()
+    {
+        $this->enableParameterPassing = true;
+        return $this;
+    }
+
+    public function allowPrivateMethodAccess()
+    {
+        $this->allowPrivateMethodAccess = true;
+        return $this;
+    }
+
     /**
      * Set resource for parameter to Class Method resolver
      *
      * @param string $parameterType
      * @param array $parameterResource
+     * @return Container
      * @throws Exception
      */
-    public function __set(string $parameterType, array $parameterResource)
+    public function registerAlias(string $parameterType, array $parameterResource)
     {
         if (!in_array($parameterType, ['constructor', 'method', 'common'])) {
             throw new Exception("$parameterType is invalid!");
         }
         $this->functionReference[$parameterType] = $parameterResource;
+        return $this;
+    }
+
+    public function call($class, $method)
+    {
+
     }
 
     /**
@@ -69,33 +116,6 @@ final class Container
     }
 
     /**
-     * Class Method Resolver
-     *
-     * @param $method
-     * @param $parameters
-     * @return mixed
-     */
-    public static function __callStatic($method, $parameters)
-    {
-        return self::__withoutInjection(self::$class, $method, self::__flatten($parameters));
-    }
-
-    /**
-     * Set resource for parameter to Class Method resolver
-     *
-     * @param string $parameterType
-     * @param array $parameterResource
-     * @throws Exception
-     */
-    public function __registerAlias(string $parameterType, array $parameterResource)
-    {
-        if (!in_array($parameterType, ['constructor', 'method', 'common'])) {
-            throw new Exception("$parameterType is invalid!");
-        }
-        $this->functionReference[$parameterType] = $parameterResource;
-    }
-
-    /**
      * Flatten array
      *
      * @param $array
@@ -105,24 +125,6 @@ final class Container
     {
         return iterator_to_array(
             new RecursiveIteratorIterator(new RecursiveArrayIterator($array))
-        );
-    }
-
-    /**
-     * Resolve without Injection
-     *
-     * @param $class
-     * @param $method
-     * @param $params
-     * @return mixed
-     */
-    private static function __withoutInjection($class, $method, $params): mixed
-    {
-        return call_user_func_array(
-            ($method === 'handle' && $class instanceof Closure) ?
-                $class :
-                [new self::$class(), $method],
-            $params
         );
     }
 
@@ -140,38 +142,26 @@ final class Container
         if ($method === 'closure' && $class instanceof Closure) {
             return call_user_func_array(
                 $class,
-                $this->__resolveParameters(new ReflectionFunction($class), $this->constructorParams, 'constructor')
+                $this->resolveParameters(new ReflectionFunction($class), $this->constructorParams, 'constructor')
             );
         }
-        return $this->__callClass(new ReflectionClass($class), $method, $params);
+        return $this->getResolvedObject($class, $method, $this->constructorParams, $params);
     }
 
     /**
-     * Call Class & Method
-     *
      * @param $class
      * @param $method
-     * @param $params
+     * @param $constructorParams
+     * @param $methodParams
      * @return mixed
      * @throws ReflectionException
      */
-    private function __callClass($class, $method, $params): mixed
+    private function getResolvedObject($class, $method, $constructorParams, $methodParams)
     {
-        $constructor = $class->getConstructor();
-        return call_user_func_array(
-            [
-                is_null($constructor) ?
-                    $class->newInstance() :
-                    call_user_func_array(
-                        [
-                            $class,
-                            'newInstance'
-                        ],
-                        $this->__resolveParameters($constructor, $this->constructorParams)
-                    ),
-                $method
-            ],
-            $this->__resolveParameters(new ReflectionMethod($class->getName(), $method), $params)
+        return $this->invokeMethod(
+            $this->getClassInstance(new ReflectionClass($class), $constructorParams),
+            $method,
+            $methodParams
         );
     }
 
@@ -184,13 +174,13 @@ final class Container
      * @return array
      * @throws ReflectionException|Exception
      */
-    private function __resolveParameters(ReflectionFunctionAbstract $reflector, array $suppliedParameters, string $type = 'method'): array
+    private function resolveParameters(ReflectionFunctionAbstract $reflector, array $suppliedParameters, string $type): array
     {
         $processed = [];
         $instanceCount = 0;
         $values = array_values($suppliedParameters);
         foreach ($reflector->getParameters() as $key => $classParameter) {
-            $instance = $this->__resolveDependency($classParameter, $processed, $type);
+            $instance = $this->resolveDependency($classParameter, $processed, $type);
             $processed[$classParameter->getName()] = match (true) {
                 $instance !== $this->stdClass
                 => [$instance, $instanceCount++][0],
@@ -216,29 +206,61 @@ final class Container
      * @return object|null
      * @throws ReflectionException
      */
-    private function __resolveDependency(ReflectionParameter $parameter, $parameters, $type): ?object
+    private function resolveDependency(ReflectionParameter $parameter, $parameters, $type): ?object
     {
         $class = $this->resolveClass($parameter, $type);
-        if ($class && !$this->__alreadyExist($class->name, $parameters)) {
+        if ($class && !$this->alreadyExist($class->name, $parameters)) {
             if ($parameter->isDefaultValueAvailable()) {
                 return null;
             }
-            $constructor = $class->getConstructor();
-            $constants = $class->getConstant('callOn');
-            $instance = is_null($constructor) ?
-                $class->newInstance() :
-                $class->newInstanceArgs($this->__resolveParameters($constructor, [], 'constructor'));
-            if ($constants && $class->hasMethod($constants)) {
-                $method = new ReflectionMethod($class->getName(), $constants);
-                $method->setAccessible(true);
-                $method->invokeArgs(
-                    $instance,
-                    $this->__resolveParameters($method, [])
-                );
-            }
-            return $instance;
+            return $this->getResolvedInstance($class);
         }
         return $this->stdClass;
+    }
+
+    private function getResolvedInstance($class)
+    {
+        $method = $this->classOrClosure[$class->getName()]['method']['on'] ?? $class->getConstant('callOn');
+        $instance = $this->getClassInstance($class, $this->classOrClosure[$class->getName()]['constructor']['params'] ?? []);
+        if ($method && $class->hasMethod($method)) {
+            $this->invokeMethod($instance, $method, $this->classOrClosure[$class->getName()]['method']['params'] ?? []);
+        }
+        return $instance;
+    }
+
+    /**
+     * @param $class
+     * @param array $params
+     * @return mixed
+     * @throws ReflectionException
+     */
+    private function getClassInstance($class, array $params = []): mixed
+    {
+        $constructor = $class->getConstructor();
+        return is_null($constructor) ?
+            $class->newInstance() :
+            $class->newInstanceArgs(
+                $this->resolveParameters($constructor, $params, 'constructor')
+            );
+    }
+
+    /**
+     * @param $classInstance
+     * @param $method
+     * @param array $params
+     * @return mixed
+     * @throws ReflectionException
+     */
+    private function invokeMethod($classInstance, $method, array $params = []): mixed
+    {
+        $method = new ReflectionMethod(get_class($classInstance), $method);
+        if ($this->allowPrivateMethodAccess) {
+            $method->setAccessible(true);
+        }
+        return $method->invokeArgs(
+            $classInstance,
+            $this->resolveParameters($method, $params, 'method')
+        );
     }
 
     /**
@@ -306,7 +328,7 @@ final class Container
      * @param array $parameters
      * @return bool
      */
-    private function __alreadyExist($class, array $parameters): bool
+    private function alreadyExist($class, array $parameters): bool
     {
         foreach ($parameters as $value) {
             if ($value instanceof $class) {
