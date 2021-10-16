@@ -5,6 +5,7 @@ namespace AbmmHasan\OOF\DI;
 
 use Closure;
 use Exception;
+use JetBrains\PhpStorm\ArrayShape;
 use RecursiveArrayIterator;
 use RecursiveIteratorIterator;
 use ReflectionClass;
@@ -22,42 +23,69 @@ use stdClass;
  */
 final class Container
 {
-    private static string $class;
-    private string $dynClass;
-    private array $constructorParams;
     private array $functionReference = [];
     private stdClass $stdClass;
     private array $classOrClosure;
     private bool $enableParameterPassing = false;
     private bool $allowPrivateMethodAccess = false;
+    private static Container $instance;
 
     /**
-     * Set Class & Constructor parameters.
-     *
-     * @param string $class
-     * @param $parameters
+     * Class Constructor
      */
-    public function __construct(string $class, $parameters)
+    public function __construct()
     {
-        self::$class = $class;
-        $this->constructorParams = $parameters;
         $this->stdClass = new stdClass();
     }
 
-    public function registerClass(string $classOrClosure, array $parameters = [])
+    /**
+     * @param $method
+     * @param $parameter
+     * @return mixed
+     * @throws Exception
+     */
+    public static function __callStatic($method, $parameter)
+    {
+        if (!in_array($method, ['registerClass', 'registerMethod'])) {
+            throw new Exception("Invalid method call!");
+        }
+        self::$instance = self::$instance ?? new self();
+        return (self::$instance)->$method(...$parameter);
+    }
+
+    /**
+     * @param $response_type
+     * @param $parameters
+     * @return mixed
+     */
+    public function __call($response_type, $parameters)
+    {
+        return (self::$instance)->$response_type(...$parameters);
+    }
+
+    /**
+     * @param string $classOrClosure
+     * @param array $parameters
+     * @return Container
+     */
+    private function registerClass(string $classOrClosure, array $parameters = []): Container
     {
         $this->classOrClosure[$classOrClosure]['constructor'] = [
             'on' => '__constructor',
             'params' => $parameters
         ];
-        return $this;
+        return self::$instance;
     }
 
-    public function registerMethod(string $class, $method, array $parameters = [])
+    /**
+     * @param string $class
+     * @param $method
+     * @param array $parameters
+     * @return Container
+     * @throws Exception
+     */
+    private function registerMethod(string $class, $method, array $parameters = []): Container
     {
-        if (!isset($this->classOrClosure[$class])) {
-            throw new Exception("Class not registered!");
-        }
         if ($class instanceof Closure) {
             throw new Exception("Method not allowed in Closure!");
         }
@@ -65,19 +93,25 @@ final class Container
             'on' => $method,
             'params' => $parameters
         ];
-        return $this;
+        return self::$instance;
     }
 
-    public function enableParameterPass()
+    /**
+     * @return Container
+     */
+    private function enableParameterPass(): Container
     {
         $this->enableParameterPassing = true;
-        return $this;
+        return self::$instance;
     }
 
-    public function allowPrivateMethodAccess()
+    /**
+     * @return Container
+     */
+    private function allowPrivateMethodAccess(): Container
     {
         $this->allowPrivateMethodAccess = true;
-        return $this;
+        return self::$instance;
     }
 
     /**
@@ -88,81 +122,50 @@ final class Container
      * @return Container
      * @throws Exception
      */
-    public function registerAlias(string $parameterType, array $parameterResource)
+    private function registerAlias(string $parameterType, array $parameterResource): Container
     {
         if (!in_array($parameterType, ['constructor', 'method', 'common'])) {
             throw new Exception("$parameterType is invalid!");
         }
         $this->functionReference[$parameterType] = $parameterResource;
-        return $this;
-    }
-
-    public function call($class, $method)
-    {
-
+        return self::$instance;
     }
 
     /**
-     * Class Method Resolver with dependency Injection
-     *
-     * @param $method
-     * @param $parameters
-     * @return mixed
-     * @throws ReflectionException
-     */
-    public function __call($method, $parameters)
-    {
-        return $this->__withInjection(self::$class, $method, $this->__flatten($parameters));
-    }
-
-    /**
-     * Flatten array
-     *
-     * @param $array
-     * @return array
-     */
-    private static function __flatten($array): array
-    {
-        return iterator_to_array(
-            new RecursiveIteratorIterator(new RecursiveArrayIterator($array))
-        );
-    }
-
-    /**
-     * Resolve with injection
-     *
      * @param $class
-     * @param $method
-     * @param $params
      * @return mixed
      * @throws ReflectionException
      */
-    private function __withInjection($class, $method, $params): mixed
+    private function call($class): mixed
     {
-        if ($method === 'closure' && $class instanceof Closure) {
-            return call_user_func_array(
-                $class,
-                $this->resolveParameters(new ReflectionFunction($class), $this->constructorParams, 'constructor')
-            );
+        if ($class instanceof Closure) {
+//            ToDo:Closure
+//            return call_user_func_array(
+//                $class,
+//                $this->resolveParameters(new ReflectionFunction($class), $this->constructorParams, 'constructor')
+//            );
         }
-        return $this->getResolvedObject($class, $method, $this->constructorParams, $params);
+        return $this->getResolvedInstance(new ReflectionClass($class))['returned'];
     }
 
     /**
      * @param $class
-     * @param $method
-     * @param $constructorParams
-     * @param $methodParams
-     * @return mixed
+     * @return array
      * @throws ReflectionException
      */
-    private function getResolvedObject($class, $method, $constructorParams, $methodParams)
+    #[ArrayShape(['instance' => "mixed", 'returned' => "mixed|null"])]
+    private function getResolvedInstance($class): array
     {
-        return $this->invokeMethod(
-            $this->getClassInstance(new ReflectionClass($class), $constructorParams),
-            $method,
-            $methodParams
-        );
+        $method = $this->classOrClosure[$class->getName()]['method']['on'] ?? $class->getConstant('callOn');
+        $instance = $this->getClassInstance($class, $this->classOrClosure[$class->getName()]['constructor']['params'] ?? []);
+        $return = null;
+        if ($method && $class->hasMethod($method)) {
+            $return = $this->invokeMethod($instance, $method, $this->classOrClosure[$class->getName()]['method']['params'] ?? []);
+        }
+        return [
+            'instance' => $instance,
+            'returned' => $return
+        ];
     }
 
     /**
@@ -213,19 +216,9 @@ final class Container
             if ($parameter->isDefaultValueAvailable()) {
                 return null;
             }
-            return $this->getResolvedInstance($class);
+            return $this->getResolvedInstance($class)['instance'];
         }
         return $this->stdClass;
-    }
-
-    private function getResolvedInstance($class)
-    {
-        $method = $this->classOrClosure[$class->getName()]['method']['on'] ?? $class->getConstant('callOn');
-        $instance = $this->getClassInstance($class, $this->classOrClosure[$class->getName()]['constructor']['params'] ?? []);
-        if ($method && $class->hasMethod($method)) {
-            $this->invokeMethod($instance, $method, $this->classOrClosure[$class->getName()]['method']['params'] ?? []);
-        }
-        return $instance;
     }
 
     /**
