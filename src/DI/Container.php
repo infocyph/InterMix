@@ -5,9 +5,6 @@ namespace AbmmHasan\OOF\DI;
 
 use Closure;
 use Exception;
-use JetBrains\PhpStorm\ArrayShape;
-use RecursiveArrayIterator;
-use RecursiveIteratorIterator;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionFunction;
@@ -25,10 +22,10 @@ final class Container
 {
     private array $functionReference = [];
     private stdClass $stdClass;
-    private array $classOrClosure;
-    private bool $enableParameterPassing = false;
+    private array $classResource;
     private bool $allowPrivateMethodAccess = false;
     private static Container $instance;
+    private array $closureResource;
 
     /**
      * Class Constructor
@@ -46,7 +43,7 @@ final class Container
      */
     public static function __callStatic($method, $parameter)
     {
-        if (!in_array($method, ['registerClass', 'registerMethod'])) {
+        if (!in_array($method, ['registerClass', 'registerMethod', 'registerClosure'])) {
             throw new Exception("Invalid method call!");
         }
         self::$instance = self::$instance ?? new self();
@@ -54,23 +51,53 @@ final class Container
     }
 
     /**
-     * @param $response_type
+     * @param $method
      * @param $parameters
      * @return mixed
+     * @throws Exception
      */
-    public function __call($response_type, $parameters)
+    public function __call($method, $parameters)
     {
-        return (self::$instance)->$response_type(...$parameters);
+        if (!in_array($method, [
+            'enableParameterPass',
+            'allowPrivateMethodAccess',
+            'registerAlias',
+            'getInstance',
+            'callClosure',
+            'call'
+        ])) {
+            throw new Exception("Invalid method call!");
+        }
+        return (self::$instance)->$method(...$parameters);
     }
 
     /**
-     * @param string $classOrClosure
+     * Register Closure
+     *
+     * @param $closureAlias
+     * @param Closure $function
      * @param array $parameters
      * @return Container
      */
-    private function registerClass(string $classOrClosure, array $parameters = []): Container
+    private function registerClosure($closureAlias, Closure $function, array $parameters = []): Container
     {
-        $this->classOrClosure[$classOrClosure]['constructor'] = [
+        $this->closureResource[$closureAlias] = [
+            'on' => $function,
+            'params' => $parameters
+        ];
+        return self::$instance;
+    }
+
+    /**
+     * Register Class with constructor Parameter
+     *
+     * @param string $class
+     * @param array $parameters
+     * @return Container
+     */
+    private function registerClass(string $class, array $parameters = []): Container
+    {
+        $this->classResource[$class]['constructor'] = [
             'on' => '__constructor',
             'params' => $parameters
         ];
@@ -78,18 +105,20 @@ final class Container
     }
 
     /**
+     * Register Class and Method with Parameter (method parameter)
+     *
      * @param string $class
-     * @param $method
+     * @param string $method
      * @param array $parameters
      * @return Container
      * @throws Exception
      */
-    private function registerMethod(string $class, $method, array $parameters = []): Container
+    private function registerMethod(string $class, string $method, array $parameters = []): Container
     {
         if ($class instanceof Closure) {
             throw new Exception("Method not allowed in Closure!");
         }
-        $this->classOrClosure[$class]['method'] = [
+        $this->classResource[$class]['method'] = [
             'on' => $method,
             'params' => $parameters
         ];
@@ -97,15 +126,8 @@ final class Container
     }
 
     /**
-     * @return Container
-     */
-    private function enableParameterPass(): Container
-    {
-        $this->enableParameterPassing = true;
-        return self::$instance;
-    }
-
-    /**
+     * Allow access to private methods
+     *
      * @return Container
      */
     private function allowPrivateMethodAccess(): Container
@@ -132,35 +154,63 @@ final class Container
     }
 
     /**
+     * Get Class Instance
+     *
+     * @param $class
+     * @return mixed
+     * @throws ReflectionException
+     */
+    private function getInstance($class): mixed
+    {
+        return $this->getClassInstance($class, $this->classResource[$class->getName()]['constructor']['params'] ?? []);
+    }
+
+    /**
+     * Call the desired closure
+     *
+     * @param $closureAlias
+     * @return mixed
+     * @throws ReflectionException
+     */
+    private function callClosure($closureAlias): mixed
+    {
+        return call_user_func_array(
+            $this->closureResource[$closureAlias]['on'],
+            $this->resolveParameters(
+                new ReflectionFunction($this->closureResource[$closureAlias]['on']),
+                $this->closureResource[$closureAlias]['params'],
+                'constructor'
+            )
+        );
+
+    }
+
+    /**
+     * Call the desired class
+     *
      * @param $class
      * @return mixed
      * @throws ReflectionException
      */
     private function call($class): mixed
     {
-        if ($class instanceof Closure) {
-//            ToDo:Closure
-//            return call_user_func_array(
-//                $class,
-//                $this->resolveParameters(new ReflectionFunction($class), $this->constructorParams, 'constructor')
-//            );
-        }
         return $this->getResolvedInstance(new ReflectionClass($class))['returned'];
     }
 
     /**
+     * Get resolved Instance & method
+     *
      * @param $class
      * @return array
      * @throws ReflectionException
      */
-    #[ArrayShape(['instance' => "mixed", 'returned' => "mixed|null"])]
     private function getResolvedInstance($class): array
     {
-        $method = $this->classOrClosure[$class->getName()]['method']['on'] ?? $class->getConstant('callOn');
-        $instance = $this->getClassInstance($class, $this->classOrClosure[$class->getName()]['constructor']['params'] ?? []);
+        $method = $this->classResource[$class->getName()]['method']['on'] ?? $class->getConstant('callOn');
+        $instance = $this->getInstance($class);
         $return = null;
         if ($method && $class->hasMethod($method)) {
-            $return = $this->invokeMethod($instance, $method, $this->classOrClosure[$class->getName()]['method']['params'] ?? []);
+            $return = $this->invokeMethod($instance, $method, $this->classResource[$class->getName()]['method']['params'] ?? []);
         }
         return [
             'instance' => $instance,
@@ -222,6 +272,8 @@ final class Container
     }
 
     /**
+     * Get class Instance
+     *
      * @param $class
      * @param array $params
      * @return mixed
@@ -238,6 +290,8 @@ final class Container
     }
 
     /**
+     * Get Method return
+     *
      * @param $classInstance
      * @param $method
      * @param array $params
