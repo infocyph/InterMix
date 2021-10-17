@@ -63,7 +63,7 @@ trait MacroMix
     }
 
     /**
-     * Dynamically handle calls to the class.
+     * Dynamically handle static calls to the class.
      *
      * @param string $method
      * @param array $parameters
@@ -72,23 +72,11 @@ trait MacroMix
      */
     public static function __callStatic(string $method, array $parameters)
     {
-        if (!static::__hasMacro($method)) {
-            throw new Exception(sprintf(
-                'Method %s::%s does not exist.', static::class, $method
-            ));
-        }
-
-        $macro = static::$macros[$method];
-
-        if ($macro instanceof Closure) {
-            $macro = $macro->bindTo(null, static::class);
-        }
-
-        return $macro(...$parameters);
+        return self::__process(null, $method, $parameters);
     }
 
     /**
-     * Dynamically handle calls to the class.
+     * Dynamically handle non-static calls to the class.
      *
      * @param string $method
      * @param array $parameters
@@ -96,6 +84,20 @@ trait MacroMix
      * @throws Exception
      */
     public function __call(string $method, array $parameters)
+    {
+        return self::__process($this, $method, $parameters);
+    }
+
+    /**
+     * Process calls
+     *
+     * @param $bind
+     * @param string $method
+     * @param array $parameters
+     * @return mixed
+     * @throws Exception
+     */
+    private static function __process($bind, string $method, array $parameters): mixed
     {
         if (!static::__hasMacro($method)) {
             throw new Exception(sprintf(
@@ -106,7 +108,7 @@ trait MacroMix
         $macro = static::$macros[$method];
 
         if ($macro instanceof Closure) {
-            $macro = $macro->bindTo($this, static::class);
+            $macro = $macro->bindTo($bind, static::class);
         }
 
         return $macro(...$parameters);

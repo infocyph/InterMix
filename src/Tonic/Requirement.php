@@ -11,7 +11,7 @@ trait Requirement
 
     use Common;
 
-    private static $instance;
+    private static $__instance;
 
     /**
      * Creates a new instance of a singleton class if the
@@ -23,12 +23,12 @@ trait Requirement
      */
     final public static function instance(array $constraints = null): static
     {
-        self::__checkRequirements($constraints);
+        static::__checkRequirements($constraints);
 
-        if (!self::$instance) {
-            self::$instance = new self;
+        if (!static::$__instance) {
+            static::$__instance = new static;
         }
 
-        return self::$instance;
+        return static::$__instance;
     }
 }

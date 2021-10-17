@@ -11,7 +11,7 @@ trait Limit
 
     use Common;
 
-    private static array $instances = [];
+    private static array $__instances = [];
 
     public static int $limit = 2;
 
@@ -25,14 +25,14 @@ trait Limit
      */
     final public static function instance(string $key,array $constraints = null): static
     {
-        self::__checkRequirements($constraints);
+        static::__checkRequirements($constraints);
 
-        if (!array_key_exists($key, self::$instances)) {
-            if (count(self::$instances) < self::$limit) {
-                self::$instances[$key] = new self;
+        if (!array_key_exists($key, static::$__instances)) {
+            if (count(static::$__instances) < static::$limit) {
+                static::$__instances[$key] = new static;
             }
         }
-        return self::$instances[$key];
+        return static::$__instances[$key];
     }
 
     /**
@@ -43,6 +43,6 @@ trait Limit
      */
     public function setLimit(int $number)
     {
-        self::$limit = $number;
+        static::$limit = $number;
     }
 }
