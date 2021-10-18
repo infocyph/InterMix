@@ -6,26 +6,46 @@ trait Overload
 {
     private array $data = [];
 
-    public function __set($name, $value)
+    /**
+     * Gets an item.
+     *
+     * @param string $key Key
+     * @return mixed Value
+     */
+    public function __get(string $key)
     {
-        $this->data[$name] ??= $value;
+        return $this->data[$key] ?? null;
     }
 
-    public function __get($name)
+    /**
+     * Set an item.
+     *
+     * @param string $key Key
+     * @param mixed $value Value
+     */
+    public function __set(string $key, mixed $value)
     {
-        if (isset($this->data[$name]) || array_key_exists($name, $this->data)) {
-            return $this->data[$name];
-        }
-        return null;
+        $this->data[$key] = $value;
     }
 
-    public function __isset($name)
+    /**
+     * Checks if an item exists.
+     *
+     * @param string $key Key
+     * @return bool Item status
+     */
+    public function __isset(string $key)
     {
-        return isset($this->data[$name]);
+        return isset($this->data[$key]) || array_key_exists($key, $this->data);
     }
 
-    public function __unset($name)
+    /**
+     * Removes an item.
+     *
+     * @param string $key Key
+     */
+    public function __unset(string $key)
     {
-        unset($this->data[$name]);
+        unset($this->data[$key]);
     }
 }
