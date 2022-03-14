@@ -17,9 +17,9 @@ use stdClass;
 /**
  * Dependency Injector
  *
- * @method Container registerClass(string $class, array $parameters = []) Register Class with constructor Parameter
- * @method Container registerMethod(string $class, string $method, array $parameters = []) Register Class and Method (with method parameter)
- * @method Container registerClosure($closureAlias, Closure $function, array $parameters = []) Register Closure
+ * @method static Container registerClass(string $class, array $parameters = []) Register Class with constructor Parameter
+ * @method static Container registerMethod(string $class, string $method, array $parameters = []) Register Class and Method (with method parameter)
+ * @method static Container registerClosure($closureAlias, Closure $function, array $parameters = []) Register Closure
  * @method Container allowPrivateMethodAccess() Allow access to private methods
  * @method Container registerAlias(string $parameterType, array $parameterResource) Set resource for parameter to Class Method resolver
  * @method mixed getInstance($class) Get Class Instance
@@ -116,13 +116,13 @@ final class Container
     /**
      * Register Class and Method with Parameter (method parameter)
      *
-     * @param string $class
+     * @param string|Closure $class
      * @param string $method
      * @param array $parameters
      * @return Container
      * @throws Exception
      */
-    private function __registerMethod(string $class, string $method, array $parameters = []): Container
+    private function __registerMethod(string|Closure $class, string $method, array $parameters = []): Container
     {
         if ($class instanceof Closure) {
             throw new Exception("Method not allowed in Closure!");
