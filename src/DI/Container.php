@@ -116,17 +116,13 @@ final class Container
     /**
      * Register Class and Method with Parameter (method parameter)
      *
-     * @param string|Closure $class
+     * @param string $class
      * @param string $method
      * @param array $parameters
      * @return Container
-     * @throws Exception
      */
-    private function __registerMethod(string|Closure $class, string $method, array $parameters = []): Container
+    private function __registerMethod(string $class, string $method, array $parameters = []): Container
     {
-        if ($class instanceof Closure) {
-            throw new Exception("Method not allowed in Closure!");
-        }
         $this->classResource[$class]['method'] = [
             'on' => $method,
             'params' => $parameters
@@ -388,7 +384,7 @@ final class Container
     {
         foreach ($parameters as $value) {
             if ($value instanceof $class) {
-                return !is_null($value);
+                return true;
             }
         }
         return false;
