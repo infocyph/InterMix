@@ -11,7 +11,7 @@ trait Multi
 
     use Common;
 
-    private static array $__instances = [];
+    protected static array $__instances = [];
 
     /**
      * Creates a new instance of a class flagged with a key.

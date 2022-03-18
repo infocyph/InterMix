@@ -81,10 +81,10 @@ final class Arrject  implements ArrayAccess, Iterator, Countable, JsonSerializab
     /**
      * Get the collection of items as JSON.
      *
-     * @param string|int $options
+     * @param int $options
      * @return string
      */
-    public function toJson(string|int $options = 0): string
+    public function toJson(int $options = 0): string
     {
         return json_encode($this->jsonSerialize(), $options);
     }
@@ -133,10 +133,10 @@ final class Arrject  implements ArrayAccess, Iterator, Countable, JsonSerializab
     /**
      * Gets an item at the offset.
      *
-     * @param string $offset Offset
+     * @param mixed $offset Offset
      * @return mixed Value
      */
-    public function offsetGet($offset): mixed
+    public function offsetGet(mixed $offset): mixed
     {
         return $this->data[$offset] ?? null;
     }
@@ -144,10 +144,10 @@ final class Arrject  implements ArrayAccess, Iterator, Countable, JsonSerializab
     /**
      * Sets an item at the offset.
      *
-     * @param string $offset Offset
+     * @param mixed $offset Offset
      * @param mixed $value Value
      */
-    public function offsetSet($offset, $value)
+    public function offsetSet(mixed $offset, mixed $value)
     {
         if (is_null($offset)) {
             $this->data[] = $value;

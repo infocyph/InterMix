@@ -11,9 +11,9 @@ trait Limit
 
     use Common;
 
-    private static array $__instances = [];
+    protected static array $__instances = [];
 
-    public static int $limit = 2;
+    protected static int $limit = 2;
 
     /**
      * Creates a new instance of a class flagged with a key.

@@ -11,7 +11,7 @@ trait Requirement
 
     use Common;
 
-    private static $__instance;
+    protected static $__instance;
 
     /**
      * Creates a new instance of a singleton class if the
