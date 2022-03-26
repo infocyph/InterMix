@@ -174,13 +174,12 @@ final class Container
      */
     private function __callClosure(string $closureAlias): mixed
     {
-        return call_user_func_array(
-            $this->closureResource[$closureAlias]['on'],
-            $this->resolveParameters(
-                new ReflectionFunction($this->closureResource[$closureAlias]['on']),
-                $this->closureResource[$closureAlias]['params'],
-                'constructor'
-            )
+        return $this->closureResource[$closureAlias]['on'](
+            ...$this->resolveParameters(
+            new ReflectionFunction($this->closureResource[$closureAlias]['on']),
+            $this->closureResource[$closureAlias]['params'],
+            'constructor'
+        )
         );
 
     }
@@ -219,10 +218,17 @@ final class Container
     private function getResolvedInstance($class): array
     {
         $method = $this->classResource[$class->getName()]['method']['on'] ?? $class->getConstant('callOn') ?? false;
-        $instance = $this->getClassInstance($class, $this->classResource[$class->getName()]['constructor']['params'] ?? []);
+        $instance = $this->getClassInstance(
+            $class,
+            $this->classResource[$class->getName()]['constructor']['params'] ?? []
+        );
         $return = null;
         if ($method && $class->hasMethod($method)) {
-            $return = $this->invokeMethod($instance, $method, $this->classResource[$class->getName()]['method']['params'] ?? []);
+            $return = $this->invokeMethod(
+                $instance,
+                $method,
+                $this->classResource[$class->getName()]['method']['params'] ?? []
+            );
         }
         return [
             'instance' => $instance,
@@ -246,7 +252,10 @@ final class Container
         $instanceCount = 0;
         $values = array_values($suppliedParameters);
         foreach ($reflector->getParameters() as $key => $classParameter) {
-            $instance = $this->resolveDependency($reflector->class, $classParameter, $processed, $type);
+            $instance = $this->resolveDependency(
+                $reflector->class ?? $reflector->getName(),
+                $classParameter, $processed, $type
+            );
             $processed[$classParameter->getName()] = match (true) {
                 $instance !== $this->stdClass
                 => [$instance, $instanceCount++][0],
@@ -301,7 +310,7 @@ final class Container
     private function getClassInstance($class, array $params = []): mixed
     {
         $constructor = $class->getConstructor();
-        return is_null($constructor) ?
+        return $constructor === null ?
             $class->newInstance() :
             $class->newInstanceArgs(
                 $this->resolveParameters($constructor, $params, 'constructor')
@@ -377,7 +386,7 @@ final class Container
      */
     private function getClassName($parameter, $name): string
     {
-        if (!is_null($class = $parameter->getDeclaringClass())) {
+        if (($class = $parameter->getDeclaringClass()) !== null) {
             return match (true) {
                 $name === 'self' => $class->getName(),
                 $name === 'parent' && ($parent = $class->getParentClass()) => $parent->getName(),

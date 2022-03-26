@@ -149,7 +149,7 @@ final class Arrject  implements ArrayAccess, Iterator, Countable, JsonSerializab
      */
     public function offsetSet(mixed $offset, mixed $value)
     {
-        if (is_null($offset)) {
+        if ($offset === null) {
             $this->data[] = $value;
         } else {
             $this->data[$offset] = $value;
