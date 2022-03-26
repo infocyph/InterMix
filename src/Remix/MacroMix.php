@@ -63,7 +63,7 @@ trait MacroMix
     }
 
     /**
-     * Dynamically handle static calls to the class.
+     * Handle static calls to the class.
      *
      * @param string $method
      * @param array $parameters
@@ -76,7 +76,7 @@ trait MacroMix
     }
 
     /**
-     * Dynamically handle non-static calls to the class.
+     * Handle non-static calls to the class.
      *
      * @param string $method
      * @param array $parameters

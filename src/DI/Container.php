@@ -51,7 +51,11 @@ final class Container
      */
     public static function __callStatic($method, $parameter)
     {
-        if (!in_array($method, ['registerClass', 'registerMethod', 'registerClosure'])) {
+        if (!in_array($method, [
+            'registerClass',
+            'registerMethod',
+            'registerClosure'
+        ])) {
             throw new Exception("Invalid method call!");
         }
         self::$instance = self::$instance ?? new self();
@@ -68,7 +72,9 @@ final class Container
     public function __call($method, $parameters)
     {
         if (!in_array($method, [
+            'registerClass',
             'registerMethod',
+            'registerClosure',
             'allowPrivateMethodAccess',
             'registerParamToClass',
             'getInstance',
@@ -84,12 +90,12 @@ final class Container
     /**
      * Register Closure
      *
-     * @param $closureAlias
+     * @param string $closureAlias
      * @param Closure $function
      * @param array $parameters
      * @return Container
      */
-    private function __registerClosure($closureAlias, Closure $function, array $parameters = []): Container
+    private function __registerClosure(string $closureAlias, Closure $function, array $parameters = []): Container
     {
         $this->closureResource[$closureAlias] = [
             'on' => $function,
@@ -162,11 +168,11 @@ final class Container
     /**
      * Call the desired closure
      *
-     * @param $closureAlias
+     * @param string $closureAlias
      * @return mixed
      * @throws ReflectionException
      */
-    private function __callClosure($closureAlias): mixed
+    private function __callClosure(string $closureAlias): mixed
     {
         return call_user_func_array(
             $this->closureResource[$closureAlias]['on'],
@@ -240,7 +246,7 @@ final class Container
         $instanceCount = 0;
         $values = array_values($suppliedParameters);
         foreach ($reflector->getParameters() as $key => $classParameter) {
-            $instance = $this->resolveDependency($classParameter, $processed, $type);
+            $instance = $this->resolveDependency($reflector->class, $classParameter, $processed, $type);
             $processed[$classParameter->getName()] = match (true) {
                 $instance !== $this->stdClass
                 => [$instance, $instanceCount++][0],
@@ -260,20 +266,26 @@ final class Container
     /**
      * Resolve parameter dependency
      *
+     * @param string $callee
      * @param ReflectionParameter $parameter
      * @param $parameters
      * @param $type
      * @return object|null
-     * @throws ReflectionException
+     * @throws ReflectionException|Exception
      */
-    private function resolveDependency(ReflectionParameter $parameter, $parameters, $type): ?object
+    private function resolveDependency(string $callee, ReflectionParameter $parameter, $parameters, $type): ?object
     {
         $class = $this->resolveClass($parameter, $type);
-        if ($class && !$this->alreadyExist($class->name, $parameters)) {
-            if ($parameter->isDefaultValueAvailable()) {
-                return null;
+        if ($class) {
+            if ($callee === $class->name) {
+                throw new Exception("Looped call detected: $callee");
             }
-            return $this->getResolvedInstance($class)['instance'];
+            if (!$this->alreadyExist($class->name, $parameters)) {
+                if ($parameter->isDefaultValueAvailable()) {
+                    return null;
+                }
+                return $this->getResolvedInstance($class)['instance'];
+            }
         }
         return $this->stdClass;
     }
@@ -344,7 +356,7 @@ final class Container
     }
 
     /**
-     * Check if specific class exists
+     * Check if specified class exists
      *
      * @param $type
      * @param $name
