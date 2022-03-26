@@ -1,5 +1,6 @@
 # OOF
 
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/9a86e42fa8984897ad76865e43481194)](https://app.codacy.com/gh/abmmhasan/OOF?utm_source=github.com&utm_medium=referral&utm_content=abmmhasan/OOF&utm_campaign=Badge_Grade_Settings)
 [![Scrutinizer Code Quality](https://img.shields.io/scrutinizer/quality/g/abmmhasan/oof)](https://scrutinizer-ci.com/g/abmmhasan/oof)
 ![Libraries.io dependency status for GitHub repo](https://img.shields.io/librariesio/github/abmmhasan/oof)
 ![Packagist Downloads](https://img.shields.io/packagist/dt/abmmhasan/oof)
