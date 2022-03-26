@@ -21,7 +21,7 @@ use stdClass;
  * @method static Container registerMethod(string $class, string $method, array $parameters = []) Register Class and Method (with method parameter)
  * @method static Container registerClosure($closureAlias, Closure $function, array $parameters = []) Register Closure
  * @method Container allowPrivateMethodAccess() Allow access to private methods
- * @method Container registerAlias(string $parameterType, array $parameterResource) Set resource for parameter to Class Method resolver
+ * @method Container registerParamToClass(string $parameterType, array $parameterResource) Set resource for parameter to Class Method resolver
  * @method mixed getInstance($class) Get Class Instance
  * @method mixed callClosure($closureAlias) Call the desired closure
  * @method mixed callMethod($class) Call the desired class (along with the method)
@@ -68,8 +68,9 @@ final class Container
     public function __call($method, $parameters)
     {
         if (!in_array($method, [
+            'registerMethod',
             'allowPrivateMethodAccess',
-            'registerAlias',
+            'registerParamToClass',
             'getInstance',
             'callClosure',
             'callMethod'
@@ -131,17 +132,6 @@ final class Container
     }
 
     /**
-     * Allow access to private methods
-     *
-     * @return Container
-     */
-    private function __allowPrivateMethodAccess(): Container
-    {
-        $this->allowPrivateMethodAccess = true;
-        return self::$instance;
-    }
-
-    /**
      * Set resource for parameter to Class Method resolver
      *
      * @param string $parameterType
@@ -149,7 +139,7 @@ final class Container
      * @return Container
      * @throws Exception
      */
-    private function __registerAlias(string $parameterType, array $parameterResource): Container
+    private function __registerParamToClass(string $parameterType, array $parameterResource): Container
     {
         if (!in_array($parameterType, ['constructor', 'method', 'common'])) {
             throw new Exception("$parameterType is invalid!");
@@ -159,15 +149,14 @@ final class Container
     }
 
     /**
-     * Get Class Instance
+     * Allow access to private methods
      *
-     * @param $class
-     * @return mixed
-     * @throws ReflectionException
+     * @return Container
      */
-    private function __getInstance($class): mixed
+    private function __allowPrivateMethodAccess(): Container
     {
-        return $this->getClassInstance($class, $this->classResource[$class->getName()]['constructor']['params'] ?? []);
+        $this->allowPrivateMethodAccess = true;
+        return self::$instance;
     }
 
     /**
@@ -203,6 +192,18 @@ final class Container
     }
 
     /**
+     * Get Class Instance
+     *
+     * @param $class
+     * @return mixed
+     * @throws ReflectionException
+     */
+    private function __getInstance($class): mixed
+    {
+        return $this->getResolvedInstance(new ReflectionClass($class))['instance'];
+    }
+
+    /**
      * Get resolved Instance & method
      *
      * @param $class
@@ -211,15 +212,16 @@ final class Container
      */
     private function getResolvedInstance($class): array
     {
-        $method = $this->classResource[$class->getName()]['method']['on'] ?? $class->getConstant('callOn');
-        $instance = $this->__getInstance($class);
+        $method = $this->classResource[$class->getName()]['method']['on'] ?? $class->getConstant('callOn') ?? false;
+        $instance = $this->getClassInstance($class, $this->classResource[$class->getName()]['constructor']['params'] ?? []);
         $return = null;
         if ($method && $class->hasMethod($method)) {
             $return = $this->invokeMethod($instance, $method, $this->classResource[$class->getName()]['method']['params'] ?? []);
         }
         return [
             'instance' => $instance,
-            'returned' => $return
+            'returned' => $return,
+            'reflection' => $class
         ];
     }
 
@@ -351,7 +353,7 @@ final class Container
     private function check($type, $name): bool
     {
         return isset($this->functionReference[$type][$name]) &&
-            class_exists($this->functionReference[$type][$name], false);
+            class_exists($this->functionReference[$type][$name], true);
     }
 
     /**
