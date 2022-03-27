@@ -20,20 +20,22 @@ use stdClass;
  * @method static Container registerClass(string $class, array $parameters = []) Register Class with constructor Parameter
  * @method static Container registerMethod(string $class, string $method, array $parameters = []) Register Class and Method (with method parameter)
  * @method static Container registerClosure($closureAlias, Closure $function, array $parameters = []) Register Closure
- * @method Container allowPrivateMethodAccess() Allow access to private methods
- * @method Container registerParamToClass(string $parameterType, array $parameterResource) Set resource for parameter to Class Method resolver
- * @method mixed getInstance($class) Get Class Instance
- * @method mixed callClosure($closureAlias) Call the desired closure
- * @method mixed callMethod($class) Call the desired class (along with the method)
+ * @method static Container registerParamToClass(string $parameterType, array $parameterResource) Set resource for parameter to Class Method resolver
+ * @method static Container allowPrivateMethodAccess() Allow access to private methods
+ * @method static Container disableNamedParameter() Allow access to private methods
+ * @method static mixed getInstance($class) Get Class Instance
+ * @method static mixed callClosure($closureAlias) Call the desired closure
+ * @method static mixed callMethod($class) Call the desired class (along with the method)
  */
 final class Container
 {
     private array $functionReference = [];
     private stdClass $stdClass;
-    private array $classResource;
+    private array $classResource = [];
     private bool $allowPrivateMethodAccess = false;
     private static Container $instance;
-    private array $closureResource;
+    private array $closureResource = [];
+    private string $resolveParameters = 'resolveAssociativeParameters';
 
     /**
      * Class Constructor
@@ -45,22 +47,14 @@ final class Container
 
     /**
      * @param $method
-     * @param $parameter
+     * @param $parameters
      * @return mixed
      * @throws Exception
      */
-    public static function __callStatic($method, $parameter)
+    public static function __callStatic($method, $parameters)
     {
-        if (!in_array($method, [
-            'registerClass',
-            'registerMethod',
-            'registerClosure'
-        ])) {
-            throw new Exception("Invalid method call!");
-        }
         self::$instance = self::$instance ?? new self();
-        $method = "__$method";
-        return (self::$instance)->$method(...$parameter);
+        return (self::$instance)->callSelf($method, $parameters);
     }
 
     /**
@@ -71,12 +65,24 @@ final class Container
      */
     public function __call($method, $parameters)
     {
+        return (self::$instance)->callSelf($method, $parameters);
+    }
+
+    /**
+     * @param $method
+     * @param $parameters
+     * @return mixed
+     * @throws Exception
+     */
+    private function callSelf($method, $parameters): mixed
+    {
         if (!in_array($method, [
             'registerClass',
             'registerMethod',
             'registerClosure',
             'allowPrivateMethodAccess',
             'registerParamToClass',
+            'disableNamedParameter',
             'getInstance',
             'callClosure',
             'callMethod'
@@ -166,32 +172,50 @@ final class Container
     }
 
     /**
+     * Disable resolution by name (instead it will resolve in sequence)
+     *
+     * @return Container
+     */
+    private function __disableNamedParameter(): Container
+    {
+        $this->resolveParameters = 'resolveNonAssociativeParameters';
+        return self::$instance;
+    }
+
+    /**
      * Call the desired closure
      *
-     * @param string $closureAlias
+     * @param string|Closure $closureAlias
      * @return mixed
-     * @throws ReflectionException
+     * @throws ReflectionException|Exception
      */
-    private function __callClosure(string $closureAlias): mixed
+    private function __callClosure(string|Closure $closureAlias): mixed
     {
-        return $this->closureResource[$closureAlias]['on'](
-            ...$this->resolveParameters(
-            new ReflectionFunction($this->closureResource[$closureAlias]['on']),
-            $this->closureResource[$closureAlias]['params'],
+        if ($closureAlias instanceof Closure) {
+            $closure = $closureAlias;
+            $params = [];
+        } elseif (isset($this->closureResource[$closureAlias]['on'])) {
+            $closure = $this->closureResource[$closureAlias]['on'];
+            $params = $this->closureResource[$closureAlias]['params'];
+        } else {
+            throw new Exception('Closure not registered!');
+        }
+        return $closure(...$this->{$this->resolveParameters}(
+            new ReflectionFunction($closure),
+            $params,
             'constructor'
-        )
-        );
+        ));
 
     }
 
     /**
      * Call the desired class (along with the method)
      *
-     * @param $class
+     * @param string $class
      * @return mixed
      * @throws ReflectionException
      */
-    private function __callMethod($class): mixed
+    private function __callMethod(string $class): mixed
     {
         return $this->getResolvedInstance(new ReflectionClass($class))['returned'];
     }
@@ -199,11 +223,11 @@ final class Container
     /**
      * Get Class Instance
      *
-     * @param $class
+     * @param string $class
      * @return mixed
      * @throws ReflectionException
      */
-    private function __getInstance($class): mixed
+    private function __getInstance(string $class): mixed
     {
         return $this->getResolvedInstance(new ReflectionClass($class))['instance'];
     }
@@ -246,14 +270,49 @@ final class Container
      * @return array
      * @throws ReflectionException|Exception
      */
-    private function resolveParameters(ReflectionFunctionAbstract $reflector, array $suppliedParameters, string $type): array
+    private function resolveNonAssociativeParameters(ReflectionFunctionAbstract $reflector, array $suppliedParameters, string $type): array
+    {
+        $processed = [];
+        $instanceCount = $parameterIndex = 0;
+        $values = array_values($suppliedParameters);
+        foreach ($reflector->getParameters() as $key => $classParameter) {
+            $instance = $this->resolveDependency(
+                $parent = $reflector->class ?? $reflector->getName(),
+                $classParameter, $processed, $type
+            );
+            $processed[] = match (true) {
+                $instance !== $this->stdClass
+                => [$instance, $instanceCount++][0],
+
+                !isset($values[$key - $instanceCount]) && $classParameter->isDefaultValueAvailable()
+                => $classParameter->getDefaultValue(),
+
+                default => $values[$parameterIndex++] ??
+                    throw new Exception(
+                        "Resolution failed: '{$classParameter->getName()}' of $parent::{$reflector->getShortName()}()!"
+                    )
+            };
+        }
+        return $processed;
+    }
+
+    /**
+     * Resolve Function parameter
+     *
+     * @param ReflectionFunctionAbstract $reflector
+     * @param array $suppliedParameters
+     * @param string $type
+     * @return array
+     * @throws ReflectionException|Exception
+     */
+    private function resolveAssociativeParameters(ReflectionFunctionAbstract $reflector, array $suppliedParameters, string $type): array
     {
         $processed = [];
         $instanceCount = 0;
         $values = array_values($suppliedParameters);
         foreach ($reflector->getParameters() as $key => $classParameter) {
             $instance = $this->resolveDependency(
-                $reflector->class ?? $reflector->getName(),
+                $parent = $reflector->class ?? $reflector->getName(),
                 $classParameter, $processed, $type
             );
             $processed[$classParameter->getName()] = match (true) {
@@ -265,7 +324,7 @@ final class Container
 
                 default => $suppliedParameters[$classParameter->getName()] ??
                     throw new Exception(
-                        "Resolution failed: '{$classParameter->getName()}' of $reflector->class::{$reflector->getShortName()}()!"
+                        "Resolution failed: '{$classParameter->getName()}' of $parent::{$reflector->getShortName()}()!"
                     )
             };
         }
@@ -313,7 +372,7 @@ final class Container
         return $constructor === null ?
             $class->newInstance() :
             $class->newInstanceArgs(
-                $this->resolveParameters($constructor, $params, 'constructor')
+                $this->{$this->resolveParameters}($constructor, $params, 'constructor')
             );
     }
 
@@ -334,7 +393,7 @@ final class Container
         }
         return $method->invokeArgs(
             $classInstance,
-            $this->resolveParameters($method, $params, 'method')
+            $this->{$this->resolveParameters}($method, $params, 'method')
         );
     }
 
