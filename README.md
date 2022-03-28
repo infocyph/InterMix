@@ -26,4 +26,8 @@ composer require abmmhasan/oof
 
 ## Documentation
 
-Check the related wiki page!
+Check the related [wiki page](https://github.com/abmmhasan/OOF/wiki)!
+
+## Support
+
+Bug/issue/help? Just create an issue!

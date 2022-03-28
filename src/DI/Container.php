@@ -270,16 +270,18 @@ final class Container
      * @return array
      * @throws ReflectionException|Exception
      */
-    private function resolveNonAssociativeParameters(ReflectionFunctionAbstract $reflector, array $suppliedParameters, string $type): array
+    private function resolveNonAssociativeParameters(
+        ReflectionFunctionAbstract $reflector,
+        array                      $suppliedParameters,
+        string                     $type
+    ): array
     {
         $processed = [];
         $instanceCount = $parameterIndex = 0;
         $values = array_values($suppliedParameters);
+        $parent = $reflector->class ?? $reflector->getName();
         foreach ($reflector->getParameters() as $key => $classParameter) {
-            $instance = $this->resolveDependency(
-                $parent = $reflector->class ?? $reflector->getName(),
-                $classParameter, $processed, $type
-            );
+            $instance = $this->resolveDependency($parent, $classParameter, $processed, $type);
             $processed[] = match (true) {
                 $instance !== $this->stdClass
                 => [$instance, $instanceCount++][0],
@@ -305,16 +307,18 @@ final class Container
      * @return array
      * @throws ReflectionException|Exception
      */
-    private function resolveAssociativeParameters(ReflectionFunctionAbstract $reflector, array $suppliedParameters, string $type): array
+    private function resolveAssociativeParameters(
+        ReflectionFunctionAbstract $reflector,
+        array                      $suppliedParameters,
+        string                     $type
+    ): array
     {
         $processed = [];
         $instanceCount = 0;
         $values = array_values($suppliedParameters);
+        $parent = $reflector->class ?? $reflector->getName();
         foreach ($reflector->getParameters() as $key => $classParameter) {
-            $instance = $this->resolveDependency(
-                $parent = $reflector->class ?? $reflector->getName(),
-                $classParameter, $processed, $type
-            );
+            $instance = $this->resolveDependency($parent, $classParameter, $processed, $type);
             $processed[$classParameter->getName()] = match (true) {
                 $instance !== $this->stdClass
                 => [$instance, $instanceCount++][0],
