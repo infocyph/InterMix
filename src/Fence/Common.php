@@ -9,24 +9,6 @@ use Exception;
 trait Common
 {
     /**
-     * Prevents cloning the instances.
-     *
-     * @return void
-     */
-    public function __clone()
-    {
-    }
-
-    /**
-     * Prevents unserializing the instances.
-     *
-     * @return void
-     */
-    public function __wakeup()
-    {
-    }
-
-    /**
      * Requirement checker
      *
      * @param array|null $constraints

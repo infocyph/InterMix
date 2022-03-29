@@ -23,7 +23,7 @@ trait Limit
      * @return self
      * @throws Exception
      */
-    final public static function getInstance(string $key, array $constraints = null): static
+    final public static function __getInstance(string $key, array $constraints = null): static
     {
         static::__checkRequirements($constraints);
 
@@ -42,7 +42,7 @@ trait Limit
      * @param $number int number of instances allowed
      * @return void
      */
-    final public function setLimit(int $number)
+    final public function __setLimit(int $number)
     {
         static::$limit = $number;
     }
