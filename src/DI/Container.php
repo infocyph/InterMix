@@ -194,7 +194,7 @@ final class Container
         if ($closureAlias instanceof Closure) {
             $closure = $closureAlias;
             $params = [];
-        } elseif (isset($this->closureResource[$closureAlias]['on'])) {
+        } elseif (!empty($this->closureResource[$closureAlias]['on'])) {
             $closure = $this->closureResource[$closureAlias]['on'];
             $params = $this->closureResource[$closureAlias]['params'];
         } else {
@@ -247,7 +247,7 @@ final class Container
             $this->classResource[$class->getName()]['constructor']['params'] ?? []
         );
         $return = null;
-        if ($method && $class->hasMethod($method)) {
+        if (!empty($method) && $class->hasMethod($method)) {
             $return = $this->invokeMethod(
                 $instance,
                 $method,

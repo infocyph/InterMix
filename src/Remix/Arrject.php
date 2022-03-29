@@ -11,7 +11,7 @@ use Iterator;
 use JsonSerializable;
 use Traversable;
 
-final class Arrject  implements ArrayAccess, Iterator, Countable, JsonSerializable
+final class Arrject implements ArrayAccess, Iterator, Countable, JsonSerializable
 {
     use Overload;
 

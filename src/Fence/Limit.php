@@ -1,7 +1,7 @@
 <?php
 
 
-namespace AbmmHasan\OOF\Tonic;
+namespace AbmmHasan\OOF\Fence;
 
 
 use Exception;
@@ -23,7 +23,7 @@ trait Limit
      * @return self
      * @throws Exception
      */
-    final public static function instance(string $key,array $constraints = null): static
+    final public static function getInstance(string $key, array $constraints = null): static
     {
         static::__checkRequirements($constraints);
 
@@ -32,7 +32,8 @@ trait Limit
                 static::$__instances[$key] = new static;
             }
         }
-        return static::$__instances[$key];
+        return static::$__instances[$key] ??
+            throw new Exception('Initialization limit exceeded!');
     }
 
     /**
@@ -41,7 +42,7 @@ trait Limit
      * @param $number int number of instances allowed
      * @return void
      */
-    public function setLimit(int $number)
+    final public function setLimit(int $number)
     {
         static::$limit = $number;
     }

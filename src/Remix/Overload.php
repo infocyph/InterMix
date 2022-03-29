@@ -4,7 +4,7 @@ namespace AbmmHasan\OOF\Remix;
 
 trait Overload
 {
-    private array $data = [];
+    protected array $data = [];
 
     /**
      * Gets an item.
