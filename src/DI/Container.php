@@ -281,10 +281,16 @@ final class Container
         $values = array_values($suppliedParameters);
         $parent = $reflector->class ?? $reflector->getName();
         foreach ($reflector->getParameters() as $key => $classParameter) {
-            $instance = $this->resolveDependency($parent, $classParameter, $processed, $type);
+            [$incrementBy, $instance] = $this->resolveDependency(
+                $parent,
+                $classParameter,
+                $processed,
+                $type,
+                $suppliedParameters[$classParameter->getName()] ?? null
+            );
             $processed[] = match (true) {
                 $instance !== $this->stdClass
-                => [$instance, $instanceCount++][0],
+                => [$instance, $instanceCount++, $parameterIndex += $incrementBy][0],
 
                 !isset($values[$key - $instanceCount]) && $classParameter->isDefaultValueAvailable()
                 => $classParameter->getDefaultValue(),
@@ -318,7 +324,13 @@ final class Container
         $values = array_values($suppliedParameters);
         $parent = $reflector->class ?? $reflector->getName();
         foreach ($reflector->getParameters() as $key => $classParameter) {
-            $instance = $this->resolveDependency($parent, $classParameter, $processed, $type);
+            [$incrementBy, $instance] = $this->resolveDependency(
+                $parent,
+                $classParameter,
+                $processed,
+                $type,
+                $suppliedParameters[$classParameter->getName()] ?? null
+            );
             $processed[$classParameter->getName()] = match (true) {
                 $instance !== $this->stdClass
                 => [$instance, $instanceCount++][0],
@@ -340,13 +352,21 @@ final class Container
      *
      * @param string $callee
      * @param ReflectionParameter $parameter
-     * @param $parameters
-     * @param $type
-     * @return object|null
+     * @param array $parameters
+     * @param string $type
+     * @param string|null $supplied
+     * @return array|null
      * @throws ReflectionException|Exception
      */
-    private function resolveDependency(string $callee, ReflectionParameter $parameter, $parameters, $type): ?object
+    private function resolveDependency(
+        string              $callee,
+        ReflectionParameter $parameter,
+        array               $parameters,
+        string              $type,
+        ?string             $supplied
+    ): ?array
     {
+        $incrementBy = 0;
         $class = $this->resolveClass($parameter, $type);
         if ($class) {
             if ($callee === $class->name) {
@@ -356,10 +376,22 @@ final class Container
                 if ($parameter->isDefaultValueAvailable()) {
                     return null;
                 }
-                return $this->getResolvedInstance($class)['instance'];
+                if (
+                    $supplied !== null &&
+                    ($constructor = $class->getConstructor()) !== null &&
+                    count($passable = $constructor->getParameters())
+                ) {
+                    if ($this->resolveParameters === 'resolveAssociativeParameters') {
+                        $this->classResource[$class->getName()]['constructor']['params'][$passable[0]->getName()] = $supplied;
+                    } else {
+                        $this->classResource[$class->getName()]['constructor']['params'][] = $supplied;
+                    }
+                    $incrementBy = 1;
+                }
+                return [$incrementBy, $this->getResolvedInstance($class)['instance']];
             }
         }
-        return $this->stdClass;
+        return [$incrementBy, $this->stdClass];
     }
 
     /**
@@ -406,10 +438,10 @@ final class Container
      *
      * @param $parameter
      * @param $methodType
-     * @return ReflectionClass|null
+     * @return object|null
      * @throws ReflectionException
      */
-    private function resolveClass($parameter, $methodType): ?ReflectionClass
+    private function resolveClass($parameter, $methodType): ?object
     {
         $type = $parameter->getType();
         $name = $parameter->getName();
