@@ -384,7 +384,9 @@ final class Container
                     if ($this->resolveParameters === 'resolveAssociativeParameters') {
                         $this->classResource[$class->getName()]['constructor']['params'][$passable[0]->getName()] = $supplied;
                     } else {
-                        $this->classResource[$class->getName()]['constructor']['params'][] = $supplied;
+                        $this->classResource[$class->getName()]['constructor']['params'] = array_merge(
+                            [$supplied], $this->classResource[$class->getName()]['constructor']['params'] ?? []
+                        );
                     }
                     $incrementBy = 1;
                 }
