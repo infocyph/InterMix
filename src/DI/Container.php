@@ -355,7 +355,7 @@ final class Container
      * @param array $parameters
      * @param string $type
      * @param string|null $supplied
-     * @return array|null
+     * @return array
      * @throws ReflectionException|Exception
      */
     private function resolveDependency(
@@ -364,18 +364,17 @@ final class Container
         array               $parameters,
         string              $type,
         ?string             $supplied
-    ): ?array
+    ): array
     {
-        $incrementBy = 0;
-        $class = $this->resolveClass($parameter, $type);
-        if ($class) {
+        if ($class = $this->resolveClass($parameter, $type)) {
             if ($callee === $class->name) {
                 throw new Exception("Looped call detected: $callee");
             }
             if (!$this->alreadyExist($class->name, $parameters)) {
                 if ($parameter->isDefaultValueAvailable()) {
-                    return null;
+                    return [0, null];
                 }
+                $incrementBy = 0;
                 if (
                     $supplied !== null &&
                     ($constructor = $class->getConstructor()) !== null &&
@@ -393,7 +392,7 @@ final class Container
                 return [$incrementBy, $this->getResolvedInstance($class)['instance']];
             }
         }
-        return [$incrementBy, $this->stdClass];
+        return [0, $this->stdClass];
     }
 
     /**
