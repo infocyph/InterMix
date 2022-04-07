@@ -20,7 +20,9 @@ use stdClass;
  * @method static Container registerClass(string $class, array $parameters = []) Register Class with constructor Parameter
  * @method static Container registerMethod(string $class, string $method, array $parameters = []) Register Class and Method (with method parameter)
  * @method static Container registerClosure($closureAlias, Closure $function, array $parameters = []) Register Closure
- * @method static Container registerParamToClass(string $parameterType, array $parameterResource) Set resource for parameter to Class Method resolver
+ * @method static Container registerParamToClass(array $parameterResource) Set resource for parameter to Class Constructor/Method resolver
+ * @method static Container registerParamToConstructor(array $parameterResource) Set resource for parameter to Class Constructor resolver
+ * @method static Container registerParamToMethod(array $parameterResource) Set resource for parameter to Class Method resolver
  * @method static Container allowPrivateMethodAccess() Allow access to private methods
  * @method static Container disableNamedParameter() Allow access to private methods
  * @method static mixed getInstance($class) Get Class Instance
@@ -82,6 +84,8 @@ final class Container
             'registerClosure',
             'allowPrivateMethodAccess',
             'registerParamToClass',
+            'registerParamToConstructor',
+            'registerParamToMethod',
             'disableNamedParameter',
             'getInstance',
             'callClosure',
@@ -144,19 +148,38 @@ final class Container
     }
 
     /**
-     * Set resource for parameter to Class Method resolver
+     * Set resource for parameter to Class Constructor/Method resolver
      *
-     * @param string $parameterType
      * @param array $parameterResource
      * @return Container
-     * @throws Exception
      */
-    private function __registerParamToClass(string $parameterType, array $parameterResource): Container
+    private function __registerParamToClass(array $parameterResource): Container
     {
-        if (!in_array($parameterType, ['constructor', 'method', 'common'])) {
-            throw new Exception("$parameterType is invalid!");
-        }
-        $this->functionReference[$parameterType] = $parameterResource;
+        $this->functionReference['common'] = $parameterResource;
+        return self::$instance;
+    }
+
+    /**
+     * Set resource for parameter to Class Constructor resolver
+     *
+     * @param array $parameterResource
+     * @return Container
+     */
+    private function __registerParamToConstructor(array $parameterResource): Container
+    {
+        $this->functionReference['constructor'] = $parameterResource;
+        return self::$instance;
+    }
+
+    /**
+     * Set resource for parameter to Class Method resolver
+     *
+     * @param array $parameterResource
+     * @return Container
+     */
+    private function __registerParamToMethod(array $parameterResource): Container
+    {
+        $this->functionReference['method'] = $parameterResource;
         return self::$instance;
     }
 

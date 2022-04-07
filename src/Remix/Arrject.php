@@ -8,10 +8,11 @@ use ArrayAccess;
 use ArrayIterator;
 use Countable;
 use Iterator;
+use IteratorAggregate;
 use JsonSerializable;
 use Traversable;
 
-final class Arrject implements ArrayAccess, Iterator, Countable, JsonSerializable
+final class Arrject implements ArrayAccess, Iterator, Countable, JsonSerializable, IteratorAggregate
 {
     use Overload;
 
@@ -22,7 +23,7 @@ final class Arrject implements ArrayAccess, Iterator, Countable, JsonSerializabl
      */
     public function __construct(array $data = [])
     {
-        $this->data = $data;
+        $this->data = $this->getArrayableItems($data);
     }
 
     /**
