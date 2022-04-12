@@ -11,7 +11,7 @@ trait Limit
 
     use Common;
 
-    protected static array $__instances = [];
+    protected static array $instances = [];
 
     protected static int $limit = 2;
 
@@ -23,16 +23,16 @@ trait Limit
      * @return self
      * @throws Exception
      */
-    final public static function __getInstance(string $key, array $constraints = null): static
+    final public static function getInstance(string $key, array $constraints = null): static
     {
-        static::__checkRequirements($constraints);
+        static::checkRequirements($constraints);
 
-        if (!array_key_exists($key, static::$__instances)) {
-            if (count(static::$__instances) < static::$limit) {
-                static::$__instances[$key] = new static;
+        if (!array_key_exists($key, static::$instances)) {
+            if (count(static::$instances) < static::$limit) {
+                static::$instances[$key] = new static;
             }
         }
-        return static::$__instances[$key] ??
+        return static::$instances[$key] ??
             throw new Exception('Initialization limit exceeded!');
     }
 
@@ -42,7 +42,7 @@ trait Limit
      * @param $number int number of instances allowed
      * @return void
      */
-    final public function __setLimit(int $number)
+    final public function setLimit(int $number)
     {
         static::$limit = $number;
     }

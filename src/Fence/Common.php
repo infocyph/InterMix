@@ -14,7 +14,7 @@ trait Common
      * @param array|null $constraints
      * @throws Exception
      */
-    protected static function __checkRequirements(array $constraints = null)
+    protected static function checkRequirements(array $constraints = null)
     {
         if (!empty($constraints['extensions'])) {
             $commonExt = array_intersect(get_loaded_extensions(), $constraints['extensions']);

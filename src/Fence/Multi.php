@@ -11,7 +11,7 @@ trait Multi
 
     use Common;
 
-    protected static array $__instances = [];
+    protected static array $instances = [];
 
     /**
      * Creates a new instance of a class flagged with a key.
@@ -21,13 +21,13 @@ trait Multi
      * @return self
      * @throws Exception
      */
-    final public static function __getInstance(string $key, array $constraints = null): static
+    final public static function getInstance(string $key, array $constraints = null): static
     {
-        static::__checkRequirements($constraints);
+        static::checkRequirements($constraints);
 
-        if (!array_key_exists($key, static::$__instances)) {
-            static::$__instances[$key] = new static;
+        if (!array_key_exists($key, static::$instances)) {
+            static::$instances[$key] = new static;
         }
-        return static::$__instances[$key];
+        return static::$instances[$key];
     }
 }

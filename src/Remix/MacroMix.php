@@ -24,7 +24,7 @@ trait MacroMix
      * @param callable|object $macro
      * @return void
      */
-    public static function __register(string $name, callable|object $macro)
+    public static function register(string $name, callable|object $macro)
     {
         static::$macros[$name] = $macro;
     }
@@ -37,16 +37,16 @@ trait MacroMix
      * @return void
      * @throws ReflectionException
      */
-    public static function __mix(object $mixin, bool $replace = true)
+    public static function mix(object $mixin, bool $replace = true)
     {
         $methods = (new ReflectionClass($mixin))->getMethods(
             ReflectionMethod::IS_PUBLIC | ReflectionMethod::IS_PROTECTED
         );
 
         foreach ($methods as $method) {
-            if ($replace || !static::__hasMacro($method->name)) {
+            if ($replace || !static::hasMacro($method->name)) {
                 $method->setAccessible(true);
-                static::__register($method->name, $method->invoke($mixin));
+                static::register($method->name, $method->invoke($mixin));
             }
         }
     }
@@ -57,7 +57,7 @@ trait MacroMix
      * @param string $name
      * @return bool
      */
-    public static function __hasMacro(string $name): bool
+    public static function hasMacro(string $name): bool
     {
         return isset(static::$macros[$name]);
     }
@@ -72,7 +72,7 @@ trait MacroMix
      */
     public static function __callStatic(string $method, array $parameters)
     {
-        return self::__process(null, $method, $parameters);
+        return self::process(null, $method, $parameters);
     }
 
     /**
@@ -85,7 +85,7 @@ trait MacroMix
      */
     public function __call(string $method, array $parameters)
     {
-        return self::__process($this, $method, $parameters);
+        return self::process($this, $method, $parameters);
     }
 
     /**
@@ -97,9 +97,9 @@ trait MacroMix
      * @return mixed
      * @throws Exception
      */
-    private static function __process($bind, string $method, array $parameters): mixed
+    private static function process($bind, string $method, array $parameters): mixed
     {
-        if (!static::__hasMacro($method)) {
+        if (!static::hasMacro($method)) {
             throw new Exception(sprintf(
                 'Method %s::%s does not exist.', static::class, $method
             ));

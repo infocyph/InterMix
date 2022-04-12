@@ -78,22 +78,20 @@ final class Container
      */
     private function callSelf($method, $parameters): mixed
     {
-        if (!in_array($method, [
-            'registerClass',
-            'registerMethod',
-            'registerClosure',
-            'allowPrivateMethodAccess',
-            'registerParamToClass',
-            'registerParamToConstructor',
-            'registerParamToMethod',
-            'disableNamedParameter',
-            'getInstance',
-            'callClosure',
-            'callMethod'
-        ])) {
-            throw new Exception("Invalid method call!");
-        }
-        $method = "__$method";
+        [
+            'registerClass' => '',
+            'registerMethod' => '',
+            'registerClosure' => '',
+            'allowPrivateMethodAccess' => '',
+            'registerParamToClass' => '',
+            'registerParamToConstructor' => '',
+            'registerParamToMethod' => '',
+            'disableNamedParameter' => '',
+            'getInstance' => '',
+            'callClosure' => '',
+            'callMethod' => ''
+        ][$method] ?? throw new Exception('Invalid method call!');
+        $method = "_$method";
         return (self::$instance)->$method(...$parameters);
     }
 
@@ -105,7 +103,7 @@ final class Container
      * @param array $parameters
      * @return Container
      */
-    private function __registerClosure(string $closureAlias, Closure $function, array $parameters = []): Container
+    private function _registerClosure(string $closureAlias, Closure $function, array $parameters = []): Container
     {
         $this->closureResource[$closureAlias] = [
             'on' => $function,
@@ -121,7 +119,7 @@ final class Container
      * @param array $parameters
      * @return Container
      */
-    private function __registerClass(string $class, array $parameters = []): Container
+    private function _registerClass(string $class, array $parameters = []): Container
     {
         $this->classResource[$class]['constructor'] = [
             'on' => '__constructor',
@@ -138,7 +136,7 @@ final class Container
      * @param array $parameters
      * @return Container
      */
-    private function __registerMethod(string $class, string $method, array $parameters = []): Container
+    private function _registerMethod(string $class, string $method, array $parameters = []): Container
     {
         $this->classResource[$class]['method'] = [
             'on' => $method,
@@ -153,7 +151,7 @@ final class Container
      * @param array $parameterResource
      * @return Container
      */
-    private function __registerParamToClass(array $parameterResource): Container
+    private function _registerParamToClass(array $parameterResource): Container
     {
         $this->functionReference['common'] = $parameterResource;
         return self::$instance;
@@ -165,7 +163,7 @@ final class Container
      * @param array $parameterResource
      * @return Container
      */
-    private function __registerParamToConstructor(array $parameterResource): Container
+    private function _registerParamToConstructor(array $parameterResource): Container
     {
         $this->functionReference['constructor'] = $parameterResource;
         return self::$instance;
@@ -177,7 +175,7 @@ final class Container
      * @param array $parameterResource
      * @return Container
      */
-    private function __registerParamToMethod(array $parameterResource): Container
+    private function _registerParamToMethod(array $parameterResource): Container
     {
         $this->functionReference['method'] = $parameterResource;
         return self::$instance;
@@ -188,7 +186,7 @@ final class Container
      *
      * @return Container
      */
-    private function __allowPrivateMethodAccess(): Container
+    private function _allowPrivateMethodAccess(): Container
     {
         $this->allowPrivateMethodAccess = true;
         return self::$instance;
@@ -199,7 +197,7 @@ final class Container
      *
      * @return Container
      */
-    private function __disableNamedParameter(): Container
+    private function _disableNamedParameter(): Container
     {
         $this->resolveParameters = 'resolveNonAssociativeParameters';
         return self::$instance;
@@ -212,7 +210,7 @@ final class Container
      * @return mixed
      * @throws ReflectionException|Exception
      */
-    private function __callClosure(string|Closure $closureAlias): mixed
+    private function _callClosure(string|Closure $closureAlias): mixed
     {
         if ($closureAlias instanceof Closure) {
             $closure = $closureAlias;
@@ -238,7 +236,7 @@ final class Container
      * @return mixed
      * @throws ReflectionException
      */
-    private function __callMethod(string $class): mixed
+    private function _callMethod(string $class): mixed
     {
         return $this->getResolvedInstance(new ReflectionClass($class))['returned'];
     }
@@ -250,7 +248,7 @@ final class Container
      * @return mixed
      * @throws ReflectionException
      */
-    private function __getInstance(string $class): mixed
+    private function _getInstance(string $class): mixed
     {
         return $this->getResolvedInstance(new ReflectionClass($class))['instance'];
     }

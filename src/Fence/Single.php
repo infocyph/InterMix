@@ -10,7 +10,7 @@ trait Single
 {
     use Common;
 
-    protected static $__instance;
+    protected static $instance;
 
     /**
      * Creates a new instance of a singleton class (via late static binding),
@@ -20,13 +20,13 @@ trait Single
      * @return self
      * @throws Exception
      */
-    final public static function __getInstance(array $constraints = null): static
+    final public static function getInstance(array $constraints = null): static
     {
-        static::__checkRequirements($constraints);
+        static::checkRequirements($constraints);
 
-        if (!static::$__instance) {
-            static::$__instance = new static;
+        if (!static::$instance) {
+            static::$instance = new static;
         }
-        return static::$__instance;
+        return static::$instance;
     }
 }
