@@ -4,9 +4,9 @@ use AbmmHasan\OOF\DI\Container;
 
 if (!function_exists('container')) {
     /**
-     * Determine if the given value is callable, but not a string.
+     * Get Container instance or direct call method/closure
      *
-     * @param string $alias
+     * @param string $alias instance alias
      * @param string|Closure|null $closureOrClass
      * @return mixed
      * @throws ReflectionException
