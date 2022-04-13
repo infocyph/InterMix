@@ -8,7 +8,6 @@ use Exception;
 
 trait Limit
 {
-
     use Common;
 
     protected static array $instances = [];
@@ -23,7 +22,7 @@ trait Limit
      * @return self
      * @throws Exception
      */
-    final public static function getInstance(string $key, array $constraints = null): static
+    final public static function instance(string $key, array $constraints = null): static
     {
         static::checkRequirements($constraints);
 

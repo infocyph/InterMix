@@ -8,7 +8,6 @@ use Exception;
 
 trait Requirement
 {
-
     use Common;
 
     protected static $instance;
@@ -21,7 +20,7 @@ trait Requirement
      * @return self
      * @throws Exception
      */
-    final public static function getInstance(array $constraints = null): static
+    final public static function instance(array $constraints = null): static
     {
         static::checkRequirements($constraints);
 
