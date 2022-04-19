@@ -48,10 +48,11 @@ final class Container
     }
 
     /**
-     * Get Container instance
+     * Unset current instance
      *
+     * @return void
      */
-    public function unsetInstance()
+    public function unset(): void
     {
         unset(self::$instances[$this->instanceAlias]);
     }
