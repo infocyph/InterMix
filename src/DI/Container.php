@@ -26,6 +26,7 @@ final class Container
     private static array $instances;
     private array $closureResource = [];
     private string $resolveParameters = 'resolveAssociativeParameters';
+    private ?string $defaultMethod = null;
 
     /**
      * Class Constructor
@@ -155,6 +156,18 @@ final class Container
     }
 
     /**
+     * Set default call method (will be called if no method/callOn const provided)
+     *
+     * @param string $method existing method name for class
+     * @return Container
+     */
+    public function defaultMethod(string $method): Container
+    {
+        $this->defaultMethod = $method;
+        return self::$instances[$this->instanceAlias];
+    }
+
+    /**
      * Disable resolution by name (instead it will resolve in sequence)
      *
      * @return Container
@@ -224,10 +237,11 @@ final class Container
      */
     private function getResolvedInstance($class): array
     {
-        $method = $this->classResource[$class->getName()]['method']['on'] ?? $class->getConstant('callOn') ?? false;
+        $method = $this->classResource[$class->getName()]['method']['on']
+            ?? $class->getConstant('callOn')
+            ?? $this->defaultMethod;
         $instance = $this->getClassInstance(
-            $class,
-            $this->classResource[$class->getName()]['constructor']['params'] ?? []
+            $class, $this->classResource[$class->getName()]['constructor']['params'] ?? []
         );
         $return = null;
         if (!empty($method) && $class->hasMethod($method)) {
