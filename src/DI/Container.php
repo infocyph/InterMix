@@ -360,7 +360,7 @@ final class Container
         ReflectionParameter $parameter,
         array               $parameters,
         string              $type,
-        ?string             $supplied
+        mixed               $supplied
     ): array
     {
         if ($class = $this->resolveClass($parameter, $type)) {
