@@ -231,11 +231,11 @@ final class Container
     /**
      * Get resolved Instance & method
      *
-     * @param $class
+     * @param ReflectionClass $class
      * @return array
      * @throws ReflectionException
      */
-    private function getResolvedInstance($class): array
+    private function getResolvedInstance(ReflectionClass $class): array
     {
         $method = $this->classResource[$class->getName()]['method']['on']
             ?? $class->getConstant('callOn')
@@ -395,12 +395,12 @@ final class Container
     /**
      * Get class Instance
      *
-     * @param $class
+     * @param ReflectionClass $class
      * @param array $params
-     * @return mixed
+     * @return object|null
      * @throws ReflectionException
      */
-    private function getClassInstance($class, array $params = []): mixed
+    private function getClassInstance(ReflectionClass $class, array $params = []): ?object
     {
         $constructor = $class->getConstructor();
         return $constructor === null ?
@@ -413,13 +413,13 @@ final class Container
     /**
      * Get Method return
      *
-     * @param $classInstance
-     * @param $method
+     * @param object|null $classInstance
+     * @param string $method
      * @param array $params
      * @return mixed
      * @throws ReflectionException
      */
-    private function invokeMethod($classInstance, $method, array $params = []): mixed
+    private function invokeMethod(?object $classInstance, string $method, array $params = []): mixed
     {
         $method = new ReflectionMethod(get_class($classInstance), $method);
         if ($this->allowPrivateMethodAccess) {
@@ -434,12 +434,12 @@ final class Container
     /**
      * Check & get Reflection instance
      *
-     * @param $parameter
-     * @param $methodType
-     * @return object|null
+     * @param ReflectionParameter $parameter
+     * @param string $methodType
+     * @return ReflectionClass|null
      * @throws ReflectionException
      */
-    private function resolveClass($parameter, $methodType): ?object
+    private function resolveClass(ReflectionParameter $parameter, string $methodType): ?ReflectionClass
     {
         $type = $parameter->getType();
         $name = $parameter->getName();
@@ -460,11 +460,11 @@ final class Container
     /**
      * Check if specified class exists
      *
-     * @param $type
-     * @param $name
+     * @param string $type
+     * @param string $name
      * @return bool
      */
-    private function check($type, $name): bool
+    private function check(string $type, string $name): bool
     {
         return isset($this->functionReference[$type][$name]) &&
             class_exists($this->functionReference[$type][$name], true);
@@ -473,11 +473,11 @@ final class Container
     /**
      * Get the class name for given type
      *
-     * @param $parameter
-     * @param $name
+     * @param ReflectionParameter $parameter
+     * @param string $name
      * @return string
      */
-    private function getClassName($parameter, $name): string
+    private function getClassName(ReflectionParameter $parameter, string $name): string
     {
         if (($class = $parameter->getDeclaringClass()) !== null) {
             return match (true) {
@@ -492,11 +492,11 @@ final class Container
     /**
      * Check if parameter already resolved
      *
-     * @param $class
+     * @param string $class
      * @param array $parameters
      * @return bool
      */
-    private function alreadyExist($class, array $parameters): bool
+    private function alreadyExist(string $class, array $parameters): bool
     {
         foreach ($parameters as $value) {
             if ($value instanceof $class) {
