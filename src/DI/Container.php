@@ -232,8 +232,9 @@ final class Container
      * Get resolved Instance & method
      *
      * @param ReflectionClass $class
+     * @param mixed|null $supplied
      * @return array
-     * @throws ReflectionException
+     * @throws ReflectionException|Exception
      */
     private function getResolvedInstance(ReflectionClass $class, mixed $supplied = null): array
     {
@@ -408,10 +409,13 @@ final class Container
      * @param ReflectionClass $class
      * @param array $params
      * @return object|null
-     * @throws ReflectionException
+     * @throws ReflectionException|Exception
      */
     private function getClassInstance(ReflectionClass $class, array $params = []): ?object
     {
+        if ($class->isInterface()) {
+            throw new Exception("Expecting class, interface ({$class->getName()}) found instead!");
+        }
         $constructor = $class->getConstructor();
         return $constructor === null ?
             $class->newInstanceWithoutConstructor() :
