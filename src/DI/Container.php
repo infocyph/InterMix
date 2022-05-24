@@ -161,7 +161,7 @@ final class Container
      * @param string $method existing method name for class
      * @return Container
      */
-    public function defaultMethod(string $method): Container
+    public function setDefaultMethod(string $method): Container
     {
         $this->defaultMethod = $method;
         return self::$instances[$this->instanceAlias];
@@ -235,20 +235,30 @@ final class Container
      * @return array
      * @throws ReflectionException
      */
-    private function getResolvedInstance(ReflectionClass $class): array
+    private function getResolvedInstance(ReflectionClass $class, mixed $supplied = null): array
     {
-        $method = $this->classResource[$class->getName()]['method']['on']
-            ?? $class->getConstant('callOn')
-            ?? $this->defaultMethod;
+        $className = $class->getName();
+        if ($class->isInterface()) {
+            if (!class_exists($supplied)) {
+                throw new Exception("Resolution failed: $supplied for interface $className");
+            }
+            [$interface, $className] = [$className, $supplied];
+            $class = new ReflectionClass($className);
+            if (!$class->implementsInterface($interface)) {
+                throw new Exception("$className doesn't implement $interface");
+            }
+        }
         $instance = $this->getClassInstance(
-            $class, $this->classResource[$class->getName()]['constructor']['params'] ?? []
+            $class, $this->classResource[$className]['constructor']['params'] ?? []
         );
         $return = null;
+        $method = $this->classResource[$className]['method']['on']
+            ?? ($class->getConstant('callOn') ?: $this->defaultMethod);
         if (!empty($method) && $class->hasMethod($method)) {
             $return = $this->invokeMethod(
                 $instance,
                 $method,
-                $this->classResource[$class->getName()]['method']['params'] ?? []
+                $this->classResource[$className]['method']['params'] ?? []
             );
         }
         return [
@@ -386,7 +396,7 @@ final class Container
                     }
                     $incrementBy = 1;
                 }
-                return [$incrementBy, $this->getResolvedInstance($class)['instance']];
+                return [$incrementBy, $this->getResolvedInstance($class, $supplied)['instance']];
             }
         }
         return [0, $this->stdClass];
@@ -404,7 +414,7 @@ final class Container
     {
         $constructor = $class->getConstructor();
         return $constructor === null ?
-            $class->newInstance() :
+            $class->newInstanceWithoutConstructor() :
             $class->newInstanceArgs(
                 $this->{$this->resolveParameters}($constructor, $params, 'constructor')
             );

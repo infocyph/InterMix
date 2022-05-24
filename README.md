@@ -12,7 +12,12 @@
 
 Object-Oriented Factory!
 
-Provides several Class oriented functionality.
+This library intended to provide you with some class oriented tools that we (may) need frequently.
+
+* Dependency Injector (Container)
+* Class initialization barrier (Fence)
+* Class Macro (MacroMix)
+* Overload
 
 ## Prerequisites
 
@@ -20,13 +25,13 @@ Language: PHP 8.0/+
 
 ## Installation
 
-```
+```bash
 composer require abmmhasan/oof
 ```
 
 ## Documentation
 
-Check the related [wiki page](https://github.com/abmmhasan/OOF/wiki)!
+Check the related [wiki page](https://github.com/abmmhasan/OOF/wiki) for details! 
 
 ## Support
 
