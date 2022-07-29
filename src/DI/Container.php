@@ -221,12 +221,13 @@ final class Container
      * Call the desired class (along with the method)
      *
      * @param string $class
+     * @param string|null $method
      * @return mixed
      * @throws ReflectionException
      */
-    public function callMethod(string $class): mixed
+    public function callMethod(string $class, string $method = null): mixed
     {
-        return $this->getResolvedInstance($this->reflectedClass($class))['returned'];
+        return $this->getResolvedInstance($this->reflectedClass($class), null, $method)['returned'];
     }
 
     /**
@@ -246,10 +247,15 @@ final class Container
      *
      * @param ReflectionClass $class
      * @param mixed|null $supplied
+     * @param string|null $callMethod
      * @return array
      * @throws ReflectionException|Exception
      */
-    private function getResolvedInstance(ReflectionClass $class, mixed $supplied = null): array
+    private function getResolvedInstance(
+        ReflectionClass $class,
+        mixed           $supplied = null,
+        string          $callMethod = null
+    ): array
     {
         $className = $class->getName();
         if ($class->isInterface()) {
@@ -262,14 +268,16 @@ final class Container
                 throw new Exception("$className doesn't implement $interface");
             }
         }
-        if ($this->forceSingleton && isset($this->resolvedResource[$className]['instance'])) {
-            return $this->resolvedResource[$className];
+
+        if (!$this->forceSingleton || !isset($this->resolvedResource[$className]['instance'])) {
+            $this->resolvedResource[$className]['instance'] = $this->getClassInstance(
+                $class, $this->classResource[$className]['constructor']['params'] ?? []
+            );
         }
-        $this->resolvedResource[$className]['instance'] = $this->getClassInstance(
-            $class, $this->classResource[$className]['constructor']['params'] ?? []
-        );
+
         $this->resolvedResource[$className]['returned'] = null;
-        $method = $this->classResource[$className]['method']['on']
+        $method = $callMethod
+            ?? $this->classResource[$className]['method']['on']
             ?? ($class->getConstant('callOn') ?: $this->defaultMethod);
         if (!empty($method) && $class->hasMethod($method)) {
             $this->resolvedResource[$className]['returned'] = $this->invokeMethod(
