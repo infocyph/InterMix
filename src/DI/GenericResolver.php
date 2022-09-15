@@ -22,11 +22,13 @@ final class GenericResolver
      */
     public function classSettler(string $class, string $method = null): array
     {
-        $constructorParams = $this->container->classResource[$class]['constructor']['params'] ?? [];
-        $methodParams = $this->container->classResource[$class]['method']['params'] ?? [];
         return [
-            'instance' => $instance = new $class(...$constructorParams),
-            'returned' => $method === null ? null : $instance->$method(...$methodParams)
+            'instance' => $instance = new $class(
+                ...($this->container->classResource[$class]['constructor']['params'] ?? [])
+            ),
+            'returned' => $method === null ? null : $instance->$method(
+                ...($this->container->classResource[$class]['method']['params'] ?? [])
+            )
         ];
     }
 

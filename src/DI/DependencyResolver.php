@@ -2,6 +2,7 @@
 
 namespace AbmmHasan\OOF\DI;
 
+use Closure;
 use Exception;
 use ReflectionClass;
 use ReflectionException;
@@ -39,12 +40,12 @@ final class DependencyResolver
     /**
      * Settle closure dependency and resolve thorough
      *
-     * @param string $closure
+     * @param string|Closure $closure
      * @param array $params
      * @return mixed
      * @throws ReflectionException
      */
-    public function closureSettler(string $closure, array $params): mixed
+    public function closureSettler(string|Closure $closure, array $params): mixed
     {
         return $closure(...$this->{$this->container->resolveParameters}(
             new ReflectionFunction($closure),

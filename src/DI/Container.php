@@ -21,7 +21,7 @@ final class Container
     public array $resolvedResource = [];
     public bool $forceSingleton = false;
     private static array $instances;
-    private string $resolver = 'DependencyResolver';
+    private string $resolver = DependencyResolver::class;
 
     /**
      * Class Constructor
@@ -190,7 +190,7 @@ final class Container
      */
     public function disableAutoResolution(): Container
     {
-        $this->resolver = 'GenericResolver';
+        $this->resolver = GenericResolver::class;
         return self::$instances[$this->instanceAlias];
     }
 
