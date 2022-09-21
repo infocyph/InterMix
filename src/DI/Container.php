@@ -12,15 +12,8 @@ use ReflectionException;
  */
 final class Container
 {
-    public array $functionReference = [];
-    public array $classResource = [];
-    public bool $allowPrivateMethodAccess = false;
-    private array $closureResource = [];
-    public string $resolveParameters = 'resolveAssociativeParameters';
-    public ?string $defaultMethod = null;
-    public array $resolvedResource = [];
-    public bool $forceSingleton = false;
     private static array $instances;
+    private Asset $assets;
     private string $resolver = DependencyResolver::class;
 
     /**
@@ -29,6 +22,7 @@ final class Container
     public function __construct(private string $instanceAlias = 'oof')
     {
         self::$instances[$this->instanceAlias] ??= $this;
+        $this->assets ??= new Asset();
     }
 
     /**
@@ -62,7 +56,8 @@ final class Container
      */
     public function registerClosure(string $closureAlias, callable|Closure $function, array $parameters = []): Container
     {
-        $this->closureResource[$closureAlias] = [
+        $this->assets
+            ->closureResource[$closureAlias] = [
             'on' => $function,
             'params' => $parameters
         ];
@@ -78,7 +73,8 @@ final class Container
      */
     public function registerClass(string $class, array $parameters = []): Container
     {
-        $this->classResource[$class]['constructor'] = [
+        $this->assets
+            ->classResource[$class]['constructor'] = [
             'on' => '__constructor',
             'params' => $parameters
         ];
@@ -95,7 +91,8 @@ final class Container
      */
     public function registerMethod(string $class, string $method, array $parameters = []): Container
     {
-        $this->classResource[$class]['method'] = [
+        $this->assets
+            ->classResource[$class]['method'] = [
             'on' => $method,
             'params' => $parameters
         ];
@@ -110,7 +107,8 @@ final class Container
      */
     public function registerParamToClass(array $parameterResource): Container
     {
-        $this->functionReference['common'] = $parameterResource;
+        $this->assets
+            ->functionReference['common'] = $parameterResource;
         return self::$instances[$this->instanceAlias];
     }
 
@@ -122,7 +120,8 @@ final class Container
      */
     public function registerParamToConstructor(array $parameterResource): Container
     {
-        $this->functionReference['constructor'] = $parameterResource;
+        $this->assets
+            ->functionReference['constructor'] = $parameterResource;
         return self::$instances[$this->instanceAlias];
     }
 
@@ -134,7 +133,8 @@ final class Container
      */
     public function registerParamToMethod(array $parameterResource): Container
     {
-        $this->functionReference['method'] = $parameterResource;
+        $this->assets
+            ->functionReference['method'] = $parameterResource;
         return self::$instances[$this->instanceAlias];
     }
 
@@ -145,7 +145,8 @@ final class Container
      */
     public function allowPrivateMethodAccess(): Container
     {
-        $this->allowPrivateMethodAccess = true;
+        $this->assets
+            ->allowPrivateMethodAccess = true;
         return self::$instances[$this->instanceAlias];
     }
 
@@ -157,7 +158,7 @@ final class Container
      */
     public function setDefaultMethod(string $method): Container
     {
-        $this->defaultMethod = $method;
+        $this->assets->defaultMethod = $method;
         return self::$instances[$this->instanceAlias];
     }
 
@@ -168,7 +169,8 @@ final class Container
      */
     public function disableNamedParameter(): Container
     {
-        $this->resolveParameters = 'resolveNonAssociativeParameters';
+        $this->assets
+            ->resolveParameters = 'resolveNonAssociativeParameters';
         return self::$instances[$this->instanceAlias];
     }
 
@@ -179,7 +181,8 @@ final class Container
      */
     public function enableSingleton(): Container
     {
-        $this->forceSingleton = true;
+        $this->assets
+            ->forceSingleton = true;
         return self::$instances[$this->instanceAlias];
     }
 
@@ -206,13 +209,13 @@ final class Container
         if ($closureAlias instanceof Closure || is_callable($closureAlias)) {
             $closure = $closureAlias;
             $params = [];
-        } elseif (!empty($this->closureResource[$closureAlias]['on'])) {
-            $closure = $this->closureResource[$closureAlias]['on'];
-            $params = $this->closureResource[$closureAlias]['params'];
+        } elseif (!empty($this->assets->closureResource[$closureAlias]['on'])) {
+            $closure = $this->assets->closureResource[$closureAlias]['on'];
+            $params = $this->assets->closureResource[$closureAlias]['params'];
         } else {
             throw new Exception('Closure not registered!');
         }
-        return (new $this->resolver($this))->closureSettler($closure, $params);
+        return (new $this->resolver($this->assets))->closureSettler($closure, $params);
     }
 
     /**
@@ -225,7 +228,7 @@ final class Container
      */
     public function callMethod(string $class, string $method = null): mixed
     {
-        return (new $this->resolver($this))->classSettler($class, $method)['returned'];
+        return (new $this->resolver($this->assets))->classSettler($class, $method)['returned'];
     }
 
     /**
@@ -237,6 +240,6 @@ final class Container
      */
     public function getInstance(string $class): mixed
     {
-        return (new $this->resolver($this))->classSettler($class)['instance'];
+        return (new $this->resolver($this->assets))->classSettler($class)['instance'];
     }
 }

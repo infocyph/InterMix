@@ -7,7 +7,7 @@ use Closure;
 final class GenericResolver
 {
     public function __construct(
-        private Container $container
+        private Asset $containerAsset
     )
     {
 
@@ -24,10 +24,10 @@ final class GenericResolver
     {
         return [
             'instance' => $instance = new $class(
-                ...($this->container->classResource[$class]['constructor']['params'] ?? [])
+                ...($this->containerAsset->classResource[$class]['constructor']['params'] ?? [])
             ),
             'returned' => $method === null ? null : $instance->$method(
-                ...($this->container->classResource[$class]['method']['params'] ?? [])
+                ...($this->containerAsset->classResource[$class]['method']['params'] ?? [])
             )
         ];
     }

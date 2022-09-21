@@ -18,7 +18,7 @@ final class DependencyResolver
     private stdClass $stdClass;
 
     public function __construct(
-        private Container $container
+        private Asset $containerAsset
     )
     {
         $this->stdClass = new stdClass();
@@ -47,7 +47,7 @@ final class DependencyResolver
      */
     public function closureSettler(string|Closure $closure, array $params): mixed
     {
-        return $closure(...$this->{$this->container->resolveParameters}(
+        return $closure(...$this->{$this->containerAsset->resolveParameters}(
             new ReflectionFunction($closure),
             $params,
             'constructor'
@@ -81,24 +81,24 @@ final class DependencyResolver
             }
         }
 
-        if (!$this->container->forceSingleton || !isset($this->container->resolvedResource[$className]['instance'])) {
-            $this->container->resolvedResource[$className]['instance'] = $this->getClassInstance(
-                $class, $this->container->classResource[$className]['constructor']['params'] ?? []
+        if (!$this->containerAsset->forceSingleton || !isset($this->containerAsset->resolvedResource[$className]['instance'])) {
+            $this->containerAsset->resolvedResource[$className]['instance'] = $this->getClassInstance(
+                $class, $this->containerAsset->classResource[$className]['constructor']['params'] ?? []
             );
         }
 
-        $this->container->resolvedResource[$className]['returned'] = null;
+        $this->containerAsset->resolvedResource[$className]['returned'] = null;
         $method = $callMethod
-            ?? $this->container->classResource[$className]['method']['on']
-            ?? ($class->getConstant('callOn') ?: $this->container->defaultMethod);
+            ?? $this->containerAsset->classResource[$className]['method']['on']
+            ?? ($class->getConstant('callOn') ?: $this->containerAsset->defaultMethod);
         if (!empty($method) && $class->hasMethod($method)) {
-            $this->container->resolvedResource[$className]['returned'] = $this->invokeMethod(
-                $this->container->resolvedResource[$className]['instance'],
+            $this->containerAsset->resolvedResource[$className]['returned'] = $this->invokeMethod(
+                $this->containerAsset->resolvedResource[$className]['instance'],
                 $method,
-                $this->container->classResource[$className]['method']['params'] ?? []
+                $this->containerAsset->classResource[$className]['method']['params'] ?? []
             );
         }
-        return $this->container->resolvedResource[$className];
+        return $this->containerAsset->resolvedResource[$className];
     }
 
     /**
@@ -216,11 +216,11 @@ final class DependencyResolver
                     ($constructor = $class->getConstructor()) !== null &&
                     count($passable = $constructor->getParameters())
                 ) {
-                    if ($this->container->resolveParameters === 'resolveAssociativeParameters') {
-                        $this->container->classResource[$class->getName()]['constructor']['params'][$passable[0]->getName()] = $supplied;
+                    if ($this->containerAsset->resolveParameters === 'resolveAssociativeParameters') {
+                        $this->containerAsset->classResource[$class->getName()]['constructor']['params'][$passable[0]->getName()] = $supplied;
                     } else {
-                        $this->container->classResource[$class->getName()]['constructor']['params'] = array_merge(
-                            [$supplied], $this->container->classResource[$class->getName()]['constructor']['params'] ?? []
+                        $this->containerAsset->classResource[$class->getName()]['constructor']['params'] = array_merge(
+                            [$supplied], $this->containerAsset->classResource[$class->getName()]['constructor']['params'] ?? []
                         );
                     }
                     $incrementBy = 1;
@@ -248,7 +248,7 @@ final class DependencyResolver
         return $constructor === null ?
             $class->newInstanceWithoutConstructor() :
             $class->newInstanceArgs(
-                $this->{$this->container->resolveParameters}($constructor, $params, 'constructor')
+                $this->{$this->containerAsset->resolveParameters}($constructor, $params, 'constructor')
             );
     }
 
@@ -264,12 +264,12 @@ final class DependencyResolver
     private function invokeMethod(?object $classInstance, string $method, array $params = []): mixed
     {
         $method = new ReflectionMethod(get_class($classInstance), $method);
-        if ($this->container->allowPrivateMethodAccess) {
+        if ($this->containerAsset->allowPrivateMethodAccess) {
             $method->setAccessible(true);
         }
         return $method->invokeArgs(
             $classInstance,
-            $this->{$this->container->resolveParameters}($method, $params, 'method')
+            $this->{$this->containerAsset->resolveParameters}($method, $params, 'method')
         );
     }
 
@@ -290,10 +290,10 @@ final class DependencyResolver
             => $this->reflectedClass($this->getClassName($parameter, $type->getName())),
 
             $this->check($methodType, $name)
-            => $this->reflectedClass($this->container->functionReference[$methodType][$name]),
+            => $this->reflectedClass($this->containerAsset->functionReference[$methodType][$name]),
 
             $this->check('common', $name)
-            => $this->reflectedClass($this->container->functionReference['common'][$name]),
+            => $this->reflectedClass($this->containerAsset->functionReference['common'][$name]),
 
             default => null
         };
@@ -308,8 +308,8 @@ final class DependencyResolver
      */
     private function check(string $type, string $name): bool
     {
-        return isset($this->container->functionReference[$type][$name]) &&
-            class_exists($this->container->functionReference[$type][$name], true);
+        return isset($this->containerAsset->functionReference[$type][$name]) &&
+            class_exists($this->containerAsset->functionReference[$type][$name], true);
     }
 
     /**
@@ -321,7 +321,7 @@ final class DependencyResolver
      */
     private function reflectedClass(string $className): ReflectionClass
     {
-        return $this->container->resolvedResource[$className]['reflection'] ??= new ReflectionClass($className);
+        return $this->containerAsset->resolvedResource[$className]['reflection'] ??= new ReflectionClass($className);
     }
 
     /**
