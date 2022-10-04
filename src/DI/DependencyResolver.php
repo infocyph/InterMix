@@ -34,7 +34,12 @@ final class DependencyResolver
      */
     public function classSettler(string $class, string $method = null): array
     {
-        return $this->getResolvedInstance($this->reflectedClass($class), null, $method);
+        return $this->getResolvedInstance(
+            $this->reflectedClass($class),
+            null,
+            $method,
+            false
+        );
     }
 
     /**
@@ -60,13 +65,15 @@ final class DependencyResolver
      * @param ReflectionClass $class
      * @param mixed|null $supplied
      * @param string|null $callMethod
+     * @param bool $resolveMethod
      * @return array
      * @throws ReflectionException|Exception
      */
     private function getResolvedInstance(
         ReflectionClass $class,
         mixed           $supplied = null,
-        string          $callMethod = null
+        string          $callMethod = null,
+        bool            $resolveMethod = true
     ): array
     {
         $className = $class->getName();
@@ -88,6 +95,10 @@ final class DependencyResolver
         }
 
         $this->containerAsset->resolvedResource[$className]['returned'] = null;
+        if ($resolveMethod === false && $callMethod === null) {
+            return $this->containerAsset->resolvedResource[$className];
+        }
+
         $method = $callMethod
             ?? $this->containerAsset->classResource[$className]['method']['on']
             ?? ($class->getConstant('callOn') ?: $this->containerAsset->defaultMethod);
@@ -309,7 +320,7 @@ final class DependencyResolver
     private function check(string $type, string $name): bool
     {
         return isset($this->containerAsset->functionReference[$type][$name]) &&
-            class_exists($this->containerAsset->functionReference[$type][$name], true);
+            class_exists($this->containerAsset->functionReference[$type][$name]);
     }
 
     /**
