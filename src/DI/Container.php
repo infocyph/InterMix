@@ -240,6 +240,6 @@ final class Container
      */
     public function getInstance(string $class): mixed
     {
-        return (new $this->resolver($this->assets))->classSettler($class)['instance'];
+        return (new $this->resolver($this->assets))->classSettler($class, false)['instance'];
     }
 }

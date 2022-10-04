@@ -37,8 +37,7 @@ final class DependencyResolver
         return $this->getResolvedInstance(
             $this->reflectedClass($class),
             null,
-            $method,
-            false
+            $method
         );
     }
 
@@ -65,15 +64,13 @@ final class DependencyResolver
      * @param ReflectionClass $class
      * @param mixed|null $supplied
      * @param string|null $callMethod
-     * @param bool $resolveMethod
      * @return array
      * @throws ReflectionException|Exception
      */
     private function getResolvedInstance(
         ReflectionClass $class,
         mixed           $supplied = null,
-        string          $callMethod = null,
-        bool            $resolveMethod = true
+        string          $callMethod = null
     ): array
     {
         $className = $class->getName();
@@ -95,7 +92,7 @@ final class DependencyResolver
         }
 
         $this->containerAsset->resolvedResource[$className]['returned'] = null;
-        if ($resolveMethod === false && $callMethod === null) {
+        if ($callMethod === false) {
             return $this->containerAsset->resolvedResource[$className];
         }
 
