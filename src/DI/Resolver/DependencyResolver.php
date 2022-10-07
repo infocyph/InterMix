@@ -1,7 +1,8 @@
 <?php
 
-namespace AbmmHasan\OOF\DI;
+namespace AbmmHasan\OOF\DI\Resolver;
 
+use AbmmHasan\OOF\DI\Asset;
 use Closure;
 use Exception;
 use ReflectionClass;
@@ -210,17 +211,18 @@ final class DependencyResolver
         mixed               $supplied
     ): array
     {
-        if ($class = $this->resolveClass($parameter, $type)) {
+        $incrementBy = 0;
+        $class = $this->resolveClass($parameter, $type);
+        if ($class) {
             if ($type === 'constructor' && $parameter->getDeclaringClass()?->getName() === $class->name) {
                 throw new Exception("Looped call detected: $class->name");
             }
             if (!$this->alreadyExist($class->name, $parameters)) {
                 if ($parameter->isDefaultValueAvailable()) {
-                    return [0, null];
+                    return [$incrementBy, null];
                 }
-                $incrementBy = 0;
                 if (
-                    $supplied !== null &&
+                    $type === 'constructor' && $supplied !== null &&
                     ($constructor = $class->getConstructor()) !== null &&
                     count($passable = $constructor->getParameters())
                 ) {
@@ -236,7 +238,7 @@ final class DependencyResolver
                 return [$incrementBy, $this->getResolvedInstance($class, $supplied)['instance']];
             }
         }
-        return [0, $this->stdClass];
+        return [$incrementBy, $this->stdClass];
     }
 
     /**
@@ -272,9 +274,7 @@ final class DependencyResolver
     private function invokeMethod(?object $classInstance, string $method, array $params = []): mixed
     {
         $method = new ReflectionMethod(get_class($classInstance), $method);
-        if ($this->containerAsset->allowPrivateMethodAccess) {
-            $method->setAccessible(true);
-        }
+        $method->setAccessible($this->containerAsset->allowPrivateMethodAccess);
         return $method->invokeArgs(
             $classInstance,
             $this->{$this->containerAsset->resolveParameters}($method, $params, 'method')

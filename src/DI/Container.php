@@ -3,6 +3,8 @@
 
 namespace AbmmHasan\OOF\DI;
 
+use AbmmHasan\OOF\DI\Resolver\DependencyResolver;
+use AbmmHasan\OOF\DI\Resolver\GenericResolver;
 use Closure;
 use Exception;
 use ReflectionException;
@@ -22,7 +24,7 @@ final class Container
     public function __construct(private string $instanceAlias = 'oof')
     {
         self::$instances[$this->instanceAlias] ??= $this;
-        $this->assets ??= new Asset();
+        $this->assets = new Asset();
     }
 
     /**

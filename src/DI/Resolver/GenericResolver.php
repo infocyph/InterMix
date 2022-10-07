@@ -1,7 +1,8 @@
 <?php
 
-namespace AbmmHasan\OOF\DI;
+namespace AbmmHasan\OOF\DI\Resolver;
 
+use AbmmHasan\OOF\DI\Asset;
 use Closure;
 
 final class GenericResolver
