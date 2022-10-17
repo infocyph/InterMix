@@ -12,7 +12,7 @@ use ReflectionException;
 /**
  * Dependency Injector
  */
-final class Container
+class Container
 {
     private static array $instances;
     private Asset $assets;
@@ -21,7 +21,7 @@ final class Container
     /**
      * Class Constructor
      */
-    public function __construct(private string $instanceAlias = 'oof')
+    public function __construct(private string $instanceAlias = 'default')
     {
         self::$instances[$this->instanceAlias] ??= $this;
         $this->assets = new Asset();
@@ -33,7 +33,7 @@ final class Container
      * @param string $instanceAlias
      * @return Container
      */
-    public static function instance(string $instanceAlias = 'oof'): Container
+    public static function instance(string $instanceAlias = 'default'): Container
     {
         return self::$instances[$instanceAlias] ??= new self($instanceAlias);
     }

@@ -20,7 +20,7 @@ trait Multi
      * @return self
      * @throws Exception
      */
-    final public static function instance(string $key, array $constraints = null): static
+    final public static function instance(string $key = 'default', array $constraints = null): static
     {
         static::checkRequirements($constraints);
 
