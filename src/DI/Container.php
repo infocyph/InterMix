@@ -14,9 +14,9 @@ use ReflectionException;
  */
 class Container
 {
-    private static array $instances;
-    private Asset $assets;
-    private string $resolver = DependencyResolver::class;
+    protected static array $instances;
+    protected Asset $assets;
+    protected string $resolver = DependencyResolver::class;
 
     /**
      * Class Constructor
