@@ -211,34 +211,32 @@ final class DependencyResolver
         mixed               $supplied
     ): array
     {
-        $incrementBy = 0;
         $class = $this->resolveClass($parameter, $type);
-        if ($class) {
-            if ($type === 'constructor' && $parameter->getDeclaringClass()?->getName() === $class->name) {
-                throw new Exception("Looped call detected: $class->name");
-            }
-            if (!$this->alreadyExist($class->name, $parameters)) {
-                if ($parameter->isDefaultValueAvailable()) {
-                    return [$incrementBy, null];
-                }
-                if (
-                    $type === 'constructor' && $supplied !== null &&
-                    ($constructor = $class->getConstructor()) !== null &&
-                    count($passable = $constructor->getParameters())
-                ) {
-                    if ($this->containerAsset->resolveParameters === 'resolveAssociativeParameters') {
-                        $this->containerAsset->classResource[$class->getName()]['constructor']['params'][$passable[0]->getName()] = $supplied;
-                    } else {
-                        $this->containerAsset->classResource[$class->getName()]['constructor']['params'] = array_merge(
-                            [$supplied], $this->containerAsset->classResource[$class->getName()]['constructor']['params'] ?? []
-                        );
-                    }
-                    $incrementBy = 1;
-                }
-                return [$incrementBy, $this->getResolvedInstance($class, $supplied)['instance']];
-            }
+        if (!$class || $this->alreadyExist($class->name, $parameters)) {
+            return [0, $this->stdClass];
         }
-        return [$incrementBy, $this->stdClass];
+        if ($parameter->isDefaultValueAvailable()) {
+            return [0, null];
+        }
+        if ($type === 'constructor' && $parameter->getDeclaringClass()?->getName() === $class->name) {
+            throw new Exception("Looped call detected: $class->name");
+        }
+        $incrementBy = 0;
+        if (
+            $type === 'constructor' && $supplied !== null &&
+            ($constructor = $class->getConstructor()) !== null &&
+            count($passable = $constructor->getParameters())
+        ) {
+            if ($this->containerAsset->resolveParameters === 'resolveAssociativeParameters') {
+                $this->containerAsset->classResource[$class->getName()]['constructor']['params'][$passable[0]->getName()] = $supplied;
+            } else {
+                $this->containerAsset->classResource[$class->getName()]['constructor']['params'] = array_merge(
+                    [$supplied], $this->containerAsset->classResource[$class->getName()]['constructor']['params'] ?? []
+                );
+            }
+            $incrementBy = 1;
+        }
+        return [$incrementBy, $this->getResolvedInstance($class, $supplied)['instance']];
     }
 
     /**
