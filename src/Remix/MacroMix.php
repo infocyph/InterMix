@@ -24,7 +24,7 @@ trait MacroMix
      * @param callable|object $macro
      * @return void
      */
-    public static function register(string $name, callable|object $macro)
+    public static function register(string $name, callable|object $macro): void
     {
         static::$macros[$name] = $macro;
     }
@@ -37,7 +37,7 @@ trait MacroMix
      * @return void
      * @throws ReflectionException
      */
-    public static function mix(object $mixin, bool $replace = true)
+    public static function mix(object $mixin, bool $replace = true): void
     {
         $methods = (new ReflectionClass($mixin))->getMethods(
             ReflectionMethod::IS_PUBLIC | ReflectionMethod::IS_PROTECTED

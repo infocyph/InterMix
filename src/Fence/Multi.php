@@ -24,9 +24,6 @@ trait Multi
     {
         static::checkRequirements($constraints);
 
-        if (!array_key_exists($key, static::$instances)) {
-            static::$instances[$key] = new static;
-        }
-        return static::$instances[$key];
+        return static::$instances[$key] ??= new static;
     }
 }

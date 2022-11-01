@@ -16,6 +16,10 @@ trait Common
      */
     protected static function checkRequirements(array $constraints = null): void
     {
+        if ($constraints === null) {
+            return;
+        }
+
         if (!empty($constraints['extensions'])) {
             $commonExt = array_intersect(get_loaded_extensions(), $constraints['extensions']);
             $missingExt = array_diff($constraints['extensions'], $commonExt);

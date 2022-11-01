@@ -13,7 +13,7 @@ trait Single
     protected static $instance;
 
     /**
-     * Creates a new instance of a singleton class (via late static binding),
+     * Creates a new instance of a singleton class,
      * accepting a variable-length argument list.
      *
      * @param array|null $constraints
@@ -24,9 +24,6 @@ trait Single
     {
         static::checkRequirements($constraints);
 
-        if (!static::$instance) {
-            static::$instance = new static;
-        }
-        return static::$instance;
+        return static::$instance ??= new static;
     }
 }

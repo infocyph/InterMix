@@ -26,13 +26,11 @@ trait Limit
     {
         static::checkRequirements($constraints);
 
-        if (!array_key_exists($key, static::$instances)) {
-            if (count(static::$instances) < static::$limit) {
-                static::$instances[$key] = new static;
-            }
-        }
-        return static::$instances[$key] ??
+        if (count(static::$instances) >= static::$limit) {
             throw new Exception('Initialization limit exceeded!');
+        }
+
+        return static::$instances[$key] ??= new static;
     }
 
     /**
@@ -41,7 +39,7 @@ trait Limit
      * @param $number int number of instances allowed
      * @return void
      */
-    final public function setLimit(int $number)
+    final public function setLimit(int $number): void
     {
         static::$limit = $number;
     }
