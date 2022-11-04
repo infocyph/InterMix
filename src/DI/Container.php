@@ -244,4 +244,24 @@ class Container
     {
         return (new $this->resolver($this->assets))->classSettler($class, false)['instance'];
     }
+
+    /**
+     * Get parsed class & method information from string
+     *
+     * @param string|array $classAndMethod
+     * @return array
+     * @throws Exception
+     */
+    public function split(string|array $classAndMethod): array
+    {
+        if (is_array($classAndMethod) && count($classAndMethod) === 2) {
+            return $classAndMethod;
+        }
+
+        if (!is_string($classAndMethod) || !str_contains($classAndMethod, '@')) {
+            throw new Exception('Unknown Class & Method formation (should be namspacedClass@method)');
+        }
+
+        return explode('@', $classAndMethod, 2);
+    }
 }
