@@ -10,7 +10,7 @@ trait Single
 {
     use Common;
 
-    protected static $instance;
+    protected static $instance = null;
 
     /**
      * Creates a new instance of a singleton class,
