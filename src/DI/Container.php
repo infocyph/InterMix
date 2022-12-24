@@ -259,7 +259,7 @@ class Container
         }
 
         if (!is_string($classAndMethod) || !str_contains($classAndMethod, '@')) {
-            throw new Exception('Unknown Class & Method formation (should be namspacedClass@method)');
+            throw new Exception('Unknown Class & Method formation (either [namspaced Class, method] or namspacedClass@method)');
         }
 
         return explode('@', $classAndMethod, 2);
