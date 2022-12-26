@@ -17,7 +17,6 @@ This library intended to provide you with some class oriented tools that we (may
 * Dependency Injector (Container)
 * Class initialization barrier (Fence)
 * Class Macro (MacroMix)
-* Overload
 
 ## Prerequisites
 
