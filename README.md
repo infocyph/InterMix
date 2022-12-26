@@ -1,6 +1,6 @@
 # OOF
 
-![GitHub Workflow Status](https://img.shields.io/github/workflow/status/abmmhasan/oof/build)
+![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/abmmhasan/oof/ci.yml)
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/88086fed2d124010aa09c5979bdc4b80)](https://www.codacy.com/gh/abmmhasan/OOF/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=abmmhasan/OOF&amp;utm_campaign=Badge_Grade)
 ![Libraries.io dependency status for GitHub repo](https://img.shields.io/librariesio/github/abmmhasan/oof)
 ![Packagist Downloads](https://img.shields.io/packagist/dt/abmmhasan/oof)
