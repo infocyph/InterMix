@@ -5,14 +5,16 @@ namespace AbmmHasan\OOF\DI;
 
 use AbmmHasan\OOF\DI\Resolver\DependencyResolver;
 use AbmmHasan\OOF\DI\Resolver\GenericResolver;
+use AbmmHasan\OOF\Exceptions\NotFoundException;
 use Closure;
 use Exception;
+use Psr\Container\ContainerInterface;
 use ReflectionException;
 
 /**
  * Dependency Injector
  */
-class Container
+class Container implements ContainerInterface
 {
     protected static array $instances;
     protected Asset $assets;
@@ -46,6 +48,61 @@ class Container
     public function unset(): void
     {
         unset(self::$instances[$this->instanceAlias]);
+    }
+
+    /**
+     * Add definitions
+     *
+     * @param array $definitions [alias/identifier => definition]
+     * @return Container
+     */
+    public function addDefinitions(array $definitions): Container
+    {
+        if ($definitions !== []) {
+            foreach ($definitions as $identifier => $definition) {
+                $this->set($identifier, $definition);
+            }
+        }
+        return self::$instances[$this->instanceAlias];
+    }
+
+    /**
+     * Add definition
+     *
+     * @param string $id Identifier of the entry
+     * @param mixed $definition
+     * @return Container
+     */
+    public function set(string $id, mixed $definition): Container
+    {
+        $this->assets->functionReference[$id] = $definition;
+        return self::$instances[$this->instanceAlias];
+    }
+
+    /**
+     * Finds an entry of the container by its identifier and returns it.
+     *
+     * @param string $id Identifier of the entry
+     * @return mixed
+     * @throws NotFoundException
+     */
+    public function get(string $id): mixed
+    {
+        if (!$this->has($id)) {
+            throw new NotFoundException("No entry found for '$id' identifier");
+        }
+        // TODO: Implement get() method.
+    }
+
+    /**
+     * Returns true if the container can return an entry for the given identifier.
+     *
+     * @param string $id Identifier of the entry to look for
+     * @return bool
+     */
+    public function has(string $id): bool
+    {
+        return array_key_exists($id, $this->assets->functionReference);
     }
 
     /**
@@ -102,45 +159,6 @@ class Container
     }
 
     /**
-     * Set resource for parameter to Class Constructor/Method resolver
-     *
-     * @param array $parameterResource
-     * @return Container
-     */
-    public function registerParamToClass(array $parameterResource): Container
-    {
-        $this->assets
-            ->functionReference['common'] = $parameterResource;
-        return self::$instances[$this->instanceAlias];
-    }
-
-    /**
-     * Set resource for parameter to Class Constructor resolver
-     *
-     * @param array $parameterResource
-     * @return Container
-     */
-    public function registerParamToConstructor(array $parameterResource): Container
-    {
-        $this->assets
-            ->functionReference['constructor'] = $parameterResource;
-        return self::$instances[$this->instanceAlias];
-    }
-
-    /**
-     * Set resource for parameter to Class Method resolver
-     *
-     * @param array $parameterResource
-     * @return Container
-     */
-    public function registerParamToMethod(array $parameterResource): Container
-    {
-        $this->assets
-            ->functionReference['method'] = $parameterResource;
-        return self::$instances[$this->instanceAlias];
-    }
-
-    /**
      * Allow access to private methods
      *
      * @return Container
@@ -161,18 +179,6 @@ class Container
     public function setDefaultMethod(string $method): Container
     {
         $this->assets->defaultMethod = $method;
-        return self::$instances[$this->instanceAlias];
-    }
-
-    /**
-     * Disable resolution by name (instead it will resolve in sequence)
-     *
-     * @return Container
-     */
-    public function disableNamedParameter(): Container
-    {
-        $this->assets
-            ->resolveParameters = 'resolveNonAssociativeParameters';
         return self::$instances[$this->instanceAlias];
     }
 
@@ -254,14 +260,22 @@ class Container
      */
     public function split(string|array $classAndMethod): array
     {
+        if (is_string($classAndMethod)) {
+            if (str_contains($classAndMethod, '@')) {
+                return explode('@', $classAndMethod, 2);
+            }
+
+            if (str_contains($classAndMethod, '::')) {
+                return explode('::', $classAndMethod, 2);
+            }
+        }
+
         if (is_array($classAndMethod) && count($classAndMethod) === 2) {
             return $classAndMethod;
         }
 
-        if (!is_string($classAndMethod) || !str_contains($classAndMethod, '@')) {
-            throw new Exception('Unknown Class & Method formation (either [namspaced Class, method] or namspacedClass@method)');
-        }
-
-        return explode('@', $classAndMethod, 2);
+        throw new Exception(
+            'Unknown Class & Method formation (either [namspaced Class, method] or namspacedClass@method or namespacedClass::method)'
+        );
     }
 }

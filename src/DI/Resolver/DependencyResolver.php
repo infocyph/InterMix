@@ -12,17 +12,15 @@ use ReflectionFunctionAbstract;
 use ReflectionMethod;
 use ReflectionNamedType;
 use ReflectionParameter;
-use stdClass;
 
 final class DependencyResolver
 {
-    private stdClass $stdClass;
+    private ParameterResolver $parameterResolver;
 
     public function __construct(
         private Asset $containerAsset
-    )
-    {
-        $this->stdClass = new stdClass();
+    ) {
+        $this->parameterResolver = new ParameterResolver($this);
     }
 
     /**
@@ -52,11 +50,13 @@ final class DependencyResolver
      */
     public function closureSettler(string|Closure $closure, array $params): mixed
     {
-        return $closure(...$this->{$this->containerAsset->resolveParameters}(
+        return $closure(
+            ...$this->resolveParameters(
             new ReflectionFunction($closure),
             $params,
             'constructor'
-        ));
+        )
+        );
     }
 
     /**
@@ -70,10 +70,9 @@ final class DependencyResolver
      */
     private function getResolvedInstance(
         ReflectionClass $class,
-        mixed           $supplied = null,
-        string          $callMethod = null
-    ): array
-    {
+        mixed $supplied = null,
+        string $callMethod = null
+    ): array {
         $className = $class->getName();
         if ($class->isInterface()) {
             if (!class_exists($supplied)) {
@@ -88,7 +87,8 @@ final class DependencyResolver
 
         if (!$this->containerAsset->forceSingleton || !isset($this->containerAsset->resolvedResource[$className]['instance'])) {
             $this->containerAsset->resolvedResource[$className]['instance'] = $this->getClassInstance(
-                $class, $this->containerAsset->classResource[$className]['constructor']['params'] ?? []
+                $class,
+                $this->containerAsset->classResource[$className]['constructor']['params'] ?? []
             );
         }
 
@@ -119,215 +119,104 @@ final class DependencyResolver
      * @return array
      * @throws ReflectionException|Exception
      */
-    private function resolveNonAssociativeParameters(
+    private function resolveParameters(
         ReflectionFunctionAbstract $reflector,
-        array                      $suppliedParameters,
-        string                     $type
-    ): array
-    {
-        $processed = [];
-        $instanceCount = $parameterIndex = 0;
-        $values = array_values($suppliedParameters);
-        $parent = $reflector->class ?? $reflector->getName();
-        foreach ($reflector->getParameters() as $key => $classParameter) {
-            [$incrementBy, $instance] = $this->resolveDependency(
-                $classParameter,
-                $processed,
-                $type,
-                $suppliedParameters[$classParameter->getName()] ?? null
-            );
-            $processed[] = match (true) {
-                $instance !== $this->stdClass
-                => [$instance, $instanceCount++, $parameterIndex += $incrementBy][0],
-
-                !isset($values[$key - $instanceCount]) && $classParameter->isDefaultValueAvailable()
-                => $classParameter->getDefaultValue(),
-
-                default => $values[$parameterIndex++] ??
-                    throw new Exception(
-                        "Resolution failed: '{$classParameter->getName()}' of $parent::{$reflector->getShortName()}()!"
-                    )
-            };
-        }
-        return $processed;
-    }
-
-    /**
-     * Resolve Function parameter
-     *
-     * @param ReflectionFunctionAbstract $reflector
-     * @param array $suppliedParameters
-     * @param string $type
-     * @return array
-     * @throws ReflectionException|Exception
-     */
-    private function resolveAssociativeParameters(
-        ReflectionFunctionAbstract $reflector,
-        array                      $suppliedParameters,
-        string                     $type
-    ): array
-    {
+        array $suppliedParameters,
+        string $type
+    ): array {
         $processed = [];
         $instanceCount = 0;
         $values = array_values($suppliedParameters);
         $parent = $reflector->class ?? $reflector->getName();
         foreach ($reflector->getParameters() as $key => $classParameter) {
-            [$incrementBy, $instance] = $this->resolveDependency(
-                $classParameter,
-                $processed,
-                $type,
-                $suppliedParameters[$classParameter->getName()] ?? null
+            $parameterName = $classParameter->getName();
+
+            if (isset($this->containerAsset->functionReference[$parameterName])) {
+                $processed[$classParameter->getName()] = $this->parameterResolver->resolveByDefinition(
+                    $this->containerAsset->functionReference[$parameterName]
+                );
+                continue;
+            }
+
+            $class = $this->getResolvableClassReflection($classParameter);
+            $passableParameter = $suppliedParameters[$parameterName] ?? null;
+
+            if ($class) {
+                if (!$this->alreadyExist($class->name, $processed)) {
+                    if ($type === 'constructor' && $classParameter->getDeclaringClass()?->getName() === $class->name) {
+                        throw new Exception("Looped call detected: $class->name");
+                    }
+                    $processed[$classParameter->getName()] = $this->resolveClassDependency(
+                        $class,
+                        $type,
+                        $passableParameter
+                    );
+                    $instanceCount++;
+                    continue;
+                }
+                throw new Exception(
+                    "Found multiple instances for $class->name in $parent::{$reflector->getShortName()}()"
+                );
+            }
+
+            if (!isset($values[$key - $instanceCount]) && $classParameter->isDefaultValueAvailable()) {
+                $processed[$classParameter->getName()] = $classParameter->getDefaultValue();
+                continue;
+            }
+
+            $processed[$classParameter->getName()] = $passableParameter ?? throw new Exception(
+                "Resolution failed: '$parameterName' of $parent::{$reflector->getShortName()}()"
             );
-            $processed[$classParameter->getName()] = match (true) {
-                $instance !== $this->stdClass
-                => [$instance, $instanceCount++][0],
-
-                !isset($values[$key - $instanceCount]) && $classParameter->isDefaultValueAvailable()
-                => $classParameter->getDefaultValue(),
-
-                default => $suppliedParameters[$classParameter->getName()] ??
-                    throw new Exception(
-                        "Resolution failed: '{$classParameter->getName()}' of $parent::{$reflector->getShortName()}()!"
-                    )
-            };
         }
         return $processed;
     }
 
     /**
-     * Resolve parameter dependency
+     * Resolve class dependency
      *
-     * @param ReflectionParameter $parameter
-     * @param array $parameters
+     * @param ReflectionClass $class
      * @param string $type
      * @param mixed $supplied
-     * @return array
-     * @throws ReflectionException|Exception
+     * @return object
+     * @throws ReflectionException
      */
-    private function resolveDependency(
-        ReflectionParameter $parameter,
-        array               $parameters,
-        string              $type,
-        mixed               $supplied
-    ): array
-    {
-        $class = $this->resolveClass($parameter, $type);
-        if (!$class || $this->alreadyExist($class->name, $parameters)) {
-            return [0, $this->stdClass];
-        }
-        if ($parameter->isDefaultValueAvailable()) {
-            return [0, null];
-        }
-        if ($type === 'constructor' && $parameter->getDeclaringClass()?->getName() === $class->name) {
-            throw new Exception("Looped call detected: $class->name");
-        }
-        $incrementBy = 0;
+    private function resolveClassDependency(
+        ReflectionClass $class,
+        string $type,
+        mixed $supplied
+    ): object {
         if (
             $type === 'constructor' && $supplied !== null &&
             ($constructor = $class->getConstructor()) !== null &&
             count($passable = $constructor->getParameters())
         ) {
-            if ($this->containerAsset->resolveParameters === 'resolveAssociativeParameters') {
-                $this->containerAsset->classResource[$class->getName()]['constructor']['params'][$passable[0]->getName()] = $supplied;
-            } else {
-                $this->containerAsset->classResource[$class->getName()]['constructor']['params'] = array_merge(
-                    [$supplied], $this->containerAsset->classResource[$class->getName()]['constructor']['params'] ?? []
-                );
-            }
-            $incrementBy = 1;
+            $this->containerAsset->classResource[$class->getName()]['constructor']['params']
+            [$passable[0]->getName()] = $supplied;
         }
-        return [$incrementBy, $this->getResolvedInstance($class, $supplied)['instance']];
+        return $this->getResolvedInstance($class, $supplied)['instance'];
     }
 
     /**
-     * Get class Instance
-     *
-     * @param ReflectionClass $class
-     * @param array $params
-     * @return object|null
-     * @throws ReflectionException|Exception
-     */
-    private function getClassInstance(ReflectionClass $class, array $params = []): ?object
-    {
-        if (!$class->isInstantiable()) {
-            throw new Exception("{$class->getName()} is not instantiable!");
-        }
-        $constructor = $class->getConstructor();
-        return $constructor === null ?
-            $class->newInstanceWithoutConstructor() :
-            $class->newInstanceArgs(
-                $this->{$this->containerAsset->resolveParameters}($constructor, $params, 'constructor')
-            );
-    }
-
-    /**
-     * Get Method return
-     *
-     * @param object|null $classInstance
-     * @param string $method
-     * @param array $params
-     * @return mixed
-     * @throws ReflectionException
-     */
-    private function invokeMethod(?object $classInstance, string $method, array $params = []): mixed
-    {
-        $method = new ReflectionMethod(get_class($classInstance), $method);
-        $method->setAccessible($this->containerAsset->allowPrivateMethodAccess);
-        return $method->invokeArgs(
-            $classInstance,
-            $this->{$this->containerAsset->resolveParameters}($method, $params, 'method')
-        );
-    }
-
-    /**
-     * Check & get Reflection instance
+     * Get reflection instance, if applicable
      *
      * @param ReflectionParameter $parameter
-     * @param string $methodType
      * @return ReflectionClass|null
      * @throws ReflectionException
      */
-    private function resolveClass(ReflectionParameter $parameter, string $methodType): ?ReflectionClass
+    private function getResolvableClassReflection(ReflectionParameter $parameter): ?ReflectionClass
     {
         $type = $parameter->getType();
+        if ($type instanceof ReflectionNamedType && !$type->isBuiltin()) {
+            return $this->reflectedClass($this->getClassName($parameter, $type->getName()));
+        }
+
         $name = $parameter->getName();
-        return match (true) {
-            $type instanceof ReflectionNamedType && !$type->isBuiltin()
-            => $this->reflectedClass($this->getClassName($parameter, $type->getName())),
-
-            $this->check($methodType, $name)
-            => $this->reflectedClass($this->containerAsset->functionReference[$methodType][$name]),
-
-            $this->check('common', $name)
-            => $this->reflectedClass($this->containerAsset->functionReference['common'][$name]),
-
-            default => null
-        };
-    }
-
-    /**
-     * Check if specified class exists
-     *
-     * @param string $type
-     * @param string $name
-     * @return bool
-     */
-    private function check(string $type, string $name): bool
-    {
-        return isset($this->containerAsset->functionReference[$type][$name]) &&
-            class_exists($this->containerAsset->functionReference[$type][$name]);
-    }
-
-    /**
-     * Get ReflectionClass instance
-     *
-     * @param string $className
-     * @return ReflectionClass
-     * @throws ReflectionException
-     */
-    private function reflectedClass(string $className): ReflectionClass
-    {
-        return $this->containerAsset->resolvedResource[$className]['reflection'] ??= new ReflectionClass($className);
+        if (isset($this->containerAsset->functionReference[$name]) &&
+            is_string($this->containerAsset->functionReference[$name]) &&
+            class_exists($this->containerAsset->functionReference[$name])) {
+            return $this->reflectedClass($this->containerAsset->functionReference[$name]);
+        }
+        return null;
     }
 
     /**
@@ -347,6 +236,58 @@ final class DependencyResolver
             };
         }
         return $name;
+    }
+
+    /**
+     * Get class Instance
+     *
+     * @param ReflectionClass $class
+     * @param array $params
+     * @return object|null
+     * @throws ReflectionException|Exception
+     */
+    private function getClassInstance(ReflectionClass $class, array $params = []): ?object
+    {
+        if (!$class->isInstantiable()) {
+            throw new Exception("{$class->getName()} is not instantiable!");
+        }
+        $constructor = $class->getConstructor();
+        return $constructor === null ?
+            $class->newInstanceWithoutConstructor() :
+            $class->newInstanceArgs(
+                $this->resolveParameters($constructor, $params, 'constructor')
+            );
+    }
+
+    /**
+     * Get Method return
+     *
+     * @param object|null $classInstance
+     * @param string $method
+     * @param array $params
+     * @return mixed
+     * @throws ReflectionException
+     */
+    private function invokeMethod(?object $classInstance, string $method, array $params = []): mixed
+    {
+        $method = new ReflectionMethod(get_class($classInstance), $method);
+        $method->setAccessible($this->containerAsset->allowPrivateMethodAccess);
+        return $method->invokeArgs(
+            $classInstance,
+            $this->resolveParameters($method, $params, 'method')
+        );
+    }
+
+    /**
+     * Get ReflectionClass instance
+     *
+     * @param string $className
+     * @return ReflectionClass
+     * @throws ReflectionException
+     */
+    private function reflectedClass(string $className): ReflectionClass
+    {
+        return $this->containerAsset->resolvedResource[$className]['reflection'] ??= new ReflectionClass($className);
     }
 
     /**

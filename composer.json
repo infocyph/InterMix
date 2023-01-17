@@ -20,6 +20,7 @@
   "minimum-stability": "dev",
   "prefer-stable": true,
   "require": {
-    "php": ">=8.0"
+    "php": ">=8.0",
+    "psr/container": "^2.0"
   }
 }
