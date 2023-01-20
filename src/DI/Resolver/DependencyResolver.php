@@ -15,12 +15,12 @@ use ReflectionParameter;
 
 final class DependencyResolver
 {
-    private ParameterResolver $parameterResolver;
+
+    private array $resolvedDefinition = [];
 
     public function __construct(
         private Asset $containerAsset
     ) {
-        $this->parameterResolver = new ParameterResolver($this);
     }
 
     /**
@@ -48,7 +48,7 @@ final class DependencyResolver
      * @return mixed
      * @throws ReflectionException
      */
-    public function closureSettler(string|Closure $closure, array $params): mixed
+    public function closureSettler(string|Closure $closure, array $params = []): mixed
     {
         return $closure(
             ...$this->resolveParameters(
@@ -74,6 +74,7 @@ final class DependencyResolver
         string $callMethod = null
     ): array {
         $className = $class->getName();
+
         if ($class->isInterface()) {
             if (!class_exists($supplied)) {
                 throw new Exception("Resolution failed: $supplied for interface $className");
@@ -131,9 +132,10 @@ final class DependencyResolver
         foreach ($reflector->getParameters() as $key => $classParameter) {
             $parameterName = $classParameter->getName();
 
-            if (isset($this->containerAsset->functionReference[$parameterName])) {
-                $processed[$classParameter->getName()] = $this->parameterResolver->resolveByDefinition(
-                    $this->containerAsset->functionReference[$parameterName]
+            if (array_key_exists($parameterName, $this->containerAsset->functionReference)) {
+                $processed[$classParameter->getName()] = $this->resolveByDefinition(
+                    $this->containerAsset->functionReference[$parameterName],
+                    $parameterName
                 );
                 continue;
             }
@@ -142,21 +144,21 @@ final class DependencyResolver
             $passableParameter = $suppliedParameters[$parameterName] ?? null;
 
             if ($class) {
-                if (!$this->alreadyExist($class->name, $processed)) {
-                    if ($type === 'constructor' && $classParameter->getDeclaringClass()?->getName() === $class->name) {
-                        throw new Exception("Looped call detected: $class->name");
-                    }
-                    $processed[$classParameter->getName()] = $this->resolveClassDependency(
-                        $class,
-                        $type,
-                        $passableParameter
+                if ($this->alreadyExist($class->name, $processed)) {
+                    throw new Exception(
+                        "Found multiple instances for $class->name in $parent::{$reflector->getShortName()}()"
                     );
-                    $instanceCount++;
-                    continue;
                 }
-                throw new Exception(
-                    "Found multiple instances for $class->name in $parent::{$reflector->getShortName()}()"
+                if ($type === 'constructor' && $classParameter->getDeclaringClass()?->getName() === $class->name) {
+                    throw new Exception("Looped call detected: $class->name");
+                }
+                $processed[$classParameter->getName()] = $this->resolveClassDependency(
+                    $class,
+                    $type,
+                    $passableParameter
                 );
+                $instanceCount++;
+                continue;
             }
 
             if (!isset($values[$key - $instanceCount]) && $classParameter->isDefaultValueAvailable()) {
@@ -167,8 +169,33 @@ final class DependencyResolver
             $processed[$classParameter->getName()] = $passableParameter ?? throw new Exception(
                 "Resolution failed: '$parameterName' of $parent::{$reflector->getShortName()}()"
             );
+            $instanceCount++;
         }
         return $processed;
+    }
+
+    /**
+     * Definition based resolver
+     *
+     * @param mixed $definition
+     * @param string $name
+     * @return mixed
+     * @throws ReflectionException
+     */
+    public function resolveByDefinition(mixed $definition, string $name): mixed
+    {
+        return $this->resolvedDefinition[$name] ??= match (true) {
+            $definition instanceof Closure => $this->closureSettler($$name = $definition),
+
+            is_array($definition) && class_exists($definition[0]) => function () use ($definition) {
+                $resolved = $this->classSettler(...$definition);
+                return empty($definition[1]) ? $resolved['instance'] : $resolved['returned'];
+            },
+
+            is_string($definition) && class_exists($definition) => $this->classSettler($definition)['instance'],
+
+            default => $definition
+        };
     }
 
     /**
@@ -210,12 +237,6 @@ final class DependencyResolver
             return $this->reflectedClass($this->getClassName($parameter, $type->getName()));
         }
 
-        $name = $parameter->getName();
-        if (isset($this->containerAsset->functionReference[$name]) &&
-            is_string($this->containerAsset->functionReference[$name]) &&
-            class_exists($this->containerAsset->functionReference[$name])) {
-            return $this->reflectedClass($this->containerAsset->functionReference[$name]);
-        }
         return null;
     }
 

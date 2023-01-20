@@ -5,6 +5,7 @@ namespace AbmmHasan\OOF\DI;
 
 use AbmmHasan\OOF\DI\Resolver\DependencyResolver;
 use AbmmHasan\OOF\DI\Resolver\GenericResolver;
+use AbmmHasan\OOF\Exceptions\ContainerException;
 use AbmmHasan\OOF\Exceptions\NotFoundException;
 use Closure;
 use Exception;
@@ -55,6 +56,7 @@ class Container implements ContainerInterface
      *
      * @param array $definitions [alias/identifier => definition]
      * @return Container
+     * @throws Exception
      */
     public function addDefinitions(array $definitions): Container
     {
@@ -72,9 +74,13 @@ class Container implements ContainerInterface
      * @param string $id Identifier of the entry
      * @param mixed $definition
      * @return Container
+     * @throws Exception
      */
     public function set(string $id, mixed $definition): Container
     {
+        if ($id === $definition) {
+            throw new Exception("Loop-able entry detected ($id)");
+        }
         $this->assets->functionReference[$id] = $definition;
         return self::$instances[$this->instanceAlias];
     }
@@ -84,14 +90,20 @@ class Container implements ContainerInterface
      *
      * @param string $id Identifier of the entry
      * @return mixed
-     * @throws NotFoundException
+     * @throws NotFoundException|ContainerException
      */
     public function get(string $id): mixed
     {
         if (!$this->has($id)) {
             throw new NotFoundException("No entry found for '$id' identifier");
         }
-        // TODO: Implement get() method.
+
+        try {
+            return (new $this->resolver($this->assets))
+                ->resolveByDefinition($this->assets->functionReference[$id], $id);
+        } catch (Exception|ReflectionException $exception) {
+            throw new ContainerException("Error while retrieving the entry: " . $exception->getMessage());
+        }
     }
 
     /**
@@ -206,60 +218,58 @@ class Container implements ContainerInterface
     }
 
     /**
-     * Call the desired closure
+     * Get the resolved class/closure/class-method
      *
-     * @param string|Closure|callable $closureAlias
-     * @return mixed
-     * @throws Exception
-     */
-    public function callClosure(string|Closure|callable $closureAlias): mixed
-    {
-        if ($closureAlias instanceof Closure || is_callable($closureAlias)) {
-            $closure = $closureAlias;
-            $params = [];
-        } elseif (!empty($this->assets->closureResource[$closureAlias]['on'])) {
-            $closure = $this->assets->closureResource[$closureAlias]['on'];
-            $params = $this->assets->closureResource[$closureAlias]['params'];
-        } else {
-            throw new Exception('Closure not registered!');
-        }
-        return (new $this->resolver($this->assets))->closureSettler($closure, $params);
-    }
-
-    /**
-     * Call the desired class (along with the method)
-     *
-     * @param string $class
+     * @param string|Closure|callable $classOrClosure
      * @param string|null $method
      * @return mixed
-     * @throws ReflectionException
+     * @throws ReflectionException|Exception
      */
-    public function callMethod(string $class, string $method = null): mixed
+    public function call(string|Closure|callable $classOrClosure, string $method = null): mixed
     {
-        return (new $this->resolver($this->assets))->classSettler($class, $method)['returned'];
+        return $this->resolve($classOrClosure, $method);
     }
 
     /**
-     * Get Class Instance
+     * Resolve based on given conditions
      *
-     * @param string $class
+     * @param string|Closure|callable $classOrClosure
+     * @param string $method
      * @return mixed
-     * @throws ReflectionException
+     * @throws ReflectionException|Exception
      */
-    public function getInstance(string $class): mixed
+    private function resolve(string|Closure|callable $classOrClosure, string $method): mixed
     {
-        return (new $this->resolver($this->assets))->classSettler($class, false)['instance'];
+        if ($classOrClosure instanceof Closure || (is_callable($classOrClosure) && !is_array($classOrClosure))) {
+            return (new $this->resolver($this->assets))
+                ->closureSettler($classOrClosure);
+        }
+
+        if (!empty($this->assets->closureResource[$classOrClosure]['on'])) {
+            return (new $this->resolver($this->assets))
+                ->closureSettler(
+                    $this->assets->closureResource[$classOrClosure]['on'],
+                    $this->assets->closureResource[$classOrClosure]['params']
+                );
+        }
+
+        return (new $this->resolver($this->assets))
+            ->classSettler($classOrClosure, $method ?: false)[$method ? 'returned' : 'instance'];
     }
 
     /**
      * Get parsed class & method information from string
      *
-     * @param string|array $classAndMethod
+     * @param string|array|Closure|callable $classAndMethod
      * @return array
      * @throws Exception
      */
-    public function split(string|array $classAndMethod): array
+    public function split(string|array|Closure|callable $classAndMethod): array
     {
+        if ($classAndMethod instanceof Closure || (is_callable($classAndMethod) && !is_array($classAndMethod))) {
+            return [$classAndMethod];
+        }
+
         if (is_string($classAndMethod)) {
             if (str_contains($classAndMethod, '@')) {
                 return explode('@', $classAndMethod, 2);
