@@ -9,18 +9,14 @@ if (!function_exists('container')) {
      * @param string $alias instance alias
      * @param string|Closure|callable|array|null $closureOrClass
      * @return Container|mixed
-     * @throws Exception
+     * @throws ReflectionException|Exception
      */
     function container(string $alias = 'oof', string|Closure|callable|array $closureOrClass = null)
     {
-        try {
-            $instance = Container::instance($alias);
-            return match (true) {
-                $closureOrClass === null => $instance,
-                default => $instance->call(...$instance->split($closureOrClass))
-            };
-        } catch (ReflectionException|Exception $e) {
-            throw new Exception($e->getMessage());
-        }
+        $instance = Container::instance($alias);
+        return match (true) {
+            $closureOrClass === null => $instance,
+            default => $instance->call(...$instance->split($closureOrClass))
+        };
     }
 }

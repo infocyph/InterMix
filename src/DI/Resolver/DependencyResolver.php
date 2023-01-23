@@ -15,7 +15,6 @@ use ReflectionParameter;
 
 final class DependencyResolver
 {
-
     private array $resolvedDefinition = [];
 
     public function __construct(
@@ -28,12 +27,12 @@ final class DependencyResolver
      *
      * @param string $class
      * @param string|null $method
-     * @return array
+     * @return object
      * @throws ReflectionException
      */
-    public function classSettler(string $class, string $method = null): array
+    public function classSettler(string $class, string $method = null): object
     {
-        return $this->getResolvedInstance(
+        return (object)$this->getResolvedInstance(
             $this->reflectedClass($class),
             null,
             $method

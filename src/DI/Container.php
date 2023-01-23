@@ -253,8 +253,7 @@ class Container implements ContainerInterface
                 );
         }
 
-        return (new $this->resolver($this->assets))
-            ->classSettler($classOrClosure, $method ?: false)[$method ? 'returned' : 'instance'];
+        return (new $this->resolver($this->assets))->classSettler($classOrClosure, $method);
     }
 
     /**

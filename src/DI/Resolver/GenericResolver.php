@@ -9,9 +9,7 @@ final class GenericResolver
 {
     public function __construct(
         private Asset $containerAsset
-    )
-    {
-
+    ) {
     }
 
     /**
@@ -19,9 +17,9 @@ final class GenericResolver
      *
      * @param string $class
      * @param string|null $method
-     * @return array
+     * @return object
      */
-    public function classSettler(string $class, string $method = null): array
+    public function classSettler(string $class, string $method = null): object
     {
         $asset = [
             'instance' => $instance = new $class(
@@ -36,7 +34,7 @@ final class GenericResolver
             );
         }
 
-        return $asset;
+        return (object)$asset;
     }
 
     /**
