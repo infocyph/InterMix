@@ -94,14 +94,27 @@ class Container implements ContainerInterface
      */
     public function get(string $id): mixed
     {
-        if (!$this->has($id)) {
-            throw new NotFoundException("No entry found for '$id' identifier");
-        }
-
         try {
-            return (new $this->resolver($this->assets))
-                ->resolveByDefinition($this->assets->functionReference[$id], $id);
+            $existsInResolved = array_key_exists($id, $this->assets->resolved);
+            if ($existsInDefinition = array_key_exists($id, $this->assets->functionReference)) {
+                return (new $this->resolver($this->assets))
+                    ->resolveByDefinition($this->assets->functionReference[$id], $id);
+            }
+
+            if ($existsInResolved) {
+                return $this->assets->resolved[$id];
+            }
+
+            $resolved = $this->call($id, false);
+            if (is_object($resolved) && property_exists($resolved, 'instance')) {
+                return $this->assets->resolved[$id] = $resolved->instance;
+            }
+
+            return $this->assets->resolved[$id] = $resolved;
         } catch (Exception|ReflectionException $exception) {
+            if (!$existsInDefinition || !$existsInResolved) {
+                throw new NotFoundException("No entry found for '$id' identifier");
+            }
             throw new ContainerException("Error while retrieving the entry: " . $exception->getMessage());
         }
     }
@@ -114,7 +127,18 @@ class Container implements ContainerInterface
      */
     public function has(string $id): bool
     {
-        return array_key_exists($id, $this->assets->functionReference);
+        try {
+            if (
+                array_key_exists($id, $this->assets->functionReference) ||
+                array_key_exists($id, $this->assets->resolved)
+            ) {
+                return true;
+            }
+            $this->get($id);
+            return array_key_exists($id, $this->assets->resolved);
+        } catch (Exception|NotFoundException|ContainerException $exception) {
+            return false;
+        }
     }
 
     /**
@@ -171,49 +195,25 @@ class Container implements ContainerInterface
     }
 
     /**
-     * Allow access to private methods
+     * Set resolution options
      *
+     * @param bool $enableSingleton Enable Singleton (instead of resolving same class multiple time, return same instance for each)
+     * @param string|null $defaultMethod Set default call method (will be called if no method/callOn const provided)
+     * @param bool $autoWiring Enable/Disable auto-wiring/auto-resolution
+     * @param bool $allowPrivateMethodAccess Allow access to private methods (discouraged)
      * @return Container
      */
-    public function allowPrivateMethodAccess(): Container
-    {
-        $this->assets
-            ->allowPrivateMethodAccess = true;
-        return self::$instances[$this->instanceAlias];
-    }
+    public function setOptions(
+        bool $enableSingleton = false,
+        string $defaultMethod = null,
+        bool $autoWiring = true,
+        bool $allowPrivateMethodAccess = false
+    ): Container {
+        $this->assets->forceSingleton = $enableSingleton;
+        $this->assets->defaultMethod = $defaultMethod ?: null;
+        $this->assets->allowPrivateMethodAccess = $allowPrivateMethodAccess;
+        $this->resolver = $autoWiring ? DependencyResolver::class : GenericResolver::class;
 
-    /**
-     * Set default call method (will be called if no method/callOn const provided)
-     *
-     * @param string $method existing method name for class
-     * @return Container
-     */
-    public function setDefaultMethod(string $method): Container
-    {
-        $this->assets->defaultMethod = $method;
-        return self::$instances[$this->instanceAlias];
-    }
-
-    /**
-     * Enable Singleton (instead of resolving same class multiple time, return same instance for each)
-     *
-     * @return Container
-     */
-    public function enableSingleton(): Container
-    {
-        $this->assets
-            ->forceSingleton = true;
-        return self::$instances[$this->instanceAlias];
-    }
-
-    /**
-     * Disable auto resolution
-     *
-     * @return Container
-     */
-    public function disableAutoResolution(): Container
-    {
-        $this->resolver = GenericResolver::class;
         return self::$instances[$this->instanceAlias];
     }
 
@@ -221,28 +221,29 @@ class Container implements ContainerInterface
      * Get the resolved class/closure/class-method
      *
      * @param string|Closure|callable $classOrClosure
-     * @param string|null $method
+     * @param string|bool|null $method
      * @return mixed
      * @throws ReflectionException|Exception
      */
-    public function call(string|Closure|callable $classOrClosure, string $method = null): mixed
-    {
-        return $this->resolve($classOrClosure, $method);
-    }
+    public
+    function call(
+        string|Closure|callable $classOrClosure,
+        string|bool $method = null
+    ): mixed {
+        $callableIsString = is_string($classOrClosure);
 
-    /**
-     * Resolve based on given conditions
-     *
-     * @param string|Closure|callable $classOrClosure
-     * @param string $method
-     * @return mixed
-     * @throws ReflectionException|Exception
-     */
-    private function resolve(string|Closure|callable $classOrClosure, string $method): mixed
-    {
+        if ($callableIsString && array_key_exists($classOrClosure, $this->assets->functionReference)) {
+            return (new $this->resolver($this->assets))
+                ->resolveByDefinition($this->assets->functionReference[$classOrClosure], $classOrClosure);
+        }
+
         if ($classOrClosure instanceof Closure || (is_callable($classOrClosure) && !is_array($classOrClosure))) {
             return (new $this->resolver($this->assets))
                 ->closureSettler($classOrClosure);
+        }
+
+        if (!$callableIsString) {
+            throw new Exception('Invalid class/closure format');
         }
 
         if (!empty($this->assets->closureResource[$classOrClosure]['on'])) {
@@ -263,8 +264,10 @@ class Container implements ContainerInterface
      * @return array
      * @throws Exception
      */
-    public function split(string|array|Closure|callable $classAndMethod): array
-    {
+    public
+    function split(
+        string|array|Closure|callable $classAndMethod
+    ): array {
         if ($classAndMethod instanceof Closure || (is_callable($classAndMethod) && !is_array($classAndMethod))) {
             return [$classAndMethod];
         }

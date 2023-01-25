@@ -100,9 +100,13 @@ trait MacroMix
     private static function process($bind, string $method, array $parameters): mixed
     {
         if (!static::hasMacro($method)) {
-            throw new Exception(sprintf(
-                'Method %s::%s does not exist.', static::class, $method
-            ));
+            throw new Exception(
+                sprintf(
+                    'Method %s::%s does not exist.',
+                    static::class,
+                    $method
+                )
+            );
         }
 
         $macro = static::$macros[$method];

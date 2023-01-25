@@ -11,4 +11,5 @@ class Asset
     public array $resolvedResource = [];
     public bool $forceSingleton = false;
     public array $closureResource = [];
+    public array $resolved = [];
 }
