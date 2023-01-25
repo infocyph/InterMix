@@ -27,12 +27,12 @@ final class DependencyResolver
      *
      * @param string $class
      * @param string|null $method
-     * @return object
+     * @return array
      * @throws ReflectionException
      */
-    public function classSettler(string $class, string $method = null): object
+    public function classSettler(string $class, string $method = null): array
     {
-        return (object)$this->getResolvedInstance(
+        return $this->getResolvedInstance(
             $this->reflectedClass($class),
             null,
             $method

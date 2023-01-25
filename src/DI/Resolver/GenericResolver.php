@@ -17,9 +17,9 @@ final class GenericResolver
      *
      * @param string $class
      * @param string|null $method
-     * @return object
+     * @return array
      */
-    public function classSettler(string $class, string $method = null): object
+    public function classSettler(string $class, string $method = null): array
     {
         $asset = [
             'instance' => $instance = new $class(
@@ -34,7 +34,7 @@ final class GenericResolver
             );
         }
 
-        return (object)$asset;
+        return $asset;
     }
 
     /**

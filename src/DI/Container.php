@@ -105,12 +105,7 @@ class Container implements ContainerInterface
                 return $this->assets->resolved[$id];
             }
 
-            $resolved = $this->call($id, false);
-            if (is_object($resolved) && property_exists($resolved, 'instance')) {
-                return $this->assets->resolved[$id] = $resolved->instance;
-            }
-
-            return $this->assets->resolved[$id] = $resolved;
+            return $this->assets->resolved[$id] = $this->call($id);
         } catch (Exception|ReflectionException $exception) {
             if (!$existsInDefinition || !$existsInResolved) {
                 throw new NotFoundException("No entry found for '$id' identifier");
@@ -225,8 +220,7 @@ class Container implements ContainerInterface
      * @return mixed
      * @throws ReflectionException|Exception
      */
-    public
-    function call(
+    public function call(
         string|Closure|callable $classOrClosure,
         string|bool $method = null
     ): mixed {
