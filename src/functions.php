@@ -1,6 +1,7 @@
 <?php
 
 use AbmmHasan\OOF\DI\Container;
+use AbmmHasan\OOF\Exceptions\ContainerException;
 
 if (!function_exists('container')) {
     /**
@@ -9,7 +10,7 @@ if (!function_exists('container')) {
      * @param string $alias instance alias
      * @param string|Closure|callable|array|null $closureOrClass
      * @return Container|mixed
-     * @throws ReflectionException|Exception
+     * @throws ContainerException
      */
     function container(string $alias = 'oof', string|Closure|callable|array $closureOrClass = null)
     {

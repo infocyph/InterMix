@@ -3,8 +3,8 @@
 namespace AbmmHasan\OOF\DI\Resolver;
 
 use AbmmHasan\OOF\DI\Asset;
+use AbmmHasan\OOF\Exceptions\ContainerException;
 use Closure;
-use Exception;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionFunction;
@@ -28,7 +28,7 @@ final class DependencyResolver
      * @param string $class
      * @param string|null $method
      * @return array
-     * @throws ReflectionException
+     * @throws ContainerException|ReflectionException
      */
     public function classSettler(string $class, string $method = null): array
     {
@@ -45,7 +45,7 @@ final class DependencyResolver
      * @param string|Closure $closure
      * @param array $params
      * @return mixed
-     * @throws ReflectionException
+     * @throws ReflectionException|ContainerException
      */
     public function closureSettler(string|Closure $closure, array $params = []): mixed
     {
@@ -65,7 +65,7 @@ final class DependencyResolver
      * @param mixed|null $supplied
      * @param string|null $callMethod
      * @return array
-     * @throws ReflectionException|Exception
+     * @throws ReflectionException|ContainerException
      */
     private function getResolvedInstance(
         ReflectionClass $class,
@@ -76,12 +76,12 @@ final class DependencyResolver
 
         if ($class->isInterface()) {
             if (!class_exists($supplied)) {
-                throw new Exception("Resolution failed: $supplied for interface $className");
+                throw new ContainerException("Resolution failed: $supplied for interface $className");
             }
             [$interface, $className] = [$className, $supplied];
             $class = $this->reflectedClass($className);
             if (!$class->implementsInterface($interface)) {
-                throw new Exception("$className doesn't implement $interface");
+                throw new ContainerException("$className doesn't implement $interface");
             }
         }
 
@@ -117,7 +117,7 @@ final class DependencyResolver
      * @param array $suppliedParameters
      * @param string $type
      * @return array
-     * @throws ReflectionException|Exception
+     * @throws ReflectionException|ContainerException
      */
     private function resolveParameters(
         ReflectionFunctionAbstract $reflector,
@@ -144,12 +144,12 @@ final class DependencyResolver
 
             if ($class) {
                 if ($this->alreadyExist($class->name, $processed)) {
-                    throw new Exception(
+                    throw new ContainerException(
                         "Found multiple instances for $class->name in $parent::{$reflector->getShortName()}()"
                     );
                 }
                 if ($type === 'constructor' && $classParameter->getDeclaringClass()?->getName() === $class->name) {
-                    throw new Exception("Looped call detected: $class->name");
+                    throw new ContainerException("Circular dependency detected: $class->name");
                 }
                 $processed[$classParameter->getName()] = $this->resolveClassDependency(
                     $class,
@@ -165,7 +165,7 @@ final class DependencyResolver
                 continue;
             }
 
-            $processed[$classParameter->getName()] = $passableParameter ?? throw new Exception(
+            $processed[$classParameter->getName()] = $passableParameter ?? throw new ContainerException(
                 "Resolution failed: '$parameterName' of $parent::{$reflector->getShortName()}()"
             );
             $instanceCount++;
@@ -179,7 +179,7 @@ final class DependencyResolver
      * @param mixed $definition
      * @param string $name
      * @return mixed
-     * @throws ReflectionException
+     * @throws ReflectionException|ContainerException
      */
     public function resolveByDefinition(mixed $definition, string $name): mixed
     {
@@ -204,7 +204,7 @@ final class DependencyResolver
      * @param string $type
      * @param mixed $supplied
      * @return object
-     * @throws ReflectionException
+     * @throws ReflectionException|ContainerException
      */
     private function resolveClassDependency(
         ReflectionClass $class,
@@ -264,12 +264,12 @@ final class DependencyResolver
      * @param ReflectionClass $class
      * @param array $params
      * @return object|null
-     * @throws ReflectionException|Exception
+     * @throws ReflectionException|ContainerException
      */
     private function getClassInstance(ReflectionClass $class, array $params = []): ?object
     {
         if (!$class->isInstantiable()) {
-            throw new Exception("{$class->getName()} is not instantiable!");
+            throw new ContainerException("{$class->getName()} is not instantiable!");
         }
         $constructor = $class->getConstructor();
         return $constructor === null ?

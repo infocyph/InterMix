@@ -56,7 +56,7 @@ class Container implements ContainerInterface
      *
      * @param array $definitions [alias/identifier => definition]
      * @return Container
-     * @throws Exception
+     * @throws ContainerException
      */
     public function addDefinitions(array $definitions): Container
     {
@@ -74,12 +74,12 @@ class Container implements ContainerInterface
      * @param string $id Identifier of the entry
      * @param mixed $definition
      * @return Container
-     * @throws Exception
+     * @throws ContainerException
      */
     public function set(string $id, mixed $definition): Container
     {
         if ($id === $definition) {
-            throw new Exception("Loop-able entry detected ($id)");
+            throw new ContainerException("Circular dependency detected ($id)");
         }
         $this->assets->functionReference[$id] = $definition;
         return self::$instances[$this->instanceAlias];
@@ -131,7 +131,7 @@ class Container implements ContainerInterface
             }
             $this->get($id);
             return array_key_exists($id, $this->assets->resolved);
-        } catch (Exception|NotFoundException|ContainerException $exception) {
+        } catch (NotFoundException|ContainerException $exception) {
             return false;
         }
     }
@@ -218,7 +218,7 @@ class Container implements ContainerInterface
      * @param string|Closure|callable $classOrClosure
      * @param string|bool|null $method
      * @return mixed
-     * @throws ReflectionException|Exception
+     * @throws ContainerException
      */
     public function call(
         string|Closure|callable $classOrClosure,
@@ -237,7 +237,7 @@ class Container implements ContainerInterface
         }
 
         if (!$callableIsString) {
-            throw new Exception('Invalid class/closure format');
+            throw new ContainerException('Invalid class/closure format');
         }
 
         if (!empty($this->assets->closureResource[$classOrClosure]['on'])) {
@@ -256,12 +256,10 @@ class Container implements ContainerInterface
      *
      * @param string|array|Closure|callable $classAndMethod
      * @return array
-     * @throws Exception
+     * @throws ContainerException
      */
-    public
-    function split(
-        string|array|Closure|callable $classAndMethod
-    ): array {
+    public function split(string|array|Closure|callable $classAndMethod): array
+    {
         if ($classAndMethod instanceof Closure || (is_callable($classAndMethod) && !is_array($classAndMethod))) {
             return [$classAndMethod];
         }
@@ -280,7 +278,7 @@ class Container implements ContainerInterface
             return $classAndMethod;
         }
 
-        throw new Exception(
+        throw new ContainerException(
             'Unknown Class & Method formation (either [namspaced Class, method] or namspacedClass@method or namespacedClass::method)'
         );
     }
