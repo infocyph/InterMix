@@ -63,17 +63,36 @@ final class DependencyResolver
      *
      * @param ReflectionClass $class
      * @param mixed|null $supplied
-     * @param string|null $callMethod
+     * @param string|bool|null $callMethod
      * @return array
-     * @throws ReflectionException|ContainerException
+     * @throws ContainerException
+     * @throws ReflectionException
      */
     private function getResolvedInstance(
         ReflectionClass $class,
         mixed $supplied = null,
-        string $callMethod = null
+        string|bool $callMethod = null
     ): array {
-        $className = $class->getName();
+        $this->resolveClass($class, $supplied);
+        $this->resolveMethod($class, $callMethod);
 
+        return $this->containerAsset->resolvedResource[$class->getName()];
+    }
+
+    /**
+     * Resolve class (initiate & construct)
+     *
+     * @param ReflectionClass $class
+     * @param mixed $supplied
+     * @return void
+     * @throws ContainerException|ReflectionException
+     */
+    private function resolveClass(ReflectionClass $class, mixed $supplied): void
+    {
+        $className = $class->getName();
+        if (isset($this->containerAsset->resolvedResource[$className]['instance'])) {
+            return;
+        }
         if ($class->isInterface()) {
             if (!class_exists($supplied)) {
                 throw new ContainerException("Resolution failed: $supplied for interface $className");
@@ -84,30 +103,53 @@ final class DependencyResolver
                 throw new ContainerException("$className doesn't implement $interface");
             }
         }
-
-        if (!$this->containerAsset->forceSingleton || !isset($this->containerAsset->resolvedResource[$className]['instance'])) {
-            $this->containerAsset->resolvedResource[$className]['instance'] = $this->getClassInstance(
-                $class,
-                $this->containerAsset->classResource[$className]['constructor']['params'] ?? []
-            );
+        if (!$class->isInstantiable()) {
+            throw new ContainerException("{$class->getName()} is not instantiable!");
         }
+        $constructor = $class->getConstructor();
+        $this->containerAsset->resolvedResource[$className]['instance'] = $constructor === null ?
+            $class->newInstanceWithoutConstructor() :
+            $class->newInstanceArgs(
+                $this->resolveParameters(
+                    $constructor,
+                    $this->containerAsset->classResource[$className]['constructor']['params'] ?? [],
+                    'constructor'
+                )
+            );
+    }
+
+    /**
+     * @param ReflectionClass $class
+     * @param string|bool $callMethod
+     * @return void
+     * @throws ContainerException
+     * @throws ReflectionException
+     */
+    private function resolveMethod(ReflectionClass $class, string|bool $callMethod): void
+    {
+        $className = $class->getName();
 
         $this->containerAsset->resolvedResource[$className]['returned'] = null;
         if ($callMethod === false) {
-            return $this->containerAsset->resolvedResource[$className];
+            return;
         }
 
         $method = $callMethod
             ?? $this->containerAsset->classResource[$className]['method']['on']
             ?? ($class->getConstant('callOn') ?: $this->containerAsset->defaultMethod);
+
         if (!empty($method) && $class->hasMethod($method)) {
-            $this->containerAsset->resolvedResource[$className]['returned'] = $this->invokeMethod(
+            $method = new ReflectionMethod($className, $method);
+            $method->setAccessible($this->containerAsset->allowPrivateMethodAccess);
+            $this->containerAsset->resolvedResource[$className]['returned'] = $method->invokeArgs(
                 $this->containerAsset->resolvedResource[$className]['instance'],
-                $method,
-                $this->containerAsset->classResource[$className]['method']['params'] ?? []
+                $this->resolveParameters(
+                    $method,
+                    $this->containerAsset->classResource[$className]['method']['params'] ?? [],
+                    'method'
+                )
             );
         }
-        return $this->containerAsset->resolvedResource[$className];
     }
 
     /**
@@ -256,46 +298,6 @@ final class DependencyResolver
             };
         }
         return $name;
-    }
-
-    /**
-     * Get class Instance
-     *
-     * @param ReflectionClass $class
-     * @param array $params
-     * @return object|null
-     * @throws ReflectionException|ContainerException
-     */
-    private function getClassInstance(ReflectionClass $class, array $params = []): ?object
-    {
-        if (!$class->isInstantiable()) {
-            throw new ContainerException("{$class->getName()} is not instantiable!");
-        }
-        $constructor = $class->getConstructor();
-        return $constructor === null ?
-            $class->newInstanceWithoutConstructor() :
-            $class->newInstanceArgs(
-                $this->resolveParameters($constructor, $params, 'constructor')
-            );
-    }
-
-    /**
-     * Get Method return
-     *
-     * @param object|null $classInstance
-     * @param string $method
-     * @param array $params
-     * @return mixed
-     * @throws ReflectionException
-     */
-    private function invokeMethod(?object $classInstance, string $method, array $params = []): mixed
-    {
-        $method = new ReflectionMethod(get_class($classInstance), $method);
-        $method->setAccessible($this->containerAsset->allowPrivateMethodAccess);
-        return $method->invokeArgs(
-            $classInstance,
-            $this->resolveParameters($method, $params, 'method')
-        );
     }
 
     /**

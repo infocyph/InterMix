@@ -192,19 +192,16 @@ class Container implements ContainerInterface
     /**
      * Set resolution options
      *
-     * @param bool $enableSingleton Enable Singleton (instead of resolving same class multiple time, return same instance for each)
      * @param string|null $defaultMethod Set default call method (will be called if no method/callOn const provided)
      * @param bool $autoWiring Enable/Disable auto-wiring/auto-resolution
      * @param bool $allowPrivateMethodAccess Allow access to private methods (discouraged)
      * @return Container
      */
     public function setOptions(
-        bool $enableSingleton = false,
         string $defaultMethod = null,
         bool $autoWiring = true,
         bool $allowPrivateMethodAccess = false
     ): Container {
-        $this->assets->forceSingleton = $enableSingleton;
         $this->assets->defaultMethod = $defaultMethod ?: null;
         $this->assets->allowPrivateMethodAccess = $allowPrivateMethodAccess;
         $this->resolver = $autoWiring ? DependencyResolver::class : GenericResolver::class;

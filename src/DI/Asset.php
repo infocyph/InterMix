@@ -9,7 +9,6 @@ class Asset
     public bool $allowPrivateMethodAccess = false;
     public ?string $defaultMethod = null;
     public array $resolvedResource = [];
-    public bool $forceSingleton = false;
     public array $closureResource = [];
     public array $resolved = [];
 }
