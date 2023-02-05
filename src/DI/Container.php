@@ -101,13 +101,15 @@ class Container implements ContainerInterface
                     ->resolveByDefinition($this->assets->functionReference[$id], $id);
             }
 
-            if ($existsInResolved) {
-                return $this->assets->resolved[$id];
+            if (!$existsInResolved) {
+                $this->assets->resolved[$id] = $this->call($id);
             }
 
-            return $this->assets->resolved[$id] = $this->call($id);
-        } catch (Exception|ReflectionException $exception) {
-            if (!$existsInDefinition || !$existsInResolved) {
+            return $this->assets->resolved[$id];
+        } catch (Exception|ReflectionException|ContainerException $exception) {
+            $containerException = $exception instanceof ContainerException ||
+                $exception instanceof ReflectionException;
+            if (!$containerException && (!$existsInDefinition || !$existsInResolved)) {
                 throw new NotFoundException("No entry found for '$id' identifier");
             }
             throw new ContainerException("Error while retrieving the entry: " . $exception->getMessage());
@@ -194,16 +196,13 @@ class Container implements ContainerInterface
      *
      * @param string|null $defaultMethod Set default call method (will be called if no method/callOn const provided)
      * @param bool $autoWiring Enable/Disable auto-wiring/auto-resolution
-     * @param bool $allowPrivateMethodAccess Allow access to private methods (discouraged)
      * @return Container
      */
     public function setOptions(
         string $defaultMethod = null,
-        bool $autoWiring = true,
-        bool $allowPrivateMethodAccess = false
+        bool $autoWiring = true
     ): Container {
         $this->assets->defaultMethod = $defaultMethod ?: null;
-        $this->assets->allowPrivateMethodAccess = $allowPrivateMethodAccess;
         $this->resolver = $autoWiring ? DependencyResolver::class : GenericResolver::class;
 
         return self::$instances[$this->instanceAlias];
@@ -276,7 +275,7 @@ class Container implements ContainerInterface
         }
 
         throw new ContainerException(
-            'Unknown Class & Method formation (either [namspaced Class, method] or namspacedClass@method or namespacedClass::method)'
+            'Unknown Class & Method formation ([namspaced Class, method]/namspacedClass@method/namespacedClass::method)'
         );
     }
 }
