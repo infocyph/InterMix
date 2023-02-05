@@ -13,41 +13,13 @@ use ReflectionMethod;
 use ReflectionNamedType;
 use ReflectionParameter;
 
-final class DependencyResolver
+abstract class DependencyResolver
 {
-    private array $resolvedDefinition = [];
+    protected array $resolvedDefinition = [];
 
     public function __construct(
-        private Asset $containerAsset
+        protected Asset $containerAsset
     ) {
-    }
-
-    /**
-     * Settle class dependency and resolve thorough
-     *
-     * @param string $class
-     * @param string|null $method
-     * @return array
-     * @throws ContainerException|ReflectionException
-     */
-    public function classSettler(string $class, string $method = null): array
-    {
-        return $this->getResolvedInstance($this->reflectedClass($class), null, $method);
-    }
-
-    /**
-     * Settle closure dependency and resolve thorough
-     *
-     * @param string|Closure $closure
-     * @param array $params
-     * @return mixed
-     * @throws ReflectionException|ContainerException
-     */
-    public function closureSettler(string|Closure $closure, array $params = []): mixed
-    {
-        return $closure(
-            ...$this->resolveParameters(new ReflectionFunction($closure), $params, 'constructor')
-        );
     }
 
     /**
@@ -60,7 +32,7 @@ final class DependencyResolver
      * @throws ContainerException
      * @throws ReflectionException
      */
-    private function getResolvedInstance(
+    protected function getResolvedInstance(
         ReflectionClass $class,
         mixed $supplied = null,
         string|bool $callMethod = null
@@ -69,6 +41,48 @@ final class DependencyResolver
         $this->resolveMethod($class, $callMethod);
 
         return $this->containerAsset->resolvedResource[$class->getName()];
+    }
+
+    /**
+     * Resolve Function parameter
+     *
+     * @param ReflectionFunctionAbstract $reflector
+     * @param array $suppliedParameters
+     * @param string $type
+     * @return array
+     * @throws ReflectionException|ContainerException
+     */
+    protected function resolveParameters(
+        ReflectionFunctionAbstract $reflector,
+        array $suppliedParameters,
+        string $type
+    ): array {
+        $refMethod = ($reflector->class ?? $reflector->getName()) . "->{$reflector->getShortName()}()";
+        $availableParams = $reflector->getParameters();
+
+        // Resolve associative parameters
+        [
+            'availableParams' => $availableParams,
+            'processed' => $processed,
+            'availableSupply' => $suppliedParameters
+        ] = $this->resolveAssociativeParameters($availableParams, $type, $suppliedParameters, $refMethod);
+
+        // Resolve numeric & default parameters
+        $this->resolveNumericDefaultParameters($processed, $availableParams, $suppliedParameters, $refMethod);
+
+        return $processed;
+    }
+
+    /**
+     * Get ReflectionClass instance
+     *
+     * @param string $className
+     * @return ReflectionClass
+     * @throws ReflectionException
+     */
+    protected function reflectedClass(string $className): ReflectionClass
+    {
+        return $this->containerAsset->resolvedResource[$className]['reflection'] ??= new ReflectionClass($className);
     }
 
     /**
@@ -111,6 +125,8 @@ final class DependencyResolver
     }
 
     /**
+     * Resolve method
+     *
      * @param ReflectionClass $class
      * @param string|bool $callMethod
      * @return void
@@ -141,36 +157,6 @@ final class DependencyResolver
                 )
             );
         }
-    }
-
-    /**
-     * Resolve Function parameter
-     *
-     * @param ReflectionFunctionAbstract $reflector
-     * @param array $suppliedParameters
-     * @param string $type
-     * @return array
-     * @throws ReflectionException|ContainerException
-     */
-    private function resolveParameters(
-        ReflectionFunctionAbstract $reflector,
-        array $suppliedParameters,
-        string $type
-    ): array {
-        $refMethod = ($reflector->class ?? $reflector->getName()) . "->{$reflector->getShortName()}()";
-        $availableParams = $reflector->getParameters();
-
-        // Resolve associative parameters
-        [
-            'availableParams' => $availableParams,
-            'processed' => $processed,
-            'availableSupply' => $suppliedParameters
-        ] = $this->resolveAssociativeParameters($availableParams, $type, $suppliedParameters, $refMethod);
-
-        // Resolve numeric & default parameters
-        $this->resolveNumericDefaultParameters($processed, $availableParams, $suppliedParameters, $refMethod);
-
-        return $processed;
     }
 
     /**
@@ -270,30 +256,6 @@ final class DependencyResolver
     }
 
     /**
-     * Definition based resolver
-     *
-     * @param mixed $definition
-     * @param string $name
-     * @return mixed
-     * @throws ReflectionException|ContainerException
-     */
-    public function resolveByDefinition(mixed $definition, string $name): mixed
-    {
-        return $this->resolvedDefinition[$name] ??= match (true) {
-            $definition instanceof Closure => $this->closureSettler($$name = $definition),
-
-            is_array($definition) && class_exists($definition[0]) => function () use ($definition) {
-                $resolved = $this->classSettler(...$definition);
-                return empty($definition[1]) ? $resolved['instance'] : $resolved['returned'];
-            },
-
-            is_string($definition) && class_exists($definition) => $this->classSettler($definition)['instance'],
-
-            default => $definition
-        };
-    }
-
-    /**
      * Resolve class dependency
      *
      * @param ReflectionClass $class
@@ -358,18 +320,6 @@ final class DependencyResolver
             };
         }
         return $name;
-    }
-
-    /**
-     * Get ReflectionClass instance
-     *
-     * @param string $className
-     * @return ReflectionClass
-     * @throws ReflectionException
-     */
-    private function reflectedClass(string $className): ReflectionClass
-    {
-        return $this->containerAsset->resolvedResource[$className]['reflection'] ??= new ReflectionClass($className);
     }
 
     /**

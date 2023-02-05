@@ -3,8 +3,8 @@
 
 namespace AbmmHasan\OOF\DI;
 
-use AbmmHasan\OOF\DI\Resolver\DependencyResolver;
-use AbmmHasan\OOF\DI\Resolver\GenericResolver;
+use AbmmHasan\OOF\DI\Resolver\GenericCall;
+use AbmmHasan\OOF\DI\Resolver\InjectedCall;
 use AbmmHasan\OOF\Exceptions\ContainerException;
 use AbmmHasan\OOF\Exceptions\NotFoundException;
 use Closure;
@@ -19,7 +19,7 @@ class Container implements ContainerInterface
 {
     protected static array $instances;
     protected Asset $assets;
-    protected string $resolver = DependencyResolver::class;
+    protected string $resolver = InjectedCall::class;
 
     /**
      * Class Constructor
@@ -203,7 +203,7 @@ class Container implements ContainerInterface
         bool $autoWiring = true
     ): Container {
         $this->assets->defaultMethod = $defaultMethod ?: null;
-        $this->resolver = $autoWiring ? DependencyResolver::class : GenericResolver::class;
+        $this->resolver = $autoWiring ? InjectedCall::class : GenericCall::class;
 
         return self::$instances[$this->instanceAlias];
     }

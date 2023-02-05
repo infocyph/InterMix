@@ -5,7 +5,7 @@ namespace AbmmHasan\OOF\DI\Resolver;
 use AbmmHasan\OOF\DI\Asset;
 use Closure;
 
-final class GenericResolver
+final class GenericCall
 {
     public function __construct(
         private Asset $containerAsset
