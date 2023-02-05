@@ -9,4 +9,5 @@ class Asset
     public ?string $defaultMethod = null;
     public array $closureResource = [];
     public array $resolved = [];
+    public array $resolvedResource = [];
 }
