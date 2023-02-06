@@ -178,13 +178,17 @@ abstract class DependencyResolver
         foreach ($availableParams as $key => $classParameter) {
             $parameterName = $classParameter->getName();
 
+            if ($classParameter->isVariadic()) {
+                $processed[$parameterName] = array_slice($suppliedParameters, $key);
+                break;
+            }
+
             if (!isset($suppliedParameters[$key])) {
                 if ($classParameter->isDefaultValueAvailable()) {
                     $processed[$parameterName] = $classParameter->getDefaultValue();
                     continue;
                 }
-                $parameterType = $classParameter->getType();
-                if ($parameterType && $parameterType->allowsNull()) {
+                if ($classParameter->getType() && $classParameter->allowsNull()) {
                     $processed[$parameterName] = null;
                     continue;
                 }
@@ -216,6 +220,11 @@ abstract class DependencyResolver
         $processed = $paramsLeft = [];
         foreach ($availableParams as $classParameter) {
             $parameterName = $classParameter->getName();
+
+            if ($classParameter->isVariadic()) {
+                $paramsLeft[] = $classParameter;
+                break;
+            }
 
             if (array_key_exists($parameterName, $this->containerAsset->functionReference)) {
                 $processed[$parameterName] = $this->resolveByDefinition(

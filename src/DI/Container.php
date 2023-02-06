@@ -105,7 +105,7 @@ class Container implements ContainerInterface
                 $this->assets->resolved[$id] = $this->call($id);
             }
 
-            return $this->assets->resolved[$id];
+            return $this->assets->resolved[$id]['instance'] ?? $this->assets->resolved[$id];
         } catch (Exception|ReflectionException|ContainerException $exception) {
             $containerException = $exception instanceof ContainerException ||
                 $exception instanceof ReflectionException;
