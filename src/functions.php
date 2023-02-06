@@ -7,12 +7,12 @@ if (!function_exists('container')) {
     /**
      * Get Container instance or direct call method/closure
      *
-     * @param string $alias instance alias
      * @param string|Closure|callable|array|null $closureOrClass
+     * @param string $alias instance alias
      * @return Container|mixed
      * @throws ContainerException
      */
-    function container(string $alias = 'oof', string|Closure|callable|array $closureOrClass = null)
+    function container(string|Closure|callable|array $closureOrClass = null, string $alias = 'oof')
     {
         $instance = Container::instance($alias);
         return match (true) {

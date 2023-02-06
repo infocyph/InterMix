@@ -222,29 +222,28 @@ class Container implements ContainerInterface
     ): mixed {
         $callableIsString = is_string($classOrClosure);
 
-        if ($callableIsString && array_key_exists($classOrClosure, $this->assets->functionReference)) {
-            return (new $this->resolver($this->assets))
-                ->resolveByDefinition($this->assets->functionReference[$classOrClosure], $classOrClosure);
-        }
+        return match (true) {
+            $callableIsString && array_key_exists(
+                $classOrClosure,
+                $this->assets->functionReference
+            ) => (new $this->resolver($this->assets))
+                ->resolveByDefinition($this->assets->functionReference[$classOrClosure], $classOrClosure),
 
-        if ($classOrClosure instanceof Closure || (is_callable($classOrClosure) && !is_array($classOrClosure))) {
-            return (new $this->resolver($this->assets))
-                ->closureSettler($classOrClosure);
-        }
+            $classOrClosure instanceof Closure || (is_callable($classOrClosure) && !is_array(
+                    $classOrClosure
+                )) => (new $this->resolver($this->assets))
+                ->closureSettler($classOrClosure),
 
-        if (!$callableIsString) {
-            throw new ContainerException('Invalid class/closure format');
-        }
+            !$callableIsString => throw new ContainerException('Invalid class/closure format'),
 
-        if (!empty($this->assets->closureResource[$classOrClosure]['on'])) {
-            return (new $this->resolver($this->assets))
+            !empty($this->assets->closureResource[$classOrClosure]['on']) => (new $this->resolver($this->assets))
                 ->closureSettler(
                     $this->assets->closureResource[$classOrClosure]['on'],
                     $this->assets->closureResource[$classOrClosure]['params']
-                );
-        }
+                ),
 
-        return (new $this->resolver($this->assets))->classSettler($classOrClosure, $method);
+            default => (new $this->resolver($this->assets))->classSettler($classOrClosure, $method)
+        };
     }
 
     /**
@@ -256,26 +255,23 @@ class Container implements ContainerInterface
      */
     public function split(string|array|Closure|callable $classAndMethod): array
     {
-        if ($classAndMethod instanceof Closure || (is_callable($classAndMethod) && !is_array($classAndMethod))) {
-            return [$classAndMethod];
-        }
+        return match (true) {
+            $classAndMethod instanceof Closure || (is_callable($classAndMethod) && !is_array(
+                    $classAndMethod
+                )) => [$classAndMethod],
 
-        if (is_string($classAndMethod)) {
-            if (str_contains($classAndMethod, '@')) {
-                return explode('@', $classAndMethod, 2);
-            }
+            is_array($classAndMethod) && count($classAndMethod) === 2 => $classAndMethod,
 
-            if (str_contains($classAndMethod, '::')) {
-                return explode('::', $classAndMethod, 2);
-            }
-        }
+            is_string($classAndMethod) && str_contains($classAndMethod, '@')
+            => explode('@', $classAndMethod, 2),
 
-        if (is_array($classAndMethod) && count($classAndMethod) === 2) {
-            return $classAndMethod;
-        }
+            is_string($classAndMethod) && str_contains($classAndMethod, '::')
+            => explode('::', $classAndMethod, 2),
 
-        throw new ContainerException(
-            'Unknown Class & Method formation ([namspaced Class, method]/namspacedClass@method/namespacedClass::method)'
-        );
+            default => throw new ContainerException(
+                'Unknown Class & Method formation
+                ([namspaced Class, method]/namspacedClass@method/namespacedClass::method)'
+            )
+        };
     }
 }

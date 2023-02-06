@@ -133,7 +133,7 @@ abstract class DependencyResolver
      * @throws ContainerException
      * @throws ReflectionException
      */
-    private function resolveMethod(ReflectionClass $class, string|bool $callMethod): void
+    private function resolveMethod(ReflectionClass $class, string|bool $callMethod = null): void
     {
         $className = $class->getName();
 
@@ -175,6 +175,7 @@ abstract class DependencyResolver
         array $suppliedParameters,
         string $refMethod
     ): void {
+        $sequential = array_values($suppliedParameters);
         foreach ($availableParams as $key => $classParameter) {
             $parameterName = $classParameter->getName();
 
@@ -183,7 +184,7 @@ abstract class DependencyResolver
                 break;
             }
 
-            if (!isset($suppliedParameters[$key])) {
+            if (!isset($sequential[$key])) {
                 if ($classParameter->isDefaultValueAvailable()) {
                     $processed[$parameterName] = $classParameter->getDefaultValue();
                     continue;
@@ -197,7 +198,7 @@ abstract class DependencyResolver
                 );
             }
 
-            $processed[$parameterName] = $suppliedParameters[$key];
+            $processed[$parameterName] = $sequential[$key];
         }
     }
 
@@ -258,9 +259,15 @@ abstract class DependencyResolver
         return [
             'availableParams' => $paramsLeft,
             'processed' => $processed,
-            'availableSupply' => array_values(
-                array_filter($suppliedParameters, "is_int", ARRAY_FILTER_USE_KEY)
-            )
+            'availableSupply' => match (true) {
+                ($lastKey = array_key_last($paramsLeft)) !== null &&
+                $paramsLeft[$lastKey]->isVariadic() => array_diff_key(
+                    $suppliedParameters,
+                    $processed
+                ),
+
+                default => array_filter($suppliedParameters, "is_int", ARRAY_FILTER_USE_KEY)
+            }
         ];
     }
 
