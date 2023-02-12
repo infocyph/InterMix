@@ -1,8 +1,8 @@
 <?php
 
-namespace AbmmHasan\OOF\DI;
+namespace AbmmHasan\OOF\DI\Resolver;
 
-class Asset
+class Repository
 {
     public array $functionReference = [];
     public array $classResource = [];
@@ -10,4 +10,5 @@ class Asset
     public array $closureResource = [];
     public array $resolved = [];
     public array $resolvedResource = [];
+    public array $resolvedDefinition = [];
 }

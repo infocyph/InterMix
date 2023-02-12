@@ -2,13 +2,12 @@
 
 namespace AbmmHasan\OOF\DI\Resolver;
 
-use AbmmHasan\OOF\DI\Asset;
 use Closure;
 
 final class GenericCall
 {
     public function __construct(
-        private Asset $containerAsset
+        private Repository $repository
     ) {
     }
 
@@ -23,14 +22,14 @@ final class GenericCall
     {
         $asset = [
             'instance' => $instance = new $class(
-                ...($this->containerAsset->classResource[$class]['constructor']['params'] ?? [])
+                ...($this->repository->classResource[$class]['constructor']['params'] ?? [])
             ),
             'returned' => null
         ];
 
         if (!empty($method) && method_exists($instance, $method)) {
             $asset['returned'] = $instance->$method(
-                ...($this->containerAsset->classResource[$class]['method']['params'] ?? [])
+                ...($this->repository->classResource[$class]['method']['params'] ?? [])
             );
         }
 

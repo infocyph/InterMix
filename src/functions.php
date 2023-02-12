@@ -2,6 +2,7 @@
 
 use AbmmHasan\OOF\DI\Container;
 use AbmmHasan\OOF\Exceptions\ContainerException;
+use AbmmHasan\OOF\Exceptions\NotFoundException;
 
 if (!function_exists('container')) {
     /**
@@ -10,14 +11,20 @@ if (!function_exists('container')) {
      * @param string|Closure|callable|array|null $closureOrClass
      * @param string $alias instance alias
      * @return Container|mixed
-     * @throws ContainerException
+     * @throws ContainerException|NotFoundException
      */
     function container(string|Closure|callable|array $closureOrClass = null, string $alias = 'oof')
     {
         $instance = Container::instance($alias);
-        return match (true) {
-            $closureOrClass === null => $instance,
-            default => $instance->call(...$instance->split($closureOrClass))
-        };
+        if ($closureOrClass === null) {
+            return $instance;
+        }
+        [$class, $method] = $instance->split($closureOrClass);
+
+        if (!$method) {
+            return $instance->get($class);
+        }
+        $instance->registerMethod($class, $method);
+        return $instance->getReturn($class);
     }
 }

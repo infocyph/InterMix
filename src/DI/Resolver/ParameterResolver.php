@@ -2,45 +2,37 @@
 
 namespace AbmmHasan\OOF\DI\Resolver;
 
-use AbmmHasan\OOF\DI\Asset;
 use AbmmHasan\OOF\Exceptions\ContainerException;
 use Closure;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionFunction;
 use ReflectionFunctionAbstract;
-use ReflectionMethod;
 use ReflectionNamedType;
 use ReflectionParameter;
 
-abstract class DependencyResolver
+class ParameterResolver
 {
-    protected array $resolvedDefinition = [];
+    use ReflectionResource;
 
-    public function __construct(
-        protected Asset $containerAsset
-    ) {
+    private ClassResolver $classResolver;
+
+    /**
+     * @param Repository $repository
+     */
+    public function __construct(private Repository $repository)
+    {
     }
 
     /**
-     * Get resolved Instance & method
+     * Set class resolver instance
      *
-     * @param ReflectionClass $class
-     * @param mixed|null $supplied
-     * @param string|bool|null $callMethod
-     * @return array
-     * @throws ContainerException
-     * @throws ReflectionException
+     * @param ClassResolver $classResolver
+     * @return void
      */
-    protected function getResolvedInstance(
-        ReflectionClass $class,
-        mixed $supplied = null,
-        string|bool $callMethod = null
-    ): array {
-        $this->resolveClass($class, $supplied);
-        $this->resolveMethod($class, $callMethod);
-
-        return $this->containerAsset->resolvedResource[$class->getName()];
+    public function setClassResolverInstance(ClassResolver $classResolver): void
+    {
+        $this->classResolver = $classResolver;
     }
 
     /**
@@ -52,7 +44,7 @@ abstract class DependencyResolver
      * @return array
      * @throws ReflectionException|ContainerException
      */
-    protected function resolveParameters(
+    public function resolveParameters(
         ReflectionFunctionAbstract $reflector,
         array $suppliedParameters,
         string $type
@@ -67,96 +59,40 @@ abstract class DependencyResolver
             'availableSupply' => $suppliedParameters
         ] = $this->resolveAssociativeParameters($availableParams, $type, $suppliedParameters, $refMethod);
 
-        // Resolve numeric & default parameters
+        // Resolve numeric/default/variadic parameters
         $this->resolveNumericDefaultParameters($processed, $availableParams, $suppliedParameters, $refMethod);
 
         return $processed;
     }
 
     /**
-     * Get ReflectionClass instance
+     * Definition based resolver
      *
-     * @param string $className
-     * @return ReflectionClass
-     * @throws ReflectionException
+     * @param mixed $definition
+     * @param string $name
+     * @return mixed
+     * @throws ReflectionException|ContainerException
      */
-    protected function reflectedClass(string $className): ReflectionClass
+    public function resolveByDefinition(mixed $definition, string $name): mixed
     {
-        return $this->containerAsset->resolvedResource[$className]['reflection'] ??= new ReflectionClass($className);
-    }
+        return $this->repository->resolvedDefinition[$name] ??= match (true) {
+            $definition instanceof Closure => $definition(
+                ...$this->resolveParameters(new ReflectionFunction($definition), [], 'constructor')
+            ),
 
-    /**
-     * Resolve class (initiate & construct)
-     *
-     * @param ReflectionClass $class
-     * @param mixed $supplied
-     * @return void
-     * @throws ContainerException|ReflectionException
-     */
-    private function resolveClass(ReflectionClass $class, mixed $supplied): void
-    {
-        $className = $class->getName();
-        if ($class->isInterface()) {
-            if (!class_exists($supplied)) {
-                throw new ContainerException("Resolution failed: $supplied for interface $className");
-            }
-            [$interface, $className] = [$className, $supplied];
-            $class = $this->reflectedClass($className);
-            if (!$class->implementsInterface($interface)) {
-                throw new ContainerException("$className doesn't implement $interface");
-            }
-        }
-        if (isset($this->containerAsset->resolvedResource[$className]['instance'])) {
-            return;
-        }
-        if (!$class->isInstantiable()) {
-            throw new ContainerException("{$class->getName()} is not instantiable!");
-        }
-        $constructor = $class->getConstructor();
-        $this->containerAsset->resolvedResource[$className]['instance'] = $constructor === null ?
-            $class->newInstanceWithoutConstructor() :
-            $class->newInstanceArgs(
-                $this->resolveParameters(
-                    $constructor,
-                    $this->containerAsset->classResource[$className]['constructor']['params'] ?? [],
-                    'constructor'
-                )
-            );
-    }
+            is_array($definition) && class_exists($definition[0])
+            => function () use ($definition) {
+                $resolved = $this->classResolver->getResolvedInstance(
+                    ...$definition
+                );
+                return empty($definition[1]) ? $resolved['instance'] : $resolved['returned'];
+            },
 
-    /**
-     * Resolve method
-     *
-     * @param ReflectionClass $class
-     * @param string|bool $callMethod
-     * @return void
-     * @throws ContainerException
-     * @throws ReflectionException
-     */
-    private function resolveMethod(ReflectionClass $class, string|bool $callMethod = null): void
-    {
-        $className = $class->getName();
+            is_string($definition) && class_exists($definition)
+            => $this->classResolver->getResolvedInstance($this->reflectedClass($definition))['instance'],
 
-        $this->containerAsset->resolvedResource[$className]['returned'] = null;
-        if ($callMethod === false) {
-            return;
-        }
-
-        $method = $callMethod
-            ?? $this->containerAsset->classResource[$className]['method']['on']
-            ?? ($class->getConstant('callOn') ?: $this->containerAsset->defaultMethod);
-
-        if (!empty($method) && $class->hasMethod($method)) {
-            $method = new ReflectionMethod($className, $method);
-            $this->containerAsset->resolvedResource[$className]['returned'] = $method->invokeArgs(
-                $this->containerAsset->resolvedResource[$className]['instance'],
-                $this->resolveParameters(
-                    $method,
-                    $this->containerAsset->classResource[$className]['method']['params'] ?? [],
-                    'method'
-                )
-            );
-        }
+            default => $definition
+        };
     }
 
     /**
@@ -184,21 +120,17 @@ abstract class DependencyResolver
                 break;
             }
 
-            if (!isset($sequential[$key])) {
-                if ($classParameter->isDefaultValueAvailable()) {
-                    $processed[$parameterName] = $classParameter->getDefaultValue();
-                    continue;
-                }
-                if ($classParameter->getType() && $classParameter->allowsNull()) {
-                    $processed[$parameterName] = null;
-                    continue;
-                }
-                throw new ContainerException(
-                    "Resolution failed for '$parameterName' in $refMethod"
-                );
-            }
+            $processed[$parameterName] = match (true) {
+                array_key_exists($key, $sequential) => $sequential[$key],
 
-            $processed[$parameterName] = $sequential[$key];
+                $classParameter->isDefaultValueAvailable() => $classParameter->getDefaultValue(),
+
+                $classParameter->getType() && $classParameter->allowsNull() => null,
+
+                default => throw new ContainerException(
+                    "Resolution failed for '$parameterName' in $refMethod"
+                )
+            };
         }
     }
 
@@ -227,9 +159,9 @@ abstract class DependencyResolver
                 break;
             }
 
-            if (array_key_exists($parameterName, $this->containerAsset->functionReference)) {
+            if (array_key_exists($parameterName, $this->repository->functionReference)) {
                 $processed[$parameterName] = $this->resolveByDefinition(
-                    $this->containerAsset->functionReference[$parameterName],
+                    $this->repository->functionReference[$parameterName],
                     $parameterName
                 );
                 continue;
@@ -288,12 +220,34 @@ abstract class DependencyResolver
         if (
             $type === 'constructor' && $supplied !== null &&
             ($constructor = $class->getConstructor()) !== null &&
-            count($passable = $constructor->getParameters())
+            count($constructor->getParameters())
         ) {
-            $this->containerAsset->classResource[$class->getName()]['constructor']['params']
-            [$passable[0]->getName()] = $supplied;
+            $this->repository->classResource[$class->getName()]['constructor']['params'] =
+                array_merge(
+                    $this->repository->classResource[$class->getName()]['constructor']['params'],
+                    (array)$supplied
+                );
         }
-        return $this->getResolvedInstance($class, $supplied)['instance'];
+        return $this->classResolver->getResolvedInstance($class, $supplied)['instance'];
+    }
+
+    /**
+     * Get the class name for given type
+     *
+     * @param ReflectionParameter $parameter
+     * @param string $name
+     * @return string
+     */
+    private function getClassName(ReflectionParameter $parameter, string $name): string
+    {
+        if (($class = $parameter->getDeclaringClass()) !== null) {
+            return match (true) {
+                $name === 'self' => $class->getName(),
+                $name === 'parent' && ($parent = $class->getParentClass()) => $parent->getName(),
+                default => $name
+            };
+        }
+        return $name;
     }
 
     /**
@@ -317,25 +271,6 @@ abstract class DependencyResolver
         }
 
         return $reflection;
-    }
-
-    /**
-     * Get the class name for given type
-     *
-     * @param ReflectionParameter $parameter
-     * @param string $name
-     * @return string
-     */
-    private function getClassName(ReflectionParameter $parameter, string $name): string
-    {
-        if (($class = $parameter->getDeclaringClass()) !== null) {
-            return match (true) {
-                $name === 'self' => $class->getName(),
-                $name === 'parent' && ($parent = $class->getParentClass()) => $parent->getName(),
-                default => $name
-            };
-        }
-        return $name;
     }
 
     /**

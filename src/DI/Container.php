@@ -5,6 +5,7 @@ namespace AbmmHasan\OOF\DI;
 
 use AbmmHasan\OOF\DI\Resolver\GenericCall;
 use AbmmHasan\OOF\DI\Resolver\InjectedCall;
+use AbmmHasan\OOF\DI\Resolver\Repository;
 use AbmmHasan\OOF\Exceptions\ContainerException;
 use AbmmHasan\OOF\Exceptions\NotFoundException;
 use Closure;
@@ -18,7 +19,7 @@ use ReflectionException;
 class Container implements ContainerInterface
 {
     protected static array $instances;
-    protected Asset $assets;
+    protected Repository $repository;
     protected string $resolver = InjectedCall::class;
 
     /**
@@ -27,7 +28,7 @@ class Container implements ContainerInterface
     public function __construct(private string $instanceAlias = 'default')
     {
         self::$instances[$this->instanceAlias] ??= $this;
-        $this->assets = new Asset();
+        $this->repository = new Repository();
     }
 
     /**
@@ -81,7 +82,7 @@ class Container implements ContainerInterface
         if ($id === $definition) {
             throw new ContainerException("Circular dependency detected ($id)");
         }
-        $this->assets->functionReference[$id] = $definition;
+        $this->repository->functionReference[$id] = $definition;
         return self::$instances[$this->instanceAlias];
     }
 
@@ -95,17 +96,17 @@ class Container implements ContainerInterface
     public function get(string $id): mixed
     {
         try {
-            $existsInResolved = array_key_exists($id, $this->assets->resolved);
-            if ($existsInDefinition = array_key_exists($id, $this->assets->functionReference)) {
-                return (new $this->resolver($this->assets))
-                    ->resolveByDefinition($this->assets->functionReference[$id], $id);
+            $existsInResolved = array_key_exists($id, $this->repository->resolved);
+            if ($existsInDefinition = array_key_exists($id, $this->repository->functionReference)) {
+                return (new $this->resolver($this->repository))
+                    ->resolveByDefinition($this->repository->functionReference[$id], $id);
             }
 
             if (!$existsInResolved) {
-                $this->assets->resolved[$id] = $this->call($id);
+                $this->repository->resolved[$id] = $this->call($id);
             }
 
-            return $this->assets->resolved[$id]['instance'] ?? $this->assets->resolved[$id];
+            return $this->repository->resolved[$id]['instance'] ?? $this->repository->resolved[$id];
         } catch (Exception|ReflectionException|ContainerException $exception) {
             $containerException = $exception instanceof ContainerException ||
                 $exception instanceof ReflectionException;
@@ -113,6 +114,29 @@ class Container implements ContainerInterface
                 throw new NotFoundException("No entry found for '$id' identifier");
             }
             throw new ContainerException("Error while retrieving the entry: " . $exception->getMessage());
+        }
+    }
+
+    /**
+     * Finds an entry of the container (returned result) by its identifier and returns it.
+     *
+     * @param string $id
+     * @return mixed
+     * @throws ContainerException
+     * @throws NotFoundException
+     */
+    public function getReturn(string $id): mixed
+    {
+        try {
+            $resolved = $this->get($id);
+            if (array_key_exists($id, $this->repository->functionReference)) {
+                return $resolved;
+            }
+            return $this->repository->resolved[$id]['returned'] ?? $resolved;
+        } catch (NotFoundException $exception) {
+            throw new NotFoundException($exception->getMessage());
+        } catch (ContainerException $exception) {
+            throw new ContainerException($exception->getMessage());
         }
     }
 
@@ -126,13 +150,13 @@ class Container implements ContainerInterface
     {
         try {
             if (
-                array_key_exists($id, $this->assets->functionReference) ||
-                array_key_exists($id, $this->assets->resolved)
+                array_key_exists($id, $this->repository->functionReference) ||
+                array_key_exists($id, $this->repository->resolved)
             ) {
                 return true;
             }
             $this->get($id);
-            return array_key_exists($id, $this->assets->resolved);
+            return array_key_exists($id, $this->repository->resolved);
         } catch (NotFoundException|ContainerException $exception) {
             return false;
         }
@@ -148,7 +172,7 @@ class Container implements ContainerInterface
      */
     public function registerClosure(string $closureAlias, callable|Closure $function, array $parameters = []): Container
     {
-        $this->assets
+        $this->repository
             ->closureResource[$closureAlias] = [
             'on' => $function,
             'params' => $parameters
@@ -165,7 +189,7 @@ class Container implements ContainerInterface
      */
     public function registerClass(string $class, array $parameters = []): Container
     {
-        $this->assets
+        $this->repository
             ->classResource[$class]['constructor'] = [
             'on' => '__constructor',
             'params' => $parameters
@@ -183,7 +207,7 @@ class Container implements ContainerInterface
      */
     public function registerMethod(string $class, string $method, array $parameters = []): Container
     {
-        $this->assets
+        $this->repository
             ->classResource[$class]['method'] = [
             'on' => $method,
             'params' => $parameters
@@ -202,7 +226,7 @@ class Container implements ContainerInterface
         string $defaultMethod = null,
         bool $autoWiring = true
     ): Container {
-        $this->assets->defaultMethod = $defaultMethod ?: null;
+        $this->repository->defaultMethod = $defaultMethod ?: null;
         $this->resolver = $autoWiring ? InjectedCall::class : GenericCall::class;
 
         return self::$instances[$this->instanceAlias];
@@ -225,24 +249,24 @@ class Container implements ContainerInterface
         return match (true) {
             $callableIsString && array_key_exists(
                 $classOrClosure,
-                $this->assets->functionReference
-            ) => (new $this->resolver($this->assets))
-                ->resolveByDefinition($this->assets->functionReference[$classOrClosure], $classOrClosure),
+                $this->repository->functionReference
+            ) => (new $this->resolver($this->repository))
+                ->resolveByDefinition($this->repository->functionReference[$classOrClosure], $classOrClosure),
 
             $classOrClosure instanceof Closure || (is_callable($classOrClosure) && !is_array(
                     $classOrClosure
-                )) => (new $this->resolver($this->assets))
+                )) => (new $this->resolver($this->repository))
                 ->closureSettler($classOrClosure),
 
             !$callableIsString => throw new ContainerException('Invalid class/closure format'),
 
-            !empty($this->assets->closureResource[$classOrClosure]['on']) => (new $this->resolver($this->assets))
-                ->closureSettler(
-                    $this->assets->closureResource[$classOrClosure]['on'],
-                    $this->assets->closureResource[$classOrClosure]['params']
-                ),
+            !empty($this->repository->closureResource[$classOrClosure]['on']) =>
+            (new $this->resolver($this->repository))->closureSettler(
+                $this->repository->closureResource[$classOrClosure]['on'],
+                $this->repository->closureResource[$classOrClosure]['params']
+            ),
 
-            default => (new $this->resolver($this->assets))->classSettler($classOrClosure, $method)
+            default => (new $this->resolver($this->repository))->classSettler($classOrClosure, $method)
         };
     }
 
