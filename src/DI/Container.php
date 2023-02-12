@@ -122,8 +122,7 @@ class Container implements ContainerInterface
      *
      * @param string $id
      * @return mixed
-     * @throws ContainerException
-     * @throws NotFoundException
+     * @throws ContainerException|NotFoundException
      */
     public function getReturn(string $id): mixed
     {
@@ -219,15 +218,15 @@ class Container implements ContainerInterface
      * Set resolution options
      *
      * @param string|null $defaultMethod Set default call method (will be called if no method/callOn const provided)
-     * @param bool $autoWiring Enable/Disable auto-wiring/auto-resolution
+     * @param bool $enableInjection Enable/Disable dependency injection
      * @return Container
      */
     public function setOptions(
         string $defaultMethod = null,
-        bool $autoWiring = true
+        bool $enableInjection = true
     ): Container {
         $this->repository->defaultMethod = $defaultMethod ?: null;
-        $this->resolver = $autoWiring ? InjectedCall::class : GenericCall::class;
+        $this->resolver = $enableInjection ? InjectedCall::class : GenericCall::class;
 
         return self::$instances[$this->instanceAlias];
     }
