@@ -36,7 +36,7 @@ class ClassResolver
         mixed $supplied = null,
         string|bool $callMethod = null
     ): array {
-        $this->resolveClass($class, $supplied);
+        $class = $this->resolveClass($class, $supplied);
         $this->resolveMethod($class, $callMethod);
 
         return $this->repository->resolvedResource[$class->getName()];
@@ -47,10 +47,10 @@ class ClassResolver
      *
      * @param ReflectionClass $class
      * @param mixed $supplied
-     * @return void
+     * @return ReflectionClass
      * @throws ContainerException|ReflectionException
      */
-    private function resolveClass(ReflectionClass $class, mixed $supplied): void
+    private function resolveClass(ReflectionClass $class, mixed $supplied): ReflectionClass
     {
         $className = $class->getName();
         if ($class->isInterface()) {
@@ -64,7 +64,7 @@ class ClassResolver
             }
         }
         if (isset($this->repository->resolvedResource[$className]['instance'])) {
-            return;
+            return $class;
         }
         if (!$class->isInstantiable()) {
             throw new ContainerException("{$class->getName()} is not instantiable!");
@@ -79,6 +79,7 @@ class ClassResolver
                     'constructor'
                 )
             );
+        return $class;
     }
 
     /**
