@@ -32,13 +32,17 @@ class ClassResolver
      * @throws ContainerException
      * @throws ReflectionException
      */
-    public function getResolvedInstance(
+    public function resolve(
         ReflectionClass $class,
         mixed $supplied = null,
         string|bool $callMethod = null
     ): array {
         $class = $this->getClass($class, $supplied);
-        $this->resolveProperties($class);
+
+        if ($properties = $this->getResolvableProperties($class)) {
+            $this->resolveProperties($class, $properties);
+        }
+
         $this->resolveConstructor($class);
         $this->resolveMethod($class, $callMethod);
 
@@ -69,10 +73,36 @@ class ClassResolver
         return $class;
     }
 
-    private function resolveProperties(ReflectionClass $class): void
+    /**
+     * Get resolvable properties
+     *
+     * @param ReflectionClass $class
+     * @return array
+     */
+    private function getResolvableProperties(ReflectionClass $class): array
     {
-        $properties = $class->getProperties(ReflectionProperty::IS_PUBLIC | ReflectionProperty::IS_PROTECTED);
-        if ($this->repository->enableAttribute) {
+        $className = $class->getName();
+
+        if (!isset($this->repository->classResource[$className]['property']) && !$this->repository->enableAttribute) {
+            return [];
+        }
+
+        return $class->getProperties(ReflectionProperty::IS_PUBLIC | ReflectionProperty::IS_PROTECTED);
+    }
+
+    private function resolveProperties(ReflectionClass $class, array $properties): void
+    {
+        $className = $class->getName();
+        $classPropertyValues = $this->repository->classResource[$className]['property'] ?? [];
+
+        foreach ($properties as $property) {
+            if (isset($classPropertyValues[$property->getName()])) {
+                $property->setValue($classPropertyValues[$property->getName()]);
+                continue;
+            }
+            if (!$this->repository->enableAttribute || $property->getAttributes() === []) {
+                continue;
+            }
         }
     }
 
@@ -96,7 +126,7 @@ class ClassResolver
         $this->repository->resolvedResource[$className]['instance'] = $constructor === null ?
             $class->newInstanceWithoutConstructor() :
             $class->newInstanceArgs(
-                $this->parameterResolver->resolveParameters(
+                $this->parameterResolver->resolve(
                     $constructor,
                     $this->repository->classResource[$className]['constructor']['params'] ?? [],
                     'constructor'
@@ -130,7 +160,7 @@ class ClassResolver
             $method = new ReflectionMethod($className, $method);
             $this->repository->resolvedResource[$className]['returned'] = $method->invokeArgs(
                 $this->repository->resolvedResource[$className]['instance'],
-                $this->parameterResolver->resolveParameters(
+                $this->parameterResolver->resolve(
                     $method,
                     $this->repository->classResource[$className]['method']['params'] ?? [],
                     'method'

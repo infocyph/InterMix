@@ -2,8 +2,8 @@
 
 namespace AbmmHasan\OOF\Remix;
 
-use Exception;
 use Closure;
+use Exception;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionMethod;
@@ -16,18 +16,6 @@ trait MacroMix
      * @var array
      */
     protected static array $macros = [];
-
-    /**
-     * Register a custom macro.
-     *
-     * @param string $name
-     * @param callable|object $macro
-     * @return void
-     */
-    public static function register(string $name, callable|object $macro): void
-    {
-        static::$macros[$name] = $macro;
-    }
 
     /**
      * Mix another object into the class.
@@ -63,6 +51,18 @@ trait MacroMix
     }
 
     /**
+     * Register a custom macro.
+     *
+     * @param string $name
+     * @param callable|object $macro
+     * @return void
+     */
+    public static function register(string $name, callable|object $macro): void
+    {
+        static::$macros[$name] = $macro;
+    }
+
+    /**
      * Handle static calls to the class.
      *
      * @param string $method
@@ -73,19 +73,6 @@ trait MacroMix
     public static function __callStatic(string $method, array $parameters)
     {
         return self::process(null, $method, $parameters);
-    }
-
-    /**
-     * Handle non-static calls to the class.
-     *
-     * @param string $method
-     * @param array $parameters
-     * @return mixed
-     * @throws Exception
-     */
-    public function __call(string $method, array $parameters)
-    {
-        return self::process($this, $method, $parameters);
     }
 
     /**
@@ -116,5 +103,18 @@ trait MacroMix
         }
 
         return $macro(...$parameters);
+    }
+
+    /**
+     * Handle non-static calls to the class.
+     *
+     * @param string $method
+     * @param array $parameters
+     * @return mixed
+     * @throws Exception
+     */
+    public function __call(string $method, array $parameters)
+    {
+        return self::process($this, $method, $parameters);
     }
 }

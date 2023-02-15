@@ -6,6 +6,9 @@ use Closure;
 
 final class GenericCall
 {
+    /**
+     * @param Repository $repository
+     */
     public function __construct(
         private Repository $repository
     ) {

@@ -35,7 +35,7 @@ final class InjectedCall
      */
     public function classSettler(string $class, string $method = null): array
     {
-        return $this->classResolver->getResolvedInstance($this->reflectedClass($class), null, $method);
+        return $this->classResolver->resolve($this->reflectedClass($class), null, $method);
     }
 
     /**
@@ -49,7 +49,7 @@ final class InjectedCall
     public function closureSettler(string|Closure $closure, array $params = []): mixed
     {
         return $closure(
-            ...$this->parameterResolver->resolveParameters(new ReflectionFunction($closure), $params, 'constructor')
+            ...$this->parameterResolver->resolve(new ReflectionFunction($closure), $params, 'constructor')
         );
     }
 }
