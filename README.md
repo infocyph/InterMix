@@ -1,14 +1,14 @@
-# OOF
+# InterMix
 
-![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/abmmhasan/oof/ci.yml)
+![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/abmmhasan/intermix/ci.yml)
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/88086fed2d124010aa09c5979bdc4b80)](https://www.codacy.com/gh/abmmhasan/OOF/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=abmmhasan/OOF&amp;utm_campaign=Badge_Grade)
-![Libraries.io dependency status for GitHub repo](https://img.shields.io/librariesio/github/abmmhasan/oof)
-![Packagist Downloads](https://img.shields.io/packagist/dt/abmmhasan/oof)
+![Libraries.io dependency status for GitHub repo](https://img.shields.io/librariesio/github/abmmhasan/intermix)
+![Packagist Downloads](https://img.shields.io/packagist/dt/abmmhasan/intermix)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
-![Packagist Version](https://img.shields.io/packagist/v/abmmhasan/oof)
-![Packagist PHP Version Support](https://img.shields.io/packagist/php-v/abmmhasan/oof)
-![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/abmmhasan/oof)
-![Lines of code](https://img.shields.io/tokei/lines/github/abmmhasan/oof)
+![Packagist Version](https://img.shields.io/packagist/v/abmmhasan/intermix)
+![Packagist PHP Version Support](https://img.shields.io/packagist/php-v/abmmhasan/intermix)
+![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/abmmhasan/intermix)
+![Lines of code](https://img.shields.io/tokei/lines/github/abmmhasan/intermix)
 
 Object-Oriented Factory!
 
@@ -25,12 +25,12 @@ Language: PHP 8.0/+
 ## Installation
 
 ```bash
-composer require abmmhasan/oof
+composer require abmmhasan/intermix
 ```
 
 ## Documentation
 
-Check the related [wiki page](https://github.com/abmmhasan/OOF/wiki) for details! 
+Check the related [wiki page](https://github.com/abmmhasan/intermix/wiki) for details! 
 
 ## Support
 
