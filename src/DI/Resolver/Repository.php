@@ -1,6 +1,6 @@
 <?php
 
-namespace AbmmHasan\OOF\DI\Resolver;
+namespace AbmmHasan\InterMix\DI\Resolver;
 
 class Repository
 {

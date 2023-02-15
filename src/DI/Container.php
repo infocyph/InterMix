@@ -1,13 +1,13 @@
 <?php
 
 
-namespace AbmmHasan\OOF\DI;
+namespace AbmmHasan\InterMix\DI;
 
-use AbmmHasan\OOF\DI\Resolver\GenericCall;
-use AbmmHasan\OOF\DI\Resolver\InjectedCall;
-use AbmmHasan\OOF\DI\Resolver\Repository;
-use AbmmHasan\OOF\Exceptions\ContainerException;
-use AbmmHasan\OOF\Exceptions\NotFoundException;
+use AbmmHasan\InterMix\DI\Resolver\GenericCall;
+use AbmmHasan\InterMix\DI\Resolver\InjectedCall;
+use AbmmHasan\InterMix\DI\Resolver\Repository;
+use AbmmHasan\InterMix\Exceptions\ContainerException;
+use AbmmHasan\InterMix\Exceptions\NotFoundException;
 use Closure;
 use Exception;
 use Psr\Container\ContainerInterface;

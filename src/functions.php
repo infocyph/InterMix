@@ -1,8 +1,8 @@
 <?php
 
-use AbmmHasan\OOF\DI\Container;
-use AbmmHasan\OOF\Exceptions\ContainerException;
-use AbmmHasan\OOF\Exceptions\NotFoundException;
+use AbmmHasan\InterMix\DI\Container;
+use AbmmHasan\InterMix\Exceptions\ContainerException;
+use AbmmHasan\InterMix\Exceptions\NotFoundException;
 
 if (!function_exists('container')) {
     /**

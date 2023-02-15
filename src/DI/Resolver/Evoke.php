@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace AbmmHasan\OOF\DI\Resolver;
+namespace AbmmHasan\InterMix\DI\Resolver;
 
 use Attribute;
 

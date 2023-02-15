@@ -1,8 +1,8 @@
 <?php
 
-namespace AbmmHasan\OOF\DI\Resolver;
+namespace AbmmHasan\InterMix\DI\Resolver;
 
-use AbmmHasan\OOF\Exceptions\ContainerException;
+use AbmmHasan\InterMix\Exceptions\ContainerException;
 use Closure;
 use ReflectionClass;
 use ReflectionException;

@@ -1,7 +1,7 @@
 <?php
 
 
-namespace AbmmHasan\OOF\Fence;
+namespace AbmmHasan\InterMix\Fence;
 
 
 use Exception;
