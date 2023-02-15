@@ -215,17 +215,38 @@ class Container implements ContainerInterface
     }
 
     /**
+     * Register Class and Method with Parameter (method parameter)
+     *
+     * @param string $class
+     * @param string $property
+     * @param mixed $value
+     * @return Container
+     */
+    public function registerProperty(string $class, string $property, mixed $value = []): Container
+    {
+        $this->repository
+            ->classResource[$class]['property'] = [
+            'on' => $property,
+            'values' => $value
+        ];
+        return self::$instances[$this->instanceAlias];
+    }
+
+    /**
      * Set resolution options
      *
      * @param string|null $defaultMethod Set default call method (will be called if no method/callOn const provided)
      * @param bool $enableInjection Enable/Disable dependency injection
+     * @param bool $useAttributes Enable/Disable dependency injection based on attributes
      * @return Container
      */
     public function setOptions(
         string $defaultMethod = null,
-        bool $enableInjection = true
+        bool $enableInjection = true,
+        bool $useAttributes = false
     ): Container {
         $this->repository->defaultMethod = $defaultMethod ?: null;
+        $this->repository->enableAttribute = $useAttributes;
         $this->resolver = $enableInjection ? InjectedCall::class : GenericCall::class;
 
         return self::$instances[$this->instanceAlias];

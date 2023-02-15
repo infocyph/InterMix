@@ -11,4 +11,5 @@ class Repository
     public array $resolved = [];
     public array $resolvedResource = [];
     public array $resolvedDefinition = [];
+    public bool $enableAttribute = false;
 }

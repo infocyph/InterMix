@@ -6,6 +6,7 @@ use AbmmHasan\OOF\Exceptions\ContainerException;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionMethod;
+use ReflectionProperty;
 
 class ClassResolver
 {
@@ -36,24 +37,26 @@ class ClassResolver
         mixed $supplied = null,
         string|bool $callMethod = null
     ): array {
-        $class = $this->resolveClass($class, $supplied);
+        $class = $this->getClass($class, $supplied);
+        $this->resolveProperties($class);
+        $this->resolveConstructor($class);
         $this->resolveMethod($class, $callMethod);
 
         return $this->repository->resolvedResource[$class->getName()];
     }
 
     /**
-     * Resolve class (initiate & construct)
+     * Get the actual class
      *
      * @param ReflectionClass $class
      * @param mixed $supplied
      * @return ReflectionClass
      * @throws ContainerException|ReflectionException
      */
-    private function resolveClass(ReflectionClass $class, mixed $supplied): ReflectionClass
+    private function getClass(ReflectionClass $class, mixed $supplied): ReflectionClass
     {
-        $className = $class->getName();
         if ($class->isInterface()) {
+            $className = $class->getName();
             if (!class_exists($supplied)) {
                 throw new ContainerException("Resolution failed: $supplied for interface $className");
             }
@@ -63,8 +66,28 @@ class ClassResolver
                 throw new ContainerException("$className doesn't implement $interface");
             }
         }
+        return $class;
+    }
+
+    private function resolveProperties(ReflectionClass $class): void
+    {
+        $properties = $class->getProperties(ReflectionProperty::IS_PUBLIC | ReflectionProperty::IS_PROTECTED);
+        if ($this->repository->enableAttribute) {
+        }
+    }
+
+    /**
+     * Resolve class (initiate & construct)
+     *
+     * @param ReflectionClass $class
+     * @return void
+     * @throws ContainerException|ReflectionException
+     */
+    private function resolveConstructor(ReflectionClass $class): void
+    {
+        $className = $class->getName();
         if (isset($this->repository->resolvedResource[$className]['instance'])) {
-            return $class;
+            return;
         }
         if (!$class->isInstantiable()) {
             throw new ContainerException("{$class->getName()} is not instantiable!");
@@ -79,7 +102,6 @@ class ClassResolver
                     'constructor'
                 )
             );
-        return $class;
     }
 
     /**
