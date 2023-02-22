@@ -86,7 +86,7 @@ class PropertyResolver
                 continue;
             }
 
-            $values = $this->resolveValue($property, $classPropertyValues, $className);
+            $values = $this->resolveValue($property, $classPropertyValues);
 
             if ($values) {
                 $property->setValue(...$values);
@@ -129,12 +129,12 @@ class PropertyResolver
     {
         return match (true) {
             $property->isStatic() && isset($classPropertyValues[$property->getName()]) => [
-                'value' => $classPropertyValues[$property->getName()]
+                $classPropertyValues[$property->getName()]
             ],
 
             isset($classPropertyValues[$property->getName()]) => [
-                'object' => $this->classInstance,
-                'value' => $classPropertyValues[$property->getName()]
+                $this->classInstance,
+                $classPropertyValues[$property->getName()]
             ],
 
             !$this->repository->enableAttribute => [],
@@ -167,10 +167,10 @@ class PropertyResolver
                 );
             }
             return [
-                'object' => $this->classInstance,
-                'value' => $this->classResolver->resolve(
+                $this->classInstance,
+                $this->classResolver->resolve(
                     $this->reflectedClass($parameterType->getName())
-                )
+                )['instance']
             ];
         }
 
@@ -178,16 +178,16 @@ class PropertyResolver
 
         return match ($infuse->getData('type')) {
             'name' => [
-                'object' => $this->classInstance,
-                'value' => $this->repository->functionReference[$infuse->getData('data')] ??
-                    throw new ContainerException(
-                        sprintf(
-                            "Unknown definition (%s) detected on %s::$%s",
-                            $infuse->getData('data'),
-                            $property->getDeclaringClass()->getName(),
-                            $property->getName()
-                        )
+                $this->classInstance,
+                $this->repository->functionReference[$infuse->getData('data')] ??
+                throw new ContainerException(
+                    sprintf(
+                        "Unknown definition (%s) detected on %s::$%s",
+                        $infuse->getData('data'),
+                        $property->getDeclaringClass()->getName(),
+                        $property->getName()
                     )
+                )
             ],
             default => throw new ContainerException(
                 sprintf(

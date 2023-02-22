@@ -12,4 +12,5 @@ class Repository
     public array $resolvedResource = [];
     public array $resolvedDefinition = [];
     public bool $enableAttribute = false;
+    public bool $enableProperties = false;
 }

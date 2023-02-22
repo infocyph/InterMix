@@ -269,18 +269,21 @@ class Container implements ContainerInterface
     /**
      * Set resolution options
      *
-     * @param string|null $defaultMethod Set default call method (will be called if no method/callOn const provided)
      * @param bool $enableInjection Enable/Disable dependency injection
      * @param bool $useAttributes Enable/Disable dependency injection based on attributes
+     * @param bool $enablePropertyResolution Enable/Disable dependency injection on properties
+     * @param string|null $defaultMethod Set default call method (will be called if no method/callOn const provided)
      * @return Container
      */
     public function setOptions(
-        string $defaultMethod = null,
         bool $enableInjection = true,
-        bool $useAttributes = false
+        bool $enablePropertyResolution = true,
+        bool $useAttributes = false,
+        string $defaultMethod = null
     ): Container {
         $this->repository->defaultMethod = $defaultMethod ?: null;
         $this->repository->enableAttribute = $useAttributes;
+        $this->repository->enableProperties = $enablePropertyResolution;
         $this->resolver = $enableInjection ? InjectedCall::class : GenericCall::class;
 
         return self::$instances[$this->instanceAlias];

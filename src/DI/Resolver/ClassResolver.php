@@ -41,7 +41,9 @@ class ClassResolver
         $class = $this->getClass($class, $supplied);
 
         $this->resolveConstructor($class);
-        $this->propertyResolver->resolve($class);
+        if ($this->repository->enableProperties) {
+            $this->propertyResolver->resolve($class);
+        }
         $this->resolveMethod($class, $callMethod);
 
         return $this->repository->resolvedResource[$class->getName()];
