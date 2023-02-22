@@ -1,7 +1,12 @@
 <?php
 
-namespace AbmmHasan\InterMix\DI\Resolver;
+namespace AbmmHasan\InterMix\DI\Invoker;
 
+use AbmmHasan\InterMix\DI\Resolver\ClassResolver;
+use AbmmHasan\InterMix\DI\Resolver\ParameterResolver;
+use AbmmHasan\InterMix\DI\Resolver\PropertyResolver;
+use AbmmHasan\InterMix\DI\Resolver\ReflectionResource;
+use AbmmHasan\InterMix\DI\Resolver\Repository;
 use AbmmHasan\InterMix\Exceptions\ContainerException;
 use Closure;
 use ReflectionException;
@@ -13,6 +18,7 @@ final class InjectedCall
 
     private ParameterResolver $parameterResolver;
     private ClassResolver $classResolver;
+    private PropertyResolver $propertyResolver;
 
     /**
      * @param Repository $repository
@@ -21,8 +27,27 @@ final class InjectedCall
         private Repository $repository
     ) {
         $this->parameterResolver = new ParameterResolver($this->repository);
-        $this->classResolver = new ClassResolver($this->repository, $this->parameterResolver);
+        $this->propertyResolver = new PropertyResolver($this->repository);
+        $this->classResolver = new ClassResolver(
+            $this->repository,
+            $this->parameterResolver,
+            $this->propertyResolver
+        );
         $this->parameterResolver->setClassResolverInstance($this->classResolver);
+        $this->propertyResolver->setClassResolverInstance($this->classResolver);
+    }
+
+    /**
+     * Definition based resolver
+     *
+     * @param mixed $definition
+     * @param string $name
+     * @return mixed
+     * @throws ReflectionException|ContainerException
+     */
+    public function resolveByDefinition(mixed $definition, string $name): mixed
+    {
+        return $this->parameterResolver->resolveByDefinition($definition, $name);
     }
 
     /**

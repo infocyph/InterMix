@@ -1,7 +1,8 @@
 <?php
 
-namespace AbmmHasan\InterMix\DI\Resolver;
+namespace AbmmHasan\InterMix\DI\Invoker;
 
+use AbmmHasan\InterMix\DI\Resolver\Repository;
 use Closure;
 
 final class GenericCall

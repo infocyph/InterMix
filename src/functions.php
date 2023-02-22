@@ -13,17 +13,18 @@ if (!function_exists('container')) {
      * @return Container|mixed
      * @throws ContainerException|NotFoundException
      */
-    function container(string|Closure|callable|array $closureOrClass = null, string $alias = 'oof')
+    function container(string|Closure|callable|array $closureOrClass = null, string $alias = 'inter_mix')
     {
         $instance = Container::instance($alias);
         if ($closureOrClass === null) {
             return $instance;
         }
-        [$class, $method] = $instance->split($closureOrClass);
 
+        [$class, $method] = $instance->split($closureOrClass);
         if (!$method) {
             return $instance->get($class);
         }
+
         $instance->registerMethod($class, $method);
         return $instance->getReturn($class);
     }

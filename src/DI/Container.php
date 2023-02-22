@@ -3,8 +3,8 @@
 
 namespace AbmmHasan\InterMix\DI;
 
-use AbmmHasan\InterMix\DI\Resolver\GenericCall;
-use AbmmHasan\InterMix\DI\Resolver\InjectedCall;
+use AbmmHasan\InterMix\DI\Invoker\GenericCall;
+use AbmmHasan\InterMix\DI\Invoker\InjectedCall;
 use AbmmHasan\InterMix\DI\Resolver\Repository;
 use AbmmHasan\InterMix\Exceptions\ContainerException;
 use AbmmHasan\InterMix\Exceptions\NotFoundException;

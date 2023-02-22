@@ -6,7 +6,6 @@ use AbmmHasan\InterMix\Exceptions\ContainerException;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionMethod;
-use ReflectionProperty;
 
 class ClassResolver
 {
@@ -15,10 +14,12 @@ class ClassResolver
     /**
      * @param Repository $repository
      * @param ParameterResolver $parameterResolver
+     * @param PropertyResolver $propertyResolver
      */
     public function __construct(
         private Repository $repository,
-        private ParameterResolver $parameterResolver
+        private ParameterResolver $parameterResolver,
+        private PropertyResolver $propertyResolver
     ) {
     }
 
@@ -39,11 +40,8 @@ class ClassResolver
     ): array {
         $class = $this->getClass($class, $supplied);
 
-        if ($properties = $this->getResolvableProperties($class)) {
-            $this->resolveProperties($class, $properties);
-        }
-
         $this->resolveConstructor($class);
+        $this->propertyResolver->resolve($class);
         $this->resolveMethod($class, $callMethod);
 
         return $this->repository->resolvedResource[$class->getName()];
@@ -71,39 +69,6 @@ class ClassResolver
             }
         }
         return $class;
-    }
-
-    /**
-     * Get resolvable properties
-     *
-     * @param ReflectionClass $class
-     * @return array
-     */
-    private function getResolvableProperties(ReflectionClass $class): array
-    {
-        $className = $class->getName();
-
-        if (!isset($this->repository->classResource[$className]['property']) && !$this->repository->enableAttribute) {
-            return [];
-        }
-
-        return $class->getProperties(ReflectionProperty::IS_PUBLIC | ReflectionProperty::IS_PROTECTED);
-    }
-
-    private function resolveProperties(ReflectionClass $class, array $properties): void
-    {
-        $className = $class->getName();
-        $classPropertyValues = $this->repository->classResource[$className]['property'] ?? [];
-
-        foreach ($properties as $property) {
-            if (isset($classPropertyValues[$property->getName()])) {
-                $property->setValue($classPropertyValues[$property->getName()]);
-                continue;
-            }
-            if (!$this->repository->enableAttribute || $property->getAttributes() === []) {
-                continue;
-            }
-        }
     }
 
     /**
