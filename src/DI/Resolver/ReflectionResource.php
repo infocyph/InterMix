@@ -2,8 +2,10 @@
 
 namespace AbmmHasan\InterMix\DI\Resolver;
 
+use Closure;
 use ReflectionClass;
 use ReflectionException;
+use ReflectionFunction;
 
 trait ReflectionResource
 {
@@ -17,5 +19,18 @@ trait ReflectionResource
     private function reflectedClass(string $className): ReflectionClass
     {
         return $this->repository->resolvedResource[$className]['reflection'] ??= new ReflectionClass($className);
+    }
+
+    /**
+     * Get ReflectionFunction instance
+     *
+     * @param string|Closure $closure
+     * @param string $name
+     * @return ReflectionFunction
+     * @throws ReflectionException
+     */
+    private function reflectedFunction(string|Closure $closure, string $name): ReflectionFunction
+    {
+        return $this->repository->resolvedFunction[$name]['reflection'] ??= new ReflectionFunction($closure);
     }
 }

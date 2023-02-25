@@ -6,7 +6,9 @@ use AbmmHasan\InterMix\DI\Attribute\Infuse;
 use AbmmHasan\InterMix\Exceptions\ContainerException;
 use ReflectionClass;
 use ReflectionException;
+use ReflectionFunction;
 use ReflectionProperty;
+use ReflectionType;
 
 class PropertyResolver
 {
@@ -18,9 +20,11 @@ class PropertyResolver
 
     /**
      * @param Repository $repository
+     * @param ParameterResolver $parameterResolver
      */
     public function __construct(
-        private Repository $repository
+        private Repository $repository,
+        private ParameterResolver $parameterResolver
     ) {
     }
 
@@ -115,7 +119,13 @@ class PropertyResolver
             return [];
         }
 
-        return $this->resolveAttribute($property, $attribute);
+        $arguments = $attribute[0]->getArguments();
+        $parameterType = $property->getType();
+
+        return match ($arguments === []) {
+            true => $this->resolveWithoutArgument($property, $parameterType),
+            default => $this->resolveArguments($attribute[0]->newInstance(), $attribute)
+        };
     }
 
     /**
@@ -144,28 +154,17 @@ class PropertyResolver
     }
 
     /**
-     * Resolve using attribute
+     * Resolve attribute without arguments
      *
      * @param ReflectionProperty $property
-     * @param array $attribute
+     * @param ReflectionType|null $parameterType
      * @return array
-     * @throws ContainerException|ReflectionException
+     * @throws ContainerException
+     * @throws ReflectionException
      */
-    private function resolveAttribute(ReflectionProperty $property, array $attribute): array
+    private function resolveWithoutArgument(ReflectionProperty $property, ReflectionType $parameterType = null): array
     {
-        $arguments = $attribute[0]->getArguments();
-        $parameterType = $property->getType();
-
-        if ($arguments === []) {
-            if ($parameterType === null || $parameterType->isBuiltin()) {
-                throw new ContainerException(
-                    sprintf(
-                        "Malformed #[Infuse] attribute detected on %s::$%s",
-                        $property->getDeclaringClass()->getName(),
-                        $property->getName()
-                    )
-                );
-            }
+        if ($parameterType !== null && !$parameterType->isBuiltin()) {
             return [
                 $this->classInstance,
                 $this->classResolver->resolve(
@@ -173,29 +172,69 @@ class PropertyResolver
                 )['instance']
             ];
         }
+        throw new ContainerException(
+            sprintf(
+                "Malformed #[Infuse] attribute detected on %s::$%s",
+                $property->getDeclaringClass()->getName(),
+                $property->getName()
+            )
+        );
+    }
 
-        $infuse = $attribute[0]->newInstance();
+    /**
+     * Resolve attribute arguments
+     *
+     * @param Infuse $infuse
+     * @param $property
+     * @return array
+     * @throws ContainerException|ReflectionException
+     */
+    private function resolveArguments(Infuse $infuse, $property): array
+    {
+        $type = $infuse->getData('type');
 
-        return match ($infuse->getData('type')) {
-            'name' => [
-                $this->classInstance,
-                $this->repository->functionReference[$infuse->getData('data')] ??
-                throw new ContainerException(
-                    sprintf(
-                        "Unknown definition (%s) detected on %s::$%s",
-                        $infuse->getData('data'),
-                        $property->getDeclaringClass()->getName(),
-                        $property->getName()
+        if ($type !== 'name') {
+            if (function_exists($type)) {
+                return [
+                    $this->classInstance,
+                    $type(
+                        ...
+                        $this->parameterResolver->resolve(
+                            new ReflectionFunction($type),
+                            $infuse->getData('data'),
+                            'constructor'
+                        )
                     )
-                )
-            ],
-            default => throw new ContainerException(
+                ];
+            }
+
+            throw new ContainerException(
                 sprintf(
-                    "Unknown #[Infuse] parameter detected on %s::$%s",
+                    "Unknown #[Infuse] parameter($type) detected on %s::$%s",
                     $property->getDeclaringClass()->getName(),
                     $property->getName()
                 )
+            );
+        }
+
+        // resolving 'name' parameter
+        if (!isset($this->repository->functionReference[$infuse->getData('data')])) {
+            throw new ContainerException(
+                sprintf(
+                    "Unknown definition (%s) detected on %s::$%s",
+                    $infuse->getData('data'),
+                    $property->getDeclaringClass()->getName(),
+                    $property->getName()
+                )
+            );
+        }
+
+        return [
+            $this->classInstance,
+            $this->parameterResolver->resolveByDefinition(
+                $this->repository->functionReference[$infuse->getData('data')],
+                $infuse->getData('data')
             )
-        };
+        ];
     }
 }

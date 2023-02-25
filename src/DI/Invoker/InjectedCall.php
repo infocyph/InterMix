@@ -27,7 +27,10 @@ final class InjectedCall
         private Repository $repository
     ) {
         $this->parameterResolver = new ParameterResolver($this->repository);
-        $this->propertyResolver = new PropertyResolver($this->repository);
+        $this->propertyResolver = new PropertyResolver(
+            $this->repository,
+            $this->parameterResolver
+        );
         $this->classResolver = new ClassResolver(
             $this->repository,
             $this->parameterResolver,

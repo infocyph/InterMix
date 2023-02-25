@@ -10,6 +10,7 @@ class Repository
     public array $closureResource = [];
     public array $resolved = [];
     public array $resolvedResource = [];
+    public array $resolvedFunction = [];
     public array $resolvedDefinition = [];
     public bool $enableAttribute = false;
     public bool $enableProperties = false;

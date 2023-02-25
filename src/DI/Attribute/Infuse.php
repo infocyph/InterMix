@@ -12,18 +12,15 @@ final class Infuse
     private ?string $data = null;
     private string $type = 'name';
 
-    public function __construct(
-        string $name = null,
-        string $config = null
-    ) {
-        if ($config !== null) {
-            $this->type = 'config';
-            $this->data = $config;
-            return;
-        }
-        if ($name !== null) {
-            $this->type = 'name';
-            $this->data = $name;
+    public function __construct(...$parameters)
+    {
+        if (!empty($parameters)) {
+            $type = array_key_first($parameters);
+            $this->data = $parameters[$type];
+
+            if (!is_int($type)) {
+                $this->type = $type;
+            }
         }
     }
 
