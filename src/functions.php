@@ -29,3 +29,9 @@ if (!function_exists('container')) {
         return $instance->getReturn($class);
     }
 }
+
+
+function memoize(callable $callable, $isWeak = true)
+{
+
+}

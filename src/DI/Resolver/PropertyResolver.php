@@ -2,7 +2,7 @@
 
 namespace AbmmHasan\InterMix\DI\Resolver;
 
-use AbmmHasan\InterMix\DI\Attribute\Infuse;
+use AbmmHasan\InterMix\DI\Attribute\Ink;
 use AbmmHasan\InterMix\Exceptions\ContainerException;
 use ReflectionClass;
 use ReflectionException;
@@ -114,7 +114,7 @@ class PropertyResolver
             return $propertyValue;
         }
 
-        $attribute = $property->getAttributes(Infuse::class);
+        $attribute = $property->getAttributes(Ink::class);
         if (!$attribute) {
             return [];
         }
@@ -174,7 +174,7 @@ class PropertyResolver
         }
         throw new ContainerException(
             sprintf(
-                "Malformed #[Infuse] attribute detected on %s::$%s",
+                "Malformed #[Ink] attribute detected on %s::$%s",
                 $property->getDeclaringClass()->getName(),
                 $property->getName()
             )
@@ -184,14 +184,14 @@ class PropertyResolver
     /**
      * Resolve attribute arguments
      *
-     * @param Infuse $infuse
+     * @param Ink $ink
      * @param $property
      * @return array
      * @throws ContainerException|ReflectionException
      */
-    private function resolveArguments(Infuse $infuse, $property): array
+    private function resolveArguments(Ink $ink, $property): array
     {
-        $type = $infuse->getData('type');
+        $type = $ink->getData('type');
 
         if ($type !== 'name') {
             if (function_exists($type)) {
@@ -201,7 +201,7 @@ class PropertyResolver
                         ...
                         $this->parameterResolver->resolve(
                             new ReflectionFunction($type),
-                            $infuse->getData('data'),
+                            (array)$ink->getData('data'),
                             'constructor'
                         )
                     )
@@ -210,7 +210,7 @@ class PropertyResolver
 
             throw new ContainerException(
                 sprintf(
-                    "Unknown #[Infuse] parameter($type) detected on %s::$%s",
+                    "Unknown #[Ink] parameter($type) detected on %s::$%s",
                     $property->getDeclaringClass()->getName(),
                     $property->getName()
                 )
@@ -218,11 +218,11 @@ class PropertyResolver
         }
 
         // resolving 'name' parameter
-        if (!isset($this->repository->functionReference[$infuse->getData('data')])) {
+        if (!isset($this->repository->functionReference[$ink->getData('data')])) {
             throw new ContainerException(
                 sprintf(
                     "Unknown definition (%s) detected on %s::$%s",
-                    $infuse->getData('data'),
+                    $ink->getData('data'),
                     $property->getDeclaringClass()->getName(),
                     $property->getName()
                 )
@@ -232,8 +232,8 @@ class PropertyResolver
         return [
             $this->classInstance,
             $this->parameterResolver->resolveByDefinition(
-                $this->repository->functionReference[$infuse->getData('data')],
-                $infuse->getData('data')
+                $this->repository->functionReference[$ink->getData('data')],
+                $ink->getData('data')
             )
         ];
     }

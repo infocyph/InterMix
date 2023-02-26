@@ -120,8 +120,9 @@ class ClassResolver
         }
 
         $method = $callMethod
-            ?? $this->repository->classResource[$className]['method']['on']
-            ?? ($class->getConstant('callOn') ?: $this->repository->defaultMethod);
+            ?: $this->repository->classResource[$className]['method']['on']
+                ?? $class->getConstant('callOn')
+                ?: $this->repository->defaultMethod;
 
         if (!empty($method) && $class->hasMethod($method)) {
             $method = new ReflectionMethod($className, $method);

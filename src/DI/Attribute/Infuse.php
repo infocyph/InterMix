@@ -6,20 +6,26 @@ namespace AbmmHasan\InterMix\DI\Attribute;
 
 use Attribute;
 
-#[Attribute(Attribute::TARGET_PROPERTY)]
+#[Attribute(Attribute::TARGET_METHOD | Attribute::TARGET_PARAMETER)]
 final class Infuse
 {
-    private ?string $data = null;
-    private string $type = 'name';
+    private ?string $name = null;
+    private array $parameters = [];
 
-    public function __construct(...$parameters)
+    public function __construct(string|array|null $name = null)
     {
-        if (!empty($parameters)) {
-            $type = array_key_first($parameters);
-            $this->data = $parameters[$type];
+        // #[Infuse('value')] or #[Infuse(name: 'value')]
+        if (is_string($name)) {
+            $this->name = $name;
+        }
 
-            if (!is_int($type)) {
-                $this->type = $type;
+        // #[Infuse([...])] on a method
+        if (is_array($name)) {
+            foreach ($name as $key => $value) {
+                if (is_string($value)) {
+                    $this->parameters[$key] = $value;
+                    continue;
+                }
             }
         }
     }
@@ -27,15 +33,20 @@ final class Infuse
     /**
      * Get Name of the entry to inject
      *
-     * @param string|null $key
-     * @return array|string|null
+     * @return string|null
      */
-    public function getData(string $key = null): array|string|null
+    public function getName(): string|null
     {
-        $returnable = [
-            'type' => $this->type,
-            'data' => $this->data
-        ];
-        return $key ? ($returnable[$key] ?? null) : $returnable;
+        return $this->name;
+    }
+
+    /**
+     * Get parameters, indexed by the parameter number (index) or name
+     *
+     * @return array
+     */
+    public function getParameters(): array
+    {
+        return $this->parameters;
     }
 }
