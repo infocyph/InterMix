@@ -13,7 +13,7 @@ use ReflectionParameter;
 
 class ParameterResolver
 {
-    use ReflectionResource;
+    use Reflector;
 
     private ClassResolver $classResolver;
 

@@ -12,7 +12,7 @@ use ReflectionType;
 
 class PropertyResolver
 {
-    use ReflectionResource;
+    use Reflector;
 
     private ClassResolver $classResolver;
 

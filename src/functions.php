@@ -1,8 +1,8 @@
 <?php
 
 use AbmmHasan\InterMix\DI\Container;
-use AbmmHasan\InterMix\Exceptions\ContainerException;
-use AbmmHasan\InterMix\Exceptions\NotFoundException;
+use AbmmHasan\InterMix\DI\Reflection\ReflectionResource;
+use AbmmHasan\InterMix\Exceptions\{ContainerException, NotFoundException};
 
 if (!function_exists('container')) {
     /**
@@ -31,7 +31,16 @@ if (!function_exists('container')) {
 }
 
 
-function memoize(callable $callable, $isWeak = true)
+/**
+ * Memoize a function return during a process
+ *
+ * @param callable|array|string $callable
+ * @param bool $isWeak
+ * @return mixed
+ * @throws ReflectionException
+ */
+function memoize(callable|array|string $callable, bool $isWeak = true): mixed
 {
+    $signature = ReflectionResource::getSignature(ReflectionResource::getForFunction($callable));
 
 }

@@ -9,7 +9,7 @@ use ReflectionMethod;
 
 class ClassResolver
 {
-    use ReflectionResource;
+    use Reflector;
 
     /**
      * @param Repository $repository

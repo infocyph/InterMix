@@ -7,7 +7,7 @@ use ReflectionClass;
 use ReflectionException;
 use ReflectionFunction;
 
-trait ReflectionResource
+trait Reflector
 {
     /**
      * Get ReflectionClass instance

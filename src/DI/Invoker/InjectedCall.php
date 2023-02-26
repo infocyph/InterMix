@@ -5,7 +5,7 @@ namespace AbmmHasan\InterMix\DI\Invoker;
 use AbmmHasan\InterMix\DI\Resolver\ClassResolver;
 use AbmmHasan\InterMix\DI\Resolver\ParameterResolver;
 use AbmmHasan\InterMix\DI\Resolver\PropertyResolver;
-use AbmmHasan\InterMix\DI\Resolver\ReflectionResource;
+use AbmmHasan\InterMix\DI\Resolver\Reflector;
 use AbmmHasan\InterMix\DI\Resolver\Repository;
 use AbmmHasan\InterMix\Exceptions\ContainerException;
 use Closure;
@@ -14,7 +14,7 @@ use ReflectionFunction;
 
 final class InjectedCall
 {
-    use ReflectionResource;
+    use Reflector;
 
     private ParameterResolver $parameterResolver;
     private ClassResolver $classResolver;
