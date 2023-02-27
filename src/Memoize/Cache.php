@@ -3,70 +3,56 @@
 namespace AbmmHasan\InterMix\Memoize;
 
 
-use AbmmHasan\InterMix\Fence\Multi;
-use WeakMap;
+use AbmmHasan\InterMix\Fence\Single;
+use Countable;
 
-class Cache
+class Cache implements Countable
 {
-    use Multi;
+    use Single;
 
-    public WeakMap $values;
-
-    protected function __construct()
-    {
-        $this->values = new WeakMap();
-    }
+    private array $values = [];
 
     /**
-     * @param object $object
-     * @param string $backtraceHash
-     * @return bool
-     */
-    public function has(object $object, string $backtraceHash): bool
-    {
-        if (!isset($this->values[$object])) {
-            return false;
-        }
-        return array_key_exists($backtraceHash, $this->values[$object]);
-    }
-
-    /**
-     * @param object $object
-     * @param string $backtraceHash
+     * Get cached data / if not cached, execute and cache
+     *
+     * @param string $signature
+     * @param callable $callable
+     * @param array $parameters
      * @return mixed
      */
-    public function get(object $object, string $backtraceHash): mixed
+    public function get(string $signature, callable $callable, array $parameters): mixed
     {
-        return $this->values[$object][$backtraceHash];
+        return $this->values[$signature] ??= call_user_func_array($callable, $parameters);
     }
 
     /**
-     * @param object $object
-     * @param string $backtraceHash
-     * @param mixed $value
+     * Forget cache by key
+     *
+     * @param string $signature
      * @return void
      */
-    public function set(object $object, string $backtraceHash, mixed $value): void
+    public function forget(string $signature): void
     {
-        $cached = $this->values[$object] ?? [];
-        $cached[$backtraceHash] = $value;
-        $this->values[$object] = $cached;
+        unset($this->values[$signature]);
     }
 
     /**
-     * @param object $object
-     * @return void
-     */
-    public function forget(object $object): void
-    {
-        unset($this->values[$object]);
-    }
-
-    /**
+     * Flush the cache
+     *
      * @return void
      */
     public function flush(): void
     {
-        $this->values = new WeakMap();
+        $this->values = [];
+    }
+
+    /**
+     * Get count
+     *
+     * @return int
+     */
+    public function count(): int
+    {
+        return count($this->values);
     }
 }
