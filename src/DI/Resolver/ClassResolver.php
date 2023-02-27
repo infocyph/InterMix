@@ -39,14 +39,18 @@ class ClassResolver
         string|bool $callMethod = null
     ): array {
         $class = $this->getClass($class, $supplied);
+        $className = $class->getName();
 
         $this->resolveConstructor($class);
-        if ($this->repository->enableProperties) {
+        if (
+            $this->repository->enableProperties &&
+            !isset($this->repository->resolvedResource[$className]['property'])
+        ) {
             $this->propertyResolver->resolve($class);
         }
         $this->resolveMethod($class, $callMethod);
 
-        return $this->repository->resolvedResource[$class->getName()];
+        return $this->repository->resolvedResource[$className];
     }
 
     /**
