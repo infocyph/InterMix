@@ -81,7 +81,7 @@ class PropertyResolver
         $className = $class->getName();
         if (
             !isset($this->repository->classResource[$className]['property']) &&
-            !$this->repository->enableAttribute
+            !$this->repository->enablePropertyAttribute
         ) {
             return;
         }
@@ -150,7 +150,7 @@ class PropertyResolver
                 $classPropertyValues[$property->getName()]
             ],
 
-            !$this->repository->enableAttribute => [],
+            !$this->repository->enablePropertyAttribute => [],
 
             default => null
         };

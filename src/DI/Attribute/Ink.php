@@ -25,12 +25,12 @@ final class Ink
     }
 
     /**
-     * Get Name of the entry to inject
+     * Get resource of the entry to inject
      *
      * @param string|null $key
      * @return array|string|null
      */
-    public function getData(string $key = null): array|string|null
+    public function getData(string $key = null): mixed
     {
         $returnable = [
             'type' => $this->type,

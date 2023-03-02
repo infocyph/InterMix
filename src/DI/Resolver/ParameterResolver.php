@@ -2,6 +2,7 @@
 
 namespace AbmmHasan\InterMix\DI\Resolver;
 
+use AbmmHasan\InterMix\DI\Attribute\Infuse;
 use AbmmHasan\InterMix\Exceptions\ContainerException;
 use Closure;
 use ReflectionClass;
@@ -82,6 +83,10 @@ class ParameterResolver
         $refMethod = ($reflector->class ?? $reflector->getName()) . "->{$reflector->getShortName()}()";
         $availableParams = $reflector->getParameters();
 
+        if ($this->repository->enableMethodAttribute) {
+            $suppliedParameters += $this->resolveArguments($reflector->getAttributes(Infuse::class));
+        }
+
         // Resolve associative parameters
         [
             'availableParams' => $availableParams,
@@ -93,6 +98,24 @@ class ParameterResolver
         $this->resolveNumericDefaultParameters($processed, $availableParams, $suppliedParameters, $refMethod);
 
         return $processed;
+    }
+
+    /**
+     * Resolve attribute arguments
+     *
+     * @param array $attribute
+     * @return array
+     */
+    private function resolveArguments(array $attribute): array
+    {
+        if (!$attribute || $attribute[0]->getArguments() === []) {
+            return [];
+        }
+
+        /** @var Infuse $infuse */
+        $infuse = $attribute[0]->newInstance();
+
+        return $infuse->getData();
     }
 
     /**
@@ -178,32 +201,23 @@ class ParameterResolver
         if (!$parameterType instanceof ReflectionNamedType || $parameterType->isBuiltin()) {
             return null;
         }
-        $reflection = $this->reflectedClass($this->getClassName($parameter, $parameterType->getName()));
+
+        $className = $parameterType->getName();
+        if (($class = $parameter->getDeclaringClass()) !== null) {
+            $className = match (true) {
+                $className === 'self' => $class->getName(),
+                $className === 'parent' && ($parent = $class->getParentClass()) => $parent->getName(),
+                default => $className
+            };
+        }
+
+        $reflection = $this->reflectedClass($className);
 
         if ($type === 'constructor' && $parameter->getDeclaringClass()?->getName() === $reflection->name) {
             throw new ContainerException("Circular dependency detected: $reflection->name");
         }
 
         return $reflection;
-    }
-
-    /**
-     * Get the class name for given type
-     *
-     * @param ReflectionParameter $parameter
-     * @param string $name
-     * @return string
-     */
-    private function getClassName(ReflectionParameter $parameter, string $name): string
-    {
-        if (($class = $parameter->getDeclaringClass()) !== null) {
-            return match (true) {
-                $name === 'self' => $class->getName(),
-                $name === 'parent' && ($parent = $class->getParentClass()) => $parent->getName(),
-                default => $name
-            };
-        }
-        return $name;
     }
 
     /**

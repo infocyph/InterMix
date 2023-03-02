@@ -12,6 +12,7 @@ class Repository
     public array $resolvedResource = [];
     public array $resolvedFunction = [];
     public array $resolvedDefinition = [];
-    public bool $enableAttribute = false;
+    public bool $enablePropertyAttribute = false;
     public bool $enableProperties = false;
+    public bool $enableMethodAttribute = false;
 }

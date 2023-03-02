@@ -269,22 +269,25 @@ class Container implements ContainerInterface
     /**
      * Set resolution options
      *
-     * @param bool $enableInjection Enable/Disable dependency injection
-     * @param bool $useAttributes Enable/Disable dependency injection based on attributes
-     * @param bool $enablePropertyResolution Enable/Disable dependency injection on properties
+     * @param bool $injection Enable/Disable dependency injection
+     * @param bool $methodAttributes Enable/Disable dependency injection based on method attributes
+     * @param bool $propertyResolution Enable/Disable dependency injection on properties
+     * @param bool $propertyAttributes Enable/Disable dependency injection based on property attributes
      * @param string|null $defaultMethod Set default call method (will be called if no method/callOn const provided)
      * @return Container
      */
     public function setOptions(
-        bool $enableInjection = true,
-        bool $enablePropertyResolution = true,
-        bool $useAttributes = false,
+        bool $injection = true,
+        bool $methodAttributes = false,
+        bool $propertyResolution = true,
+        bool $propertyAttributes = false,
         string $defaultMethod = null
     ): Container {
         $this->repository->defaultMethod = $defaultMethod ?: null;
-        $this->repository->enableAttribute = $useAttributes;
-        $this->repository->enableProperties = $enablePropertyResolution;
-        $this->resolver = $enableInjection ? InjectedCall::class : GenericCall::class;
+        $this->repository->enablePropertyAttribute = $propertyAttributes;
+        $this->repository->enableProperties = $propertyResolution;
+        $this->repository->enableMethodAttribute = $methodAttributes;
+        $this->resolver = $injection ? InjectedCall::class : GenericCall::class;
 
         return self::$instances[$this->instanceAlias];
     }
