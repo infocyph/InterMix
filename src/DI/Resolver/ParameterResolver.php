@@ -84,7 +84,7 @@ class ParameterResolver
         $availableParams = $reflector->getParameters();
 
         if ($this->repository->enableMethodAttribute) {
-            $suppliedParameters += $this->resolveArguments($reflector->getAttributes(Infuse::class));
+            $suppliedParameters += $this->resolveAttributes($reflector->getAttributes(Infuse::class));
         }
 
         // Resolve associative parameters
@@ -106,16 +106,13 @@ class ParameterResolver
      * @param array $attribute
      * @return array
      */
-    private function resolveArguments(array $attribute): array
+    private function resolveAttributes(array $attribute): array
     {
         if (!$attribute || $attribute[0]->getArguments() === []) {
             return [];
         }
 
-        /** @var Infuse $infuse */
-        $infuse = $attribute[0]->newInstance();
-
-        return $infuse->getData();
+        return ($attribute[0]->newInstance())->getData();
     }
 
     /**
