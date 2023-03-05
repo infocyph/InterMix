@@ -66,4 +66,4 @@ Instead of closure lets push a whole class (which is full of methods)
 .. tip::
 
     Whenever you are using some identifier like ``$this`` or some parameter variable it might happen that it won't backtrace
-    as editor won't know it out function/method. In this case, use ``/** @var NameSpace\Class $this */`` to give it the identity.
+    as editor won't know it out of function/method. In this case, use ``/** @var NameSpace\Class $this */`` to give it the identity.

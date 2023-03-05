@@ -96,7 +96,7 @@ html_show_sphinx = False
 htmlhelp_basename = 'abmmhasan-intermix-doc'
 
 html_context = {
-    "display_github": True,
+    "display_github": false,
     "github_user": "abmmhasan",
     "github_repo": "InterMix",
     "github_version": version,

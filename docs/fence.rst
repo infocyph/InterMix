@@ -11,7 +11,7 @@ to it.
     It doesn't do anything on ``new`` initialization just check below examples for details.
 
 Lets understand with example
-============================
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. code:: php
 
@@ -26,7 +26,7 @@ Lets understand with example
    }
 
 Instead of initializing with ``new``, we have to initialize differently
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+------------------------------------------------------------------------
 
 .. code:: php
 
@@ -41,10 +41,10 @@ Instead of initializing with ``new``, we have to initialize differently
    $lgi->setLimit(5); // changing limit count
 
 Well I wanna apply requirements in other example as well
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+---------------------------------------------------------
 
-No problem that covered as well! ``instance`` method in **Single, Multi,
-Limit** accepts one (more) parameter where you can send the requirement
+No problem that covered as well! ``instance`` method in **Single**, **Multi**,
+**Limit** accepts one (more) parameter where you can send the requirement
 array as well.
 
 .. code:: php

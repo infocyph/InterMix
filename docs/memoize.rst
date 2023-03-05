@@ -9,8 +9,7 @@ repeated calls to functions that process the same input.
 
 We have 2 functions ``memoize()`` & ``remember()`` which is different from each other on how long the cache will be served.
 
-Example
-^^^^^^^
+Lets check with example,
 
 .. code:: php
 
@@ -54,8 +53,9 @@ Just pass in a Closure or any callable on first parameter. In 2nd parameter you 
 parameter. (check example) It doesn't matter how many time you call it will always return the same result.
 
 .. code:: php
-    (new MySpecialClass())->method1()
-    $classInstance->method1()
+
+    (new MySpecialClass())->method1() // 1st time
+    $classInstance->method1() // 2nd time ... & so on ....
 
 remember()
 ----------

@@ -28,7 +28,7 @@ composer require abmmhasan/intermix
 
 ## Documentation
 
-Check the related [wiki page](https://github.com/abmmhasan/intermix/wiki) for details! 
+Check the [documentation](https://intermix.readthedocs.io) for details! 
 
 ## Support
 

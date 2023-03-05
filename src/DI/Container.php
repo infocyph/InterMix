@@ -10,7 +10,7 @@ use AbmmHasan\InterMix\Exceptions\ContainerException;
 use AbmmHasan\InterMix\Exceptions\NotFoundException;
 use Closure;
 use Exception;
-use http\Exception\InvalidArgumentException;
+use InvalidArgumentException;
 use Psr\Container\ContainerInterface;
 use ReflectionException;
 
