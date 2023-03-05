@@ -34,7 +34,7 @@ def get_version():
 
 # -- Project information -----------------------------------------------------
 
-project = 'abmmhasan/testmyproject'
+project = 'abmmhasan/InterMix'
 copyright = '2021-{year}, A. B. M. Mahmudul Hasan'.format(year = datetime.date.today().strftime('%Y'))
 author = 'A. B. M. Mahmudul Hasan'
 
