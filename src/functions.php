@@ -1,12 +1,17 @@
 <?php
 
+namespace AbmmHasan\InterMix;
+
 use AbmmHasan\InterMix\DI\Container;
 use AbmmHasan\InterMix\DI\Reflection\ReflectionResource;
 use AbmmHasan\InterMix\Exceptions\{ContainerException, NotFoundException};
 use AbmmHasan\InterMix\Memoize\Cache;
 use AbmmHasan\InterMix\Memoize\WeakCache;
+use Closure;
+use Exception;
+use ReflectionException;
 
-if (!function_exists('container')) {
+if (!function_exists('AbmmHasan\InterMix\container')) {
     /**
      * Get Container instance or direct call method/closure
      *
@@ -32,7 +37,7 @@ if (!function_exists('container')) {
     }
 }
 
-if (!function_exists('memoize')) {
+if (!function_exists('AbmmHasan\InterMix\memoize')) {
     /**
      * Memoize a function return during a process
      *
@@ -54,7 +59,7 @@ if (!function_exists('memoize')) {
     }
 }
 
-if (!function_exists('remember')) {
+if (!function_exists('AbmmHasan\InterMix\remember')) {
     /**
      * Memoize a function return till the class object is destroyed/garbage collected
      *

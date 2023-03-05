@@ -57,7 +57,7 @@ trait MacroMix
      * @param callable|object $macro
      * @return void
      */
-    public static function register(string $name, callable|object $macro): void
+    public static function macro(string $name, callable|object $macro): void
     {
         static::$macros[$name] = $macro;
     }

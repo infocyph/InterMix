@@ -2,6 +2,8 @@
 
 namespace AbmmHasan\InterMix\DI\Resolver;
 
+use AbmmHasan\InterMix\Exceptions\ContainerException;
+
 class Repository
 {
     public array $functionReference = [];
@@ -15,4 +17,19 @@ class Repository
     public bool $enablePropertyAttribute = false;
     public bool $enableProperties = false;
     public bool $enableMethodAttribute = false;
+    public bool $isLocked = false;
+
+    /**
+     * Lock check
+     *
+     * @return Repository
+     * @throws ContainerException
+     */
+    public function checkIfLocked(): static
+    {
+        if ($this->isLocked) {
+            throw new ContainerException('Container is locked! Unable to set/modify any value');
+        }
+        return $this;
+    }
 }

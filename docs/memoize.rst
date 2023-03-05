@@ -1,47 +1,66 @@
-Pass a function to it, it will cache the output as long as you need and deliver back.
+.. _container:
 
-We have 2 functions `memoize()` & `remember()` which is different from each other on how long the cache will be served.
+=======
+Memoize
+=======
 
-# Let's understand with example
-Both of our function accepts callable but in a different way.
+Memoization is used to speed up computer programs by eliminating the repetitive computation of results and by avoiding
+repeated calls to functions that process the same input.
 
-#### Example
-```php
-class MySpecialClass
-{
-    public function __construct()
-    {
-        // do something here
-    }
+We have 2 functions ``memoize()`` & ``remember()`` which is different from each other on how long the cache will be served.
 
-    public function method1()
-    {
-        return memoize(function () {
-            return microtime(true);
-        });
-    }
+Example
+^^^^^^^
 
-    public function method2()
-    {
-        return remember($this, function () {
-            return microtime(true);
-        });
-    }
+.. code:: php
 
-    public function method3()
-    {
-        return [
-            $this->method1(),
-            $this->method2()
-        ];
-    }
-}
-```
+   class MySpecialClass
+   {
+       public function __construct()
+       {
+           // do something here
+       }
 
-#### Functions
+       public function method1()
+       {
+           return memoize(function () {
+               return microtime(true);
+           });
+       }
 
-#### `memoize(callable $callable = null, array $parameters = [])`
-Just pass in a Closure or any callable on first parameter. In 2nd parameter you should pass parameters if the callable require any parameter. On above example it doesn't matter how many time you call **(new MySpecialClass())->method1()** or **$classInstance->method1()** (**$classInstance = new MySpecialClass()**) it will always return the same.
+       public function method2()
+       {
+           return remember($this, function () {
+               return microtime(true);
+           });
+       }
 
-#### `remember(object $classObject = null, callable $callable = null, array $parameters = [])`
-Almost same as previous function but it takes class object (`$this` or any other class instance) as first parameter & 2 more as parameter with same signature. The difference is, If, any time your class object is garbage collected or destroyed the memory will be gone, automatically. It is memory safe due to the fact that, it removes the data when it no longer needed.
+       public function method3()
+       {
+           return [
+               $this->method1(),
+               $this->method2()
+           ];
+       }
+   }
+
+Functions
+^^^^^^^^^
+
+memoize()
+---------
+
+Just pass in a Closure or any callable on first parameter. In 2nd parameter you should pass parameters if the callable require any
+parameter. (check example) It doesn't matter how many time you call it will always return the same result.
+
+.. code:: php
+    (new MySpecialClass())->method1()
+    $classInstance->method1()
+
+remember()
+----------
+
+Almost same as previous function but it takes class object (``$this`` or any other class instance) as first parameter &
+2 more as parameter with same signature. The difference is, If, any time your class object is garbage collected or destroyed
+the memory will be gone, automatically. It is memory safe due to the fact that, it removes the data when it no
+longer needed.

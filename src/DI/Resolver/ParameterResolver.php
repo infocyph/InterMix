@@ -46,7 +46,11 @@ class ParameterResolver
      */
     public function resolveByDefinition(mixed $definition, string $name): mixed
     {
-        return $this->repository->resolvedDefinition[$name] ??= match (true) {
+        if (array_key_exists($name, $this->repository->resolvedDefinition)) {
+            return $this->repository->resolvedDefinition[$name];
+        }
+
+        return $this->repository->resolvedDefinition[$name] = match (true) {
             $definition instanceof Closure => $definition(
                 ...$this->resolve(new ReflectionFunction($definition), [], 'constructor')
             ),

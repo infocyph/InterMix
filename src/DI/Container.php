@@ -10,6 +10,7 @@ use AbmmHasan\InterMix\Exceptions\ContainerException;
 use AbmmHasan\InterMix\Exceptions\NotFoundException;
 use Closure;
 use Exception;
+use http\Exception\InvalidArgumentException;
 use Psr\Container\ContainerInterface;
 use ReflectionException;
 
@@ -53,6 +54,17 @@ class Container implements ContainerInterface
     }
 
     /**
+     * Lock the container to prevent any further modification
+     *
+     * @return Container
+     */
+    public function lock(): Container
+    {
+        $this->repository->isLocked = true;
+        return self::$instances[$this->instanceAlias];
+    }
+
+    /**
      * Add definitions
      *
      * @param array $definitions [alias/identifier => definition]
@@ -79,6 +91,7 @@ class Container implements ContainerInterface
      */
     public function set(string $id, mixed $definition): Container
     {
+        $this->repository->checkIfLocked();
         if ($id === $definition) {
             throw new ContainerException("Circular dependency detected ($id)");
         }
@@ -206,10 +219,12 @@ class Container implements ContainerInterface
      * @param callable|Closure $function
      * @param array $parameters
      * @return Container
+     * @throws ContainerException
      */
     public function registerClosure(string $closureAlias, callable|Closure $function, array $parameters = []): Container
     {
         $this->repository
+            ->checkIfLocked()
             ->closureResource[$closureAlias] = [
             'on' => $function,
             'params' => $parameters
@@ -223,10 +238,12 @@ class Container implements ContainerInterface
      * @param string $class
      * @param array $parameters
      * @return Container
+     * @throws ContainerException
      */
     public function registerClass(string $class, array $parameters = []): Container
     {
         $this->repository
+            ->checkIfLocked()
             ->classResource[$class]['constructor'] = [
             'on' => '__constructor',
             'params' => $parameters
@@ -241,10 +258,12 @@ class Container implements ContainerInterface
      * @param string $method
      * @param array $parameters
      * @return Container
+     * @throws ContainerException
      */
     public function registerMethod(string $class, string $method, array $parameters = []): Container
     {
         $this->repository
+            ->checkIfLocked()
             ->classResource[$class]['method'] = [
             'on' => $method,
             'params' => $parameters
@@ -256,13 +275,18 @@ class Container implements ContainerInterface
      * Register Class and Method with Parameter (method parameter)
      *
      * @param string $class
-     * @param string $property
-     * @param mixed $value
+     * @param array $property ['property name' => 'value to assign']
      * @return Container
+     * @throws ContainerException
      */
-    public function registerProperty(string $class, string $property, mixed $value = null): Container
+    public function registerProperty(string $class, array $property): Container
     {
-        $this->repository->classResource[$class]['property'][$property] = $value;
+        $this->repository
+            ->checkIfLocked()
+            ->classResource[$class]['property'] = array_merge(
+            $this->repository->classResource[$class]['property'] ?? [],
+            $property
+        );
         return self::$instances[$this->instanceAlias];
     }
 
@@ -275,14 +299,16 @@ class Container implements ContainerInterface
      * @param bool $propertyAttributes Enable/Disable dependency injection based on property attributes
      * @param string|null $defaultMethod Set default call method (will be called if no method/callOn const provided)
      * @return Container
+     * @throws ContainerException
      */
     public function setOptions(
         bool $injection = true,
         bool $methodAttributes = false,
-        bool $propertyResolution = true,
+        bool $propertyResolution = false,
         bool $propertyAttributes = false,
         string $defaultMethod = null
     ): Container {
+        $this->repository->checkIfLocked();
         $this->repository->defaultMethod = $defaultMethod ?: null;
         $this->repository->enablePropertyAttribute = $propertyAttributes;
         $this->repository->enableProperties = $propertyResolution;
@@ -301,12 +327,18 @@ class Container implements ContainerInterface
      */
     public function split(string|array|Closure|callable $classAndMethod): array
     {
+        if (empty($classAndMethod)) {
+            throw new InvalidArgumentException(
+                'No argument found!'
+            );
+        }
+
         return match (true) {
             $classAndMethod instanceof Closure || (is_callable($classAndMethod) && !is_array(
                     $classAndMethod
                 )) => [$classAndMethod],
 
-            is_array($classAndMethod) && count($classAndMethod) === 2 => $classAndMethod,
+            is_array($classAndMethod) && count($classAndMethod) <= 2 => $classAndMethod,
 
             is_string($classAndMethod) && str_contains($classAndMethod, '@')
             => explode('@', $classAndMethod, 2),

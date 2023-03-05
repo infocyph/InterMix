@@ -1,63 +1,69 @@
-# Inject method in a class, Dynamically
-Depending on several scenario, we may need to add methods inside a class dynamically and that is where it comes in play.
+.. _container:
 
-# Lets see some example
-Just simply add the trait in your desired class and see the magic:
+=================
+Macro Mix (Mixin)
+=================
 
-```php
-class House {
- use MacroMix;
- protected $color = 'gold';
-}
+Have you ever wished that a PHP class had another method on it that you’d like to use? ``MacroMix`` makes this dream come true.
+This trait allows you to call a static “macro” method at runtime to add a new method to the class by executing a closure.
+Behind the scenes, it will use the magic ``__call()`` and ``__callStatic()`` methods PHP provides to make the method
+work as if it were really on the class.
 
-$houseClass = new House();
+.. caution::
 
-// Inject a method
-$houseClass::register('paint', function() {
-   return $this->color;
-});
+    It uses ``__call`` & ``__callStatic`` magic methods. Be careful if your
+    class already using them. It will end up in conflict.
 
-// Now use it
-$houseClass->paint(); // Output: gold
-```
+macro()
+=======
 
-Lets' check another one alike,
+.. code:: php
 
-```php
-// Inject a method
-$houseClass::register('dot', function(... $strings) {
-   return implode('.', $strings);
-};
+   class House {
+    use MacroMix;
+    protected $color = 'gold';
+   }
 
-// Now use it
-$houseClass->dot('abc', 'def', 'ghi'); // Output: abc.def.ghi
-```
+Now lets mix,
 
-# Lets advance more
-Instead of function now lets push a class:
+.. code:: php
 
-```php
-$lemonade = new class() {
-    public function lemon()
-    {
-       return function() {
-          return 'Squeeze Lemon';
-       };
+    House::macro('fill', function ($value) {
+        return $this->map(fn () => $value);
+    });
+
+    $house = new House();
+    $house->fill('x')->all(); // ['x', 'x', 'x']
+
+mix()
+=======
+
+Instead of closure lets push a whole class (which is full of methods)
+
+.. code:: php
+
+    $lemonade = new class() {
+       public function lemon()
+       {
+          return function() {
+             return 'Squeeze Lemon';
+          };
+       }
+
+       public function water()
+       {
+          return function() {
+             return 'Add Water';
+          };
+       }
     }
 
-    public function water()
-    {
-       return function() {
-          return 'Add Water';
-       };
-    }
-}
+    House::mix($lemonade);
 
-// lets mix
-$houseClass::mix($lemonade);
+    $house = new House();
+    $houseClass->lemon(); // Squeeze Lemon
 
-// Now all those method (lemon & water) is available in `houseClass` as well
-$houseClass->lemon() // get: Squeeze Lemon
-```
-# Caution
-It uses `__call` & `__callStatic` magic methods. Be careful if your class already using them. It will end up in conflict.
+.. tip::
+
+    Whenever you are using some identifier like ``$this`` or some parameter variable it might happen that it won't backtrace
+    as editor won't know it out function/method. In this case, use ``/** @var NameSpace\Class $this */`` to give it the identity.
