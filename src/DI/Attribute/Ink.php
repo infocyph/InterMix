@@ -6,21 +6,17 @@ namespace AbmmHasan\InterMix\DI\Attribute;
 
 use Attribute;
 
-#[Attribute(Attribute::TARGET_PROPERTY)]
+#[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 final class Ink
 {
     private array|string|null $data = null;
-    private string $type = 'name';
+    private string $type = '';
 
     public function __construct(...$parameters)
     {
         if (!empty($parameters)) {
-            $type = array_key_first($parameters);
-            $this->data = $parameters[$type];
-
-            if (!is_int($type)) {
-                $this->type = $type;
-            }
+            $this->type = array_key_first($parameters);
+            $this->data = $parameters[$this->type];
         }
     }
 

@@ -6,7 +6,7 @@ namespace AbmmHasan\InterMix\DI\Attribute;
 
 use Attribute;
 
-#[Attribute(Attribute::TARGET_METHOD | Attribute::TARGET_PARAMETER)]
+#[Attribute(Attribute::TARGET_METHOD)]
 final class Infuse
 {
     private array $data = [];

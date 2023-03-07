@@ -158,13 +158,6 @@ Available options are,
     Defaults are; ``injection`` is enabled, rests are disabled. If ``injection`` is disabled rest of the options won't work.
     ``propertyAttributes`` also requires ``propertyResolution`` to be enabled.
 
-When container scans through the classes, to resolve a method it follows below priority:
-
-* Method already provided, using ``call()``
-* Look for method, registered via ``registerMethod()``
-* Method provided via ``callOn`` constant
-* Method name found via ``defaultMethod``
-
 split()
 -------
 

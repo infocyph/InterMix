@@ -295,7 +295,6 @@ class Container implements ContainerInterface
      *
      * @param bool $injection Enable/Disable dependency injection
      * @param bool $methodAttributes Enable/Disable dependency injection based on method attributes
-     * @param bool $propertyResolution Enable/Disable dependency injection on properties
      * @param bool $propertyAttributes Enable/Disable dependency injection based on property attributes
      * @param string|null $defaultMethod Set default call method (will be called if no method/callOn const provided)
      * @return Container
@@ -304,14 +303,12 @@ class Container implements ContainerInterface
     public function setOptions(
         bool $injection = true,
         bool $methodAttributes = false,
-        bool $propertyResolution = false,
         bool $propertyAttributes = false,
         string $defaultMethod = null
     ): Container {
         $this->repository->checkIfLocked();
         $this->repository->defaultMethod = $defaultMethod ?: null;
         $this->repository->enablePropertyAttribute = $propertyAttributes;
-        $this->repository->enableProperties = $propertyResolution;
         $this->repository->enableMethodAttribute = $methodAttributes;
         $this->resolver = $injection ? InjectedCall::class : GenericCall::class;
 

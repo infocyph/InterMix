@@ -6,7 +6,6 @@ use AbmmHasan\InterMix\DI\Attribute\Ink;
 use AbmmHasan\InterMix\Exceptions\ContainerException;
 use ReflectionClass;
 use ReflectionException;
-use ReflectionFunction;
 use ReflectionNamedType;
 use ReflectionProperty;
 use ReflectionType;
@@ -122,13 +121,22 @@ class PropertyResolver
             return [];
         }
 
-        $arguments = $attribute[0]->getArguments();
         $parameterType = $property->getType();
 
-        return match ($arguments === []) {
-            true => $this->resolveWithoutArgument($property, $parameterType),
-            default => $this->resolveArguments($attribute[0]->newInstance(), $attribute)
-        };
+        return [
+            $this->classInstance,
+            match ($attribute[0]->getArguments() === []) {
+                true => $this->resolveWithoutArgument($property, $parameterType),
+                default => $this->classResolver->resolveInk($attribute[0]->newInstance())
+                    ?? throw new ContainerException(
+                        sprintf(
+                            "Unknown #[Ink] parameter detected on %s::$%s",
+                            $property->getDeclaringClass()->getName(),
+                            $property->getName()
+                        )
+                    )
+            }
+        ];
     }
 
     /**
@@ -161,11 +169,11 @@ class PropertyResolver
      *
      * @param ReflectionProperty $property
      * @param ReflectionType|null $parameterType
-     * @return array
+     * @return object
      * @throws ContainerException
      * @throws ReflectionException
      */
-    private function resolveWithoutArgument(ReflectionProperty $property, ReflectionType $parameterType = null): array
+    private function resolveWithoutArgument(ReflectionProperty $property, ReflectionType $parameterType = null): object
     {
         if (!$parameterType instanceof ReflectionNamedType || $parameterType->isBuiltin()) {
             throw new ContainerException(
@@ -176,67 +184,8 @@ class PropertyResolver
                 )
             );
         }
-        return [
-            $this->classInstance,
-            $this->classResolver->resolve(
-                $this->reflectedClass($parameterType->getName())
-            )['instance']
-        ];
-    }
-
-    /**
-     * Resolve attribute arguments
-     *
-     * @param Ink $ink
-     * @param $property
-     * @return array
-     * @throws ContainerException|ReflectionException
-     */
-    private function resolveArguments(Ink $ink, $property): array
-    {
-        $type = $ink->getData('type');
-
-        if ($type !== 'name') {
-            if (!function_exists($type)) {
-                throw new ContainerException(
-                    sprintf(
-                        "Unknown #[Ink] parameter($type) detected on %s::$%s",
-                        $property->getDeclaringClass()->getName(),
-                        $property->getName()
-                    )
-                );
-            }
-            return [
-                $this->classInstance,
-                $type(
-                    ...
-                    $this->parameterResolver->resolve(
-                        new ReflectionFunction($type),
-                        (array)$ink->getData('data'),
-                        'constructor'
-                    )
-                )
-            ];
-        }
-
-        // resolving 'name' parameter
-        if (!isset($this->repository->functionReference[$ink->getData('data')])) {
-            throw new ContainerException(
-                sprintf(
-                    "Unknown definition (%s) detected on %s::$%s",
-                    $ink->getData('data'),
-                    $property->getDeclaringClass()->getName(),
-                    $property->getName()
-                )
-            );
-        }
-
-        return [
-            $this->classInstance,
-            $this->parameterResolver->resolveByDefinition(
-                $this->repository->functionReference[$ink->getData('data')],
-                $ink->getData('data')
-            )
-        ];
+        return $this->classResolver->resolve(
+            $this->reflectedClass($parameterType->getName())
+        )['instance'];
     }
 }

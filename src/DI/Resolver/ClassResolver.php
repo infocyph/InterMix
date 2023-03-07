@@ -2,9 +2,11 @@
 
 namespace AbmmHasan\InterMix\DI\Resolver;
 
+use AbmmHasan\InterMix\DI\Attribute\Ink;
 use AbmmHasan\InterMix\Exceptions\ContainerException;
 use ReflectionClass;
 use ReflectionException;
+use ReflectionFunction;
 use ReflectionMethod;
 
 class ClassResolver
@@ -21,6 +23,39 @@ class ClassResolver
         private ParameterResolver $parameterResolver,
         private PropertyResolver $propertyResolver
     ) {
+    }
+
+    /**
+     * Resolve attribute via Ink
+     *
+     * @param Ink $ink
+     * @return mixed
+     * @throws ContainerException
+     * @throws ReflectionException
+     */
+    public function resolveInk(Ink $ink): mixed
+    {
+        $type = $ink->getData('type');
+
+        if (isset($this->repository->functionReference[$type])) {
+            return $this->parameterResolver->resolveByDefinition(
+                $this->repository->functionReference[$type],
+                $ink->getData('data')
+            );
+        }
+
+        if (function_exists($type)) {
+            return $type(
+                ...
+                $this->parameterResolver->resolve(
+                    new ReflectionFunction($type),
+                    (array)$ink->getData('data'),
+                    'constructor'
+                )
+            );
+        }
+
+        return null;
     }
 
     /**
@@ -42,10 +77,7 @@ class ClassResolver
         $className = $class->getName();
 
         $this->resolveConstructor($class);
-        if (
-            $this->repository->enableProperties &&
-            !isset($this->repository->resolvedResource[$className]['property'])
-        ) {
+        if (!isset($this->repository->resolvedResource[$className]['property'])) {
             $this->propertyResolver->resolve($class);
         }
         $this->resolveMethod($class, $callMethod);

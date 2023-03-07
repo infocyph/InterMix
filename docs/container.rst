@@ -10,8 +10,8 @@ Dependency Injection (Container)
 
     di/understanding
     di/usage
-    di/init
-    di/sum-up
+    di/attribute
+    di/flow
 
 Using the library is pretty straight-forward.
 

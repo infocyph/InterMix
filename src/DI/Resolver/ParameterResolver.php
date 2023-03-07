@@ -3,6 +3,7 @@
 namespace AbmmHasan\InterMix\DI\Resolver;
 
 use AbmmHasan\InterMix\DI\Attribute\Infuse;
+use AbmmHasan\InterMix\DI\Attribute\Ink;
 use AbmmHasan\InterMix\Exceptions\ContainerException;
 use Closure;
 use ReflectionClass;
@@ -87,8 +88,11 @@ class ParameterResolver
         $refMethod = ($reflector->class ?? $reflector->getName()) . "->{$reflector->getShortName()}()";
         $availableParams = $reflector->getParameters();
 
-        if ($this->repository->enableMethodAttribute) {
-            $suppliedParameters += $this->resolveAttributes($reflector->getAttributes(Infuse::class));
+        if (
+            $this->repository->enableMethodAttribute &&
+            ($type === 'constructor' ^ ($reflector->class ?? null))
+        ) {
+            $suppliedParameters += $this->resolveMethodAttributes($reflector->getAttributes(Infuse::class));
         }
 
         // Resolve associative parameters
@@ -98,7 +102,7 @@ class ParameterResolver
             'availableSupply' => $suppliedParameters
         ] = $this->resolveAssociativeParameters($availableParams, $type, $suppliedParameters, $refMethod);
 
-        // Resolve numeric/default/variadic parameters
+        // Resolve numeric/default/variadic/attribute-based parameters
         $this->resolveNumericDefaultParameters($processed, $availableParams, $suppliedParameters, $refMethod);
 
         return $processed;
@@ -110,7 +114,7 @@ class ParameterResolver
      * @param array $attribute
      * @return array
      */
-    private function resolveAttributes(array $attribute): array
+    private function resolveMethodAttributes(array $attribute): array
     {
         if (!$attribute || $attribute[0]->getArguments() === []) {
             return [];
@@ -136,6 +140,8 @@ class ParameterResolver
         string $refMethod
     ): array {
         $processed = $paramsLeft = [];
+
+        /** @var ReflectionParameter $classParameter */
         foreach ($availableParams as $classParameter) {
             $parameterName = $classParameter->getName();
 
@@ -173,12 +179,13 @@ class ParameterResolver
             $paramsLeft[] = $classParameter;
         }
 
+        $lastKey = array_key_last($paramsLeft);
+
         return [
             'availableParams' => $paramsLeft,
             'processed' => $processed,
             'availableSupply' => match (true) {
-                ($lastKey = array_key_last($paramsLeft)) !== null &&
-                $paramsLeft[$lastKey]->isVariadic() => array_diff_key(
+                $lastKey !== null && $paramsLeft[$lastKey]->isVariadic() => array_diff_key(
                     $suppliedParameters,
                     $processed
                 ),
@@ -215,7 +222,7 @@ class ParameterResolver
         $reflection = $this->reflectedClass($className);
 
         if ($type === 'constructor' && $parameter->getDeclaringClass()?->getName() === $reflection->name) {
-            throw new ContainerException("Circular dependency detected: $reflection->name");
+            throw new ContainerException("Circular dependency detected on $reflection->name");
         }
 
         return $reflection;
@@ -274,7 +281,7 @@ class ParameterResolver
      * @param array $suppliedParameters
      * @param string $refMethod
      * @return void
-     * @throws ContainerException
+     * @throws ContainerException|ReflectionException
      */
     private function resolveNumericDefaultParameters(
         array &$processed,
@@ -283,6 +290,8 @@ class ParameterResolver
         string $refMethod
     ): void {
         $sequential = array_values($suppliedParameters);
+
+        /** @var ReflectionParameter $classParameter */
         foreach ($availableParams as $key => $classParameter) {
             $parameterName = $classParameter->getName();
 
@@ -291,9 +300,20 @@ class ParameterResolver
                 break;
             }
 
-            $processed[$parameterName] = match (true) {
-                array_key_exists($key, $sequential) => $sequential[$key],
+            if (array_key_exists($key, $sequential)) {
+                $processed[$parameterName] = $sequential[$key];
+                continue;
+            }
 
+            if ($this->repository->enableMethodAttribute) {
+                $data = $this->resolveParameterAttribute($classParameter);
+                if ($data['isResolved']) {
+                    $processed[$parameterName] = $data['resolved'];
+                    continue;
+                }
+            }
+
+            $processed[$parameterName] = match (true) {
                 $classParameter->isDefaultValueAvailable() => $classParameter->getDefaultValue(),
 
                 $classParameter->getType() && $classParameter->allowsNull() => null,
@@ -303,5 +323,34 @@ class ParameterResolver
                 )
             };
         }
+    }
+
+    /**
+     * Resolve parameter attribute
+     *
+     * @param ReflectionParameter $classParameter
+     * @return array|false[]
+     * @throws ContainerException|ReflectionException
+     */
+    private function resolveParameterAttribute(ReflectionParameter $classParameter): array
+    {
+        $attribute = $classParameter->getAttributes(Ink::class);
+        if (!$attribute || $attribute[0]->getArguments() === []) {
+            return [
+                'isResolved' => false
+            ];
+        }
+
+        return [
+            'isResolved' => true,
+            'resolved' => $this->classResolver->resolveInk($attribute[0]->newInstance())
+                ?? throw new ContainerException(
+                    sprintf(
+                        "Unknown #[Ink] parameter detected on %s::$%s",
+                        $classParameter->getDeclaringClass()->getName(),
+                        $classParameter->getName()
+                    )
+                )
+        ];
     }
 }
