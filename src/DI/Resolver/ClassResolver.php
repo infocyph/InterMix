@@ -2,7 +2,7 @@
 
 namespace AbmmHasan\InterMix\DI\Resolver;
 
-use AbmmHasan\InterMix\DI\Attribute\Ink;
+use AbmmHasan\InterMix\DI\Attribute\Infuse;
 use AbmmHasan\InterMix\Exceptions\ContainerException;
 use ReflectionClass;
 use ReflectionException;
@@ -28,19 +28,19 @@ class ClassResolver
     /**
      * Resolve attribute via Ink
      *
-     * @param Ink $ink
+     * @param Infuse $ink
      * @return mixed
      * @throws ContainerException
      * @throws ReflectionException
      */
-    public function resolveInk(Ink $ink): mixed
+    public function resolveInfuse(Infuse $ink): mixed
     {
-        $type = $ink->getData('type');
+        $type = $ink->getNonMethodData('type');
 
         if (isset($this->repository->functionReference[$type])) {
             return $this->parameterResolver->resolveByDefinition(
                 $this->repository->functionReference[$type],
-                $ink->getData('data')
+                $ink->getNonMethodData('data')
             );
         }
 
@@ -49,7 +49,7 @@ class ClassResolver
                 ...
                 $this->parameterResolver->resolve(
                     new ReflectionFunction($type),
-                    (array)$ink->getData('data'),
+                    (array)$ink->getNonMethodData('data'),
                     'constructor'
                 )
             );

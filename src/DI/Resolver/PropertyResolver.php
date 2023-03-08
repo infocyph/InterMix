@@ -2,7 +2,7 @@
 
 namespace AbmmHasan\InterMix\DI\Resolver;
 
-use AbmmHasan\InterMix\DI\Attribute\Ink;
+use AbmmHasan\InterMix\DI\Attribute\Infuse;
 use AbmmHasan\InterMix\Exceptions\ContainerException;
 use ReflectionClass;
 use ReflectionException;
@@ -116,7 +116,7 @@ class PropertyResolver
             return $propertyValue;
         }
 
-        $attribute = $property->getAttributes(Ink::class);
+        $attribute = $property->getAttributes(Infuse::class);
         if (!$attribute) {
             return [];
         }
@@ -127,7 +127,7 @@ class PropertyResolver
             $this->classInstance,
             match ($attribute[0]->getArguments() === []) {
                 true => $this->resolveWithoutArgument($property, $parameterType),
-                default => $this->classResolver->resolveInk($attribute[0]->newInstance())
+                default => $this->classResolver->resolveInfuse($attribute[0]->newInstance())
                     ?? throw new ContainerException(
                         sprintf(
                             "Unknown #[Ink] parameter detected on %s::$%s",

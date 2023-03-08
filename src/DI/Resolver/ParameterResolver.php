@@ -3,7 +3,6 @@
 namespace AbmmHasan\InterMix\DI\Resolver;
 
 use AbmmHasan\InterMix\DI\Attribute\Infuse;
-use AbmmHasan\InterMix\DI\Attribute\Ink;
 use AbmmHasan\InterMix\Exceptions\ContainerException;
 use Closure;
 use ReflectionClass;
@@ -120,7 +119,7 @@ class ParameterResolver
             return [];
         }
 
-        return ($attribute[0]->newInstance())->getData();
+        return ($attribute[0]->newInstance())->getMethodData();
     }
 
     /**
@@ -334,7 +333,7 @@ class ParameterResolver
      */
     private function resolveParameterAttribute(ReflectionParameter $classParameter): array
     {
-        $attribute = $classParameter->getAttributes(Ink::class);
+        $attribute = $classParameter->getAttributes(Infuse::class);
         if (!$attribute || $attribute[0]->getArguments() === []) {
             return [
                 'isResolved' => false
@@ -343,10 +342,10 @@ class ParameterResolver
 
         return [
             'isResolved' => true,
-            'resolved' => $this->classResolver->resolveInk($attribute[0]->newInstance())
+            'resolved' => $this->classResolver->resolveInfuse($attribute[0]->newInstance())
                 ?? throw new ContainerException(
                     sprintf(
-                        "Unknown #[Ink] parameter detected on %s::$%s",
+                        "Unknown #[Infuse] parameter detected on %s::$%s",
                         $classParameter->getDeclaringClass()->getName(),
                         $classParameter->getName()
                     )

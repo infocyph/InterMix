@@ -149,14 +149,12 @@ Available options are,
 
 * ``injection``: Enable/disable dependency injection (Enabled by default)
 * ``methodAttributes``: Enable/disable attribute resolution on method
-* ``propertyResolution``: Enable/disable property resolution
 * ``propertyAttributes``: Enable/disable attribute resolution on property
 * ``defaultMethod``: Set a default method to be called if method is not set already
 
 .. attention::
 
     Defaults are; ``injection`` is enabled, rests are disabled. If ``injection`` is disabled rest of the options won't work.
-    ``propertyAttributes`` also requires ``propertyResolution`` to be enabled.
 
 split()
 -------

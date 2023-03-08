@@ -6,14 +6,17 @@ namespace AbmmHasan\InterMix\DI\Attribute;
 
 use Attribute;
 
-#[Attribute(Attribute::TARGET_METHOD)]
+#[Attribute(Attribute::TARGET_METHOD | Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 final class Infuse
 {
     private array $data = [];
 
+    private string|int $firstKey;
+
     public function __construct(...$parameters)
     {
         if (!empty($parameters)) {
+            $this->firstKey = array_key_first($parameters);
             foreach ($parameters as $type => $value) {
                 if (is_int($type)) {
                     $this->data[] = $value;
@@ -25,12 +28,27 @@ final class Infuse
     }
 
     /**
-     * Get resource of the entry to inject
+     * Get resource of the entry to inject (on property/parameter)
+     *
+     * @param int|string|null $key
+     * @return array|mixed|null
+     */
+    public function getNonMethodData(int|string $key = null): mixed
+    {
+        $returnable = [
+            'type' => $this->firstKey,
+            'data' => $this->data[$this->firstKey]
+        ];
+        return $key ? ($returnable[$key] ?? null) : $returnable;
+    }
+
+    /**
+     * Get resource of the entry to inject (on method)
      *
      * @param int|string|null $key
      * @return array|string|null
      */
-    public function getData(int|string $key = null): mixed
+    public function getMethodData(int|string $key = null): mixed
     {
         return $key ? ($this->data[$key] ?? null) : $this->data;
     }

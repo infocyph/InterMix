@@ -11,18 +11,21 @@ Main Process steps
 
 After setting all the options/registering what ever we need we just execute ``get`` or ``getReturn`` or ``call``.
 
-* ``get`` or ``getReturn`` actually calls ``call`` under the hood but only difference is they cache everything.
-* If it is definition -
-    * return the resolved result
-* If it is function -
+* ``get`` or ``getReturn`` calls ``call`` under the hood. Only difference is they cache everything.
+* If it is definition return the resolved result
+* If it is function
+
     * resolves all the parameter
     * execute & return the result
-* If it is class -
+
+* If it is class
+
     * resolve parameters in the constructor
     * resolve properties
     * resolve properties with Attributes (based on set options & if applicable)
     * Select method based on priority (check below)
     * gather method Attribute (based on set options & if applicable)
+    * gather parameter Attribute (based on set options & if applicable)
     * resolve method parameters (will also use attributes found in previous step)
     * execute & return the result
 
@@ -36,11 +39,12 @@ The process goes through every parameter of the in-progress method (this also in
 
 .. note::
     | Parameter from attribute will have less priority.
-    | Only attributes marked with class ``Infuse()`` will be counted.
+    | Only attributes marked with class ``Infuse()`` will be counted (on method or argument)
     | ``__constructor()`` attributes will be ignored.
 
 * Resolve named parameters first then the others
 * Resolve value by following order (whichever available)
+
     * check definition
     * check if resolvable class (also if named parameter is injectable)
     * direct value placement from available supplies
@@ -52,10 +56,10 @@ In between **constructor** & **method** resolution, class properties are resolve
 
 * resolve current class first then also the parent class (if available)
 * resolve if property supplied via ``registerProperty()``
-* check if initiated via class ``ink()``
+* check if initiated via class ``Infuse()``
 * resolve if type hint indicates any resolvable class
 * if found in definition list, resolve
-* if any function exists with given name resolve
+* if any function exists with given name, resolve
 
 Method Selection
 ----------------
