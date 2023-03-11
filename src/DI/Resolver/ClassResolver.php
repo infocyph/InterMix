@@ -26,21 +26,21 @@ class ClassResolver
     }
 
     /**
-     * Resolve attribute via Ink
+     * Resolve attribute via Infuse
      *
-     * @param Infuse $ink
+     * @param Infuse $infuse
      * @return mixed
      * @throws ContainerException
      * @throws ReflectionException
      */
-    public function resolveInfuse(Infuse $ink): mixed
+    public function resolveInfuse(Infuse $infuse): mixed
     {
-        $type = $ink->getNonMethodData('type');
+        $type = $infuse->getNonMethodData('type');
 
         if (isset($this->repository->functionReference[$type])) {
             return $this->parameterResolver->resolveByDefinition(
                 $this->repository->functionReference[$type],
-                $ink->getNonMethodData('data')
+                $infuse->getNonMethodData('data')
             );
         }
 
@@ -49,7 +49,7 @@ class ClassResolver
                 ...
                 $this->parameterResolver->resolve(
                     new ReflectionFunction($type),
-                    (array)$ink->getNonMethodData('data'),
+                    (array)$infuse->getNonMethodData('data'),
                     'constructor'
                 )
             );

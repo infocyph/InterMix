@@ -129,11 +129,8 @@ class PropertyResolver
                 true => $this->resolveWithoutArgument($property, $parameterType),
                 default => $this->classResolver->resolveInfuse($attribute[0]->newInstance())
                     ?? throw new ContainerException(
-                        sprintf(
-                            "Unknown #[Ink] parameter detected on %s::$%s",
-                            $property->getDeclaringClass()->getName(),
-                            $property->getName()
-                        )
+                        "Unknown #[Infuse] parameter detected on
+                            {$property->getDeclaringClass()->getName()}::\${$property->getName()}"
                     )
             }
         ];
@@ -177,11 +174,8 @@ class PropertyResolver
     {
         if (!$parameterType instanceof ReflectionNamedType || $parameterType->isBuiltin()) {
             throw new ContainerException(
-                sprintf(
-                    "Malformed #[Ink] attribute or property type, on %s::$%s",
-                    $property->getDeclaringClass()->getName(),
-                    $property->getName()
-                )
+                "Malformed #[Infuse] attribute or property type detected on
+                            {$property->getDeclaringClass()->getName()}::\${$property->getName()}"
             );
         }
         return $this->classResolver->resolve(

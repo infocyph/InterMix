@@ -49,7 +49,7 @@ In case of property 2 possible ways:
     #[Infuse]
     private AClass $aClassInstance;
 
-* Same as Method attribute but only with Ink
+* Same as Method attribute
 
 .. code:: php
 

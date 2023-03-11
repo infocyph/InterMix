@@ -11,7 +11,7 @@ to it.
     It doesn't do anything on ``new`` initialization just check below examples for details.
 
 Lets understand with example
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+----------------------------
 
 .. code:: php
 
@@ -40,21 +40,20 @@ Instead of initializing with ``new``, we have to initialize differently
    $lgi = Limiton::instance('instanceName');
    $lgi->setLimit(5); // changing limit count
 
-Well I wanna apply requirements in other example as well
----------------------------------------------------------
+Applying requirements
+--------------------------------
 
-No problem that covered as well! ``instance`` method in **Single**, **Multi**,
-**Limit** accepts one (more) parameter where you can send the requirement
+``instance`` method in **Single**, **Multi**, **Limit** accepts one (more) parameter where you can send the requirement
 array as well.
 
 .. code:: php
 
    $sgi = Singleton::instance([
-       'extensions' => [ // Extension list
+       'extensions' => [ // required Extension list
            'curl',
            'mbstring'
        ],
-       'classes' => [ // Class names (with namespaces)
+       'classes' => [ // required classes (with namespace)
            'Directory',
            'IteratorIterator'
        ]

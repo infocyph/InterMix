@@ -344,11 +344,8 @@ class ParameterResolver
             'isResolved' => true,
             'resolved' => $this->classResolver->resolveInfuse($attribute[0]->newInstance())
                 ?? throw new ContainerException(
-                    sprintf(
-                        "Unknown #[Infuse] parameter detected on %s::$%s",
-                        $classParameter->getDeclaringClass()->getName(),
-                        $classParameter->getName()
-                    )
+                    "Unknown #[Infuse] parameter detected on
+                    {$classParameter->getDeclaringClass()->getName()}::\${$classParameter->getName()}"
                 )
         ];
     }
