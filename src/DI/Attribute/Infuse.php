@@ -10,6 +10,7 @@ use Attribute;
 final class Infuse
 {
     private array $data = [];
+    private array $dataByKeyType = [];
 
     private string|int $firstKey;
 
@@ -23,6 +24,7 @@ final class Infuse
                     continue;
                 }
                 $this->data[$type] = $value;
+                $this->dataByKeyType[$type] = $value;
             }
         }
     }
@@ -35,6 +37,9 @@ final class Infuse
      */
     public function getNonMethodData(int|string $key = null): mixed
     {
+        if (is_int($this->firstKey)) {
+            [$this->firstKey, $this->data[$this->firstKey]] = [$this->data[$this->firstKey], $this->firstKey];
+        }
         $returnable = [
             'type' => $this->firstKey,
             'data' => $this->data[$this->firstKey]
@@ -50,6 +55,6 @@ final class Infuse
      */
     public function getMethodData(int|string $key = null): mixed
     {
-        return $key ? ($this->data[$key] ?? null) : $this->data;
+        return $key ? ($this->data[$key] ?? null) : $this->dataByKeyType;
     }
 }
