@@ -310,6 +310,8 @@ class ParameterResolver
     }
 
     /**
+     * Resolve attribute for method
+     *
      * @param string $attributeValue
      * @return mixed
      * @throws ContainerException
