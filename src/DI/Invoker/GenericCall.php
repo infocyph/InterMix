@@ -31,6 +31,19 @@ final class GenericCall
             'returned' => null
         ];
 
+        if (!empty($this->repository->classResource[$class]['property'])) {
+            foreach ($this->repository->classResource[$class]['property'] as $item => $value) {
+                if (property_exists($instance, $item)) {
+                    $instance->$item = $value;
+                    continue;
+                }
+
+                if (property_exists($class, $item)) {
+                    $class::$$item = $value;
+                }
+            }
+        }
+
         if (!empty($method) && method_exists($instance, $method)) {
             $asset['returned'] = $instance->$method(
                 ...($this->repository->classResource[$class]['method']['params'] ?? [])
