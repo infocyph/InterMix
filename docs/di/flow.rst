@@ -76,12 +76,12 @@ The process goes through every parameter of the in-progress method (this also in
         /**
          * Resolving method
          * 1. 'ClassModel' class will be resolved into $classModel
-         * 2. If any parameter with the name 'classModel' is delivered, the value will be sent to constructor of
-         * 'ClassModel' (parameter to Class binding)
-         * 3. If 'parameterA' don't have any parameter supply in form of Key => Value (associative) it will be resolved by
-         * calling time() function
-         * 4. If 'parameterB' don't have any supply in form of value (non-associative) / Key => Value (associative) the
-         * 'db.host' will be resolved from definition (follows same steps as of property)
+         * 2. If any parameter with the name 'classModel' is delivered, the value will be sent to
+         *    constructor of 'ClassModel' (parameter to Class binding)
+         * 3. If 'parameterA' don't have any parameter supply in form of Key => Value (associative)
+         *    it will be resolved by calling time() function
+         * 4. If 'parameterB' don't have any supply in form of value (non-associative) / Key => Value
+         *    (associative) the 'db.host' will be resolved from definition (same steps as of property)
          * 5. Any leftover supply parameter(s) will be resolved in variadic $parameterC
          * 6. If variadic is not present and supply parameters have values left, it will be ignored
          *
@@ -122,7 +122,7 @@ Check below example for further understanding:
     {
         /**
          * A normal property, got no attribute.
-         * 1: Will do nothing unless property is set by 'registerProperty()'
+         * > Will do nothing unless property is set by 'registerProperty()'
          *
          * @var string
          */
@@ -130,7 +130,7 @@ Check below example for further understanding:
 
         /**
          * A property labeled with 'Infuse' class and no parameter
-         * 2: ClassA will be resolved and injected in $classA
+         * > ClassA will be resolved and injected in $classA
          *
          * @var ClassA
          */
@@ -139,9 +139,9 @@ Check below example for further understanding:
 
         /**
          * A property labeled with 'Infuse' class with keyless parameter
-         * 3: Will resolve it using set definitions.
-         * 4: Will pick first parameter only (applicable for any property resolution)
-         * 5: In case of type mismatch, error will be thrown (applicable for any property resolution)
+         * > Will resolve it using set definitions.
+         * > Will pick first parameter (inside 'Infuse') only (applicable for any property resolution)
+         * > In case of type mismatch, error will be thrown (applicable for any property resolution)
          *
          * @var string
          */
@@ -150,8 +150,8 @@ Check below example for further understanding:
 
         /**
          * A property labeled with 'Infuse' class with key-value paired parameter
-         * 6: It will call 'strtotime()' with 'yesterday' as first parameter
-         * 7: To send more parameter, send an array as value like in below case ['yesterday', 1678786990]
+         * > It will call 'strtotime()' with 'yesterday' as first parameter
+         * > To send more parameter, send an array as value like in below case ['yesterday', 1678786990]
          *
          * @var int
          */
@@ -169,4 +169,4 @@ When container scans through the classes, it selects method using below priority
 * Method provided via ``callOn`` constant
 * Method name found via ``defaultMethod``
 
-If none found after above steps, no method will be resolved.
+If none found after above steps, method won't be resolved.
