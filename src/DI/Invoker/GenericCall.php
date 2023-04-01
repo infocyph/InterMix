@@ -4,6 +4,8 @@ namespace AbmmHasan\InterMix\DI\Invoker;
 
 use AbmmHasan\InterMix\DI\Resolver\Repository;
 use Closure;
+use Exception;
+use Error;
 
 final class GenericCall
 {
@@ -33,16 +35,16 @@ final class GenericCall
 
         if (!empty($this->repository->classResource[$class]['property'])) {
             foreach ($this->repository->classResource[$class]['property'] as $item => $value) {
-                if (property_exists($instance, $item)) {
+                try {
                     $instance->$item = $value;
-                    continue;
-                }
-
-                if (property_exists($class, $item)) {
+                } catch (Exception|Error $e) {
                     $class::$$item = $value;
                 }
             }
         }
+
+        $method ??= $this->repository->classResource[$class]['method']['on']
+            ?? $this->repository->defaultMethod;
 
         if (!empty($method) && method_exists($instance, $method)) {
             $asset['returned'] = $instance->$method(

@@ -43,14 +43,13 @@ final class InjectedCall
     /**
      * Definition based resolver
      *
-     * @param mixed $definition
      * @param string $name
      * @return mixed
      * @throws ReflectionException|ContainerException
      */
-    public function resolveByDefinition(mixed $definition, string $name): mixed
+    public function resolveByDefinition(string $name): mixed
     {
-        return $this->parameterResolver->resolveByDefinition($definition, $name);
+        return $this->parameterResolver->prepareDefinition($name);
     }
 
     /**

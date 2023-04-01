@@ -16,8 +16,6 @@ class PropertyResolver
 
     private ClassResolver $classResolver;
 
-    private object $classInstance;
-
     /**
      * @param Repository $repository
      * @param ParameterResolver $parameterResolver
@@ -49,15 +47,16 @@ class PropertyResolver
     public function resolve(ReflectionClass $class): void
     {
         $className = $class->getName();
-        $this->classInstance = $this->repository->resolvedResource[$className]['instance'];
         $this->resolveProperties(
             $class,
-            $class->getProperties()
+            $class->getProperties(),
+            $this->repository->resolvedResource[$className]['instance']
         );
         if ($parentClass = $class->getParentClass()) {
             $this->resolveProperties(
                 $parentClass,
-                $parentClass->getProperties(ReflectionProperty::IS_PRIVATE)
+                $parentClass->getProperties(ReflectionProperty::IS_PRIVATE),
+                $this->repository->resolvedResource[$className]['instance']
             );
         }
         $this->repository->resolvedResource[$className]['property'] = true;
@@ -68,10 +67,11 @@ class PropertyResolver
      *
      * @param ReflectionClass $class
      * @param array $properties
+     * @param object $classInstance
      * @return void
      * @throws ContainerException|ReflectionException
      */
-    private function resolveProperties(ReflectionClass $class, array $properties): void
+    private function resolveProperties(ReflectionClass $class, array $properties, object $classInstance): void
     {
         if ($properties === []) {
             return;
@@ -87,12 +87,16 @@ class PropertyResolver
 
         $classPropertyValues = $this->repository->classResource[$className]['property'] ?? [];
 
+        /** @var  ReflectionProperty $property */
         foreach ($properties as $property) {
             if ($property->isPromoted()) {
                 continue;
             }
 
-            $values = $this->resolveValue($property, $classPropertyValues);
+            // required for PHP 8.0 only
+            $property->setAccessible(true);
+
+            $values = $this->resolveValue($property, $classPropertyValues, $classInstance);
 
             if ($values) {
                 $property->setValue(...$values);
@@ -105,12 +109,13 @@ class PropertyResolver
      *
      * @param ReflectionProperty $property
      * @param $classPropertyValues
+     * @param object $classInstance
      * @return array
      * @throws ContainerException|ReflectionException
      */
-    private function resolveValue(ReflectionProperty $property, $classPropertyValues): array
+    private function resolveValue(ReflectionProperty $property, $classPropertyValues, object $classInstance): array
     {
-        $propertyValue = $this->setWithPredefined($property, $classPropertyValues);
+        $propertyValue = $this->setWithPredefined($property, $classPropertyValues, $classInstance);
 
         if ($propertyValue !== null) {
             return $propertyValue;
@@ -124,7 +129,7 @@ class PropertyResolver
         $parameterType = $property->getType();
 
         return [
-            $this->classInstance,
+            $classInstance,
             match ($attribute[0]->getArguments() === []) {
                 true => $this->resolveWithoutArgument($property, $parameterType),
                 default => $this->classResolver->resolveInfuse($attribute[0]->newInstance())
@@ -144,17 +149,21 @@ class PropertyResolver
      *
      * @param ReflectionProperty $property
      * @param array $classPropertyValues
+     * @param object $classInstance
      * @return array|null
      */
-    private function setWithPredefined(ReflectionProperty $property, array $classPropertyValues): ?array
-    {
+    private function setWithPredefined(
+        ReflectionProperty $property,
+        array $classPropertyValues,
+        object $classInstance
+    ): ?array {
         return match (true) {
             $property->isStatic() && isset($classPropertyValues[$property->getName()]) => [
                 $classPropertyValues[$property->getName()]
             ],
 
             isset($classPropertyValues[$property->getName()]) => [
-                $this->classInstance,
+                $classInstance,
                 $classPropertyValues[$property->getName()]
             ],
 

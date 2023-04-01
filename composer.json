@@ -17,10 +17,24 @@
       "AbmmHasan\\InterMix\\": "src/"
     }
   },
+  "autoload-dev": {
+    "psr-4": {
+      "AbmmHasan\\InterMix\\Tests\\": "tests/"
+    }
+  },
   "minimum-stability": "dev",
   "prefer-stable": true,
   "require": {
     "php": ">=8.0",
     "psr/container": "^2.0"
+  },
+  "config": {
+    "allow-plugins": {
+      "pestphp/pest-plugin": true
+    }
+  },
+  "require-dev": {
+    "pestphp/pest": "^2.3",
+    "pestphp/pest-plugin-arch": "^2.0"
   }
 }
