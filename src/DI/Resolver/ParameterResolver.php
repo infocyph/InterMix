@@ -40,18 +40,45 @@ class ParameterResolver
     }
 
     /**
+     * Resolve by definition (with type preparation)
+     *
+     * @param string $name
+     * @param ReflectionParameter $parameter
+     * @return mixed
+     * @throws ContainerException|ReflectionException
+     */
+    public function resolveByDefinition(string $name, ReflectionParameter $parameter): mixed
+    {
+        $parameterType = $parameter->getType();
+
+        return match (true) {
+            array_key_exists($name, $this->repository->functionReference) => $this->prepareDefinition($name),
+
+            !$parameterType instanceof ReflectionNamedType || $parameterType->isBuiltin() => $this->stdClass,
+
+            array_key_exists(
+                $className = $parameterType->getName(),
+                $this->repository->functionReference
+            ) => $this->prepareDefinition($className),
+
+            default => $this->stdClass
+        };
+    }
+
+    /**
      * Definition based resolver
      *
-     * @param mixed $definition
      * @param string $name
      * @return mixed
      * @throws ReflectionException|ContainerException
      */
-    public function resolveByDefinition(mixed $definition, string $name): mixed
+    public function prepareDefinition(string $name): mixed
     {
         if (array_key_exists($name, $this->repository->resolvedDefinition)) {
             return $this->repository->resolvedDefinition[$name];
         }
+
+        $definition = $this->repository->functionReference[$name];
 
         return $this->repository->resolvedDefinition[$name] = match (true) {
             $definition instanceof Closure => $definition(
@@ -164,20 +191,18 @@ class ParameterResolver
                 break;
             }
 
-            if (array_key_exists($parameterName, $this->repository->functionReference)) {
-                $processed[$parameterName] = $this->resolveByDefinition(
-                    $this->repository->functionReference[$parameterName],
-                    $parameterName
-                );
+            if (($definition = $this->resolveByDefinition($parameterName, $classParameter)) !== $this->stdClass) {
+                $processed[$parameterName] = $definition;
                 continue;
             }
 
             $class = $this->getResolvableClassReflection($reflector, $classParameter, $type, $processed);
             if ($class) {
+                $name = $class->isInterface() ? $class->getName() : $parameterName;
                 $processed[$parameterName] = $this->resolveClassDependency(
                     $class,
                     $type,
-                    $suppliedParameters[$parameterName] ?? null
+                    $suppliedParameters[$name] ?? $suppliedParameters[$parameterName] ?? null
                 );
                 continue;
             }
@@ -188,7 +213,7 @@ class ParameterResolver
             }
 
             if (isset($parameterAttribute[$parameterName])) {
-                $resolved = $this->resolveIndividualAttribute($parameterAttribute[$parameterName]);
+                $resolved = $this->resolveIndividualAttribute($classParameter, $parameterAttribute[$parameterName]);
                 if ($resolved !== $this->stdClass) {
                     $processed[$parameterName] = $resolved;
                     continue;
@@ -312,18 +337,16 @@ class ParameterResolver
     /**
      * Resolve attribute for method
      *
+     * @param ReflectionParameter $classParameter
      * @param string $attributeValue
      * @return mixed
      * @throws ContainerException
      * @throws ReflectionException
      */
-    private function resolveIndividualAttribute(string $attributeValue): mixed
+    private function resolveIndividualAttribute(ReflectionParameter $classParameter, string $attributeValue): mixed
     {
-        if (isset($this->repository->functionReference[$attributeValue])) {
-            return $this->resolveByDefinition(
-                $this->repository->functionReference[$attributeValue],
-                $attributeValue
-            );
+        if (($definition = $this->resolveByDefinition($attributeValue, $classParameter)) !== $this->stdClass) {
+            return $definition;
         }
 
         if (function_exists($attributeValue)) {

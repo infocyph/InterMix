@@ -134,7 +134,7 @@ class Container implements ContainerInterface
             $existsInResolved = array_key_exists($id, $this->repository->resolved);
             if ($existsInDefinition = array_key_exists($id, $this->repository->functionReference)) {
                 return (new $this->resolver($this->repository))
-                    ->resolveByDefinition($this->repository->functionReference[$id], $id);
+                    ->resolveByDefinition($id);
             }
 
             if (!$existsInResolved) {
@@ -171,7 +171,7 @@ class Container implements ContainerInterface
                 $classOrClosure,
                 $this->repository->functionReference
             ) => (new $this->resolver($this->repository))
-                ->resolveByDefinition($this->repository->functionReference[$classOrClosure], $classOrClosure),
+                ->resolveByDefinition($classOrClosure),
 
             $classOrClosure instanceof Closure || (is_callable($classOrClosure) && !is_array(
                     $classOrClosure
@@ -330,17 +330,30 @@ class Container implements ContainerInterface
             );
         }
 
-        return match (true) {
-            $classAndMethod instanceof Closure || (is_callable($classAndMethod) && !is_array(
-                    $classAndMethod
-                )) => [$classAndMethod],
+        $isString = is_string($classAndMethod);
 
-            is_array($classAndMethod) && count($classAndMethod) <= 2 => $classAndMethod,
+        $callableFormation = match (true) {
+            $classAndMethod instanceof Closure ||
+            ($isString && (class_exists($classAndMethod) || is_callable($classAndMethod)))
+            => [$classAndMethod, null],
 
-            is_string($classAndMethod) && str_contains($classAndMethod, '@')
+            is_array($classAndMethod) && class_exists($classAndMethod[0]) => $classAndMethod + [null, null],
+
+            default => null
+        };
+
+        if (!$isString) {
+            throw new ContainerException(
+                'Unknown Class & Method formation
+                ([namspaced Class, method]/namspacedClass@method/namespacedClass::method)'
+            );
+        }
+
+        return $callableFormation ?: match (true) {
+            str_contains($classAndMethod, '@')
             => explode('@', $classAndMethod, 2),
 
-            is_string($classAndMethod) && str_contains($classAndMethod, '::')
+            str_contains($classAndMethod, '::')
             => explode('::', $classAndMethod, 2),
 
             default => throw new ContainerException(

@@ -1,42 +1,38 @@
 name: "build"
 
 on:
-    push:
-        branches: ['main']
-    pull_request:
-        branches: ['*']
+  push:
+    branches: [ 'main' ]
+  pull_request:
+    branches: [ '*' ]
 
 jobs:
   run:
     runs-on: ${{ matrix.operating-system }}
     strategy:
       matrix:
-        operating-system: [ubuntu-latest]
-        php-versions: ['8.0', '8.1']
+        operating-system: [ ubuntu-latest ]
+        php-versions: [ '8.1', '8.2' ]
     name: PHP ${{ matrix.php-versions }} Test on ${{ matrix.operating-system }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
-      - name: Install PHP
+      - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php-versions }}
+          tools: composer:v2
+          coverage: xdebug
 
       - name: Validate composer.json and composer.lock
         run: composer validate --strict
 
-      - name: Cache Composer packages
-        id: composer-cache
-        uses: actions/cache@v2
-        with:
-          path: vendor
-          key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-php-
-
       - name: Install dependencies
-        run: composer install --prefer-dist --no-progress
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
 
       - name: Check PHP Version
         run: php -v
+
+      - name: Tests
+        run: ./vendor/bin/pest

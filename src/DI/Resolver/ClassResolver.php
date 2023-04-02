@@ -37,11 +37,8 @@ class ClassResolver
     {
         $type = $infuse->getNonMethodData('type');
 
-        if (isset($this->repository->functionReference[$type])) {
-            return $this->parameterResolver->resolveByDefinition(
-                $this->repository->functionReference[$type],
-                $infuse->getNonMethodData('data')
-            );
+        if (array_key_exists($type, $this->repository->functionReference)) {
+            return $this->parameterResolver->prepareDefinition($type);
         }
 
         if (function_exists($type)) {
@@ -97,8 +94,8 @@ class ClassResolver
     {
         if ($class->isInterface()) {
             $className = $class->getName();
-            if (!class_exists($supplied)) {
-                throw new ContainerException("Resolution failed: $supplied for interface $className");
+            if (!$supplied || !class_exists($supplied)) {
+                throw new ContainerException("Resolution failed $supplied for interface $className");
             }
             [$interface, $className] = [$className, $supplied];
             $class = $this->reflectedClass($className);
