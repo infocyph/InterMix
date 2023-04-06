@@ -24,7 +24,7 @@ class ClassA implements InterfaceA
      * @param ...$parameterC
      * @return array
      */
-    #[Infuse(parameterA: 'time')]
+    #[Infuse(parameterA: 'gethostname')]
     public function resolveIt(
         ClassB $classB,
         string $parameterA,
