@@ -30,8 +30,6 @@ test('Inject using method attribute', function () use ($classMethodAttribute) {
     expect($classMethodAttribute['parameterA'])->toBe(gethostname());
 });
 
-//dd($classMethodAttribute);
-
 test('Inject via Typehint', function () use ($classMethodValues, $classMethodAttribute) {
     expect($classMethodValues['classB'])->toBeInstanceOf(ClassB::class)
         ->and($classMethodAttribute['classB'])->toBeInstanceOf(ClassB::class);
@@ -53,24 +51,22 @@ test(
 
 test(
     'Variadic parameter',
-    function () use ($classMethodValues) {
-        expect($classMethodValues['parameterC'])->toBe(['def', 'jkl']);
+    function () use ($classMethodValues, $classMethodAttribute) {
+        expect($classMethodValues['parameterC'])->toBe(['def', 'jkl'])
+            ->and($classMethodAttribute['parameterC'])->toBeArray()->toBeEmpty();
     }
 );
 
+test(
+    'Parameter assigned via method attribute (doc-block attached)',
+    function () use ($classMethodAttribute) {
+        expect($classMethodAttribute['parameterA'])->toBe(gethostname());
+    }
+);
 
-///** @var ClassInitWInterface $classInterfaceTest */
-//$classInterfaceTest = container(null, 'init_with_interface')
-//    ->setOptions(true, true)
-//    ->registerClass(ClassInitWInterface::class, [
-//        InterfaceB::class => ClassB::class,
-//        'abc',
-//        'def',
-//        'ghi'
-//    ])
-//    ->addDefinitions([
-//        InterfaceA::class => ClassA::class,
-//        InterfaceC::class => new ClassC()
-//    ])
-//    ->get(ClassInitWInterface::class);
-//$classInterfaceValues = $classInterfaceTest->getValues();
+test(
+    'Parameter assigned via parameter attribute (used definition)',
+    function () use ($classMethodAttribute) {
+        expect($classMethodAttribute['parameterB'])->toBe('127.0.0.1');
+    }
+);
