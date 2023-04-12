@@ -127,7 +127,8 @@ class ParameterResolver
         [
             'availableParams' => $availableParams,
             'processed' => $processed,
-            'availableSupply' => $suppliedParameters
+            'availableSupply' => $suppliedParameters,
+            'sort' => $sort
         ] = $this->resolveAssociativeParameters(
             $reflector,
             $availableParams,
@@ -137,12 +138,21 @@ class ParameterResolver
         );
 
         // Resolve numeric/default/variadic parameters
-        $processed += $this->resolveNumericDefaultParameters(
+        [
+            'processed' => $numericallyProcessed,
+            'variadic' => $variadic
+        ] = $this->resolveNumericDefaultParameters(
             $reflector,
             $availableParams,
             $suppliedParameters,
             $applyAttribute
         );
+
+        $processed += $numericallyProcessed;
+
+        if ($variadic) {
+            $processed = $this->processVariadic($processed, $variadic, $sort);
+        }
 
         return $processed;
     }
@@ -180,11 +190,12 @@ class ParameterResolver
         array $suppliedParameters,
         array $parameterAttribute
     ): array {
-        $processed = $paramsLeft = [];
+        $processed = $paramsLeft = $sort = [];
 
         /** @var ReflectionParameter $classParameter */
-        foreach ($availableParams as $classParameter) {
+        foreach ($availableParams as $key => $classParameter) {
             $parameterName = $classParameter->getName();
+            $sort[$parameterName] = $key;
 
             if ($classParameter->isVariadic()) {
                 $paramsLeft[] = $classParameter;
@@ -235,7 +246,8 @@ class ParameterResolver
                 ),
 
                 default => array_filter($suppliedParameters, 'is_int', ARRAY_FILTER_USE_KEY)
-            }
+            },
+            'sort' => $sort
         ];
     }
 
@@ -374,13 +386,14 @@ class ParameterResolver
     ): array {
         $sequential = array_values($suppliedParameters);
         $processed = [];
+        $variadic = [];
 
         /** @var ReflectionParameter $classParameter */
         foreach ($availableParams as $key => $classParameter) {
             $parameterName = $classParameter->getName();
 
             if ($classParameter->isVariadic()) {
-                $processed[$parameterName] = array_slice($suppliedParameters, $key);
+                $variadic = array_slice($suppliedParameters, $key);
                 break;
             }
 
@@ -413,7 +426,10 @@ class ParameterResolver
             };
         }
 
-        return $processed;
+        return [
+            'processed' => $processed,
+            'variadic' => $variadic
+        ];
     }
 
     /**
@@ -443,5 +459,24 @@ class ParameterResolver
                     )
                 )
         ];
+    }
+
+    /**
+     * Variadic value processor
+     *
+     * @param $processed
+     * @param $variadic
+     * @param $sort
+     * @return array
+     */
+    private function processVariadic($processed, $variadic, $sort): array
+    {
+        if (array_key_exists(0, $variadic)) {
+            uksort($processed, fn($a, $b) => $sort[$a] <=> $sort[$b]);
+            $processed = array_values($processed);
+            array_push($processed, ...array_values($variadic));
+            return $processed;
+        }
+        return array_merge($processed, $variadic);
     }
 }

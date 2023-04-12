@@ -2,12 +2,8 @@
 
 namespace AbmmHasan\InterMix\Tests\Feature;
 
-use AbmmHasan\InterMix\Tests\Fixture\ClassA;
-use AbmmHasan\InterMix\Tests\Fixture\ClassB;
-use AbmmHasan\InterMix\Tests\Fixture\ClassInit;
-use AbmmHasan\InterMix\Tests\Fixture\ClassInitWInterface;
-use AbmmHasan\InterMix\Tests\Fixture\InterfaceA;
-use AbmmHasan\InterMix\Tests\Fixture\InterfaceB;
+use AbmmHasan\InterMix\Tests\Fixture\{ClassA, ClassB, ClassC};
+use AbmmHasan\InterMix\Tests\Fixture\{ClassInit, ClassInitWInterface, InterfaceA, InterfaceB, InterfaceC};
 
 use function AbmmHasan\InterMix\container;
 
@@ -20,21 +16,7 @@ $classInit = container(null, 'init_only')
         'dbS' => 'ghi'
     ])
     ->get(ClassInit::class);
-$values = $classInit->getValues();
-
-test('Inject by Typehint', function () use ($values) {
-    expect($values['classA'])->toBeInstanceOf(ClassA::class);
-});
-
-test('Parameter assigned via register (Non-Associative)', function () use ($values) {
-    expect($values['myString'])
-        ->toBe('abc');
-});
-
-test('Parameter assigned via register (Associative)', function () use ($values) {
-    expect($values['dbS'])
-        ->toBe('ghi');
-});
+$classInitValues = $classInit->getValues();
 
 /** @var ClassInitWInterface $classInterfaceTest */
 $classInterfaceTest = container(null, 'init_with_interface')
@@ -46,10 +28,40 @@ $classInterfaceTest = container(null, 'init_with_interface')
         'ghi'
     ])
     ->addDefinitions([
-        InterfaceA::class => ClassA::class
+        InterfaceA::class => ClassA::class,
+        InterfaceC::class => new ClassC()
     ])
     ->get(ClassInitWInterface::class);
+$classInterfaceValues = $classInterfaceTest->getValues();
 
+test('Inject via Typehint', function () use ($classInitValues) {
+    expect($classInitValues['classA'])->toBeInstanceOf(ClassA::class);
+});
 
+test(
+    'Parameter assigned via register (Non-Associative)',
+    function () use ($classInitValues, $classInterfaceValues) {
+        expect($classInitValues['myString'])->toBe('abc')
+            ->and($classInterfaceValues['myString'])->toBe('abc')
+            ->and($classInterfaceValues['dbS'])->toBe('def');
+    }
+);
 
+test(
+    'Parameter assigned via register (Associative)',
+    function () use ($classInitValues, $classInterfaceValues) {
+        expect($classInitValues['dbS'])->toBe('ghi');
+    }
+);
 
+test('Interface Name to Class Name (via register)', function () use ($classInterfaceValues) {
+    expect($classInterfaceValues['classB'])->toBeInstanceOf(ClassB::class);
+});
+
+test('Interface Name to Class Name (via addDefinition)', function () use ($classInterfaceValues) {
+    expect($classInterfaceValues['classA'])->toBeInstanceOf(ClassA::class);
+});
+
+test('Interface Name to Class Object (via addDefinition)', function () use ($classInterfaceValues) {
+    expect($classInterfaceValues['classC'])->toBeInstanceOf(ClassC::class);
+});

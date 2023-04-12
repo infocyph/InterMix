@@ -11,7 +11,7 @@
 
 This library intended to provide you with some class oriented tools that we (may) need frequently.
 
-* Dependency Injector (Container) (addtionally PSR 11 complient)
+* Dependency Injector (Container) (PSR 11 compliant)
 * Class initialization barrier (Fence)
 * Class Macro (MacroMix)
 * Memoize

@@ -12,8 +12,7 @@ container(null, 'injection_less')
 test('Instance', function () {
     $get1 = container(null, 'injection_less')
         ->get(InjectionLessClass::class);
-    expect($get1)
-        ->toBeInstanceOf(InjectionLessClass::class);
+    expect($get1)->toBeInstanceOf(InjectionLessClass::class);
 });
 
 $get2 = container(null, 'injection_less')
