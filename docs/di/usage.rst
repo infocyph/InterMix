@@ -32,7 +32,7 @@ get() & has()
 The container implements the
 `PSR-11 <http://www.php-fig.org/psr/psr-11/>`__ standard. That means it
 implements
-```Psr\Container\ContainerInterface`` <https://github.com/php-fig/container/blob/master/src/ContainerInterface.php>`__:
+`Psr\Container\ContainerInterface <https://github.com/php-fig/container/blob/master/src/ContainerInterface.php>`__:
 
 .. code:: php
 
