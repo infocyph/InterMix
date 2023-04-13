@@ -7,7 +7,6 @@
 ![Packagist Version](https://img.shields.io/packagist/v/abmmhasan/intermix)
 ![Packagist PHP Version](https://img.shields.io/packagist/dependency-v/abmmhasan/intermix/php)
 ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/abmmhasan/intermix)
-![Lines of code](https://img.shields.io/tokei/lines/github/abmmhasan/intermix)
 
 This library intended to provide you with some class oriented tools that we (may) need frequently.
 

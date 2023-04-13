@@ -163,4 +163,4 @@ Now, it is for the user of the StoreService to decide which
 implementation to use. And it can be changed anytime, without having to
 rewrite the ``StoreService``.
 
-**The ``StoreService`` is no longer tightly coupled to its dependency.**
+The ``StoreService`` is no longer tightly coupled to its dependency.
