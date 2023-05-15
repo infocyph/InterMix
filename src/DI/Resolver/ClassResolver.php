@@ -154,19 +154,27 @@ class ClassResolver
 
         $method = $callMethod
             ?: $this->repository->classResource[$className]['method']['on']
-                ?? $class->getConstant('callOn')
+                ??= $class->getConstant('callOn')
                 ?: $this->repository->defaultMethod;
 
-        if (!empty($method) && $class->hasMethod($method)) {
-            $method = new ReflectionMethod($className, $method);
-            $this->repository->resolvedResource[$className]['returned'] = $method->invokeArgs(
-                $this->repository->resolvedResource[$className]['instance'],
-                $this->parameterResolver->resolve(
-                    $method,
-                    $this->repository->classResource[$className]['method']['params'] ?? [],
-                    'method'
-                )
-            );
+        $method = match (true) {
+            $method && $class->hasMethod($method) => $method,
+            $class->hasMethod('__invoke') => '__invoke',
+            default => false
+        };
+
+        if (!$method) {
+            return;
         }
+
+        $reflectedMethod = new ReflectionMethod($className, $method);
+        $this->repository->resolvedResource[$className]['returned'] = $reflectedMethod->invokeArgs(
+            $this->repository->resolvedResource[$className]['instance'],
+            $this->parameterResolver->resolve(
+                $reflectedMethod,
+                $this->repository->classResource[$className]['method']['params'] ?? [],
+                'method'
+            )
+        );
     }
 }
