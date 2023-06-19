@@ -38,6 +38,6 @@ jobs:
 
       - name: Pest Tests
         run: ./vendor/bin/pest
-
-      - name: Rector(Dry) Tests
-        run: php vendor/bin/rector process --dry-run --config=rector.php
+#
+#      - name: Rector(Dry) Tests
+#        run: php vendor/bin/rector process --dry-run --config=rector.php

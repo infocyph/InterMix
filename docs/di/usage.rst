@@ -80,6 +80,14 @@ call()
 ``get()`` & ``getReturn()`` both internally calls ``call()``. Differences are, ``get()`` & ``getReturn()`` results are
 cached. In case of ``call()`` returns from method/closure are never cached (but class instances is cached as usual).
 
+make()
+------
+
+This library only builds single instance per class (Singleton). But sometime we may need class instance independently.
+``container()`` have 2nd parameter for completely different container instance for that. But what if we need only one
+new instance for a class but other dependencies from cached? well, that is what ``make()`` is for! Also, as the definition
+it supports class only.
+
 registerClass()
 ---------------
 
