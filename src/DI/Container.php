@@ -30,12 +30,15 @@ class Container implements ContainerInterface
     {
         self::$instances[$this->instanceAlias] ??= $this;
         $this->repository = new Repository();
+        $this->repository->functionReference = [
+            ContainerInterface::class => $this
+        ];
     }
 
     /**
      * Get Container instance
      *
-     * @param string $instanceAlias
+     * @param string $instanceAlias Instance alias
      * @return Container
      */
     public static function instance(string $instanceAlias = 'default'): Container
@@ -75,7 +78,7 @@ class Container implements ContainerInterface
     {
         if ($definitions !== []) {
             foreach ($definitions as $identifier => $definition) {
-                $this->set($identifier, $definition);
+                $this->bind($identifier, $definition);
             }
         }
         return self::$instances[$this->instanceAlias];
@@ -84,12 +87,12 @@ class Container implements ContainerInterface
     /**
      * Add definition
      *
-     * @param string $id Identifier of the entry
-     * @param mixed $definition
+     * @param string $id Identifier/alias of the entry
+     * @param mixed $definition Entry definition
      * @return Container
      * @throws ContainerException
      */
-    public function set(string $id, mixed $definition): Container
+    public function bind(string $id, mixed $definition): Container
     {
         $this->repository->checkIfLocked();
         if ($id === $definition) {
@@ -102,7 +105,7 @@ class Container implements ContainerInterface
     /**
      * Finds an entry of the container (returned result) by its identifier and returns it.
      *
-     * @param string $id
+     * @param string $id Identifier of the entry
      * @return mixed
      * @throws ContainerException|NotFoundException
      */
@@ -155,8 +158,8 @@ class Container implements ContainerInterface
     /**
      * Get the resolved class/closure/class-method
      *
-     * @param string|Closure|callable $classOrClosure
-     * @param string|bool|null $method
+     * @param string|Closure|callable $classOrClosure class name with namespace / closure
+     * @param string|bool|null $method method within the class (if class)
      * @return mixed
      * @throws ContainerException
      */
@@ -191,6 +194,18 @@ class Container implements ContainerInterface
     }
 
     /**
+     * Get new (uncached) instance of the Class
+     *
+     * @param string $class class name with namespace
+     * @param string|bool $method method within the class
+     * @return mixed
+     */
+    public function make(string $class, string|bool $method = false): mixed
+    {
+        return (new $this->resolver($this->repository))->classSettler($class, $method, true);
+    }
+
+    /**
      * Returns true if the container can return an entry for the given identifier.
      *
      * @param string $id Identifier of the entry to look for
@@ -207,7 +222,7 @@ class Container implements ContainerInterface
             }
             $this->get($id);
             return array_key_exists($id, $this->repository->resolved);
-        } catch (NotFoundException|ContainerException $exception) {
+        } catch (NotFoundException|ContainerException) {
             return false;
         }
     }
@@ -215,9 +230,9 @@ class Container implements ContainerInterface
     /**
      * Register Closure
      *
-     * @param string $closureAlias
-     * @param callable|Closure $function
-     * @param array $parameters
+     * @param string $closureAlias Closure alias
+     * @param callable|Closure $function the Closure
+     * @param array $parameters Closure parameters
      * @return Container
      * @throws ContainerException
      */
@@ -235,8 +250,8 @@ class Container implements ContainerInterface
     /**
      * Register Class with constructor Parameter
      *
-     * @param string $class
-     * @param array $parameters
+     * @param string $class class name with namespace
+     * @param array $parameters constructor parameters
      * @return Container
      * @throws ContainerException
      */
@@ -254,9 +269,9 @@ class Container implements ContainerInterface
     /**
      * Register Class and Method with Parameter (method parameter)
      *
-     * @param string $class
-     * @param string $method
-     * @param array $parameters
+     * @param string $class class name with namespace
+     * @param string $method method within the class
+     * @param array $parameters parameters to provide within method
      * @return Container
      * @throws ContainerException
      */
@@ -274,7 +289,7 @@ class Container implements ContainerInterface
     /**
      * Register Class and Method with Parameter (method parameter)
      *
-     * @param string $class
+     * @param string $class class name with namespace
      * @param array $property ['property name' => 'value to assign']
      * @return Container
      * @throws ContainerException
@@ -318,7 +333,7 @@ class Container implements ContainerInterface
     /**
      * Get parsed class & method information from string
      *
-     * @param string|array|Closure|callable $classAndMethod
+     * @param string|array|Closure|callable $classAndMethod formatted class name (with method) / closure
      * @return array
      * @throws ContainerException
      */

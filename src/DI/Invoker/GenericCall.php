@@ -10,7 +10,7 @@ use Error;
 final class GenericCall
 {
     /**
-     * @param Repository $repository
+     * @param Repository $repository the repository instance
      */
     public function __construct(
         private Repository $repository
@@ -20,8 +20,8 @@ final class GenericCall
     /**
      * Call the class
      *
-     * @param string $class
-     * @param string|null $method
+     * @param string $class the class name
+     * @param string|null $method method name within the class
      * @return array
      */
     public function classSettler(string $class, string $method = null): array
@@ -58,8 +58,8 @@ final class GenericCall
     /**
      * call the closure
      *
-     * @param string|Closure $closure
-     * @param array $params
+     * @param string|Closure $closure the closure
+     * @param array $params parameters to provide in closure
      * @return mixed
      */
     public function closureSettler(string|Closure $closure, array $params): mixed

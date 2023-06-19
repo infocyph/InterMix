@@ -57,12 +57,13 @@ final class InjectedCall
      *
      * @param string $class
      * @param string|null $method
+     * @param bool $make
      * @return array
-     * @throws ContainerException|ReflectionException
+     * @throws ReflectionException|ContainerException
      */
-    public function classSettler(string $class, string $method = null): array
+    public function classSettler(string $class, string $method = null, bool $make = false): array
     {
-        return $this->classResolver->resolve($this->reflectedClass($class), null, $method);
+        return $this->classResolver->resolve($this->reflectedClass($class), null, $method, $make);
     }
 
     /**

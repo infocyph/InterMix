@@ -44,16 +44,16 @@ implements
        public function has($id);
    }
 
-set() & addDefinitions()
+bind() & addDefinitions()
 ------------------------
 
-You can set entries directly on the container using either ``set()``:
+You can set entries directly on the container using either ``bind()``:
 
 .. code:: php
 
-    $container->set('foo', 'bar');
-    $container->set('MyInterface', container('MyClass'));
-    $container->set('myClosure', function() { /* ... */ });
+    $container->bind('foo', 'bar');
+    $container->bind('MyInterface', container('MyClass'));
+    $container->bind('myClosure', function() { /* ... */ });
 
 or ``addDefinitions()``
 
@@ -79,6 +79,14 @@ call()
 
 ``get()`` & ``getReturn()`` both internally calls ``call()``. Differences are, ``get()`` & ``getReturn()`` results are
 cached. In case of ``call()`` returns from method/closure are never cached (but class instances is cached as usual).
+
+make()
+------
+
+This library only builds single instance per class (Singleton). But sometime we may need class instance independently.
+``container()`` have 2nd parameter for completely different container instance for that. But what if we need only one
+new instance for a class but other dependencies from cached? well, that is what ``make()`` is for! Also, as the definition
+it supports class only.
 
 registerClass()
 ---------------
