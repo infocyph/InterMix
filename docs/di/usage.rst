@@ -44,16 +44,16 @@ implements
        public function has($id);
    }
 
-set() & addDefinitions()
+bind() & addDefinitions()
 ------------------------
 
-You can set entries directly on the container using either ``set()``:
+You can set entries directly on the container using either ``bind()``:
 
 .. code:: php
 
-    $container->set('foo', 'bar');
-    $container->set('MyInterface', container('MyClass'));
-    $container->set('myClosure', function() { /* ... */ });
+    $container->bind('foo', 'bar');
+    $container->bind('MyInterface', container('MyClass'));
+    $container->bind('myClosure', function() { /* ... */ });
 
 or ``addDefinitions()``
 

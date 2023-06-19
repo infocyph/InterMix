@@ -30,6 +30,9 @@ class Container implements ContainerInterface
     {
         self::$instances[$this->instanceAlias] ??= $this;
         $this->repository = new Repository();
+        $this->repository->functionReference = [
+            ContainerInterface::class => $this
+        ];
     }
 
     /**
@@ -75,7 +78,7 @@ class Container implements ContainerInterface
     {
         if ($definitions !== []) {
             foreach ($definitions as $identifier => $definition) {
-                $this->set($identifier, $definition);
+                $this->bind($identifier, $definition);
             }
         }
         return self::$instances[$this->instanceAlias];
@@ -89,7 +92,7 @@ class Container implements ContainerInterface
      * @return Container
      * @throws ContainerException
      */
-    public function set(string $id, mixed $definition): Container
+    public function bind(string $id, mixed $definition): Container
     {
         $this->repository->checkIfLocked();
         if ($id === $definition) {
@@ -191,6 +194,18 @@ class Container implements ContainerInterface
     }
 
     /**
+     * Get new (uncached) instance of the Class
+     *
+     * @param string $class
+     * @param string|bool $method
+     * @return mixed
+     */
+    public function make(string $class, string|bool $method = false): mixed
+    {
+        return (new $this->resolver($this->repository))->classSettler($class, $method, true);
+    }
+
+    /**
      * Returns true if the container can return an entry for the given identifier.
      *
      * @param string $id Identifier of the entry to look for
@@ -207,7 +222,7 @@ class Container implements ContainerInterface
             }
             $this->get($id);
             return array_key_exists($id, $this->repository->resolved);
-        } catch (NotFoundException|ContainerException $exception) {
+        } catch (NotFoundException|ContainerException) {
             return false;
         }
     }
