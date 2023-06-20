@@ -73,30 +73,44 @@ class ClassResolver
         bool $make = false
     ): array {
         $class = $this->getClass($class, $supplied);
-        $this->resolvePropertyAndConstructor($class, $class->getName(), $make);
-        $this->resolveMethod($class, $callMethod);
-        return $this->repository->resolvedResource[$class->getName()];
+        $className = $class->getName();
+        if ($make) {
+            return $this->resolveMake($class, $className, $callMethod);
+        }
+        $this->resolveClassResources($class, $className, $callMethod);
+        return $this->repository->resolvedResource[$className];
     }
 
     /**
      * @param ReflectionClass $class
      * @param string $className
-     * @param bool $make
-     * @return void
-     * @throws ContainerException
-     * @throws ReflectionException
+     * @param string|bool|null $callMethod
+     * @return array
+     * @throws ReflectionException|ContainerException
      */
-    private function resolvePropertyAndConstructor(ReflectionClass $class, string $className, bool $make): void
+    private function resolveMake(ReflectionClass $class, string $className, string|bool|null $callMethod): array
     {
-        if ($make) {
-            $existing = $this->repository->resolvedResource[$className] ?? null;
-            $this->resolveConstructor($class);
-            $this->propertyResolver->resolve($class);
-            $this->repository->resolvedResource[$className] = $existing
-                ?? $this->repository->resolvedResource[$className];
-            return;
-        }
+        $existing = $this->repository->resolvedResource[$className] ?? [];
+        $this->resolveConstructor($class);
+        $this->propertyResolver->resolve($class);
+        $this->resolveMethod($class, $callMethod);
+        $resolved = $this->repository->resolvedResource[$className];
+        $this->repository->resolvedResource[$className] = $existing;
+        return $resolved;
+    }
 
+    /**
+     * @param ReflectionClass $class
+     * @param string $className
+     * @param string|bool|null $callMethod
+     * @return void
+     * @throws ReflectionException|ContainerException
+     */
+    private function resolveClassResources(
+        ReflectionClass $class,
+        string $className,
+        string|bool|null $callMethod
+    ): void {
         if (!isset($this->repository->resolvedResource[$className]['instance'])) {
             $this->resolveConstructor($class);
         }
@@ -104,6 +118,8 @@ class ClassResolver
         if (!isset($this->repository->resolvedResource[$className]['property'])) {
             $this->propertyResolver->resolve($class);
         }
+
+        $this->resolveMethod($class, $callMethod);
     }
 
     /**
