@@ -82,6 +82,8 @@ class ClassResolver
     }
 
     /**
+     * Rebuild class for make
+     *
      * @param ReflectionClass $class
      * @param string $className
      * @param string|bool|null $callMethod
@@ -100,6 +102,8 @@ class ClassResolver
     }
 
     /**
+     * Resolve class resources
+     *
      * @param ReflectionClass $class
      * @param string $className
      * @param string|bool|null $callMethod

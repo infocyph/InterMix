@@ -96,7 +96,7 @@ class Container implements ContainerInterface
     {
         $this->repository->checkIfLocked();
         if ($id === $definition) {
-            throw new ContainerException("Circular dependency detected ($id)");
+            throw new ContainerException("Id & definition cannot be same ($id)");
         }
         $this->repository->functionReference[$id] = $definition;
         return self::$instances[$this->instanceAlias];
@@ -360,7 +360,7 @@ class Container implements ContainerInterface
         if (!$isString) {
             throw new ContainerException(
                 'Unknown Class & Method formation
-                ([namspaced Class, method]/namspacedClass@method/namespacedClass::method)'
+                ([namespaced Class, method]/namespacedClass@method/namespacedClass::method)'
             );
         }
 
@@ -373,7 +373,7 @@ class Container implements ContainerInterface
 
             default => throw new ContainerException(
                 'Unknown Class & Method formation
-                ([namspaced Class, method]/namspacedClass@method/namespacedClass::method)'
+                ([namespaced Class, method]/namespacedClass@method/namespacedClass::method)'
             )
         };
     }

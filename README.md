@@ -1,6 +1,7 @@
 # InterMix
 
-![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/abmmhasan/intermix/ci.yml)
+[![build](https://github.com/abmmhasan/InterMix/actions/workflows/ci.yml/badge.svg)](https://github.com/abmmhasan/InterMix/actions/workflows/ci.yml)
+[![Codacy Security Scan](https://github.com/abmmhasan/InterMix/actions/workflows/codacy.yml/badge.svg)](https://github.com/abmmhasan/InterMix/actions/workflows/codacy.yml)
 ![Libraries.io dependency status for GitHub repo](https://img.shields.io/librariesio/github/abmmhasan/InterMix)
 ![Packagist Downloads](https://img.shields.io/packagist/dt/abmmhasan/intermix)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
