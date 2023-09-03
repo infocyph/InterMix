@@ -27,16 +27,19 @@ jobs:
           tools: composer:v2
           coverage: xdebug
 
-      - name: Validate composer.json and composer.lock
+      - name: Check PHP Version
+        run: php -v
+
+      - name: Validate Composer
         run: composer validate --strict
 
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
 
-      - name: Check PHP Version
-        run: php -v
+      - name: Auditing packages
+        run: composer audit
 
-      - name: Pest Tests
+      - name: Test
         run: ./vendor/bin/pest
 #
 #      - name: Rector(Dry) Tests
