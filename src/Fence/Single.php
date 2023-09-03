@@ -13,11 +13,10 @@ trait Single
     protected static $instance = null;
 
     /**
-     * Creates a new instance of a singleton class,
-     * accepting a variable-length argument list.
+     * Creates and returns the only instance of the class.
      *
-     * @param array|null $constraints
-     * @return self
+     * @param array|null $constraints The constraints for creating the instance.
+     * @return static The created instance.
      * @throws Exception
      */
     final public static function instance(array $constraints = null): static

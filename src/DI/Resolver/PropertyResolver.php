@@ -17,8 +17,10 @@ class PropertyResolver
     private ClassResolver $classResolver;
 
     /**
-     * @param Repository $repository
-     * @param ParameterResolver $parameterResolver
+     * Constructs a new instance of the class.
+     *
+     * @param Repository $repository The repository object.
+     * @param ParameterResolver $parameterResolver The parameter resolver object.
      */
     public function __construct(
         private Repository $repository,
@@ -27,9 +29,9 @@ class PropertyResolver
     }
 
     /**
-     * Set class resolver instance
+     * Set the class resolver instance.
      *
-     * @param ClassResolver $classResolver
+     * @param ClassResolver $classResolver The class resolver instance.
      * @return void
      */
     public function setClassResolverInstance(ClassResolver $classResolver): void
@@ -38,11 +40,11 @@ class PropertyResolver
     }
 
     /**
-     * Resolve class properties
+     * Resolves the properties of a given class.
      *
-     * @param ReflectionClass $class
+     * @param ReflectionClass $class The ReflectionClass instance of the class.
      * @return void
-     * @throws ContainerException|ReflectionException
+     * @throws ContainerException|ReflectionException If an error occurs while resolving the properties.
      */
     public function resolve(ReflectionClass $class): void
     {
@@ -63,13 +65,13 @@ class PropertyResolver
     }
 
     /**
-     * Resolve properties
+     * Resolves the properties of a class instance.
      *
-     * @param ReflectionClass $class
-     * @param array $properties
-     * @param object $classInstance
+     * @param ReflectionClass $class The reflection class object.
+     * @param array $properties The array of properties to be resolved.
+     * @param object $classInstance The instance of the class.
      * @return void
-     * @throws ContainerException|ReflectionException
+     * @throws ContainerException|ReflectionException If something goes wrong during property resolution.
      */
     private function resolveProperties(ReflectionClass $class, array $properties, object $classInstance): void
     {
@@ -105,16 +107,19 @@ class PropertyResolver
     }
 
     /**
-     * Resolve property value
+     * Resolves the value of a property.
      *
-     * @param ReflectionProperty $property
-     * @param $classPropertyValues
-     * @param object $classInstance
-     * @return array
-     * @throws ContainerException|ReflectionException
+     * @param ReflectionProperty $property The reflection property.
+     * @param mixed $classPropertyValues The property values of the class.
+     * @param object $classInstance The instance of the class.
+     * @return array The resolved property value.
+     * @throws ContainerException|ReflectionException If an unknown #[Infuse] parameter is detected.
      */
-    private function resolveValue(ReflectionProperty $property, $classPropertyValues, object $classInstance): array
-    {
+    private function resolveValue(
+        ReflectionProperty $property,
+        mixed $classPropertyValues,
+        object $classInstance
+    ): array {
         $propertyValue = $this->setWithPredefined($property, $classPropertyValues, $classInstance);
 
         if ($propertyValue !== null) {
@@ -145,12 +150,12 @@ class PropertyResolver
     }
 
     /**
-     * Check & get predefined value if available
+     * Sets the value of a property with predefined values.
      *
-     * @param ReflectionProperty $property
-     * @param array $classPropertyValues
-     * @param object $classInstance
-     * @return array|null
+     * @param ReflectionProperty $property The reflection property.
+     * @param array $classPropertyValues The array of class property values.
+     * @param object $classInstance The class instance.
+     * @return array|null The resulting array or null.
      */
     private function setWithPredefined(
         ReflectionProperty $property,
@@ -174,13 +179,12 @@ class PropertyResolver
     }
 
     /**
-     * Resolve attribute without arguments
+     * Resolves the property without any argument.
      *
-     * @param ReflectionProperty $property
-     * @param ReflectionType|null $parameterType
-     * @return object
-     * @throws ContainerException
-     * @throws ReflectionException
+     * @param ReflectionProperty $property The reflection property.
+     * @param ReflectionType|null $parameterType The reflection parameter type.
+     * @return object The resolved object.
+     * @throws ContainerException|ReflectionException When a malformed #[Infuse] attribute or property type is detected.
      */
     private function resolveWithoutArgument(ReflectionProperty $property, ReflectionType $parameterType = null): object
     {

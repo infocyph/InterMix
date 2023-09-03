@@ -14,9 +14,11 @@ class ClassResolver
     use Reflector;
 
     /**
-     * @param Repository $repository
-     * @param ParameterResolver $parameterResolver
-     * @param PropertyResolver $propertyResolver
+     * Constructor for the class.
+     *
+     * @param Repository $repository The repository object.
+     * @param ParameterResolver $parameterResolver The parameter resolver object.
+     * @param PropertyResolver $propertyResolver The property resolver object.
      */
     public function __construct(
         private Repository $repository,
@@ -26,12 +28,11 @@ class ClassResolver
     }
 
     /**
-     * Resolve attribute via Infuse
+     * Resolves the given Infuse object and returns the result.
      *
-     * @param Infuse $infuse
-     * @return mixed
-     * @throws ContainerException
-     * @throws ReflectionException
+     * @param Infuse $infuse The Infuse object to be resolved.
+     * @return mixed The resolved value.
+     * @throws ContainerException|ReflectionException
      */
     public function resolveInfuse(Infuse $infuse): mixed
     {
@@ -56,15 +57,14 @@ class ClassResolver
     }
 
     /**
-     * Get resolved Instance & method
+     * Resolves a given class and returns the resolved resources.
      *
-     * @param ReflectionClass $class
-     * @param mixed|null $supplied
-     * @param string|bool|null $callMethod
-     * @param bool $make
-     * @return array
-     * @throws ContainerException
-     * @throws ReflectionException
+     * @param ReflectionClass $class The class to be resolved.
+     * @param mixed $supplied The supplied value.
+     * @param string|bool $callMethod The method to be called.
+     * @param bool $make Whether to create a new instance of the class.
+     * @return array The resolved resources.
+     * @throws ContainerException|ReflectionException Exception thrown if there is an issue with resolving the class.
      */
     public function resolve(
         ReflectionClass $class,
@@ -82,12 +82,12 @@ class ClassResolver
     }
 
     /**
-     * Rebuild class for make
+     * Rebuild the resources for the make operation for a given class name.
      *
-     * @param ReflectionClass $class
-     * @param string $className
-     * @param string|bool|null $callMethod
-     * @return array
+     * @param ReflectionClass $class The reflection class object.
+     * @param string $className The name of the class.
+     * @param string|bool|null $callMethod The method to be called.
+     * @return array The resolved resource.
      * @throws ReflectionException|ContainerException
      */
     private function resolveMake(ReflectionClass $class, string $className, string|bool|null $callMethod): array
@@ -102,11 +102,11 @@ class ClassResolver
     }
 
     /**
-     * Resolve class resources
+     * Resolves the class resources.
      *
-     * @param ReflectionClass $class
-     * @param string $className
-     * @param string|bool|null $callMethod
+     * @param ReflectionClass $class The reflection class.
+     * @param string $className The class name.
+     * @param string|bool|null $callMethod The method to call.
      * @return void
      * @throws ReflectionException|ContainerException
      */
@@ -127,12 +127,13 @@ class ClassResolver
     }
 
     /**
-     * Get the actual class
+     * Retrieves the ReflectionClass object for a given class or interface.
      *
-     * @param ReflectionClass $class
-     * @param mixed $supplied
-     * @return ReflectionClass
-     * @throws ContainerException|ReflectionException
+     * @param ReflectionClass $class The class or interface for which to retrieve the ReflectionClass object.
+     * @param mixed $supplied The name of the class to use for resolution, if the given class is an interface.
+     * @return ReflectionClass The ReflectionClass object for the given class or interface.
+     * @throws ContainerException If the resolution fails or if the given class doesn't implement the interface.
+     * @throws ReflectionException
      */
     private function getClass(ReflectionClass $class, mixed $supplied): ReflectionClass
     {
@@ -151,11 +152,12 @@ class ClassResolver
     }
 
     /**
-     * Resolve class (initiate & construct)
+     * Resolves the constructor of a given class and initializes an instance of it.
      *
-     * @param ReflectionClass $class
+     * @param ReflectionClass $class The reflection class object.
      * @return void
-     * @throws ContainerException|ReflectionException
+     * @throws ContainerException If the class is not instantiable.
+     * @throws ReflectionException
      */
     private function resolveConstructor(ReflectionClass $class): void
     {
@@ -176,13 +178,12 @@ class ClassResolver
     }
 
     /**
-     * Resolve method
+     * Resolves the method to be called based on the given class and call method.
      *
-     * @param ReflectionClass $class
-     * @param string|bool $callMethod
+     * @param ReflectionClass $class The reflection class object.
+     * @param string|bool $callMethod The name of the method to be called or false if no method is specified.
      * @return void
-     * @throws ContainerException
-     * @throws ReflectionException
+     * @throws ReflectionException|ContainerException
      */
     private function resolveMethod(ReflectionClass $class, string|bool $callMethod = null): void
     {

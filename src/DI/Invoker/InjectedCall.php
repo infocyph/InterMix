@@ -21,7 +21,9 @@ final class InjectedCall
     private PropertyResolver $propertyResolver;
 
     /**
-     * @param Repository $repository
+     * Constructor for the class.
+     *
+     * @param Repository $repository The repository.
      */
     public function __construct(
         private Repository $repository
@@ -41,11 +43,11 @@ final class InjectedCall
     }
 
     /**
-     * Definition based resolver
+     * Resolves a parameter by its definition.
      *
-     * @param string $name
-     * @return mixed
-     * @throws ReflectionException|ContainerException
+     * @param string $name The name of the parameter.
+     * @return mixed The resolved parameter.
+     * @throws ContainerException|ReflectionException
      */
     public function resolveByDefinition(string $name): mixed
     {
@@ -53,26 +55,26 @@ final class InjectedCall
     }
 
     /**
-     * Settle class dependency and resolve thorough
+     * Settle class dependency injection
      *
-     * @param string $class
-     * @param string|null $method
-     * @param bool $make
-     * @return array
-     * @throws ReflectionException|ContainerException
+     * @param string|object $class The class or object to settle.
+     * @param string|null $method The method to resolve.
+     * @param bool $make Whether to create a new instance of the class if it exists.
+     * @return array The resolved class.
+     * @throws ContainerException|ReflectionException
      */
-    public function classSettler(string $class, string $method = null, bool $make = false): array
+    public function classSettler(string|object $class, string $method = null, bool $make = false): array
     {
         return $this->classResolver->resolve($this->reflectedClass($class), null, $method, $make);
     }
 
     /**
-     * Settle closure dependency and resolve thorough
+     * Executes a closure with the given parameters and returns the result.
      *
-     * @param string|Closure $closure
-     * @param array $params
-     * @return mixed
-     * @throws ReflectionException|ContainerException
+     * @param string|Closure $closure The closure to be executed.
+     * @param array $params The parameters to be passed to the closure.
+     * @return mixed The result of executing the closure.
+     * @throws ReflectionException|ContainerException If there is an error resolving the parameters.
      */
     public function closureSettler(string|Closure $closure, array $params = []): mixed
     {

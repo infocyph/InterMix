@@ -15,12 +15,12 @@ if (!function_exists('AbmmHasan\InterMix\container')) {
     /**
      * Get Container instance or direct call method/closure
      *
-     * @param string|Closure|callable|array|null $closureOrClass
-     * @param string $alias instance alias
-     * @return Container|mixed
+     * @param string|Closure|callable|array|null $closureOrClass The closure, class, or callable array.
+     * @param string $alias The alias for the container instance.
+     * @return Container|mixed Container or The return value of the function.
      * @throws ContainerException|NotFoundException
      */
-    function container(string|Closure|callable|array $closureOrClass = null, string $alias = 'inter_mix')
+    function container(string|Closure|callable|array $closureOrClass = null, string $alias = 'default')
     {
         $instance = Container::instance($alias);
         if ($closureOrClass === null) {
@@ -39,11 +39,11 @@ if (!function_exists('AbmmHasan\InterMix\container')) {
 
 if (!function_exists('AbmmHasan\InterMix\memoize')) {
     /**
-     * Memoize a function return during a process
+     * Retrieves a memoized value of the provided callable.
      *
-     * @param callable|null $callable callable
-     * @param array $parameters
-     * @return mixed
+     * @param callable|null $callable The callable to be memoized. Defaults to null.
+     * @param array $parameters The parameters to be passed to the callable. Defaults to an empty array.
+     * @return mixed The memoized result of the callable.
      * @throws ReflectionException|Exception
      */
     function memoize(callable $callable = null, array $parameters = []): mixed
@@ -61,12 +61,12 @@ if (!function_exists('AbmmHasan\InterMix\memoize')) {
 
 if (!function_exists('AbmmHasan\InterMix\remember')) {
     /**
-     * Memoize a function return till the class object is destroyed/garbage collected
+     * Retrieves a memoized value based on the provided class object (till garbage collected)
      *
-     * @param object|null $classObject $this
-     * @param callable|null $callable callable
-     * @param array $parameters
-     * @return mixed
+     * @param object|null $classObject The class object for which the value is being retrieved.
+     * @param callable|null $callable The callable for which the value is being retrieved.
+     * @param array $parameters The parameters for the callable.
+     * @return mixed The memoized result of the callable.
      * @throws ReflectionException|Exception
      */
     function remember(object $classObject = null, callable $callable = null, array $parameters = []): mixed

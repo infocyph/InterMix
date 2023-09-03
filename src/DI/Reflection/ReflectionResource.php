@@ -12,10 +12,10 @@ use ReflectionMethod;
 class ReflectionResource
 {
     /**
-     * Get an unique signature per reflection
+     * Returns the signature of the given reflection object.
      *
-     * @param ReflectionClass|ReflectionMethod|ReflectionFunction $reflection
-     * @return string
+     * @param ReflectionClass|ReflectionMethod|ReflectionFunction $reflection The reflection object.
+     * @return string The signature of the reflection object.
      */
     public static function getSignature(
         ReflectionClass|ReflectionMethod|ReflectionFunction $reflection
@@ -24,10 +24,10 @@ class ReflectionResource
     }
 
     /**
-     * Get class reflection
+     * Returns a ReflectionClass instance for the given class or object.
      *
-     * @param string|object $class
-     * @return ReflectionClass
+     * @param string|object $class The name of the class or an object instance.
+     * @return ReflectionClass A ReflectionClass instance for the given class or object.
      * @throws ReflectionException
      */
     public static function getForClass(string|object $class): ReflectionClass
@@ -36,10 +36,11 @@ class ReflectionResource
     }
 
     /**
-     * Get reflection for function
+     * Retrieves the reflection of a callable function or method.
      *
-     * @param callable|array|string $callable
-     * @return ReflectionMethod|ReflectionFunction
+     * @param callable|array|string $callable The callable function or method.
+     * @return ReflectionMethod|ReflectionFunction The reflection of the callable function or method.
+     * @throws InvalidArgumentException If the method does not exist/the callable formation is unknown or invalid.
      * @throws ReflectionException
      */
     public static function getForFunction(callable|array|string $callable): ReflectionMethod|ReflectionFunction

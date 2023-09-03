@@ -10,7 +10,9 @@ use Error;
 final class GenericCall
 {
     /**
-     * @param Repository $repository the repository instance
+     * A constructor for the class.
+     *
+     * @param Repository $repository The repository instance.
      */
     public function __construct(
         private Repository $repository
@@ -18,11 +20,12 @@ final class GenericCall
     }
 
     /**
-     * Call the class
+     * Generates a function comment for the given function body.
      *
-     * @param string $class the class name
-     * @param string|null $method method name within the class
-     * @return array
+     * @param string $class The class name.
+     * @param string|null $method The method name. Defaults to null.
+     * @return array The array containing the instantiated class, and the returned value from the method.
+     * @throws Exception|Error If an error occurs while setting a property.
      */
     public function classSettler(string $class, string $method = null): array
     {
@@ -37,7 +40,7 @@ final class GenericCall
             foreach ($this->repository->classResource[$class]['property'] as $item => $value) {
                 try {
                     $instance->$item = $value;
-                } catch (Exception|Error $e) {
+                } catch (Exception|Error) {
                     $class::$$item = $value;
                 }
             }
@@ -56,11 +59,11 @@ final class GenericCall
     }
 
     /**
-     * call the closure
+     * Executes a closure with the given parameters and returns the result.
      *
-     * @param string|Closure $closure the closure
-     * @param array $params parameters to provide in closure
-     * @return mixed
+     * @param string|Closure $closure The closure to be executed.
+     * @param array $params The parameters to be passed to the closure.
+     * @return mixed The result of executing the closure.
      */
     public function closureSettler(string|Closure $closure, array $params): mixed
     {
