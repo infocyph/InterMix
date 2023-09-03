@@ -13,19 +13,26 @@ final class WeakCache implements Countable
 
     private WeakMap $values;
 
+    /**
+     * Constructor for the class.
+     *
+     * This function initializes the values property with a new WeakMap object.
+     */
     protected function __construct()
     {
         $this->values = new WeakMap();
     }
 
     /**
-     * Get cached data / if not cached, execute and cache
+     * Retrieves a value from the specified class object and signature,
+     * or calls the provided callable with the given parameters and stores
+     * the result if it has not been previously stored.
      *
-     * @param object $classObject
-     * @param string $signature
-     * @param callable $callable callable
-     * @param mixed $parameters
-     * @return mixed
+     * @param object $classObject The class object from which to retrieve the value.
+     * @param string $signature The signature of the value to retrieve.
+     * @param callable $callable The callable to call if the value has not been previously stored.
+     * @param mixed $parameters The parameters to pass to the callable.
+     * @return mixed The retrieved value or the result of the callable.
      */
     public function get(object $classObject, string $signature, callable $callable, mixed $parameters): mixed
     {

@@ -24,7 +24,10 @@ class Container implements ContainerInterface
     protected string $resolver = InjectedCall::class;
 
     /**
-     * Class Constructor
+     * Constructs a new instance of the class.
+     *
+     * @param string $instanceAlias The alias of the instance (default: 'default').
+     * @return void
      */
     public function __construct(private string $instanceAlias = 'default')
     {
@@ -36,10 +39,11 @@ class Container implements ContainerInterface
     }
 
     /**
-     * Get Container instance
+     * Creates a new/Get existing instance of the Container class.
      *
-     * @param string $instanceAlias Instance alias
-     * @return Container
+     * @param string $instanceAlias The alias for the instance (optional, default: 'default').
+     * @return Container The existing or newly created instance of the Container class.
+     * @throws InvalidArgumentException If the instance alias is not a string.
      */
     public static function instance(string $instanceAlias = 'default'): Container
     {
@@ -68,10 +72,10 @@ class Container implements ContainerInterface
     }
 
     /**
-     * Add definitions
+     * Adds definitions to the container.
      *
-     * @param array $definitions [alias/identifier => definition]
-     * @return Container
+     * @param array $definitions The array of definitions to be added [alias/identifier => definition].
+     * @return Container The container instance.
      * @throws ContainerException
      */
     public function addDefinitions(array $definitions): Container
@@ -85,12 +89,12 @@ class Container implements ContainerInterface
     }
 
     /**
-     * Add definition
+     * Binds a definition to an identifier in the container.
      *
-     * @param string $id Identifier/alias of the entry
-     * @param mixed $definition Entry definition
-     * @return Container
-     * @throws ContainerException
+     * @param string $id The identifier to bind the definition to.
+     * @param mixed $definition The definition to bind to the identifier.
+     * @return Container The container instance.
+     * @throws ContainerException If the identifier and definition are the same.
      */
     public function bind(string $id, mixed $definition): Container
     {
@@ -103,11 +107,12 @@ class Container implements ContainerInterface
     }
 
     /**
-     * Finds an entry of the container (returned result) by its identifier and returns it.
+     * Retrieves the return value of the function based on the provided ID.
      *
-     * @param string $id Identifier of the entry
-     * @return mixed
-     * @throws ContainerException|NotFoundException
+     * @param string $id The ID of the value to retrieve.
+     * @return mixed The resolved value or the returned value from the repository.
+     * @throws ContainerException If there is an error accessing the container.
+     * @throws NotFoundException If the value with the provided ID is not found.
      */
     public function getReturn(string $id): mixed
     {
@@ -125,11 +130,12 @@ class Container implements ContainerInterface
     }
 
     /**
-     * Finds an entry of the container by its identifier and returns it.
+     * Retrieves a value from the repository based on the given ID.
      *
-     * @param string $id Identifier of the entry
-     * @return mixed
-     * @throws NotFoundException|ContainerException
+     * @param string $id The ID of the value to retrieve.
+     * @return mixed The retrieved value.
+     * @throws ContainerException If there is an error accessing the container.
+     * @throws NotFoundException If the value with the provided ID is not found.
      */
     public function get(string $id): mixed
     {
@@ -156,12 +162,12 @@ class Container implements ContainerInterface
     }
 
     /**
-     * Get the resolved class/closure/class-method
+     * Calls the provided class or closure based on the conditions.
      *
-     * @param string|Closure|callable $classOrClosure class name with namespace / closure
-     * @param string|bool|null $method method within the class (if class)
-     * @return mixed
-     * @throws ContainerException
+     * @param string|Closure|callable $classOrClosure The class, closure, or callable to be called.
+     * @param string|bool $method The method to be called (optional).
+     * @return mixed The result of the function call.
+     * @throws ContainerException If the class or closure format is invalid.
      */
     public function call(
         string|Closure|callable $classOrClosure,
@@ -194,11 +200,11 @@ class Container implements ContainerInterface
     }
 
     /**
-     * Get new (uncached) instance of the Class
+     * Generates a new uncached instance of the specified class and executes a method (if specified).
      *
-     * @param string $class class name with namespace
-     * @param string|bool $method method within the class
-     * @return mixed
+     * @param string $class The name of the class to instantiate.
+     * @param string|bool $method The name of the method to execute on the class instance. Defaults to false.
+     * @return mixed The result of the method execution.
      */
     public function make(string $class, string|bool $method = false): mixed
     {
@@ -206,10 +212,10 @@ class Container implements ContainerInterface
     }
 
     /**
-     * Returns true if the container can return an entry for the given identifier.
+     * Checks if the given ID exists in the function reference or the resolved repository.
      *
-     * @param string $id Identifier of the entry to look for
-     * @return bool
+     * @param string $id The ID to check.
+     * @return bool Returns true if the ID exists, false otherwise.
      */
     public function has(string $id): bool
     {
@@ -228,12 +234,12 @@ class Container implements ContainerInterface
     }
 
     /**
-     * Register Closure
+     * Registers a closure in the container.
      *
-     * @param string $closureAlias Closure alias
-     * @param callable|Closure $function the Closure
-     * @param array $parameters Closure parameters
-     * @return Container
+     * @param string $closureAlias The alias for the closure.
+     * @param callable|Closure $function The closure or callable to register.
+     * @param array $parameters The parameters to pass to the closure or callable.
+     * @return Container The container instance.
      * @throws ContainerException
      */
     public function registerClosure(string $closureAlias, callable|Closure $function, array $parameters = []): Container
@@ -248,12 +254,12 @@ class Container implements ContainerInterface
     }
 
     /**
-     * Register Class with constructor Parameter
+     * Registers a class in the container with optional parameters.
      *
-     * @param string $class class name with namespace
-     * @param array $parameters constructor parameters
-     * @return Container
-     * @throws ContainerException
+     * @param string $class The name of the class to register.
+     * @param array $parameters An array of parameters for the class constructor. Default is an empty array.
+     * @return Container The current instance of the container.
+     * @throws ContainerException If the container is locked and cannot be modified.
      */
     public function registerClass(string $class, array $parameters = []): Container
     {
@@ -267,12 +273,12 @@ class Container implements ContainerInterface
     }
 
     /**
-     * Register Class and Method with Parameter (method parameter)
+     * Registers a method in the container.
      *
-     * @param string $class class name with namespace
-     * @param string $method method within the class
-     * @param array $parameters parameters to provide within method
-     * @return Container
+     * @param string $class The class name.
+     * @param string $method The method name.
+     * @param array $parameters (optional) The method parameters. Default is an empty array.
+     * @return Container The container instance.
      * @throws ContainerException
      */
     public function registerMethod(string $class, string $method, array $parameters = []): Container
@@ -287,11 +293,11 @@ class Container implements ContainerInterface
     }
 
     /**
-     * Register Class and Method with Parameter (method parameter)
+     * Registers a property for a given class in the container.
      *
-     * @param string $class class name with namespace
-     * @param array $property ['property name' => 'value to assign']
-     * @return Container
+     * @param string $class The name of the class.
+     * @param array $property An array containing the properties to register.
+     * @return Container The container instance.
      * @throws ContainerException
      */
     public function registerProperty(string $class, array $property): Container
@@ -306,13 +312,13 @@ class Container implements ContainerInterface
     }
 
     /**
-     * Set resolution options
+     * Sets the options for the Container.
      *
-     * @param bool $injection Enable/Disable dependency injection
-     * @param bool $methodAttributes Enable/Disable dependency injection based on method attributes
-     * @param bool $propertyAttributes Enable/Disable dependency injection based on property attributes
-     * @param string|null $defaultMethod Set default call method (will be called if no method/callOn const provided)
-     * @return Container
+     * @param bool $injection Whether to enable injection or not. Default is true.
+     * @param bool $methodAttributes Whether to enable method attributes or not. Default is false.
+     * @param bool $propertyAttributes Whether to enable property attributes or not. Default is false.
+     * @param string|null $defaultMethod The default method to use. Null if not specified.
+     * @return Container The Container instance.
      * @throws ContainerException
      */
     public function setOptions(
@@ -331,11 +337,12 @@ class Container implements ContainerInterface
     }
 
     /**
-     * Get parsed class & method information from string
+     * Splits a string or array representing a class and method into an array.
      *
-     * @param string|array|Closure|callable $classAndMethod formatted class name (with method) / closure
-     * @return array
-     * @throws ContainerException
+     * @param string|array|Closure|callable $classAndMethod The string or array representing the class and method.
+     * @return array The array representing the split class and method.
+     * @throws ContainerException If the class and method formation is unknown.
+     * @throws InvalidArgumentException If no argument is found.
      */
     public function split(string|array|Closure|callable $classAndMethod): array
     {

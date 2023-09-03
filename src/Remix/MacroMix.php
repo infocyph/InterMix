@@ -18,12 +18,12 @@ trait MacroMix
     protected static array $macros = [];
 
     /**
-     * Mix another object into the class.
+     * Mixes the methods from a given object into the current class.
      *
-     * @param object $mixin
-     * @param bool $replace
+     * @param object $mixin The object containing the methods to be mixed in.
+     * @param bool $replace Whether to replace existing methods with the same name.
      * @return void
-     * @throws ReflectionException
+     * @throws ReflectionException If there is an error accessing the reflection class.
      */
     public static function mix(object $mixin, bool $replace = true): void
     {
@@ -34,16 +34,16 @@ trait MacroMix
         foreach ($methods as $method) {
             if ($replace || !static::hasMacro($method->name)) {
                 $method->setAccessible(true);
-                static::register($method->name, $method->invoke($mixin));
+                static::macro($method->name, $method->invoke($mixin));
             }
         }
     }
 
     /**
-     * Checks if macro is registered.
+     * Check if a macro is registered.
      *
-     * @param string $name
-     * @return bool
+     * @param string $name The name of the macro.
+     * @return bool Returns true if the macro is registered, false otherwise.
      */
     public static function hasMacro(string $name): bool
     {
@@ -53,8 +53,8 @@ trait MacroMix
     /**
      * Register a custom macro.
      *
-     * @param string $name
-     * @param callable|object $macro
+     * @param string $name The name of the macro.
+     * @param callable|object $macro The macro to be added.
      * @return void
      */
     public static function macro(string $name, callable|object $macro): void
@@ -65,9 +65,9 @@ trait MacroMix
     /**
      * Handle static calls to the class.
      *
-     * @param string $method
-     * @param array $parameters
-     * @return mixed
+     * @param string $method The method name to be called.
+     * @param array $parameters An array of parameters to be passed to the method.
+     * @return mixed The result of the method call.
      * @throws Exception
      */
     public static function __callStatic(string $method, array $parameters)
@@ -76,15 +76,28 @@ trait MacroMix
     }
 
     /**
-     * Process calls
+     * Handle dynamic calls to the class.
      *
-     * @param $bind
-     * @param string $method
-     * @param array $parameters
-     * @return mixed
+     * @param string $method The name of the method being called.
+     * @param array $parameters The parameters passed to the method.
+     * @return mixed The return value of the called method.
      * @throws Exception
      */
-    private static function process($bind, string $method, array $parameters): mixed
+    public function __call(string $method, array $parameters)
+    {
+        return self::process($this, $method, $parameters);
+    }
+
+    /**
+     * Processes the given bind, method and parameters and returns the result.
+     *
+     * @param object|null $bind The bind object to be used in the method call.
+     * @param string $method The name of the method to be called.
+     * @param array $parameters The parameters to be passed to the method.
+     * @return mixed The result of the method call.
+     * @throws Exception If the method does not exist.
+     */
+    private static function process(object|null $bind, string $method, array $parameters): mixed
     {
         if (!static::hasMacro($method)) {
             throw new Exception(
@@ -103,18 +116,5 @@ trait MacroMix
         }
 
         return $macro(...$parameters);
-    }
-
-    /**
-     * Handle non-static calls to the class.
-     *
-     * @param string $method
-     * @param array $parameters
-     * @return mixed
-     * @throws Exception
-     */
-    public function __call(string $method, array $parameters)
-    {
-        return self::process($this, $method, $parameters);
     }
 }

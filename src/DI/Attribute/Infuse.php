@@ -13,7 +13,12 @@ final class Infuse
 
     private string|int $firstKey;
 
-    public function __construct(...$parameters)
+    /**
+     * Constructs a new instance of the class.
+     *
+     * @param mixed ...$parameters The parameters to pass to the constructor.
+     */
+    public function __construct(mixed ...$parameters)
     {
         if (!empty($parameters)) {
             $this->firstKey = array_key_first($parameters);
@@ -28,10 +33,10 @@ final class Infuse
     }
 
     /**
-     * Get resource of the entry to inject (on property/parameter)
+     * Retrieves non-method data (property/parameter) based on the provided key.
      *
-     * @param int|string|null $key
-     * @return array|mixed|null
+     * @param int|string|null $key The key to retrieve the data for. Defaults to null.
+     * @return mixed The retrieved data based on the key, or the entire data if no key is provided.
      */
     public function getNonMethodData(int|string $key = null): mixed
     {
@@ -46,10 +51,10 @@ final class Infuse
     }
 
     /**
-     * Get resource of the entry to inject (on method)
+     * Retrieves data from the method based on the provided key.
      *
-     * @param int|string|null $key
-     * @return array|string|null
+     * @param int|string|null $key The key to retrieve data for. Default is null.
+     * @return mixed The retrieved data based on the key, or the entire data if no key is provided.
      */
     public function getMethodData(int|string $key = null): mixed
     {

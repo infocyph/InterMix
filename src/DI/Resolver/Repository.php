@@ -19,10 +19,10 @@ class Repository
     public bool $isLocked = false;
 
     /**
-     * Lock check
+     * Check if the container is locked.
      *
-     * @return Repository
-     * @throws ContainerException
+     * @return static Returns the instance of the container.
+     * @throws ContainerException If the container is locked and unable to set/modify any value.
      */
     public function checkIfLocked(): static
     {

@@ -9,10 +9,11 @@ use Exception;
 trait Common
 {
     /**
-     * Requirement checker
+     * Checks the given array of constraints and throws exceptions if any requirements are not met.
      *
-     * @param array|null $constraints
-     * @throws Exception
+     * @param array|null $constraints The array of constraints to check.
+     * @return void
+     * @throws Exception If any required extensions or classes are missing.
      */
     protected static function checkRequirements(array $constraints = null): void
     {

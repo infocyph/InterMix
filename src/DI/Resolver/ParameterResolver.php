@@ -21,7 +21,9 @@ class ParameterResolver
     private stdClass $stdClass;
 
     /**
-     * @param Repository $repository
+     * Constructs a new instance of the class.
+     *
+     * @param Repository $repository The repository object.
      */
     public function __construct(private Repository $repository)
     {
@@ -29,9 +31,9 @@ class ParameterResolver
     }
 
     /**
-     * Set class resolver instance
+     * Sets the ClassResolver instance for the object.
      *
-     * @param ClassResolver $classResolver
+     * @param ClassResolver $classResolver The ClassResolver instance to set.
      * @return void
      */
     public function setClassResolverInstance(ClassResolver $classResolver): void
@@ -40,11 +42,11 @@ class ParameterResolver
     }
 
     /**
-     * Resolve by definition (with type preparation)
+     * Resolves the function parameter by its definition.
      *
-     * @param string $name
-     * @param ReflectionParameter $parameter
-     * @return mixed
+     * @param string $name The name of the parameter.
+     * @param ReflectionParameter $parameter The reflection parameter object.
+     * @return mixed The resolved value.
      * @throws ContainerException|ReflectionException
      */
     public function resolveByDefinition(string $name, ReflectionParameter $parameter): mixed
@@ -66,10 +68,10 @@ class ParameterResolver
     }
 
     /**
-     * Definition based resolver
+     * Prepare the definition for a given name.
      *
-     * @param string $name
-     * @return mixed
+     * @param string $name The name of the definition.
+     * @return mixed The prepared definition.
      * @throws ReflectionException|ContainerException
      */
     public function prepareDefinition(string $name): mixed
@@ -101,12 +103,12 @@ class ParameterResolver
     }
 
     /**
-     * Resolve Function parameter
+     * Resolves the parameters of a given function.
      *
-     * @param ReflectionFunctionAbstract $reflector
-     * @param array $suppliedParameters
-     * @param string $type
-     * @return array
+     * @param ReflectionFunctionAbstract $reflector The reflection object of the function.
+     * @param array $suppliedParameters The array of supplied parameters.
+     * @param string $type The type of function ('constructor' or other).
+     * @return array The processed parameters.
      * @throws ReflectionException|ContainerException
      */
     public function resolve(
@@ -158,10 +160,10 @@ class ParameterResolver
     }
 
     /**
-     * Resolve attribute arguments
+     * Resolves the attributes of a method.
      *
-     * @param array $attribute
-     * @return array
+     * @param array $attribute An array of method attributes.
+     * @return array The resolved method attributes.
      */
     private function resolveMethodAttributes(array $attribute): array
     {
@@ -173,14 +175,14 @@ class ParameterResolver
     }
 
     /**
-     * Resolve associative parameters
+     * Resolves associative parameters based on the available parameters.
      *
-     * @param ReflectionFunctionAbstract $reflector
-     * @param array $availableParams
-     * @param string $type
-     * @param array $suppliedParameters
-     * @param array $parameterAttribute
-     * @return array[]
+     * @param ReflectionFunctionAbstract $reflector The reflection object for the function.
+     * @param array $availableParams The array of available parameters.
+     * @param string $type The type of the parameters.
+     * @param array $suppliedParameters The array of supplied parameters.
+     * @param array $parameterAttribute The array of parameter attributes.
+     * @return array The resolved associative parameters.
      * @throws ContainerException|ReflectionException
      */
     private function resolveAssociativeParameters(
@@ -251,14 +253,14 @@ class ParameterResolver
     }
 
     /**
-     * Get reflection instance, if applicable
+     * Retrieves the reflection class for a resolvable parameter in a given function.
      *
-     * @param ReflectionFunctionAbstract $reflector
-     * @param ReflectionParameter $parameter
-     * @param string $type
-     * @param array $processed
-     * @return ReflectionClass|null
-     * @throws ContainerException|ReflectionException
+     * @param ReflectionFunctionAbstract $reflector The reflection object of the function or method.
+     * @param ReflectionParameter $parameter The reflection object of the parameter.
+     * @param string $type The type of the resolvable parameter.
+     * @param array $processed An array of already processed parameters.
+     * @return ReflectionClass|null The reflection class of the resolvable parameter, or null if not resolvable.
+     * @throws ContainerException|ReflectionException circular dependency or multiple instances for the same class
      */
     private function getResolvableClassReflection(
         ReflectionFunctionAbstract $reflector,
@@ -301,11 +303,11 @@ class ParameterResolver
     }
 
     /**
-     * Check if parameter already resolved
+     * Checks if an object of the given class already exists in the array of parameters.
      *
-     * @param string $class
-     * @param array $parameters
-     * @return bool
+     * @param string $class The name of the class to check for.
+     * @param array $parameters The array of parameters to search in.
+     * @return bool Returns true if an object of the given class exists in the array of parameters, false otherwise.
      */
     private function alreadyExist(string $class, array $parameters): bool
     {
@@ -318,12 +320,12 @@ class ParameterResolver
     }
 
     /**
-     * Resolve class dependency
+     * Resolves a class dependency.
      *
-     * @param ReflectionClass $class
-     * @param string $type
-     * @param mixed $supplied
-     * @return object
+     * @param ReflectionClass $class The reflection class.
+     * @param string $type The type of dependency.
+     * @param mixed $supplied The supplied value.
+     * @return object The resolved class instance.
      * @throws ReflectionException|ContainerException
      */
     private function resolveClassDependency(
@@ -346,13 +348,12 @@ class ParameterResolver
     }
 
     /**
-     * Resolve attribute for method
+     * Resolves an individual attribute.
      *
-     * @param ReflectionParameter $classParameter
-     * @param string $attributeValue
-     * @return mixed
-     * @throws ContainerException
-     * @throws ReflectionException
+     * @param ReflectionParameter $classParameter The reflection parameter.
+     * @param string $attributeValue The attribute value.
+     * @return mixed The resolved attribute.
+     * @throws ContainerException|ReflectionException
      */
     private function resolveIndividualAttribute(ReflectionParameter $classParameter, string $attributeValue): mixed
     {
@@ -368,14 +369,14 @@ class ParameterResolver
     }
 
     /**
-     * Resolve non-associative parameters
+     * Resolves the numeric & default parameters based on the available parameters.
      *
-     * @param ReflectionFunctionAbstract $reflector
-     * @param array $availableParams
-     * @param array $suppliedParameters
-     * @param bool $applyAttribute
-     * @return array
-     * @throws ContainerException|ReflectionException
+     * @param ReflectionFunctionAbstract $reflector The reflection of the function.
+     * @param array $availableParams The available parameters of the function.
+     * @param array $suppliedParameters The supplied parameters for the function.
+     * @param bool $applyAttribute Whether to apply attribute resolution.
+     * @return array The processed parameters and the variadic parameter.
+     * @throws ContainerException|ReflectionException Resolution failed for a parameter in the function.
      */
     private function resolveNumericDefaultParameters(
         ReflectionFunctionAbstract $reflector,
@@ -438,11 +439,11 @@ class ParameterResolver
     }
 
     /**
-     * Resolve parameter attribute
+     * Resolves the parameter attribute.
      *
-     * @param ReflectionParameter $classParameter
-     * @return array|false[]
-     * @throws ContainerException|ReflectionException
+     * @param ReflectionParameter $classParameter The reflection parameter object.
+     * @return array The resolved parameter attribute.
+     * @throws ContainerException|ReflectionException If an unknown #[Infuse] parameter is detected.
      */
     private function resolveParameterAttribute(ReflectionParameter $classParameter): array
     {
@@ -467,14 +468,14 @@ class ParameterResolver
     }
 
     /**
-     * Variadic value processor
+     * Processes an array of values by sorting them based on a given sort array and adding any variadic values.
      *
-     * @param $processed
-     * @param $variadic
-     * @param $sort
-     * @return array
+     * @param array $processed The array of values that have already been processed.
+     * @param array $variadic The array of variadic values to be added.
+     * @param array $sort The array used to sort the values in $processed.
+     * @return array The processed array after applying the sorting (if applicable) and adding any variadic values.
      */
-    private function processVariadic($processed, $variadic, $sort): array
+    private function processVariadic(array $processed, array $variadic, array $sort): array
     {
         if (array_key_exists(0, $variadic['value'])) {
             uksort($processed, fn($a, $b) => $sort[$a] <=> $sort[$b]);

@@ -15,12 +15,12 @@ trait Limit
     protected static int $limit = 2;
 
     /**
-     * Creates a new instance of a class flagged with a key.
+     * Creates a new instance of the class.
      *
-     * @param string $key the key which the instance should be stored/retrieved
-     * @param array|null $constraints
-     * @return self
-     * @throws Exception
+     * @param string $key The key for the instance. Default is 'default'.
+     * @param array|null $constraints An optional array of constraints.
+     * @return static The new instance of the class.
+     * @throws Exception If the initialization limit has been exceeded.
      */
     final public static function instance(string $key = 'default', array $constraints = null): static
     {
@@ -34,9 +34,9 @@ trait Limit
     }
 
     /**
-     * Sets the maximum number of instances the class allows
+     * Sets the maximum number of instances allowed.
      *
-     * @param $number int number of instances allowed
+     * @param int $number The number to set as the limit.
      * @return void
      */
     final public function setLimit(int $number): void
