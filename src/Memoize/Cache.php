@@ -2,7 +2,6 @@
 
 namespace AbmmHasan\InterMix\Memoize;
 
-
 use AbmmHasan\InterMix\Fence\Single;
 use Countable;
 

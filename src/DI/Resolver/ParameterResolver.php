@@ -478,7 +478,7 @@ class ParameterResolver
     private function processVariadic(array $processed, array $variadic, array $sort): array
     {
         if (array_key_exists(0, $variadic['value'])) {
-            uksort($processed, fn($a, $b) => $sort[$a] <=> $sort[$b]);
+            uksort($processed, fn ($a, $b) => $sort[$a] <=> $sort[$b]);
             $processed = array_values($processed);
             array_push($processed, ...array_values($variadic['value']));
             return $processed;

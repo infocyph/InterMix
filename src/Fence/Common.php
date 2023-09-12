@@ -1,8 +1,6 @@
 <?php
 
-
 namespace AbmmHasan\InterMix\Fence;
-
 
 use Exception;
 

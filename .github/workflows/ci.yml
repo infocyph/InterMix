@@ -12,7 +12,7 @@ jobs:
     strategy:
       matrix:
         operating-system: [ ubuntu-latest, macos-latest, windows-latest ]
-        php-versions: [ '8.1', '8.2' ]
+        php-versions: [ '8.1', '8.2', '8.3' ]
         dependency-version: [ prefer-lowest, prefer-stable ]
 
     name: PHP ${{ matrix.php-versions }} - ${{ matrix.operating-system }} - ${{ matrix.dependency-version }}
@@ -41,6 +41,9 @@ jobs:
 
       - name: Test
         run: ./vendor/bin/pest
-#
-#      - name: Rector(Dry) Tests
-#        run: php vendor/bin/rector process --dry-run --config=rector.php
+
+      - name: Refactor
+        run: ./vendor/bin/rector process --dry-run
+
+      - name: Lint
+        run: ./vendor/bin/pint --test
