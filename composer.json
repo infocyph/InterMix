@@ -30,7 +30,8 @@
     "pestphp/pest": "^2.18",
     "symfony/var-dumper": "^6.3",
     "rector/rector": "^0.18",
-    "laravel/pint": "^1.13"
+    "laravel/pint": "^1.13",
+    "captainhook/captainhook": "^5.16"
   },
   "minimum-stability": "dev",
   "prefer-stable": true,
@@ -39,5 +40,10 @@
     "allow-plugins": {
       "pestphp/pest-plugin": true
     }
+  },
+  "scripts": {
+    "test:pest": "vendor/bin/pest",
+    "refactor:rector": "vendor/bin/rector process --dry-run",
+    "lint:pint": "vendor/bin/pint"
   }
 }
