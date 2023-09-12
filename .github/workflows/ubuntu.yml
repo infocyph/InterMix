@@ -1,0 +1,49 @@
+name: "Ubuntu Build"
+
+on:
+  push:
+    branches: [ 'main' ]
+  pull_request:
+    branches: [ '*' ]
+
+jobs:
+  run:
+    runs-on: ${{ matrix.operating-system }}
+    strategy:
+      matrix:
+        operating-system: [ ubuntu-latest ]
+        php-versions: [ '8.1', '8.2', '8.3' ]
+        dependency-version: [ prefer-lowest, prefer-stable ]
+
+    name: PHP ${{ matrix.php-versions }} - ${{ matrix.operating-system }} - ${{ matrix.dependency-version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-versions }}
+          tools: composer:v2
+          coverage: xdebug
+
+      - name: Check PHP Version
+        run: php -v
+
+      - name: Validate Composer
+        run: composer validate --strict
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Auditing packages
+        run: composer audit
+
+      - name: Test
+        run: ./vendor/bin/pest
+
+      - name: Refactor
+        run: ./vendor/bin/rector process --dry-run
+
+      - name: Lint
+        run: ./vendor/bin/pint --test
