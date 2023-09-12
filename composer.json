@@ -27,15 +27,16 @@
     "psr/container": "^2.0"
   },
   "require-dev": {
-    "pestphp/pest": "^2.18",
-    "symfony/var-dumper": "^6.3",
-    "rector/rector": "^0.18",
+    "captainhook/captainhook": "^5.16",
     "laravel/pint": "^1.13",
-    "captainhook/captainhook": "^5.16"
+    "pestphp/pest": "^2.18",
+    "rector/rector": "^0.18",
+    "symfony/var-dumper": "^6.3"
   },
   "minimum-stability": "dev",
   "prefer-stable": true,
   "config": {
+    "sort-packages": true,
     "optimize-autoloader": true,
     "allow-plugins": {
       "pestphp/pest-plugin": true
