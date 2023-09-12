@@ -1,6 +1,5 @@
 <?php
 
-
 namespace AbmmHasan\InterMix\DI;
 
 use AbmmHasan\InterMix\DI\Invoker\GenericCall;
@@ -183,8 +182,8 @@ class Container implements ContainerInterface
                 ->resolveByDefinition($classOrClosure),
 
             $classOrClosure instanceof Closure || (is_callable($classOrClosure) && !is_array(
-                    $classOrClosure
-                )) => (new $this->resolver($this->repository))
+                $classOrClosure
+            )) => (new $this->resolver($this->repository))
                 ->closureSettler($classOrClosure),
 
             !$callableIsString => throw new ContainerException('Invalid class/closure format'),
@@ -305,9 +304,9 @@ class Container implements ContainerInterface
         $this->repository
             ->checkIfLocked()
             ->classResource[$class]['property'] = array_merge(
-            $this->repository->classResource[$class]['property'] ?? [],
-            $property
-        );
+                $this->repository->classResource[$class]['property'] ?? [],
+                $property
+            );
         return self::$instances[$this->instanceAlias];
     }
 

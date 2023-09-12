@@ -1,8 +1,6 @@
 <?php
 
-
 namespace AbmmHasan\InterMix\Fence;
-
 
 use Exception;
 
@@ -24,6 +22,6 @@ trait Multi
     {
         static::checkRequirements($constraints);
 
-        return static::$instances[$key] ??= new static;
+        return static::$instances[$key] ??= new static();
     }
 }

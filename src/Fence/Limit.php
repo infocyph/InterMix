@@ -1,8 +1,6 @@
 <?php
 
-
 namespace AbmmHasan\InterMix\Fence;
-
 
 use Exception;
 
@@ -30,7 +28,7 @@ trait Limit
             throw new Exception('Initialization limit exceeded!');
         }
 
-        return static::$instances[$key] ??= new static;
+        return static::$instances[$key] ??= new static();
     }
 
     /**
