@@ -1,6 +1,8 @@
 # InterMix
 
-[![build](https://github.com/abmmhasan/InterMix/actions/workflows/ci.yml/badge.svg)](https://github.com/abmmhasan/InterMix/actions/workflows/ci.yml)
+[![Ubuntu](https://github.com/abmmhasan/InterMix/actions/workflows/ubuntu.yml/badge.svg)](https://github.com/abmmhasan/InterMix/actions/workflows/ubuntu.yml)
+[![Mac](https://github.com/abmmhasan/InterMix/actions/workflows/mac.yml/badge.svg)](https://github.com/abmmhasan/InterMix/actions/workflows/mac.yml)
+[![Windows](https://github.com/abmmhasan/InterMix/actions/workflows/windows.yml/badge.svg)](https://github.com/abmmhasan/InterMix/actions/workflows/windows.yml)
 [![Codacy Security Scan](https://github.com/abmmhasan/InterMix/actions/workflows/codacy.yml/badge.svg)](https://github.com/abmmhasan/InterMix/actions/workflows/codacy.yml)
 ![Libraries.io dependency status for GitHub repo](https://img.shields.io/librariesio/github/abmmhasan/InterMix)
 ![Packagist Downloads](https://img.shields.io/packagist/dt/abmmhasan/intermix)
