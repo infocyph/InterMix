@@ -43,8 +43,14 @@
     }
   },
   "scripts": {
-    "test:pest": "vendor/bin/pest",
-    "refactor:rector": "vendor/bin/rector process --dry-run",
-    "lint:pint": "vendor/bin/pint"
+    "test:code": "vendor/bin/pest --parallel --processes=10",
+    "test:refactor": "vendor/bin/rector --dry-run",
+    "test:lint": "vendor/bin/pint --test",
+    "test": [
+      "@test:code",
+      "@test:refactor",
+      "@test:lint"
+    ],
+    "git:hook": "vendor/bin/captainhook install --only-enabled -nf"
   }
 }
