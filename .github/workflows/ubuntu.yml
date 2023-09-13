@@ -36,14 +36,8 @@ jobs:
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
 
-      - name: Auditing packages
+      - name: Package Audit
         run: composer audit
 
       - name: Test
-        run: ./vendor/bin/pest
-
-      - name: Refactor
-        run: ./vendor/bin/rector process --dry-run
-
-      - name: Lint
-        run: ./vendor/bin/pint --test
+        run: composer test
