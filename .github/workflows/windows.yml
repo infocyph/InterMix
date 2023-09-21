@@ -40,4 +40,4 @@ jobs:
         run: composer audit
 
       - name: Test
-        run: composer test
+        run: composer tests

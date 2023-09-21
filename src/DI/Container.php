@@ -106,6 +106,19 @@ class Container implements ContainerInterface
     }
 
     /**
+     * Enables the cache.
+     *
+     * @return Container The container instance.
+     */
+    public function enableCache(string $cachePath = null): Container
+    {
+        $this->repository->cachePath = realpath($cachePath ?? '/tmp')
+            . DIRECTORY_SEPARATOR
+            . crc32("$this->instanceAlias:$cachePath");
+        return self::$instances[$this->instanceAlias];
+    }
+
+    /**
      * Retrieves the return value of the function based on the provided ID.
      *
      * @param string $id The ID of the value to retrieve.
@@ -181,9 +194,8 @@ class Container implements ContainerInterface
             ) => (new $this->resolver($this->repository))
                 ->resolveByDefinition($classOrClosure),
 
-            $classOrClosure instanceof Closure || (is_callable($classOrClosure) && !is_array(
-                $classOrClosure
-            )) => (new $this->resolver($this->repository))
+            $classOrClosure instanceof Closure || (is_callable($classOrClosure) && !is_array($classOrClosure))
+            => (new $this->resolver($this->repository))
                 ->closureSettler($classOrClosure),
 
             !$callableIsString => throw new ContainerException('Invalid class/closure format'),

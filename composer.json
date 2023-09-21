@@ -43,14 +43,25 @@
     }
   },
   "scripts": {
-    "test:code": "vendor/bin/pest --parallel --processes=10",
-    "test:refactor": "vendor/bin/rector --dry-run",
-    "test:lint": "vendor/bin/pint --test",
-    "test": [
+    "test:code": "pest --parallel --processes=10",
+    "test:refactor": "rector --dry-run",
+    "test:lint": "pint --test",
+    "test:hook": [
+      "captainhook hook:post-checkout",
+      "captainhook hook:pre-commit",
+      "captainhook hook:post-commit",
+      "captainhook hook:post-merge",
+      "captainhook hook:post-rewrite",
+      "captainhook hook:pre-push"
+    ],
+    "tests": [
       "@test:code",
       "@test:refactor",
       "@test:lint"
     ],
-    "git:hook": "vendor/bin/captainhook install --only-enabled -nf"
+    "git:hook": "captainhook install --only-enabled -nf",
+    "test": "pest",
+    "refactor": "rector",
+    "lint": "pint"
   }
 }

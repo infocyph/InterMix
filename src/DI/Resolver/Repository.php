@@ -17,6 +17,7 @@ class Repository
     public bool $enablePropertyAttribute = false;
     public bool $enableMethodAttribute = false;
     public bool $isLocked = false;
+    public ?string $cachePath = null;
 
     /**
      * Check if the container is locked.

@@ -19,7 +19,7 @@
                 "options": []
             },
             {
-                "action": "composer test",
+                "action": "composer tests",
                 "options": []
             }
         ]
