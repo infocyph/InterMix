@@ -27,9 +27,9 @@
     "psr/container": "^2.0"
   },
   "require-dev": {
-    "captainhook/captainhook": "^5.16",
+    "captainhook/captainhook": "^5.18",
     "laravel/pint": "^1.13",
-    "pestphp/pest": "^2.18",
+    "pestphp/pest": "^2.23",
     "rector/rector": "^0.18",
     "symfony/var-dumper": "^6.3"
   },
