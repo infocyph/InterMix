@@ -10,8 +10,10 @@ use AbmmHasan\InterMix\Exceptions\NotFoundException;
 use Closure;
 use Exception;
 use InvalidArgumentException;
+use Psr\Cache\InvalidArgumentException as InvalidArgumentExceptionInCache;
 use Psr\Container\ContainerInterface;
 use ReflectionException;
+use Symfony\Contracts\Cache\CacheInterface;
 
 /**
  * Dependency Injector
@@ -106,15 +108,14 @@ class Container implements ContainerInterface
     }
 
     /**
-     * Enables the cache.
+     * Enable definition cache.
      *
+     * @param CacheInterface $cache The cache instance to use.
      * @return Container The container instance.
      */
-    public function enableCache(string $cachePath = null): Container
+    public function enableDefinitionCache(CacheInterface $cache): Container
     {
-        $this->repository->cachePath = realpath($cachePath ?? '/tmp')
-            . DIRECTORY_SEPARATOR
-            . crc32("$this->instanceAlias:$cachePath");
+        $this->repository->cacheAdapter = $cache;
         return self::$instances[$this->instanceAlias];
     }
 
@@ -123,8 +124,7 @@ class Container implements ContainerInterface
      *
      * @param string $id The ID of the value to retrieve.
      * @return mixed The resolved value or the returned value from the repository.
-     * @throws ContainerException If there is an error accessing the container.
-     * @throws NotFoundException If the value with the provided ID is not found.
+     * @throws ContainerException|NotFoundException|InvalidArgumentExceptionInCache
      */
     public function getReturn(string $id): mixed
     {
@@ -146,8 +146,7 @@ class Container implements ContainerInterface
      *
      * @param string $id The ID of the value to retrieve.
      * @return mixed The retrieved value.
-     * @throws ContainerException If there is an error accessing the container.
-     * @throws NotFoundException If the value with the provided ID is not found.
+     * @throws ContainerException|NotFoundException|InvalidArgumentExceptionInCache
      */
     public function get(string $id): mixed
     {
@@ -179,7 +178,7 @@ class Container implements ContainerInterface
      * @param string|Closure|callable $classOrClosure The class, closure, or callable to be called.
      * @param string|bool $method The method to be called (optional).
      * @return mixed The result of the function call.
-     * @throws ContainerException If the class or closure format is invalid.
+     * @throws ContainerException|InvalidArgumentExceptionInCache
      */
     public function call(
         string|Closure|callable $classOrClosure,
@@ -239,7 +238,7 @@ class Container implements ContainerInterface
             }
             $this->get($id);
             return array_key_exists($id, $this->repository->resolved);
-        } catch (NotFoundException|ContainerException) {
+        } catch (NotFoundException|ContainerException|InvalidArgumentExceptionInCache) {
             return false;
         }
     }

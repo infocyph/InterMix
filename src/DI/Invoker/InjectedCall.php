@@ -9,6 +9,7 @@ use AbmmHasan\InterMix\DI\Resolver\Reflector;
 use AbmmHasan\InterMix\DI\Resolver\Repository;
 use AbmmHasan\InterMix\Exceptions\ContainerException;
 use Closure;
+use Psr\Cache\InvalidArgumentException;
 use ReflectionException;
 use ReflectionFunction;
 
@@ -47,11 +48,11 @@ final class InjectedCall
      *
      * @param string $name The name of the parameter.
      * @return mixed The resolved parameter.
-     * @throws ContainerException|ReflectionException
+     * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
     public function resolveByDefinition(string $name): mixed
     {
-        return $this->parameterResolver->prepareDefinition($name);
+        return $this->parameterResolver->getResolvedDefinition($name);
     }
 
     /**

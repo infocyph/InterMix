@@ -4,6 +4,7 @@ namespace AbmmHasan\InterMix\DI\Resolver;
 
 use AbmmHasan\InterMix\DI\Attribute\Infuse;
 use AbmmHasan\InterMix\Exceptions\ContainerException;
+use Psr\Cache\InvalidArgumentException;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionNamedType;
@@ -44,7 +45,7 @@ class PropertyResolver
      *
      * @param ReflectionClass $class The ReflectionClass instance of the class.
      * @return void
-     * @throws ContainerException|ReflectionException If an error occurs while resolving the properties.
+     * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
     public function resolve(ReflectionClass $class): void
     {
@@ -71,7 +72,7 @@ class PropertyResolver
      * @param array $properties The array of properties to be resolved.
      * @param object $classInstance The instance of the class.
      * @return void
-     * @throws ContainerException|ReflectionException If something goes wrong during property resolution.
+     * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
     private function resolveProperties(ReflectionClass $class, array $properties, object $classInstance): void
     {
@@ -113,7 +114,7 @@ class PropertyResolver
      * @param mixed $classPropertyValues The property values of the class.
      * @param object $classInstance The instance of the class.
      * @return array The resolved property value.
-     * @throws ContainerException|ReflectionException If an unknown #[Infuse] parameter is detected.
+     * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
     private function resolveValue(
         ReflectionProperty $property,
@@ -184,7 +185,7 @@ class PropertyResolver
      * @param ReflectionProperty $property The reflection property.
      * @param ReflectionType|null $parameterType The reflection parameter type.
      * @return object The resolved object.
-     * @throws ContainerException|ReflectionException When a malformed #[Infuse] attribute or property type is detected.
+     * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
     private function resolveWithoutArgument(ReflectionProperty $property, ReflectionType $parameterType = null): object
     {

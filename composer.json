@@ -24,7 +24,8 @@
   },
   "require": {
     "php": ">=8.0",
-    "psr/container": "^2.0"
+    "psr/container": "^2.0",
+    "symfony/cache": "^6.3"
   },
   "require-dev": {
     "captainhook/captainhook": "^5.18",
