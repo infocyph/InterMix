@@ -19,19 +19,29 @@ trait Common
             return;
         }
 
-        if (!empty($constraints['extensions'])) {
-            $commonExt = array_intersect(get_loaded_extensions(), $constraints['extensions']);
-            $missingExt = array_diff($constraints['extensions'], $commonExt);
-            if (!empty($missingExt)) {
-                throw new Exception('Missing extensions: ' . implode(', ', $missingExt));
+        if (isset($constraints['extensions'])) {
+            $constraints['extensions'] = (array)$constraints['extensions'];
+            $commonExtensions = array_intersect(get_loaded_extensions(), $constraints['extensions']);
+            if (count($commonExtensions) !== count($constraints['extensions'])) {
+                throw new Exception(
+                    'Missing extensions: ' . implode(
+                        ', ',
+                        array_diff($constraints['extensions'], $commonExtensions)
+                    )
+                );
             }
         }
 
-        if (!empty($constraints['classes'])) {
+        if (isset($constraints['classes'])) {
+            $constraints['classes'] = (array)$constraints['classes'];
             $loadedClasses = array_intersect(get_declared_classes(), $constraints['classes']);
-            $missingClasses = array_diff($constraints['classes'], $loadedClasses);
-            if (!empty($missingClasses)) {
-                throw new Exception('Missing classes: ' . implode(', ', $missingClasses));
+            if (count($loadedClasses) !== count($constraints['classes'])) {
+                throw new Exception(
+                    'Missing classes: ' . implode(
+                        ', ',
+                        array_diff($constraints['classes'], $loadedClasses)
+                    )
+                );
             }
         }
     }

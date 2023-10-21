@@ -10,8 +10,10 @@ use AbmmHasan\InterMix\Exceptions\NotFoundException;
 use Closure;
 use Exception;
 use InvalidArgumentException;
+use Psr\Cache\InvalidArgumentException as InvalidArgumentExceptionInCache;
 use Psr\Container\ContainerInterface;
 use ReflectionException;
+use Symfony\Contracts\Cache\CacheInterface;
 
 /**
  * Dependency Injector
@@ -35,6 +37,7 @@ class Container implements ContainerInterface
         $this->repository->functionReference = [
             ContainerInterface::class => $this
         ];
+        $this->repository->alias = $this->instanceAlias;
     }
 
     /**
@@ -106,12 +109,55 @@ class Container implements ContainerInterface
     }
 
     /**
+     * Caches all definitions and returns the instance alias.
+     *
+     * @param bool $forceClearFirst Whether to clear the cache before caching the definitions.
+     * @return mixed The instance alias.
+     * @throws ContainerException|InvalidArgumentExceptionInCache
+     */
+    public function cacheAllDefinitions(bool $forceClearFirst = false): Container
+    {
+        if (empty($this->repository->functionReference)) {
+            throw new ContainerException('No definitions added.');
+        }
+
+        if (!isset($this->repository->cacheAdapter)) {
+            throw new ContainerException('No cache adapter set.');
+        }
+
+        if ($forceClearFirst) {
+            $this->repository->cacheAdapter->clear($this->repository->alias . '-');
+        }
+
+        $resolver = new $this->resolver($this->repository);
+        foreach ($this->repository->functionReference as $id => $definition) {
+            $this->repository->resolvedDefinition[$id] = $this->repository->cacheAdapter->get(
+                $this->repository->alias . '-' . strtr($id, ['/' => '_', '\\' => '_', ':' => '_']),
+                fn () => $resolver->resolveByDefinition($id)
+            );
+        }
+
+        return self::$instances[$this->instanceAlias];
+    }
+
+    /**
+     * Enable definition cache.
+     *
+     * @param CacheInterface $cache The cache instance to use.
+     * @return Container The container instance.
+     */
+    public function enableDefinitionCache(CacheInterface $cache): Container
+    {
+        $this->repository->cacheAdapter = $cache;
+        return self::$instances[$this->instanceAlias];
+    }
+
+    /**
      * Retrieves the return value of the function based on the provided ID.
      *
      * @param string $id The ID of the value to retrieve.
      * @return mixed The resolved value or the returned value from the repository.
-     * @throws ContainerException If there is an error accessing the container.
-     * @throws NotFoundException If the value with the provided ID is not found.
+     * @throws ContainerException|NotFoundException|InvalidArgumentExceptionInCache
      */
     public function getReturn(string $id): mixed
     {
@@ -133,8 +179,7 @@ class Container implements ContainerInterface
      *
      * @param string $id The ID of the value to retrieve.
      * @return mixed The retrieved value.
-     * @throws ContainerException If there is an error accessing the container.
-     * @throws NotFoundException If the value with the provided ID is not found.
+     * @throws ContainerException|NotFoundException|InvalidArgumentExceptionInCache
      */
     public function get(string $id): mixed
     {
@@ -150,10 +195,10 @@ class Container implements ContainerInterface
             }
 
             return $this->repository->resolved[$id]['instance'] ?? $this->repository->resolved[$id];
-        } catch (Exception|ReflectionException|ContainerException $exception) {
-            $containerException = $exception instanceof ContainerException ||
-                $exception instanceof ReflectionException;
-            if (!$containerException && (!$existsInDefinition || !$existsInResolved)) {
+        } catch (ReflectionException|ContainerException|InvalidArgumentExceptionInCache $exception) {
+            throw new ContainerException("Error while retrieving the entry: " . $exception->getMessage());
+        } catch (Exception $exception) {
+            if (!$existsInDefinition || !$existsInResolved) {
                 throw new NotFoundException("No entry found for '$id' identifier");
             }
             throw new ContainerException("Error while retrieving the entry: " . $exception->getMessage());
@@ -166,7 +211,7 @@ class Container implements ContainerInterface
      * @param string|Closure|callable $classOrClosure The class, closure, or callable to be called.
      * @param string|bool $method The method to be called (optional).
      * @return mixed The result of the function call.
-     * @throws ContainerException If the class or closure format is invalid.
+     * @throws ContainerException|InvalidArgumentExceptionInCache
      */
     public function call(
         string|Closure|callable $classOrClosure,
@@ -181,9 +226,8 @@ class Container implements ContainerInterface
             ) => (new $this->resolver($this->repository))
                 ->resolveByDefinition($classOrClosure),
 
-            $classOrClosure instanceof Closure || (is_callable($classOrClosure) && !is_array(
-                $classOrClosure
-            )) => (new $this->resolver($this->repository))
+            $classOrClosure instanceof Closure || (is_callable($classOrClosure) && !is_array($classOrClosure))
+            => (new $this->resolver($this->repository))
                 ->closureSettler($classOrClosure),
 
             !$callableIsString => throw new ContainerException('Invalid class/closure format'),
@@ -227,7 +271,7 @@ class Container implements ContainerInterface
             }
             $this->get($id);
             return array_key_exists($id, $this->repository->resolved);
-        } catch (NotFoundException|ContainerException) {
+        } catch (NotFoundException|ContainerException|InvalidArgumentExceptionInCache) {
             return false;
         }
     }

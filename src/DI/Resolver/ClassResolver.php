@@ -4,6 +4,7 @@ namespace AbmmHasan\InterMix\DI\Resolver;
 
 use AbmmHasan\InterMix\DI\Attribute\Infuse;
 use AbmmHasan\InterMix\Exceptions\ContainerException;
+use Psr\Cache\InvalidArgumentException;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionFunction;
@@ -32,14 +33,14 @@ class ClassResolver
      *
      * @param Infuse $infuse The Infuse object to be resolved.
      * @return mixed The resolved value.
-     * @throws ContainerException|ReflectionException
+     * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
     public function resolveInfuse(Infuse $infuse): mixed
     {
         $type = $infuse->getNonMethodData('type');
 
         if (array_key_exists($type, $this->repository->functionReference)) {
-            return $this->parameterResolver->prepareDefinition($type);
+            return $this->parameterResolver->getResolvedDefinition($type);
         }
 
         if (function_exists($type)) {
@@ -64,7 +65,7 @@ class ClassResolver
      * @param string|bool $callMethod The method to be called.
      * @param bool $make Whether to create a new instance of the class.
      * @return array The resolved resources.
-     * @throws ContainerException|ReflectionException Exception thrown if there is an issue with resolving the class.
+     * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
     public function resolve(
         ReflectionClass $class,
@@ -88,7 +89,7 @@ class ClassResolver
      * @param string $className The name of the class.
      * @param string|bool|null $callMethod The method to be called.
      * @return array The resolved resource.
-     * @throws ReflectionException|ContainerException
+     * @throws ReflectionException|ContainerException|InvalidArgumentException
      */
     private function resolveMake(ReflectionClass $class, string $className, string|bool|null $callMethod): array
     {
@@ -108,7 +109,7 @@ class ClassResolver
      * @param string $className The class name.
      * @param string|bool|null $callMethod The method to call.
      * @return void
-     * @throws ReflectionException|ContainerException
+     * @throws ReflectionException|ContainerException|InvalidArgumentException
      */
     private function resolveClassResources(
         ReflectionClass $class,
@@ -132,8 +133,7 @@ class ClassResolver
      * @param ReflectionClass $class The class or interface for which to retrieve the ReflectionClass object.
      * @param mixed $supplied The name of the class to use for resolution, if the given class is an interface.
      * @return ReflectionClass The ReflectionClass object for the given class or interface.
-     * @throws ContainerException If the resolution fails or if the given class doesn't implement the interface.
-     * @throws ReflectionException
+     * @throws ContainerException|ReflectionException
      */
     private function getClass(ReflectionClass $class, mixed $supplied): ReflectionClass
     {
@@ -157,7 +157,7 @@ class ClassResolver
      * @param ReflectionClass $class The reflection class object.
      * @return void
      * @throws ContainerException If the class is not instantiable.
-     * @throws ReflectionException
+     * @throws ReflectionException|InvalidArgumentException
      */
     private function resolveConstructor(ReflectionClass $class): void
     {
@@ -183,7 +183,7 @@ class ClassResolver
      * @param ReflectionClass $class The reflection class object.
      * @param string|bool $callMethod The name of the method to be called or false if no method is specified.
      * @return void
-     * @throws ReflectionException|ContainerException
+     * @throws ReflectionException|ContainerException|InvalidArgumentException
      */
     private function resolveMethod(ReflectionClass $class, string|bool $callMethod = null): void
     {

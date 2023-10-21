@@ -5,6 +5,7 @@ namespace AbmmHasan\InterMix\DI\Resolver;
 use AbmmHasan\InterMix\DI\Attribute\Infuse;
 use AbmmHasan\InterMix\Exceptions\ContainerException;
 use Closure;
+use Psr\Cache\InvalidArgumentException;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionFunction;
@@ -47,21 +48,21 @@ class ParameterResolver
      * @param string $name The name of the parameter.
      * @param ReflectionParameter $parameter The reflection parameter object.
      * @return mixed The resolved value.
-     * @throws ContainerException|ReflectionException
+     * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
-    public function resolveByDefinition(string $name, ReflectionParameter $parameter): mixed
+    public function resolveByDefinitionType(string $name, ReflectionParameter $parameter): mixed
     {
         $parameterType = $parameter->getType();
 
         return match (true) {
-            array_key_exists($name, $this->repository->functionReference) => $this->prepareDefinition($name),
+            array_key_exists($name, $this->repository->functionReference) => $this->getResolvedDefinition($name),
 
             !$parameterType instanceof ReflectionNamedType || $parameterType->isBuiltin() => $this->stdClass,
 
             array_key_exists(
                 $className = $parameterType->getName(),
                 $this->repository->functionReference
-            ) => $this->prepareDefinition($className),
+            ) => $this->getResolvedDefinition($className),
 
             default => $this->stdClass
         };
@@ -72,17 +73,36 @@ class ParameterResolver
      *
      * @param string $name The name of the definition.
      * @return mixed The prepared definition.
-     * @throws ReflectionException|ContainerException
+     * @throws ReflectionException|ContainerException|InvalidArgumentException
      */
-    public function prepareDefinition(string $name): mixed
+    public function getResolvedDefinition(string $name): mixed
     {
         if (array_key_exists($name, $this->repository->resolvedDefinition)) {
             return $this->repository->resolvedDefinition[$name];
         }
 
+        if (!isset($this->repository->cacheAdapter)) {
+            return $this->repository->resolvedDefinition[$name] = $this->resolveDefinition($name);
+        }
+
+        return $this->repository->resolvedDefinition[$name] = $this->repository->cacheAdapter->get(
+            $this->repository->alias . '-' . strtr($name, ['/' => '_', '\\' => '_', ':' => '_']),
+            fn () => $this->resolveDefinition($name)
+        );
+    }
+
+    /**
+     * Prepare the definition for a given name.
+     *
+     * @param string $name The name of the definition.
+     * @return mixed The resolved definition.
+     * @throws ReflectionException|ContainerException|InvalidArgumentException
+     */
+    private function resolveDefinition(string $name): mixed
+    {
         $definition = $this->repository->functionReference[$name];
 
-        return $this->repository->resolvedDefinition[$name] = match (true) {
+        return match (true) {
             $definition instanceof Closure => $definition(
                 ...$this->resolve(new ReflectionFunction($definition), [], 'constructor')
             ),
@@ -109,7 +129,7 @@ class ParameterResolver
      * @param array $suppliedParameters The array of supplied parameters.
      * @param string $type The type of function ('constructor' or other).
      * @return array The processed parameters.
-     * @throws ReflectionException|ContainerException
+     * @throws ReflectionException|ContainerException|InvalidArgumentException
      */
     public function resolve(
         ReflectionFunctionAbstract $reflector,
@@ -183,7 +203,7 @@ class ParameterResolver
      * @param array $suppliedParameters The array of supplied parameters.
      * @param array $parameterAttribute The array of parameter attributes.
      * @return array The resolved associative parameters.
-     * @throws ContainerException|ReflectionException
+     * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
     private function resolveAssociativeParameters(
         ReflectionFunctionAbstract $reflector,
@@ -204,7 +224,7 @@ class ParameterResolver
                 break;
             }
 
-            if (($definition = $this->resolveByDefinition($parameterName, $classParameter)) !== $this->stdClass) {
+            if (($definition = $this->resolveByDefinitionType($parameterName, $classParameter)) !== $this->stdClass) {
                 $processed[$parameterName] = $definition;
                 continue;
             }
@@ -326,7 +346,7 @@ class ParameterResolver
      * @param string $type The type of dependency.
      * @param mixed $supplied The supplied value.
      * @return object The resolved class instance.
-     * @throws ReflectionException|ContainerException
+     * @throws ReflectionException|ContainerException|InvalidArgumentException
      */
     private function resolveClassDependency(
         ReflectionClass $class,
@@ -353,11 +373,11 @@ class ParameterResolver
      * @param ReflectionParameter $classParameter The reflection parameter.
      * @param string $attributeValue The attribute value.
      * @return mixed The resolved attribute.
-     * @throws ContainerException|ReflectionException
+     * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
     private function resolveIndividualAttribute(ReflectionParameter $classParameter, string $attributeValue): mixed
     {
-        if (($definition = $this->resolveByDefinition($attributeValue, $classParameter)) !== $this->stdClass) {
+        if (($definition = $this->resolveByDefinitionType($attributeValue, $classParameter)) !== $this->stdClass) {
             return $definition;
         }
 
@@ -376,7 +396,7 @@ class ParameterResolver
      * @param array $suppliedParameters The supplied parameters for the function.
      * @param bool $applyAttribute Whether to apply attribute resolution.
      * @return array The processed parameters and the variadic parameter.
-     * @throws ContainerException|ReflectionException Resolution failed for a parameter in the function.
+     * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
     private function resolveNumericDefaultParameters(
         ReflectionFunctionAbstract $reflector,
@@ -443,7 +463,7 @@ class ParameterResolver
      *
      * @param ReflectionParameter $classParameter The reflection parameter object.
      * @return array The resolved parameter attribute.
-     * @throws ContainerException|ReflectionException If an unknown #[Infuse] parameter is detected.
+     * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
     private function resolveParameterAttribute(ReflectionParameter $classParameter): array
     {

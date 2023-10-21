@@ -3,6 +3,7 @@
 namespace AbmmHasan\InterMix\DI\Resolver;
 
 use AbmmHasan\InterMix\Exceptions\ContainerException;
+use Symfony\Contracts\Cache\CacheInterface;
 
 class Repository
 {
@@ -17,6 +18,8 @@ class Repository
     public bool $enablePropertyAttribute = false;
     public bool $enableMethodAttribute = false;
     public bool $isLocked = false;
+    public CacheInterface $cacheAdapter;
+    public string $alias;
 
     /**
      * Check if the container is locked.

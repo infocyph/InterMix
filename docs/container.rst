@@ -11,6 +11,7 @@ Dependency Injection (Container)
     di/understanding
     di/usage
     di/attribute
+    di/cache
     di/flow
 
 Using the library is pretty straight-forward.
