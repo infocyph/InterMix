@@ -9,6 +9,7 @@ use AbmmHasan\InterMix\Memoize\Cache;
 use AbmmHasan\InterMix\Memoize\WeakCache;
 use Closure;
 use Exception;
+use Psr\Cache\InvalidArgumentException;
 use ReflectionException;
 
 if (!function_exists('AbmmHasan\InterMix\container')) {
@@ -18,7 +19,7 @@ if (!function_exists('AbmmHasan\InterMix\container')) {
      * @param string|Closure|callable|array|null $closureOrClass The closure, class, or callable array.
      * @param string $alias The alias for the container instance.
      * @return Container|mixed Container or The return value of the function.
-     * @throws ContainerException|NotFoundException
+     * @throws ContainerException|NotFoundException|InvalidArgumentException
      */
     function container(string|Closure|callable|array $closureOrClass = null, string $alias = 'default')
     {

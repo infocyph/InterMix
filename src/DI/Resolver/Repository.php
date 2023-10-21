@@ -19,6 +19,7 @@ class Repository
     public bool $enableMethodAttribute = false;
     public bool $isLocked = false;
     public CacheInterface $cacheAdapter;
+    public string $alias;
 
     /**
      * Check if the container is locked.

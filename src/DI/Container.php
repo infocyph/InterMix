@@ -37,6 +37,7 @@ class Container implements ContainerInterface
         $this->repository->functionReference = [
             ContainerInterface::class => $this
         ];
+        $this->repository->alias = $this->instanceAlias;
     }
 
     /**
@@ -108,6 +109,38 @@ class Container implements ContainerInterface
     }
 
     /**
+     * Caches all definitions and returns the instance alias.
+     *
+     * @param bool $forceClearFirst Whether to clear the cache before caching the definitions.
+     * @return mixed The instance alias.
+     * @throws ContainerException|InvalidArgumentExceptionInCache
+     */
+    public function cacheAllDefinitions(bool $forceClearFirst = false): Container
+    {
+        if (empty($this->repository->functionReference)) {
+            throw new ContainerException('No definitions added.');
+        }
+
+        if (!isset($this->repository->cacheAdapter)) {
+            throw new ContainerException('No cache adapter set.');
+        }
+
+        if ($forceClearFirst) {
+            $this->repository->cacheAdapter->clear($this->repository->alias . '-');
+        }
+
+        $resolver = new $this->resolver($this->repository);
+        foreach ($this->repository->functionReference as $id => $definition) {
+            $this->repository->resolvedDefinition[$id] = $this->repository->cacheAdapter->get(
+                $this->repository->alias . '-' . strtr($id, ['/' => '_', '\\' => '_', ':' => '_']),
+                fn () => $resolver->resolveByDefinition($id)
+            );
+        }
+
+        return self::$instances[$this->instanceAlias];
+    }
+
+    /**
      * Enable definition cache.
      *
      * @param CacheInterface $cache The cache instance to use.
@@ -162,10 +195,10 @@ class Container implements ContainerInterface
             }
 
             return $this->repository->resolved[$id]['instance'] ?? $this->repository->resolved[$id];
-        } catch (Exception|ReflectionException|ContainerException $exception) {
-            $containerException = $exception instanceof ContainerException ||
-                $exception instanceof ReflectionException;
-            if (!$containerException && (!$existsInDefinition || !$existsInResolved)) {
+        } catch (ReflectionException|ContainerException|InvalidArgumentExceptionInCache $exception) {
+            throw new ContainerException("Error while retrieving the entry: " . $exception->getMessage());
+        } catch (Exception $exception) {
+            if (!$existsInDefinition || !$existsInResolved) {
                 throw new NotFoundException("No entry found for '$id' identifier");
             }
             throw new ContainerException("Error while retrieving the entry: " . $exception->getMessage());

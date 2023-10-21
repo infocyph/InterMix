@@ -81,14 +81,14 @@ class ParameterResolver
             return $this->repository->resolvedDefinition[$name];
         }
 
-        if (isset($this->repository->cacheAdapter)) {
-            return $this->repository->resolvedDefinition[$name] = $this->repository->cacheAdapter->get(
-                $name,
-                [$this, 'resolveDefinition']
-            );
+        if (!isset($this->repository->cacheAdapter)) {
+            return $this->repository->resolvedDefinition[$name] = $this->resolveDefinition($name);
         }
 
-        return $this->repository->resolvedDefinition[$name] = $this->resolveDefinition($name);
+        return $this->repository->resolvedDefinition[$name] = $this->repository->cacheAdapter->get(
+            $this->repository->alias . '-' . strtr($name, ['/' => '_', '\\' => '_', ':' => '_']),
+            fn () => $this->resolveDefinition($name)
+        );
     }
 
     /**

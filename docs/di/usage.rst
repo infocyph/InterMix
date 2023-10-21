@@ -1,8 +1,8 @@
 .. _di.usage:
 
-===================
-Using the container
-===================
+=====
+Usage
+=====
 
 Simply, initialize using either of these lines,
 
@@ -26,13 +26,13 @@ By default,
 
 The container have following options to play with as you see fit,
 
-get() & has()
--------------
+get(string $id) & has(string $id)
+---------------------------------
 
 The container implements the
 `PSR-11 <http://www.php-fig.org/psr/psr-11/>`__ standard. That means it
 implements
-`Psr\Container\ContainerInterface <https://github.com/php-fig/container/blob/master/src/ContainerInterface.php>`__:
+`Psr\\Container\\ContainerInterface <https://github.com/php-fig/container/blob/master/src/ContainerInterface.php>`__:
 
 .. code:: php
 
@@ -44,8 +44,8 @@ implements
        public function has($id);
    }
 
-bind() & addDefinitions()
-------------------------
+bind(string $id, mixed $definition) & addDefinitions(array $definitions)
+------------------------------------------------------------------------
 
 You can set entries directly on the container using either ``bind()``:
 
@@ -68,28 +68,28 @@ or ``addDefinitions()``
 
 For details, see the :doc:`di.definitions`.
 
-getReturn()
------------
+getReturn(string $id)
+---------------------
 
 ``get()`` & ``getReturn()`` does the same except, ``getReturn()`` prioritize method returns where ``get()`` prioritizes
 class object.
 
-call()
-------
+call(string|Closure|callable $classOrClosure, string|bool $method = null)
+-------------------------------------------------------------------------
 
 ``get()`` & ``getReturn()`` both internally calls ``call()``. Differences are, ``get()`` & ``getReturn()`` results are
 cached. In case of ``call()`` returns from method/closure are never cached (but class instances is cached as usual).
 
-make()
-------
+make(string $class, string|bool $method = false)
+------------------------------------------------
 
 This library only builds single instance per class (Singleton). But sometime we may need class instance independently.
 ``container()`` have 2nd parameter for completely different container instance for that. But what if we need only one
 new instance for a class but other dependencies from cached? well, that is what ``make()`` is for! Also, as the definition
 it supports class only.
 
-registerClass()
----------------
+registerClass(string $class, array $parameters = [])
+----------------------------------------------------
 
 Normally, this method won't be needed unless you need to send in some extra parameter to the constructor.
 
@@ -118,13 +118,13 @@ but you will need here if the variable ``$user`` is not defined via set()/addDef
         'user' => 'some value'
     ]);
 
-registerClosure()
------------------
+registerClosure(string $closureAlias, callable|Closure $function, array $parameters = [])
+-----------------------------------------------------------------------------------------
 
 Same as ``registerClass()`` but for Closure.
 
-registerProperty(), registerMethod()
-------------------------------------
+registerProperty(string $class, array $property), registerMethod(string $class, string $method, array $parameters = [])
+-----------------------------------------------------------------------------------------------------------------------
 
 While resolving through classes, container will look for any property value registered of that class (if **attribute** &
 **property** resolutions is enabled) & will resolve it. During this if any custom property value is defined with
@@ -149,8 +149,8 @@ register parameter in a method (also is default method to resolve for that class
         'user' => 'some value'
     ]);
 
-setOptions()
-------------
+setOptions(bool $injection = true, bool $methodAttributes = false, bool $propertyAttributes = false, string $defaultMethod = null)
+----------------------------------------------------------------------------------------------------------------------------------
 
 Well, as you have seen above, the container provides lots of options. Obviously you can enable/disable them as your requirements.
 Available options are,
@@ -164,8 +164,8 @@ Available options are,
 
     Defaults are; ``injection`` is enabled, rests are disabled. If ``injection`` is disabled rest of the options won't work.
 
-split()
--------
+split(string|array|Closure|callable $classAndMethod)
+----------------------------------------------------
 
 Breakdown any recognizable formation to a recognizable callable format ``['class', 'method']`` or ``['closure']``. Will
 be called automatically if 1st parameter in ``container()`` function is passed.
