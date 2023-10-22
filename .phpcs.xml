@@ -1,7 +1,0 @@
-<?xml version="1.0"?>
-<ruleset name="PHP_CodeSniffer">
-  <description>PHP_CodeSniffer configuration</description>
-  <arg name="extensions" value="php"/>
-  <file>./src</file>
-  <rule ref="PSR12"> </rule>
-</ruleset>
