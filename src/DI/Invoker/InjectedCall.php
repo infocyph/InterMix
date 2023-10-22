@@ -62,7 +62,7 @@ final class InjectedCall
      * @param string|null $method The method to resolve.
      * @param bool $make Whether to create a new instance of the class if it exists.
      * @return array The resolved class.
-     * @throws ContainerException|ReflectionException
+     * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
     public function classSettler(string|object $class, string $method = null, bool $make = false): array
     {
@@ -75,7 +75,7 @@ final class InjectedCall
      * @param string|Closure $closure The closure to be executed.
      * @param array $params The parameters to be passed to the closure.
      * @return mixed The result of executing the closure.
-     * @throws ReflectionException|ContainerException If there is an error resolving the parameters.
+     * @throws ReflectionException|ContainerException|InvalidArgumentException
      */
     public function closureSettler(string|Closure $closure, array $params = []): mixed
     {
