@@ -132,7 +132,7 @@ class Container implements ContainerInterface
         $resolver = new $this->resolver($this->repository);
         foreach ($this->repository->functionReference as $id => $definition) {
             $this->repository->resolvedDefinition[$id] = $this->repository->cacheAdapter->get(
-                $this->repository->alias . '-' . strtr($id, ['/' => '_', '\\' => '_', ':' => '_']),
+                base64_encode($this->repository->alias . '-' . $id),
                 fn () => $resolver->resolveByDefinition($id)
             );
         }
