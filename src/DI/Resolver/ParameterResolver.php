@@ -86,7 +86,7 @@ class ParameterResolver
         }
 
         return $this->repository->resolvedDefinition[$name] = $this->repository->cacheAdapter->get(
-            $this->repository->alias . '-' . strtr($name, ['/' => '_', '\\' => '_', ':' => '_']),
+            $this->repository->alias . '-' . base64_encode($name),
             fn () => $this->resolveDefinition($name)
         );
     }
