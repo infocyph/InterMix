@@ -1,4 +1,4 @@
-name: "Security, Style & Coding Standards"
+name: "Security & Standards"
 
 on:
   push:
