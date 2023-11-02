@@ -101,11 +101,7 @@ trait MacroMix
     {
         if (!static::hasMacro($method)) {
             throw new Exception(
-                sprintf(
-                    'Method %s::%s does not exist.',
-                    static::class,
-                    $method
-                )
+                'Method' . static::class . "::$method does not exist."
             );
         }
 

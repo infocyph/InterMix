@@ -310,12 +310,9 @@ class ParameterResolver
 
         if ($this->alreadyExist($reflection->name, $processed)) {
             throw new ContainerException(
-                sprintf(
-                    "Found multiple instances for %s in %s::%s()",
-                    $reflection->name,
-                    $reflector->class ?? $reflector->getName(),
-                    $reflector->getShortName()
-                )
+                "Found multiple instances for $reflection->name in " .
+                ($reflector->class ?? $reflector->getName()) .
+                "::{$reflector->getShortName()}()"
             );
         }
 
@@ -442,12 +439,9 @@ class ParameterResolver
                 $classParameter->getType() && $classParameter->allowsNull() => null,
 
                 default => throw new ContainerException(
-                    sprintf(
-                        "Resolution failed for '%s' in %s::%s()",
-                        $parameterName,
-                        $reflector->class ?? $reflector->getName(),
-                        $reflector->getShortName()
-                    )
+                    "Resolution failed for '$parameterName' in " .
+                    ($reflector->class ?? $reflector->getName()) .
+                    "::{$reflector->getShortName()}()"
                 )
             };
         }
@@ -478,11 +472,8 @@ class ParameterResolver
             'isResolved' => true,
             'resolved' => $this->classResolver->resolveInfuse($attribute[0]->newInstance())
                 ?? throw new ContainerException(
-                    sprintf(
-                        "Unknown #[Infuse] parameter detected on %s::$%s",
-                        $classParameter->getDeclaringClass()->getName(),
-                        $classParameter->getName()
-                    )
+                    "Unknown #[Infuse] parameter detected on
+                    {$classParameter->getDeclaringClass()->getName()}::\${$classParameter->getName()}"
                 )
         ];
     }
