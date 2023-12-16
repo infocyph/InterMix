@@ -20,6 +20,7 @@ class ParameterResolver
 
     private ClassResolver $classResolver;
     private stdClass $stdClass;
+    private array $entriesResolving = [];
 
     /**
      * Constructs a new instance of the class.
@@ -77,18 +78,39 @@ class ParameterResolver
      */
     public function getResolvedDefinition(string $name): mixed
     {
-        if (array_key_exists($name, $this->repository->resolvedDefinition)) {
-            return $this->repository->resolvedDefinition[$name];
+        if (isset($this->entriesResolving[$name])) {
+            throw new ContainerException("Circular dependency detected while resolving entry '$name'");
+        }
+        $this->entriesResolving[$name] = true;
+
+        try {
+            $resolved = $this->getFromCacheOrResolve($name);
+        } finally {
+            unset($this->entriesResolving[$name]);
         }
 
-        if (!isset($this->repository->cacheAdapter)) {
-            return $this->repository->resolvedDefinition[$name] = $this->resolveDefinition($name);
-        }
+        return $resolved;
+    }
 
-        return $this->repository->resolvedDefinition[$name] = $this->repository->cacheAdapter->get(
-            $this->repository->alias . '-' . base64_encode($name),
-            fn () => $this->resolveDefinition($name)
-        );
+    /**
+     * Retrieves the value from the cache if it exists, otherwise resolves the value.
+     *
+     * @param string $name The name of the value to retrieve or resolve.
+     * @return mixed The resolved value.
+     * @throws ReflectionException|ContainerException|InvalidArgumentException
+     */
+    private function getFromCacheOrResolve(string $name): mixed
+    {
+        if (!array_key_exists($name, $this->repository->resolvedDefinition)) {
+            $this->repository->resolvedDefinition[$name] = match (true) {
+                isset($this->repository->cacheAdapter) => $this->repository->cacheAdapter->get(
+                    $this->repository->alias . '-' . base64_encode($name),
+                    fn () => $this->resolveDefinition($name)
+                ),
+                default => $this->resolveDefinition($name)
+            };
+        }
+        return $this->repository->resolvedDefinition[$name];
     }
 
     /**
@@ -172,6 +194,7 @@ class ParameterResolver
 
         $processed += $numericallyProcessed;
 
+        // Resolve variadic parameters
         if ($variadic['value'] !== null) {
             $processed = $this->processVariadic($processed, $variadic, $sort);
         }
@@ -473,7 +496,7 @@ class ParameterResolver
             'resolved' => $this->classResolver->resolveInfuse($attribute[0]->newInstance())
                 ?? throw new ContainerException(
                     "Unknown #[Infuse] parameter detected on
-                    {$classParameter->getDeclaringClass()->getName()}::\${$classParameter->getName()}"
+                    {$classParameter->getDeclaringClass()?->getName()}::\${$classParameter->getName()}"
                 )
         ];
     }
@@ -489,7 +512,7 @@ class ParameterResolver
     private function processVariadic(array $processed, array $variadic, array $sort): array
     {
         if (array_key_exists(0, $variadic['value'])) {
-            uksort($processed, fn ($a, $b) => $sort[$a] <=> $sort[$b]);
+            uksort($processed, static fn ($a, $b) => $sort[$a] <=> $sort[$b]);
             $processed = array_values($processed);
             array_push($processed, ...array_values($variadic['value']));
             return $processed;

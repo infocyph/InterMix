@@ -45,8 +45,7 @@ class ClassResolver
 
         if (function_exists($type)) {
             return $type(
-                ...
-                $this->parameterResolver->resolve(
+                ...$this->parameterResolver->resolve(
                     new ReflectionFunction($type),
                     (array)$infuse->getNonMethodData('data'),
                     'constructor'
@@ -97,8 +96,10 @@ class ClassResolver
         $this->resolveConstructor($class);
         $this->propertyResolver->resolve($class);
         $this->resolveMethod($class, $callMethod);
-        $resolved = $this->repository->resolvedResource[$className];
-        $this->repository->resolvedResource[$className] = $existing;
+        [$resolved, $this->repository->resolvedResource[$className]] = [
+            $this->repository->resolvedResource[$className],
+            $existing
+        ];
         return $resolved;
     }
 

@@ -100,10 +100,7 @@ class PropertyResolver
             $property->setAccessible(true);
 
             $values = $this->resolveValue($property, $classPropertyValues, $classInstance);
-
-            if ($values) {
-                $property->setValue(...$values);
-            }
+            !$values ?: $property->setValue(...$values);
         }
     }
 
