@@ -3,6 +3,7 @@
 namespace AbmmHasan\InterMix\DI\Invoker;
 
 use AbmmHasan\InterMix\DI\Resolver\ClassResolver;
+use AbmmHasan\InterMix\DI\Resolver\DefinitionResolver;
 use AbmmHasan\InterMix\DI\Resolver\ParameterResolver;
 use AbmmHasan\InterMix\DI\Resolver\PropertyResolver;
 use AbmmHasan\InterMix\DI\Resolver\Reflector;
@@ -19,7 +20,7 @@ final class InjectedCall
 
     private ParameterResolver $parameterResolver;
     private ClassResolver $classResolver;
-    private PropertyResolver $propertyResolver;
+    private DefinitionResolver $definitionResolver;
 
     /**
      * Constructor for the class.
@@ -29,18 +30,22 @@ final class InjectedCall
     public function __construct(
         private Repository $repository
     ) {
-        $this->parameterResolver = new ParameterResolver($this->repository);
-        $this->propertyResolver = new PropertyResolver(
+        $this->definitionResolver = new DefinitionResolver($this->repository);
+        $this->parameterResolver = new ParameterResolver($this->repository, $this->definitionResolver);
+        $propertyResolver = new PropertyResolver(
             $this->repository,
             $this->parameterResolver
         );
         $this->classResolver = new ClassResolver(
             $this->repository,
             $this->parameterResolver,
-            $this->propertyResolver
+            $propertyResolver,
+            $this->definitionResolver
         );
+
+        $this->definitionResolver->setResolverInstance($this->classResolver, $this->parameterResolver);
         $this->parameterResolver->setClassResolverInstance($this->classResolver);
-        $this->propertyResolver->setClassResolverInstance($this->classResolver);
+        $propertyResolver->setClassResolverInstance($this->classResolver);
     }
 
     /**
@@ -52,7 +57,7 @@ final class InjectedCall
      */
     public function resolveByDefinition(string $name): mixed
     {
-        return $this->parameterResolver->getResolvedDefinition($name);
+        return $this->definitionResolver->resolve($name);
     }
 
     /**

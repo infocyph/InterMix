@@ -13,6 +13,7 @@ use ReflectionMethod;
 class ClassResolver
 {
     use Reflector;
+    private array $entriesResolving = [];
 
     /**
      * Constructor for the class.
@@ -20,11 +21,13 @@ class ClassResolver
      * @param Repository $repository The repository object.
      * @param ParameterResolver $parameterResolver The parameter resolver object.
      * @param PropertyResolver $propertyResolver The property resolver object.
+     * @param DefinitionResolver $definitionResolver The definition resolver object.
      */
     public function __construct(
         private Repository $repository,
         private ParameterResolver $parameterResolver,
-        private PropertyResolver $propertyResolver
+        private PropertyResolver $propertyResolver,
+        private DefinitionResolver $definitionResolver
     ) {
     }
 
@@ -40,7 +43,7 @@ class ClassResolver
         $type = $infuse->getNonMethodData('type');
 
         if (array_key_exists($type, $this->repository->functionReference)) {
-            return $this->parameterResolver->getResolvedDefinition($type);
+            return $this->definitionResolver->resolve($type);
         }
 
         if (function_exists($type)) {
@@ -117,15 +120,24 @@ class ClassResolver
         string $className,
         string|bool|null $callMethod
     ): void {
-        if (!isset($this->repository->resolvedResource[$className]['instance'])) {
-            $this->resolveConstructor($class);
+        if (isset($this->entriesResolving[$className])) {
+            throw new ContainerException("Circular dependency detected while resolving class '$className'");
         }
+        $this->entriesResolving[$className] = true;
 
-        if (!isset($this->repository->resolvedResource[$className]['property'])) {
-            $this->propertyResolver->resolve($class);
+        try {
+            if (!isset($this->repository->resolvedResource[$className]['instance'])) {
+                $this->resolveConstructor($class);
+            }
+
+            if (!isset($this->repository->resolvedResource[$className]['property'])) {
+                $this->propertyResolver->resolve($class);
+            }
+
+            $this->resolveMethod($class, $callMethod);
+        } finally {
+            unset($this->entriesResolving[$className]);
         }
-
-        $this->resolveMethod($class, $callMethod);
     }
 
     /**
