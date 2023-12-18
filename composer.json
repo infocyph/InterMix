@@ -28,9 +28,9 @@
     "symfony/cache": "^6.3"
   },
   "require-dev": {
-    "captainhook/captainhook": "^5.18",
+    "captainhook/captainhook": "^5.19",
     "laravel/pint": "^1.13",
-    "pestphp/pest": "^2.24",
+    "pestphp/pest": "^2.28",
     "rector/rector": "^0.18",
     "symfony/var-dumper": "^6.3"
   },
