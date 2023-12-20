@@ -25,14 +25,14 @@
   "require": {
     "php": ">=8.0",
     "psr/container": "^2.0",
-    "symfony/cache": "^6.3"
+    "symfony/cache": "^7.0"
   },
   "require-dev": {
     "captainhook/captainhook": "^5.19",
     "laravel/pint": "^1.13",
     "pestphp/pest": "^2.28",
-    "rector/rector": "^0.18",
-    "symfony/var-dumper": "^6.3"
+    "rector/rector": "^0.18.12",
+    "symfony/var-dumper": "^7.0"
   },
   "minimum-stability": "dev",
   "prefer-stable": true,
@@ -57,8 +57,8 @@
     ],
     "tests": [
       "@test:code",
-      "@test:refactor",
-      "@test:lint"
+      "@test:lint",
+      "@test:refactor"
     ],
     "git:hook": "captainhook install --only-enabled -nf",
     "test": "pest",
