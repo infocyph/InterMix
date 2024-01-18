@@ -24,8 +24,8 @@ class PropertyResolver
      * @param ParameterResolver $parameterResolver The parameter resolver object.
      */
     public function __construct(
-        private Repository $repository,
-        private ParameterResolver $parameterResolver
+        private readonly Repository $repository,
+        private readonly ParameterResolver $parameterResolver
     ) {
     }
 

@@ -9,6 +9,6 @@ return static function (RectorConfig $rectorConfig): void {
         __DIR__ . '/src'
     ]);
     $rectorConfig->sets([
-        constant("Rector\Set\ValueObject\LevelSetList::UP_TO_PHP_80")
+        constant("Rector\Set\ValueObject\LevelSetList::UP_TO_PHP_82")
     ]);
 };
