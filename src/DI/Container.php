@@ -166,7 +166,9 @@ class Container implements ContainerInterface
             if (array_key_exists($id, $this->repository->functionReference)) {
                 return $resolved;
             }
-            return $this->repository->resolved[$id]['returned'] ?? $resolved;
+            return array_key_exists('returned', $this->repository->resolved[$id])
+                ? $this->repository->resolved[$id]['returned']
+                : $resolved;
         } catch (NotFoundException $exception) {
             throw new NotFoundException($exception->getMessage());
         } catch (ContainerException $exception) {
