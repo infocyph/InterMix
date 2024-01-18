@@ -14,7 +14,7 @@ use Psr\Cache\InvalidArgumentException;
 use ReflectionException;
 use ReflectionFunction;
 
-final class InjectedCall
+final readonly class InjectedCall
 {
     use Reflector;
 

@@ -22,7 +22,7 @@ class DefinitionResolver
      * @param Repository $repository The repository object.
      */
     public function __construct(
-        private Repository $repository
+        private readonly Repository $repository
     ) {
     }
 

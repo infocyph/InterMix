@@ -7,7 +7,7 @@ use Closure;
 use Exception;
 use Error;
 
-final class GenericCall
+final readonly class GenericCall
 {
     /**
      * A constructor for the class.

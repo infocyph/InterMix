@@ -69,7 +69,8 @@
     ],
     "tests": [
       "@test:code",
-      "@test:lint"
+      "@test:lint",
+      "@test:refactor"
     ],
     "git:hook": "captainhook install --only-enabled -nf",
     "test": "pest",

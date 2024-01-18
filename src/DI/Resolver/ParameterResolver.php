@@ -19,7 +19,7 @@ class ParameterResolver
     use Reflector;
 
     private ClassResolver $classResolver;
-    private stdClass $stdClass;
+    private readonly stdClass $stdClass;
 
     /**
      * Constructs a new instance of the class.
@@ -28,8 +28,8 @@ class ParameterResolver
      * @param DefinitionResolver $definitionResolver The definition resolver object.
      */
     public function __construct(
-        private Repository $repository,
-        private DefinitionResolver $definitionResolver
+        private readonly Repository $repository,
+        private readonly DefinitionResolver $definitionResolver
     ) {
         $this->stdClass = new StdClass();
     }

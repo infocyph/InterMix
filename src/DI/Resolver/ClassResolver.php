@@ -24,10 +24,10 @@ class ClassResolver
      * @param DefinitionResolver $definitionResolver The definition resolver object.
      */
     public function __construct(
-        private Repository $repository,
-        private ParameterResolver $parameterResolver,
-        private PropertyResolver $propertyResolver,
-        private DefinitionResolver $definitionResolver
+        private readonly Repository $repository,
+        private readonly ParameterResolver $parameterResolver,
+        private readonly PropertyResolver $propertyResolver,
+        private readonly DefinitionResolver $definitionResolver
     ) {
     }
 
