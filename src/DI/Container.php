@@ -21,7 +21,7 @@ use Symfony\Contracts\Cache\CacheInterface;
 class Container implements ContainerInterface
 {
     protected static array $instances;
-    protected Repository $repository;
+    protected readonly Repository $repository;
     protected string $resolver = InjectedCall::class;
 
     /**
@@ -30,7 +30,7 @@ class Container implements ContainerInterface
      * @param string $instanceAlias The alias of the instance (default: 'default').
      * @return void
      */
-    public function __construct(private string $instanceAlias = 'default')
+    public function __construct(private readonly string $instanceAlias = 'default')
     {
         self::$instances[$this->instanceAlias] ??= $this;
         $this->repository = new Repository();
