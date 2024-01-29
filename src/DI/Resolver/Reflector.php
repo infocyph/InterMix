@@ -5,6 +5,7 @@ namespace AbmmHasan\InterMix\DI\Resolver;
 use AbmmHasan\InterMix\DI\Reflection\ReflectionResource;
 use Closure;
 use ReflectionClass;
+use ReflectionEnum;
 use ReflectionException;
 use ReflectionFunction;
 
@@ -20,6 +21,18 @@ trait Reflector
     private function reflectedClass(string|object $class): ReflectionClass
     {
         return $this->repository->resolvedResource[$class]['reflection'] ??= ReflectionResource::getForClass($class);
+    }
+
+    /**
+     * Returns a ReflectionEnum object based on the given name.
+     *
+     * @param string $name The name of the enum to reflect
+     * @return ReflectionEnum The reflection object for the given enum name
+     * @throws ReflectionException If the ReflectionClass cannot be obtained.
+     */
+    private function reflectedEnum(string $name): ReflectionEnum
+    {
+        return $this->repository->resolvedEnum[$name]['reflection'] ??= new ReflectionEnum($name);
     }
 
     /**

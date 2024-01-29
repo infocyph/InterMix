@@ -13,6 +13,7 @@ class Repository
     public array $closureResource = [];
     public array $resolved = [];
     public array $resolvedResource = [];
+    public array $resolvedEnum = [];
     public array $resolvedFunction = [];
     public array $resolvedDefinition = [];
     public bool $enablePropertyAttribute = false;

@@ -24,7 +24,7 @@ class PropertyResolver
      * @param ParameterResolver $parameterResolver The parameter resolver object.
      */
     public function __construct(
-        private readonly Repository $repository,
+        private Repository $repository,
         private readonly ParameterResolver $parameterResolver
     ) {
     }
@@ -95,9 +95,6 @@ class PropertyResolver
             if ($property->isPromoted()) {
                 continue;
             }
-
-            // required for PHP 8.0 only
-            $property->setAccessible(true);
 
             $values = $this->resolveValue($property, $classPropertyValues, $classInstance);
             !$values ?: $property->setValue(...$values);

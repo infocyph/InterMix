@@ -24,10 +24,10 @@ $instance1 = $classInit->call(ClassInit::class);
 $randomInitConstructor1 = $instance1['instance']->getValues()['random'];
 $instance2 = $classInit->call(ClassInit::class);
 $randomInitConstructor2 = $instance2['instance']->getValues()['random'];
-$instance3 = $classInit->make(ClassInit::class);
-$randomInitConstructor3 = $instance3['instance']->getValues()['random'];
-$instance4 = $classInit->make(ClassInit::class);
-$randomInitConstructor4 = $instance4['instance']->getValues()['random'];
+$instance3 = $classInit->make(ClassInit::class, 'getValues');
+$randomInitConstructor3 = $instance3['random'];
+$instance4 = $classInit->make(ClassInit::class, 'getValues');
+$randomInitConstructor4 = $instance4['random'];
 $instance5 = $classInit->call(ClassInit::class);
 $randomInitConstructor5 = $instance5['instance']->getValues()['random'];
 

@@ -28,7 +28,7 @@ class ParameterResolver
      * @param DefinitionResolver $definitionResolver The definition resolver object.
      */
     public function __construct(
-        private readonly Repository $repository,
+        private Repository $repository,
         private readonly DefinitionResolver $definitionResolver
     ) {
         $this->stdClass = new StdClass();
@@ -180,7 +180,7 @@ class ParameterResolver
                 continue;
             }
 
-            $class = $this->getResolvableClassReflection($reflector, $classParameter, $type, $processed);
+            $class = $this->getResolvableReflection($reflector, $classParameter, $type, $processed);
             if ($class) {
                 $name = $class->isInterface() ? $class->getName() : $parameterName;
                 $processed[$parameterName] = $this->resolveClassDependency(
@@ -233,7 +233,7 @@ class ParameterResolver
      * @return ReflectionClass|null The reflection class of the resolvable parameter, or null if not resolvable.
      * @throws ContainerException|ReflectionException circular dependency or multiple instances for the same class
      */
-    private function getResolvableClassReflection(
+    private function getResolvableReflection(
         ReflectionFunctionAbstract $reflector,
         ReflectionParameter $parameter,
         string $type,
