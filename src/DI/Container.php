@@ -21,7 +21,7 @@ use Symfony\Contracts\Cache\CacheInterface;
 class Container implements ContainerInterface
 {
     protected static array $instances;
-    protected readonly Repository $repository;
+    protected Repository $repository;
     protected string $resolver = InjectedCall::class;
 
     /**
@@ -253,7 +253,8 @@ class Container implements ContainerInterface
      */
     public function make(string $class, string|bool $method = false): mixed
     {
-        return (new $this->resolver($this->repository))->classSettler($class, $method, true);
+        $resolved = (new $this->resolver($this->repository))->classSettler($class, $method, true);
+        return $method ? $resolved['returned'] : $resolved['instance'];
     }
 
     /**

@@ -8,7 +8,7 @@ Simply, initialize using either of these lines,
 
 .. code-block:: php
 
-    $container = AbmmHasan\InterMix\container();
+    $container = AbmmHasan\InterMix\container(); // recommended
     $container = AbmmHasan\InterMix\DI\Container::instance();
     $container = new AbmmHasan\InterMix\DI\Container();
 
@@ -83,10 +83,13 @@ cached. In case of ``call()`` returns from method/closure are never cached (but 
 make(string $class, string|bool $method = false)
 ------------------------------------------------
 
-This library only builds single instance per class (Singleton). But sometime we may need class instance independently.
-``container()`` have 2nd parameter for completely different container instance for that. But what if we need only one
-new instance for a class but other dependencies from cached? well, that is what ``make()`` is for! Also, as the definition
-it supports class only.
+This library only builds single instance per class (Singleton). But sometime we may need class instance/values independently.
+
+Though ``container()`` have 2nd parameter for completely different container instance but what if we need only one
+new instance for a single class but other dependencies from existing?
+Well, that is what ``make()`` is for! Also, it supports classes only.
+
+Providing 2nd parameter will get return from method execution. If not provided, will get the class instance only.
 
 registerClass(string $class, array $parameters = [])
 ----------------------------------------------------
