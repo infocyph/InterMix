@@ -31,7 +31,7 @@
     "captainhook/captainhook": "^5.19",
     "laravel/pint": "^1.13",
     "pestphp/pest": "^2.31",
-    "rector/rector": "^0.19",
+    "rector/rector": "^0.19 || ^1.0",
     "symfony/var-dumper": "^7.0"
   },
   "archive": {
