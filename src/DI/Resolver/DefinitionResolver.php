@@ -1,8 +1,8 @@
 <?php
 
-namespace AbmmHasan\InterMix\DI\Resolver;
+namespace Infocyph\InterMix\DI\Resolver;
 
-use AbmmHasan\InterMix\Exceptions\ContainerException;
+use Infocyph\InterMix\Exceptions\ContainerException;
 use Closure;
 use Psr\Cache\InvalidArgumentException;
 use ReflectionException;

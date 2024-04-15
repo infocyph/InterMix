@@ -1,8 +1,8 @@
 <?php
 
-namespace AbmmHasan\InterMix\DI\Invoker;
+namespace Infocyph\InterMix\DI\Invoker;
 
-use AbmmHasan\InterMix\DI\Resolver\Repository;
+use Infocyph\InterMix\DI\Resolver\Repository;
 use Closure;
 use Exception;
 use Error;

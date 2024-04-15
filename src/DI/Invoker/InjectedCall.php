@@ -1,14 +1,14 @@
 <?php
 
-namespace AbmmHasan\InterMix\DI\Invoker;
+namespace Infocyph\InterMix\DI\Invoker;
 
-use AbmmHasan\InterMix\DI\Resolver\ClassResolver;
-use AbmmHasan\InterMix\DI\Resolver\DefinitionResolver;
-use AbmmHasan\InterMix\DI\Resolver\ParameterResolver;
-use AbmmHasan\InterMix\DI\Resolver\PropertyResolver;
-use AbmmHasan\InterMix\DI\Resolver\Reflector;
-use AbmmHasan\InterMix\DI\Resolver\Repository;
-use AbmmHasan\InterMix\Exceptions\ContainerException;
+use Infocyph\InterMix\DI\Resolver\ClassResolver;
+use Infocyph\InterMix\DI\Resolver\DefinitionResolver;
+use Infocyph\InterMix\DI\Resolver\ParameterResolver;
+use Infocyph\InterMix\DI\Resolver\PropertyResolver;
+use Infocyph\InterMix\DI\Resolver\Reflector;
+use Infocyph\InterMix\DI\Resolver\Repository;
+use Infocyph\InterMix\Exceptions\ContainerException;
 use Closure;
 use Psr\Cache\InvalidArgumentException;
 use ReflectionException;

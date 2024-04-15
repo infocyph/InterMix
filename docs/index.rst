@@ -1,12 +1,12 @@
 .. _index:
 
 =========================
-abmmhasan/InterMix Manual
+infocyph/InterMix Manual
 =========================
 
-For `abmmhasan/InterMix <https://github.com/abmmhasan/InterMix>`_ |version|. Updated on |today|.
+For `infpcyph/InterMix <https://github.com/infpcyph/InterMix>`_ |version|. Updated on |today|.
 
-Licensed under `MIT <https://github.com/abmmhasan/InterMix/blob/main/LICENSE>`_.
+Licensed under `MIT <https://github.com/infpcyph/InterMix/blob/main/LICENSE>`_.
 
 Contents
 --------

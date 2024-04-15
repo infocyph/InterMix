@@ -1,11 +1,11 @@
 <?php
 
-namespace AbmmHasan\InterMix\Tests\Feature;
+namespace Infocyph\InterMix\Tests\Feature;
 
-use AbmmHasan\InterMix\Tests\Fixture\ClassA;
-use AbmmHasan\InterMix\Tests\Fixture\ClassB;
+use Infocyph\InterMix\Tests\Fixture\ClassA;
+use Infocyph\InterMix\Tests\Fixture\ClassB;
 
-use function AbmmHasan\InterMix\container;
+use function Infocyph\InterMix\container;
 
 /** @var ClassA $classMethodValues */
 $classMethodValues = container(null, 'method')

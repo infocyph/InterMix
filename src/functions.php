@@ -1,18 +1,18 @@
 <?php
 
-namespace AbmmHasan\InterMix;
+namespace Infocyph\InterMix;
 
-use AbmmHasan\InterMix\DI\Container;
-use AbmmHasan\InterMix\DI\Reflection\ReflectionResource;
-use AbmmHasan\InterMix\Exceptions\{ContainerException, NotFoundException};
-use AbmmHasan\InterMix\Memoize\Cache;
-use AbmmHasan\InterMix\Memoize\WeakCache;
+use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Reflection\ReflectionResource;
+use Infocyph\InterMix\Exceptions\{ContainerException, NotFoundException};
+use Infocyph\InterMix\Memoize\Cache;
+use Infocyph\InterMix\Memoize\WeakCache;
 use Closure;
 use Exception;
 use Psr\Cache\InvalidArgumentException;
 use ReflectionException;
 
-if (!function_exists('AbmmHasan\InterMix\container')) {
+if (!function_exists('Infocyph\InterMix\container')) {
     /**
      * Get Container instance or direct call method/closure
      *
@@ -38,7 +38,7 @@ if (!function_exists('AbmmHasan\InterMix\container')) {
     }
 }
 
-if (!function_exists('AbmmHasan\InterMix\memoize')) {
+if (!function_exists('Infocyph\InterMix\memoize')) {
     /**
      * Retrieves a memoized value of the provided callable.
      *
@@ -60,7 +60,7 @@ if (!function_exists('AbmmHasan\InterMix\memoize')) {
     }
 }
 
-if (!function_exists('AbmmHasan\InterMix\remember')) {
+if (!function_exists('Infocyph\InterMix\remember')) {
     /**
      * Retrieves a memoized value based on the provided class object (till garbage collected)
      *

@@ -1,6 +1,8 @@
 name: "Security & Standards"
 
 on:
+  schedule:
+    - cron: '0 0 * * 0'
   push:
     branches: [ '*' ]
   pull_request:

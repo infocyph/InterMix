@@ -1,8 +1,8 @@
 <?php
 
-namespace AbmmHasan\InterMix\Memoize;
+namespace Infocyph\InterMix\Memoize;
 
-use AbmmHasan\InterMix\Fence\Single;
+use Infocyph\InterMix\Fence\Single;
 use Countable;
 
 class Cache implements Countable

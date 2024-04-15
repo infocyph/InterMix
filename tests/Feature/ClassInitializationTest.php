@@ -1,11 +1,11 @@
 <?php
 
-namespace AbmmHasan\InterMix\Tests\Feature;
+namespace Infocyph\InterMix\Tests\Feature;
 
-use AbmmHasan\InterMix\Tests\Fixture\{ClassA, ClassB, ClassC};
-use AbmmHasan\InterMix\Tests\Fixture\{ClassInit, ClassInitWInterface, InterfaceA, InterfaceB, InterfaceC};
+use Infocyph\InterMix\Tests\Fixture\{ClassA, ClassB, ClassC};
+use Infocyph\InterMix\Tests\Fixture\{ClassInit, ClassInitWInterface, InterfaceA, InterfaceB, InterfaceC};
 
-use function AbmmHasan\InterMix\container;
+use function Infocyph\InterMix\container;
 
 /** @var ClassInit $classInit */
 $classInit = container(null, 'init_only')

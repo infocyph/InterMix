@@ -1,6 +1,6 @@
 <?php
 
-namespace AbmmHasan\InterMix\Remix;
+namespace Infocyph\InterMix\Remix;
 
 use Closure;
 use Exception;

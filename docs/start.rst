@@ -4,7 +4,7 @@
 Getting Started
 ===============
 
-abmmhasan/InterMix is a PHP library to provide with some class oriented tools that we need frequently.
+infocyph/InterMix is a PHP library to provide with some class oriented tools that we need frequently.
 
 What Is this?
 ##############
@@ -16,15 +16,15 @@ and balanced within Speed & Scalability!.
 Requirements
 ############
 
-abmmhasan/InterMix |version| requires the following:
+infocyph/InterMix |version| requires the following:
 
 * PHP 8.0/+
 
 Installation
 ############
 
-Use the following command to add abmmhasan/InterMix to your project using `Composer <https://getcomposer.org>`_:
+Use the following command to add infocyph/InterMix to your project using `Composer <https://getcomposer.org>`_:
 
 .. code-block:: bash
 
-    composer require abmmhasan/intermix
+    composer require infocyph/intermix

@@ -1,9 +1,9 @@
 <?php
 
-namespace AbmmHasan\InterMix\DI\Resolver;
+namespace Infocyph\InterMix\DI\Resolver;
 
-use AbmmHasan\InterMix\DI\Attribute\Infuse;
-use AbmmHasan\InterMix\Exceptions\ContainerException;
+use Infocyph\InterMix\DI\Attribute\Infuse;
+use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\InvalidArgumentException;
 use ReflectionAttribute;
 use ReflectionClass;

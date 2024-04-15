@@ -1,9 +1,9 @@
 <?php
 
-use AbmmHasan\InterMix\Tests\Fixture\ClassInit;
-use AbmmHasan\InterMix\Tests\Fixture\InjectionOnlyClass;
+use Infocyph\InterMix\Tests\Fixture\ClassInit;
+use Infocyph\InterMix\Tests\Fixture\InjectionOnlyClass;
 
-use function AbmmHasan\InterMix\container;
+use function Infocyph\InterMix\container;
 
 test('Instance', function () {
     expect(container(InjectionOnlyClass::class, 'injection1'))
@@ -12,7 +12,7 @@ test('Instance', function () {
         ->toBeInstanceOf(InjectionOnlyClass::class);
 });
 
-/** @var \AbmmHasan\InterMix\DI\Container $classInit */
+/** @var \Infocyph\InterMix\DI\Container $classInit */
 $classInit = container(null, 'init_only_1')
     ->setOptions(true, true)
     ->registerClass(ClassInit::class, [

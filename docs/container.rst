@@ -57,7 +57,7 @@ Creating the container is as easy as it can be,
 
 .. code-block:: php
 
-   $container = new AbmmHasan\InterMix\container();
+   $container = new Infocyph\InterMix\container();
 
 Then simply register or setOptions as your requirements:
 
