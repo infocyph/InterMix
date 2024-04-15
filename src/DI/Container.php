@@ -1,12 +1,12 @@
 <?php
 
-namespace AbmmHasan\InterMix\DI;
+namespace Infocyph\InterMix\DI;
 
-use AbmmHasan\InterMix\DI\Invoker\GenericCall;
-use AbmmHasan\InterMix\DI\Invoker\InjectedCall;
-use AbmmHasan\InterMix\DI\Resolver\Repository;
-use AbmmHasan\InterMix\Exceptions\ContainerException;
-use AbmmHasan\InterMix\Exceptions\NotFoundException;
+use Infocyph\InterMix\DI\Invoker\GenericCall;
+use Infocyph\InterMix\DI\Invoker\InjectedCall;
+use Infocyph\InterMix\DI\Resolver\Repository;
+use Infocyph\InterMix\Exceptions\ContainerException;
+use Infocyph\InterMix\Exceptions\NotFoundException;
 use Closure;
 use Exception;
 use InvalidArgumentException;

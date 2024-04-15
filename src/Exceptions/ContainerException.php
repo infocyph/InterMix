@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace AbmmHasan\InterMix\Exceptions;
+namespace Infocyph\InterMix\Exceptions;
 
 use Exception;
 use Psr\Container\ContainerExceptionInterface;

@@ -1,6 +1,6 @@
 # Security Policy
 
-![Libraries.io dependency status for GitHub repo](https://img.shields.io/librariesio/github/abmmhasan/InterMix)
+![Libraries.io dependency status for GitHub repo](https://img.shields.io/librariesio/github/infocyph/InterMix)
 
 ## Supported Versions
 

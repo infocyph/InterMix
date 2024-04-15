@@ -1,9 +1,9 @@
 <?php
 
-use AbmmHasan\InterMix\Tests\Fixture\ClassA;
-use AbmmHasan\InterMix\Tests\Fixture\PropertyClass;
+use Infocyph\InterMix\Tests\Fixture\ClassA;
+use Infocyph\InterMix\Tests\Fixture\PropertyClass;
 
-use function AbmmHasan\InterMix\container;
+use function Infocyph\InterMix\container;
 
 /** @var PropertyClass $propertyClass */
 $propertyClass = container(null, 'propOnly')

@@ -1,6 +1,6 @@
 <?php
 
-namespace AbmmHasan\InterMix\DI\Reflection;
+namespace Infocyph\InterMix\DI\Reflection;
 
 use Closure;
 use InvalidArgumentException;

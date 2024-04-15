@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace AbmmHasan\InterMix\DI\Attribute;
+namespace Infocyph\InterMix\DI\Attribute;
 
 use Attribute;
 

@@ -8,9 +8,9 @@ Simply, initialize using either of these lines,
 
 .. code-block:: php
 
-    $container = AbmmHasan\InterMix\container(); // recommended
-    $container = AbmmHasan\InterMix\DI\Container::instance();
-    $container = new AbmmHasan\InterMix\DI\Container();
+    $container = Infocyph\InterMix\container(); // recommended
+    $container = Infocyph\InterMix\DI\Container::instance();
+    $container = new Infocyph\InterMix\DI\Container();
 
 By default,
 

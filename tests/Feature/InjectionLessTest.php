@@ -1,8 +1,8 @@
 <?php
 
-use AbmmHasan\InterMix\Tests\Fixture\InjectionLessClass;
+use Infocyph\InterMix\Tests\Fixture\InjectionLessClass;
 
-use function AbmmHasan\InterMix\container;
+use function Infocyph\InterMix\container;
 
 container(null, 'injection_less')
     ->setOptions(false)

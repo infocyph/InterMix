@@ -10,12 +10,12 @@ some pre-requisite as given below:
 For method attribute,
 
 * ``methodAttributes`` parameter in ``setOptions()`` should be set to true
-* On method or arguments, attributes should be marked using ``AbmmHasan\InterMix\DI\Attribute\Infuse()`` class
+* On method or arguments, attributes should be marked using ``Infocyph\InterMix\DI\Attribute\Infuse()`` class
 
 For property attribute
 
 * ``propertyAttributes`` parameter in ``setOptions()`` should be set to true
-* Attributes should be marked using ``AbmmHasan\InterMix\DI\Attribute\Infuse()`` class
+* Attributes should be marked using ``Infocyph\InterMix\DI\Attribute\Infuse()`` class
 
 Method attribute
 ----------------

@@ -1,6 +1,6 @@
 <?php
 
-namespace AbmmHasan\InterMix\Tests\Fixture;
+namespace Infocyph\InterMix\Tests\Fixture;
 
 interface InterfaceA
 {

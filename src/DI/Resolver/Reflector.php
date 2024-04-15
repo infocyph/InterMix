@@ -1,8 +1,8 @@
 <?php
 
-namespace AbmmHasan\InterMix\DI\Resolver;
+namespace Infocyph\InterMix\DI\Resolver;
 
-use AbmmHasan\InterMix\DI\Reflection\ReflectionResource;
+use Infocyph\InterMix\DI\Reflection\ReflectionResource;
 use Closure;
 use ReflectionClass;
 use ReflectionEnum;

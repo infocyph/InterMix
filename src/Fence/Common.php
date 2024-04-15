@@ -1,6 +1,6 @@
 <?php
 
-namespace AbmmHasan\InterMix\Fence;
+namespace Infocyph\InterMix\Fence;
 
 use Exception;
 

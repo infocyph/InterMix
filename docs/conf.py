@@ -34,8 +34,8 @@ def get_version():
 
 # -- Project information -----------------------------------------------------
 
-project = 'abmmhasan/InterMix'
-copyright = '2021-{year}, A. B. M. Mahmudul Hasan'.format(year = datetime.date.today().strftime('%Y'))
+project = 'infocyph/InterMix'
+copyright = '2021-{year}, infocyph'.format(year = datetime.date.today().strftime('%Y'))
 author = 'A. B. M. Mahmudul Hasan'
 
 version = get_version().strip()
@@ -90,14 +90,14 @@ html_theme_options = {
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
 
-html_title = "abmmhasan/InterMix %s Manual" % get_version()
+html_title = "infocyph/InterMix %s Manual" % get_version()
 html_show_sphinx = False
 
-htmlhelp_basename = 'abmmhasan-intermix-doc'
+htmlhelp_basename = 'infocyph-intermix-doc'
 
 html_context = {
     "display_github": False,
-    "github_user": "abmmhasan",
+    "github_user": "infocyph",
     "github_repo": "InterMix",
     "github_version": version,
     "conf_py_path": "/docs/",

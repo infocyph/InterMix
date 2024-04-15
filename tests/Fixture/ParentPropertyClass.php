@@ -1,8 +1,8 @@
 <?php
 
-namespace AbmmHasan\InterMix\Tests\Fixture;
+namespace Infocyph\InterMix\Tests\Fixture;
 
-use AbmmHasan\InterMix\DI\Attribute\Infuse;
+use Infocyph\InterMix\DI\Attribute\Infuse;
 
 class ParentPropertyClass
 {
