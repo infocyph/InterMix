@@ -76,7 +76,7 @@ class DefinitionResolver
         if (!array_key_exists($name, $this->repository->resolvedDefinition)) {
             $this->repository->resolvedDefinition[$name] = match (true) {
                 isset($this->repository->cacheAdapter) => $this->repository->cacheAdapter->get(
-                    $this->repository->alias . '-' . base64_encode($name),
+                    $this->repository->alias . '-def' . base64_encode($name),
                     fn () => $this->resolveDefinition($name)
                 ),
                 default => $this->resolveDefinition($name)

@@ -1,7 +1,7 @@
 # InterMix
 
 [![Security & Standards](https://github.com/infocyph/InterMix/actions/workflows/build.yml/badge.svg)](https://github.com/infocyph/InterMix/actions/workflows/build.yml)
-[![Documentation Status](https://readthedocs.org/projects/intermix/badge/?version=latest)](https://intermix.readthedocs.io/en/latest/?badge=latest)
+[![Documentation Status](https://readthedocs.org/projects/intermix/badge/?version=latest)](https://intermix.readthedocs.io)
 ![Packagist Downloads (custom server)](https://img.shields.io/packagist/dt/infocyph/intermix?color=green&link=https%3A%2F%2Fpackagist.org%2Fpackages%2Finfocyph%2Fintermix)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 ![Packagist Version](https://img.shields.io/packagist/v/infocyph/intermix)
