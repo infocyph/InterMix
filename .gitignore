@@ -1,6 +1,6 @@
-/vendor
-/example
+vendor
+example
 .idea
 example.php
 composer.lock
-/git-story_media
+git-story_media
