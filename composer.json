@@ -76,6 +76,6 @@
     "test": "pest",
     "refactor": "rector process",
     "lint": "pint",
-    "post-install-cmd": "@git:hook"
+    "post-autoload-dump": "@git:hook"
   }
 }

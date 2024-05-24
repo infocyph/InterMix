@@ -1,3 +1,5 @@
+.gitattributes abmmhasan@users.noreply.github.com
+.github/CODEOWNERS abmmhasan@users.noreply.github.com
 .github/dependabot.yml abmmhasan@users.noreply.github.com
 .github/workflows/build.yml abmmhasan@users.noreply.github.com
 .gitignore abmmhasan@users.noreply.github.com
@@ -46,7 +48,7 @@ src/Memoize/Cache.php abmmhasan@users.noreply.github.com
 src/Memoize/WeakCache.php abmmhasan@users.noreply.github.com
 src/Remix/MacroMix.php abmmhasan@users.noreply.github.com
 src/functions.php abmmhasan@users.noreply.github.com
-tests/Feature/ArchTest.php abmmhasan@users.noreply.github.com
+tests/ArchTest.php abmmhasan@users.noreply.github.com
 tests/Feature/ClassInitializationTest.php abmmhasan@users.noreply.github.com
 tests/Feature/InjectionLessTest.php abmmhasan@users.noreply.github.com
 tests/Feature/InjectionTest.php abmmhasan@users.noreply.github.com
@@ -64,6 +66,3 @@ tests/Fixture/InterfaceB.php abmmhasan@users.noreply.github.com
 tests/Fixture/InterfaceC.php abmmhasan@users.noreply.github.com
 tests/Fixture/ParentPropertyClass.php abmmhasan@users.noreply.github.com
 tests/Fixture/PropertyClass.php abmmhasan@users.noreply.github.com
-tests/Pest.php abmmhasan@users.noreply.github.com
-tests/TestCase.php abmmhasan@users.noreply.github.com
-tests/Unit/CommonTest.php abmmhasan@users.noreply.github.com
