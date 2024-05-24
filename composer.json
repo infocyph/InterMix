@@ -57,7 +57,7 @@
   },
   "scripts": {
     "test:code": "pest --parallel --processes=10",
-    "test:refactor": "rector --dry-run",
+    "test:refactor": "rector process --dry-run",
     "test:lint": "pint --test",
     "test:hook": [
       "captainhook hook:post-checkout",
@@ -74,7 +74,8 @@
     ],
     "git:hook": "captainhook install --only-enabled -nf",
     "test": "pest",
-    "refactor": "rector",
-    "lint": "pint"
+    "refactor": "rector process",
+    "lint": "pint",
+    "post-install-cmd": "@git:hook"
   }
 }
