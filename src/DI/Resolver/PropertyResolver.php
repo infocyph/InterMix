@@ -20,8 +20,8 @@ class PropertyResolver
     /**
      * Constructs a new instance of the class.
      *
-     * @param Repository $repository The repository object.
-     * @param ParameterResolver $parameterResolver The parameter resolver object.
+     * @param  Repository  $repository  The repository object.
+     * @param  ParameterResolver  $parameterResolver  The parameter resolver object.
      */
     public function __construct(
         private Repository $repository,
@@ -32,8 +32,7 @@ class PropertyResolver
     /**
      * Set the class resolver instance.
      *
-     * @param ClassResolver $classResolver The class resolver instance.
-     * @return void
+     * @param  ClassResolver  $classResolver  The class resolver instance.
      */
     public function setClassResolverInstance(ClassResolver $classResolver): void
     {
@@ -43,20 +42,20 @@ class PropertyResolver
     /**
      * Resolves the properties of a given class.
      *
-     * @param ReflectionClass $class The ReflectionClass instance of the class.
-     * @return void
+     * @param  ReflectionClass  $class  The ReflectionClass instance of the class.
+     *
      * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
     public function resolve(ReflectionClass $class): void
     {
         $className = $class->getName();
-        $this->resolveProperties(
+        $this->processProperties(
             $class,
             $class->getProperties(),
             $this->repository->resolvedResource[$className]['instance']
         );
         if ($parentClass = $class->getParentClass()) {
-            $this->resolveProperties(
+            $this->processProperties(
                 $parentClass,
                 $parentClass->getProperties(ReflectionProperty::IS_PRIVATE),
                 $this->repository->resolvedResource[$className]['instance']
@@ -68,46 +67,47 @@ class PropertyResolver
     /**
      * Resolves the properties of a class instance.
      *
-     * @param ReflectionClass $class The reflection class object.
-     * @param array $properties The array of properties to be resolved.
-     * @param object $classInstance The instance of the class.
-     * @return void
+     * @param  ReflectionClass  $class  The reflection class object.
+     * @param  array  $properties  The array of properties to be resolved.
+     * @param  object  $classInstance  The instance of the class.
+     *
      * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
-    private function resolveProperties(ReflectionClass $class, array $properties, object $classInstance): void
+    private function processProperties(ReflectionClass $class, array $properties, object $classInstance): void
     {
-        if ($properties === []) {
+        if (! $properties) {
             return;
         }
 
         $className = $class->getName();
         if (
-            !isset($this->repository->classResource[$className]['property']) &&
-            !$this->repository->enablePropertyAttribute
+            ! isset($this->repository->classResource[$className]['property']) &&
+            ! $this->repository->enablePropertyAttribute
         ) {
             return;
         }
 
         $classPropertyValues = $this->repository->classResource[$className]['property'] ?? [];
 
-        /** @var  ReflectionProperty $property */
+        /** @var ReflectionProperty $property */
         foreach ($properties as $property) {
             if ($property->isPromoted()) {
                 continue;
             }
 
             $values = $this->resolveValue($property, $classPropertyValues, $classInstance);
-            !$values ?: $property->setValue(...$values);
+            ! $values ?: $property->setValue(...$values);
         }
     }
 
     /**
      * Resolves the value of a property.
      *
-     * @param ReflectionProperty $property The reflection property.
-     * @param mixed $classPropertyValues The property values of the class.
-     * @param object $classInstance The instance of the class.
+     * @param  ReflectionProperty  $property  The reflection property.
+     * @param  mixed  $classPropertyValues  The property values of the class.
+     * @param  object  $classInstance  The instance of the class.
      * @return array The resolved property value.
+     *
      * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
     private function resolveValue(
@@ -122,7 +122,7 @@ class PropertyResolver
         }
 
         $attribute = $property->getAttributes(Infuse::class);
-        if (!$attribute) {
+        if (! $attribute) {
             return [];
         }
 
@@ -137,16 +137,16 @@ class PropertyResolver
                         "Unknown #[Infuse] parameter detected on
                         {$property->getDeclaringClass()->getName()}::\${$property->getName()}"
                     )
-            }
+            },
         ];
     }
 
     /**
      * Sets the value of a property with predefined values.
      *
-     * @param ReflectionProperty $property The reflection property.
-     * @param array $classPropertyValues The array of class property values.
-     * @param object $classInstance The class instance.
+     * @param  ReflectionProperty  $property  The reflection property.
+     * @param  array  $classPropertyValues  The array of class property values.
+     * @param  object  $classInstance  The class instance.
      * @return array|null The resulting array or null.
      */
     private function setWithPredefined(
@@ -156,15 +156,15 @@ class PropertyResolver
     ): ?array {
         return match (true) {
             $property->isStatic() && isset($classPropertyValues[$property->getName()]) => [
-                $classPropertyValues[$property->getName()]
+                $classPropertyValues[$property->getName()],
             ],
 
             isset($classPropertyValues[$property->getName()]) => [
                 $classInstance,
-                $classPropertyValues[$property->getName()]
+                $classPropertyValues[$property->getName()],
             ],
 
-            !$this->repository->enablePropertyAttribute => [],
+            ! $this->repository->enablePropertyAttribute => [],
 
             default => null
         };
@@ -173,19 +173,21 @@ class PropertyResolver
     /**
      * Resolves the property without any argument.
      *
-     * @param ReflectionProperty $property The reflection property.
-     * @param ReflectionType|null $parameterType The reflection parameter type.
+     * @param  ReflectionProperty  $property  The reflection property.
+     * @param  ReflectionType|null  $parameterType  The reflection parameter type.
      * @return object The resolved object.
+     *
      * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
-    private function resolveWithoutArgument(ReflectionProperty $property, ReflectionType $parameterType = null): object
+    private function resolveWithoutArgument(ReflectionProperty $property, ?ReflectionType $parameterType = null): object
     {
-        if (!$parameterType instanceof ReflectionNamedType || $parameterType->isBuiltin()) {
+        if (! $parameterType instanceof ReflectionNamedType || $parameterType->isBuiltin()) {
             throw new ContainerException(
                 "Malformed #[Infuse] attribute or property type detected on
                 {$property->getDeclaringClass()->getName()}::\${$property->getName()}"
             );
         }
+
         return $this->classResolver->resolve(
             $this->reflectedClass($parameterType->getName())
         )['instance'];

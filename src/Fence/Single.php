@@ -8,19 +8,31 @@ trait Single
 {
     use Common;
 
-    protected static $instance = null;
+    protected static ?self $instance = null;
 
     /**
-     * Creates and returns the only instance of the class.
+     * Creates and returns the singleton instance of the class.
      *
-     * @param array|null $constraints The constraints for creating the instance.
-     * @return static The created instance.
+     * @param  array|null  $constraints  Constraints for instance creation.
+     *
      * @throws Exception
      */
-    final public static function instance(array $constraints = null): static
+    final public static function instance(?array $constraints = null): static
     {
         static::checkRequirements($constraints);
 
-        return static::$instance ??= new static();
+        if (static::$instance === null) {
+            static::$instance = new static();
+        }
+
+        return static::$instance;
+    }
+
+    /**
+     * Clears the current instance.
+     */
+    final public static function clearInstance(): void
+    {
+        static::$instance = null;
     }
 }

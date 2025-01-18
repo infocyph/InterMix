@@ -8,6 +8,7 @@
 ![Packagist Version](https://img.shields.io/packagist/v/infocyph/intermix)
 ![Packagist PHP Version](https://img.shields.io/packagist/dependency-v/infocyph/intermix/php)
 ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/infocyph/intermix)
+![visitors](https://visitor-badge.laobi.icu/badge?page_id=infocyph.com)
 
 This library intended to provide you with some class oriented tools that we (may) need frequently.
 
