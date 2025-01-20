@@ -1,8 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Infocyph\InterMix\DI\Resolver;
 
 use Closure;
+use Infocyph\InterMix\DI\Reflection\ReflectionResource;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\InvalidArgumentException;
 use ReflectionException;
@@ -10,53 +13,54 @@ use ReflectionFunction;
 
 class DefinitionResolver
 {
-    use Reflector;
+    private ClassResolver      $classResolver;
+    private ParameterResolver  $parameterResolver;
 
-    private ClassResolver $classResolver;
-
-    private ParameterResolver $parameterResolver;
-
+    /**
+     * Tracks definitions currently being resolved to detect circular dependencies.
+     *
+     * @var array<string,bool>
+     */
     private array $entriesResolving = [];
 
     /**
-     * Constructor for the class.
-     *
-     * @param  Repository  $repository  The repository object.
+     * @param  Repository  $repository
      */
-    public function __construct(private readonly Repository $repository)
-    {
+    public function __construct(
+        private readonly Repository $repository
+    ) {
+        //
     }
 
     /**
-     * Sets the ClassResolver and ParameterResolver instances.
-     *
-     * @param  ClassResolver  $classResolver  The ClassResolver instance.
-     * @param  ParameterResolver  $parameterResolver  The ParameterResolver instance.
+     * Set the ClassResolver and ParameterResolver instances so we can delegate to them.
      */
     public function setResolverInstance(
         ClassResolver $classResolver,
         ParameterResolver $parameterResolver
     ): void {
-        $this->classResolver = $classResolver;
+        $this->classResolver    = $classResolver;
         $this->parameterResolver = $parameterResolver;
     }
 
     /**
-     * Resolve a definition by its name.
+     * Resolve a definition by its name (ID).
      *
-     * @param  string  $name  The name of the definition.
-     * @return mixed The resolved definition.
+     * @param  string  $name
+     * @return mixed
      *
      * @throws ReflectionException|ContainerException|InvalidArgumentException
      */
     public function resolve(string $name): mixed
     {
+        // Check for circular reference
         if (isset($this->entriesResolving[$name])) {
-            throw new ContainerException("Circular dependency detected while resolving definition '$name'.");
+            throw new ContainerException(
+                "Circular dependency detected while resolving definition '$name'."
+            );
         }
 
         $this->entriesResolving[$name] = true;
-
         try {
             return $this->getFromCacheOrResolve($name);
         } finally {
@@ -65,68 +69,86 @@ class DefinitionResolver
     }
 
     /**
-     * Get a value from cache or resolve it if not cached.
-     *
-     * @param  string  $name  The name to resolve.
-     * @return mixed The resolved value.
+     * Retrieve a definition from the repository’s definition cache if present;
+     * otherwise resolve it and store it in the cache.
      *
      * @throws ReflectionException|ContainerException|InvalidArgumentException
      */
     private function getFromCacheOrResolve(string $name): mixed
     {
-        if (! isset($this->repository->resolvedDefinition[$name])) {
-            $resolver = fn () => $this->resolveDefinition($name);
+        // Check if already resolved
+        $resolvedDefs = $this->repository->getResolvedDefinition();
+        if (! isset($resolvedDefs[$name])) {
+            $resolverCallback = fn () => $this->resolveDefinition($name);
 
-            $this->repository->resolvedDefinition[$name] = isset($this->repository->cacheAdapter)
-                ? $this->repository->cacheAdapter->get(
-                    $this->repository->alias.'-def'.base64_encode($name),
-                    $resolver
-                )
-                : $resolver();
+            $cacheAdapter = $this->repository->getCacheAdapter();
+            if ($cacheAdapter) {
+                // Build a cache key using the repository alias
+                $cacheKey = $this->repository->getAlias() . '-def' . base64_encode($name);
+
+                // Use the cache to store/fetch
+                $value = $cacheAdapter->get($cacheKey, $resolverCallback);
+                $this->repository->setResolvedDefinition($name, $value);
+            } else {
+                // No cache adapter => directly resolve
+                $value = $resolverCallback();
+                $this->repository->setResolvedDefinition($name, $value);
+            }
         }
 
-        return $this->repository->resolvedDefinition[$name];
+        return $this->repository->getResolvedDefinition()[$name];
     }
 
     /**
-     * Resolve a definition.
-     *
-     * @param  string  $name  The name of the definition.
-     * @return mixed The resolved definition.
+     * Actually resolve a definition by looking up the definition in functionReference
+     * and handling different types (Closure, array, class-string, etc.).
      *
      * @throws ReflectionException|ContainerException|InvalidArgumentException
      */
     private function resolveDefinition(string $name): mixed
     {
-        $definition = $this->repository->functionReference[$name] ?? null;
+        // Retrieve the definition from repository->functionReference
+        $definition = $this->repository->getFunctionReference()[$name] ?? null;
 
         return match (true) {
-            $definition instanceof Closure => $definition(
-                ...$this->parameterResolver->resolve(
-                    new ReflectionFunction($definition),
-                    [],
-                    'constructor'
-                )
-            ),
-            is_array($definition) && class_exists($definition[0]) => $this->resolveArrayDefinition($definition),
-            is_string($definition) && class_exists($definition) => $this->classResolver
-                ->resolve($this->reflectedClass($definition))['instance'],
-            default => $definition
+            // If it's a closure => call it, injecting parameters
+            $definition instanceof Closure =>
+            $definition(...$this->parameterResolver->resolve(
+                new ReflectionFunction($definition),
+                [],
+                'constructor'
+            )),
+
+            // If it's an array with [className, ???], and that className exists => handle array definition
+            is_array($definition) && isset($definition[0]) && class_exists($definition[0]) =>
+            $this->resolveArrayDefinition($definition),
+
+            // If it's a string and that string is a valid class => use ClassResolver
+            is_string($definition) && class_exists($definition) =>
+            $this->classResolver->resolve(
+                ReflectionResource::getClassReflection($definition)
+            )['instance'],
+
+            // Otherwise, just return the definition as-is (e.g. scalar or non-class string)
+            default => $definition,
         };
     }
 
     /**
-     * Resolve an array-based definition.
+     * Resolve an array-based definition: e.g. ['Some\Class', true/falseOrMethod].
      *
-     * @param  array  $definition  The array definition.
-     * @return mixed The resolved instance or returned value.
+     * @param  array  $definition  e.g. [className, boolOrMethod], or [className]
+     * @return mixed
      *
      * @throws ReflectionException|ContainerException|InvalidArgumentException
      */
     private function resolveArrayDefinition(array $definition): mixed
     {
+        // $definition[0] => className
+        // $definition[1] => could be method name or bool, etc.
         $resolved = $this->classResolver->resolve(...$definition);
 
-        return $definition[1] ?? false ? $resolved['returned'] : $resolved['instance'];
+        // If the second element of $definition is truthy => return 'returned', else 'instance'
+        return !empty($definition[1]) ? $resolved['returned'] : $resolved['instance'];
     }
 }

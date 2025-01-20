@@ -15,96 +15,81 @@ final readonly class GenericCall
     }
 
     /**
-     * Resolves a class instance and executes its properties and method.
+     * Resolves a class instance (without any DI magic),
+     * sets properties, and optionally invokes a method.
      *
-     * @param  string  $class  The class name.
-     * @param  string|null  $method  The method name (optional).
-     * @return array The array containing the instantiated class and the method return value (if any).
+     * @param  string  $class  Fully-qualified class name to instantiate.
+     * @param  string|null  $method  Method to invoke, if any.
+     * @return array{
+     *     instance: object,
+     *     returned: mixed
+     * }
      */
     public function classSettler(string $class, ?string $method = null): array
     {
-        $instance = $this->createInstance($class);
-        $this->setProperties($instance, $class);
-        $method ??= $this->getDefaultMethod($class);
+        // Grab class info if present, else an empty array
+        $classResource = $this->repository->classResource[$class] ?? [];
+
+        // Constructor parameters
+        $ctorParams = $classResource['constructor']['params'] ?? [];
+        $instance = new $class(...$ctorParams);
+
+        // Set class properties (if any)
+        $props = $classResource['property'] ?? [];
+        $this->setProperties($instance, $props);
+
+        // Determine method to invoke (method param, or classResource's configured "method", or defaultMethod)
+        $method ??= $classResource['method']['on'] ?? $this->repository->defaultMethod;
+        $returned = $this->invokeMethod($instance, $method, $classResource);
 
         return [
             'instance' => $instance,
-            'returned' => $this->invokeMethod($instance, $class, $method),
+            'returned' => $returned,
         ];
     }
 
     /**
-     * Executes a closure with the provided parameters and returns the result.
+     * Executes a closure or callable with the provided parameters and returns the result.
      *
-     * @param  string|Closure  $closure  The closure or callable.
-     * @param  array  $params  Parameters to pass to the closure.
-     * @return mixed The result of executing the closure.
+     * @param callable $closure
+     * @param array $params
+     * @return mixed
      */
-    public function closureSettler(string|Closure $closure, array $params): mixed
+    public function closureSettler(callable $closure, array $params = []): mixed
     {
         return $closure(...$params);
     }
 
     /**
-     * Creates an instance of the given class.
+     * Sets public properties on the object or static properties if needed.
      *
-     * @param  string  $class  The class name.
-     * @return object The instantiated class object.
+     * @param  array  $properties  [propertyName => value, ...]
      */
-    private function createInstance(string $class): object
+    private function setProperties(object $instance, array $properties): void
     {
-        $params = $this->repository->classResource[$class]['constructor']['params'] ?? [];
-
-        return new $class(...$params);
-    }
-
-    /**
-     * Sets the properties of a class instance.
-     *
-     * @param  object  $instance  The class instance.
-     * @param  string  $class  The class name.
-     */
-    private function setProperties(object $instance, string $class): void
-    {
-        $properties = $this->repository->classResource[$class]['property'] ?? [];
-
         foreach ($properties as $property => $value) {
             try {
+                // Attempt to set object property
                 $instance->$property = $value;
             } catch (Exception|Error) {
-                $class::$$property = $value;
+                // If it's a static property or protected context
+                $className = $instance::class;
+                $className::$$property = $value;
             }
         }
     }
 
     /**
-     * Retrieves the default method for a class if defined.
-     *
-     * @param  string  $class  The class name.
-     * @return string|null The default method name or null if not defined.
+     * Invokes a method on the given object if it exists in the classResource.
      */
-    private function getDefaultMethod(string $class): ?string
+    private function invokeMethod(object $instance, ?string $method, array $classResource): mixed
     {
-        return $this->repository->classResource[$class]['method']['on']
-            ?? $this->repository->defaultMethod;
-    }
-
-    /**
-     * Invokes a method on a class instance.
-     *
-     * @param  object  $instance  The class instance.
-     * @param  string  $class  The class name.
-     * @param  string|null  $method  The method name.
-     * @return mixed The method's return value or null if the method does not exist.
-     */
-    private function invokeMethod(object $instance, string $class, ?string $method): mixed
-    {
-        if (! empty($method) && method_exists($instance, $method)) {
-            $params = $this->repository->classResource[$class]['method']['params'] ?? [];
-
-            return $instance->$method(...$params);
+        if (! $method || ! method_exists($instance, $method)) {
+            return null;
         }
 
-        return null;
+        $params = $classResource['method']['params'] ?? [];
+
+        return $instance->$method(...$params);
     }
 }
