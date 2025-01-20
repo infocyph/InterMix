@@ -2,19 +2,13 @@
 
 namespace Infocyph\InterMix\Tests\Fixture;
 
+/**
+ * Constructor injection for multiple interfaces + scalar strings.
+ */
 class ClassInitWInterface
 {
     private string $dbS;
 
-    /**
-     * Resolving constructor
-     *
-     * @param InterfaceA $interfaceA
-     * @param InterfaceB $interfaceB
-     * @param InterfaceC $interfaceC
-     * @param string $myString
-     * @param string $dbS
-     */
     public function __construct(
         protected InterfaceA $interfaceA,
         protected InterfaceB $interfaceB,
@@ -25,14 +19,14 @@ class ClassInitWInterface
         $this->dbS = $dbS;
     }
 
-    public function getValues()
+    public function getValues(): array
     {
         return [
-            'classA' => $this->interfaceA,
-            'classB' => $this->interfaceB,
-            'classC' => $this->interfaceC,
+            'classA'   => $this->interfaceA,
+            'classB'   => $this->interfaceB,
+            'classC'   => $this->interfaceC,
             'myString' => $this->myString,
-            'dbS' => $this->dbS,
+            'dbS'      => $this->dbS,
         ];
     }
 }

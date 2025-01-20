@@ -7,22 +7,11 @@ use Infocyph\InterMix\DI\Attribute\Infuse;
 class ClassA implements InterfaceA
 {
     /**
-     * Resolving method
-     * 1. 'ClassModel' class will be resolved into $classModel
-     * 2. If any parameter with the name 'classModel' is delivered, the value will be sent to
-     *    constructor of 'ClassModel' (parameter to Class binding)
-     * 3. If 'parameterA' don't have any parameter supply in form of Key => Value (associative)
-     *    it will be resolved by calling time() function
-     * 4. If 'parameterB' don't have any supply in form of value (non-associative) / Key => Value
-     *    (associative) the 'db.host' will be resolved from definition (same steps as of property)
-     * 5. Any leftover supply parameter(s) will be resolved in variadic $parameterC
-     * 6. If variadic is not present and supply parameters have values left, it will be ignored
-     *
-     * @param ClassB $classB
-     * @param string $parameterA
-     * @param string $parameterB
-     * @param ...$parameterC
-     * @return array
+     * Showcases method injection with:
+     *  1) "ClassB $classB" => typed param
+     *  2) "string $parameterA" => with attribute Infuse(...) => if no param is given, use that
+     *  3) "string $parameterB" => with #[Infuse('db.host')] => from definition
+     *  4) variadic $parameterC => leftover parameters
      */
     #[Infuse(parameterA: 'gethostname')]
     public function resolveIt(

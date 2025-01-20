@@ -7,23 +7,13 @@ namespace Infocyph\InterMix\DI\Resolver;
 use Infocyph\InterMix\DI\Attribute\Infuse;
 use Infocyph\InterMix\DI\Reflection\ReflectionResource;
 use Infocyph\InterMix\Exceptions\ContainerException;
-use Psr\Cache\InvalidArgumentException;
 use ReflectionClass;
-use ReflectionException;
 use ReflectionMethod;
 
 class ClassResolver
 {
-    /**
-     * Tracks classes currently being resolved to detect circular dependencies.
-     *
-     * @var array<string,bool>
-     */
     private array $entriesResolving = [];
 
-    /**
-     * Constructor for the class.
-     */
     public function __construct(
         private Repository $repository,
         private readonly ParameterResolver $parameterResolver,
@@ -33,46 +23,62 @@ class ClassResolver
     }
 
     /**
-     * Resolves the given Infuse object and returns the result.
-     *
-     * @return mixed The resolved value (or null if function/class not found).
-     *
-     * @throws ContainerException|ReflectionException|InvalidArgumentException
+     * If you have an Infuse attribute referencing a function or a class definition, we handle it.
      */
     public function resolveInfuse(Infuse $infuse): mixed
     {
-        $type = $infuse->getParameterData('type');
+        // 1) Extract the "type" (class name, function name, definition ID, etc.)
+        $typeData = $infuse->getParameterData();
+        // e.g. ['type' => 'SomeClassOrFunction', 'data' => [...]]
 
-        // 1) If we have a definition (functionReference) for $type
+        $type = $typeData['type'] ?? null;
+        $data = $typeData['data'] ?? [];  // extra data (array) if present
+
+        // If no type, nothing to resolve
+        if (! $type) {
+            return null;
+        }
+
+        // 2) If $type is in functionReference => let definitionResolver handle it
         if ($this->repository->hasFunctionReference($type)) {
             return $this->definitionResolver->resolve($type);
         }
 
-        // 2) If it is a global function
+        // 3) If $type is a global function name
         if (function_exists($type)) {
-            // e.g. call user function with Infuse data
-            $reflectionFn = ReflectionResource::getFunctionReflection($type);
+            // Reflect the function to figure out parameters
+            $reflectionFn = new \ReflectionFunction($type);
+            // Use parameterResolver to handle injection or data
+            $args = $this->parameterResolver->resolve($reflectionFn, (array) $data, 'constructor');
 
-            return $type(...$this->parameterResolver->resolve(
-                $reflectionFn,
-                (array) $infuse->getParameterData('data'),
-                'constructor'
-            ));
+            // Call the function with resolved arguments
+            return $type(...$args);
         }
 
-        // 3) Otherwise return null if there's nothing to resolve
+        // 4) If $type is a class or interface => do a reflection-based resolution
+        if (class_exists($type) || interface_exists($type)) {
+            // (Optional) environment-based override if it's an interface
+            if (interface_exists($type)) {
+                $envConcrete = $this->repository->getEnvConcrete($type);
+                if ($envConcrete && class_exists($envConcrete)) {
+                    $type = $envConcrete;
+                }
+            }
+
+            // Reflect & resolve using ClassResolver
+            $reflection = ReflectionResource::getClassReflection($type);
+            $resolved = $this->resolve($reflection);
+
+            // $resolved is typically an array with ['instance'=>..., 'returned'=>...]
+            return $resolved['instance'] ?? $resolved;
+        }
+
+        // 5) Otherwise, we have no way to resolve it
         return null;
     }
 
     /**
-     * Resolves a given class and returns the resolved resources.
-     *
-     * @param  mixed  $supplied  Extra data for constructor or interface resolution
-     * @param  string|bool|null  $callMethod  The method to be called (or false if none)
-     * @param  bool  $make  Whether to create a new instance ignoring previous
-     * @return array The resolved resource: ['instance' => object, 'returned' => mixed|null, ...]
-     *
-     * @throws ContainerException|ReflectionException|InvalidArgumentException
+     * Resolves a given class, returning ['instance'=>..., 'returned'=>...].
      */
     public function resolve(
         ReflectionClass $class,
@@ -80,85 +86,66 @@ class ClassResolver
         string|bool|null $callMethod = null,
         bool $make = false
     ): array {
-        // Possibly replace if $class is interface
+        // Possibly environment-based interface => check if $class->isInterface(), then environment override
         $class = $this->getConcreteClassForInterface($class, $supplied);
         $className = $class->getName();
 
-        if ($make) {
-            return $this->resolveMake($class, $className, $callMethod);
+        // If debug
+        if ($this->repository->isDebug()) {
+            // e.g. error_log("ClassResolver: resolving $className, make=$make");
         }
 
-        $this->resolveClassResources($class, $className, $callMethod);
-
-        return $this->repository->getResolvedResource()[$className];
+        return $make
+            ? $this->resolveMake($class, $className, $callMethod)
+            : $this->resolveClassResources($class, $className, $callMethod);
     }
 
-    /**
-     * Internal method that resolves a "make" request to produce a fresh instance.
-     */
     private function resolveMake(
         ReflectionClass $class,
         string $className,
         string|bool|null $callMethod
     ): array {
-        // Temporarily store the existing resolved resource
         $existing = $this->repository->getResolvedResource()[$className] ?? [];
 
-        // Rebuild the instance from scratch
+        // build fresh
         $this->resolveConstructor($class);
         $this->propertyResolver->resolve($class);
         $this->resolveMethod($class, $callMethod);
 
-        // Now store the newly built resource, but revert $repository->resolvedResource[$className]
-        // to the original to avoid overwriting the "singleton" or shared resource.
-        $newlyBuilt = $this->repository->getResolvedResource()[$className];
+        $newlyBuilt = $this->repository->getResolvedResource()[$className] ?? [];
+        // revert the old
         $this->repository->setResolvedResource($className, $existing);
 
         return $newlyBuilt;
     }
 
-    /**
-     * Resolves the resources for a class if not already resolved.
-     *
-     * @throws ReflectionException|ContainerException|InvalidArgumentException
-     */
     private function resolveClassResources(
         ReflectionClass $class,
         string $className,
         string|bool|null $callMethod
-    ): void {
-        // Check for circular dependency
+    ): array {
         if (isset($this->entriesResolving[$className])) {
-            throw new ContainerException(
-                "Circular dependency detected while resolving class '$className'"
-            );
+            throw new ContainerException("Circular dependency on $className");
         }
         $this->entriesResolving[$className] = true;
 
         try {
-            // If instance not built yet, resolve constructor
             $resolvedResource = $this->repository->getResolvedResource()[$className] ?? [];
+
             if (! isset($resolvedResource['instance'])) {
                 $this->resolveConstructor($class);
             }
-
-            // If property not resolved, do property injection
             if (! isset($resolvedResource['property'])) {
                 $this->propertyResolver->resolve($class);
             }
-
-            // Optionally call a method
             $this->resolveMethod($class, $callMethod);
+
+            return $this->repository->getResolvedResource()[$className] ?? [];
         } finally {
             unset($this->entriesResolving[$className]);
         }
     }
 
-    /**
-     * If ReflectionClass is an interface, attempt to reflect the user-supplied class.
-     *
-     * @throws ContainerException|ReflectionException
-     */
     private function getConcreteClassForInterface(
         ReflectionClass $class,
         mixed $supplied
@@ -166,110 +153,82 @@ class ClassResolver
         if (! $class->isInterface()) {
             return $class;
         }
+        $className = $class->getName();
+        // environment override
+        $envConcrete = $this->repository->getEnvConcrete($className);
+        if ($envConcrete) {
+            $class = new ReflectionClass($envConcrete);
+            if (! $class->implementsInterface($className)) {
+                throw new ContainerException("$envConcrete doesn't implement $className");
+            }
 
-        $interfaceName = $class->getName();
+            return $class;
+        }
+        // fallback to $supplied
         if (! $supplied || ! class_exists($supplied)) {
-            throw new ContainerException(
-                "Resolution failed ($supplied) for interface $interfaceName"
-            );
+            throw new ContainerException("Resolution failed ($supplied) for interface $className");
+        }
+        $reflect = new ReflectionClass($supplied);
+        if (! $reflect->implementsInterface($className)) {
+            throw new ContainerException("$supplied doesn't implement $className");
         }
 
-        // e.g. $supplied is "ConcreteClass"
-        $concreteReflect = ReflectionResource::getClassReflection($supplied);
-        if (! $concreteReflect->implementsInterface($interfaceName)) {
-            throw new ContainerException(
-                "$supplied doesn't implement $interfaceName"
-            );
-        }
-
-        return $concreteReflect;
+        return $reflect;
     }
 
-    /**
-     * Resolves the constructor of a given class (if any) and stores the instance.
-     *
-     * @throws ContainerException If the class is not instantiable
-     * @throws ReflectionException|InvalidArgumentException
-     */
     private function resolveConstructor(ReflectionClass $class): void
     {
         $className = $class->getName();
-
         if (! $class->isInstantiable()) {
             throw new ContainerException("$className is not instantiable!");
         }
-
         $constructor = $class->getConstructor();
+        $resolvedResource = $this->repository->getResolvedResource()[$className] ?? [];
+
         if ($constructor === null) {
-            // No constructor => create instance with no arguments
-            $instance = $class->newInstanceWithoutConstructor();
+            $resolvedResource['instance'] = $class->newInstanceWithoutConstructor();
         } else {
-            // Resolve constructor params
-            $classResource = $this->repository->getClassResource();
-            $suppliedParams = $classResource[$className]['constructor']['params'] ?? [];
-
-            $args = $this->parameterResolver->resolve($constructor, $suppliedParams, 'constructor');
-            $instance = $class->newInstanceArgs($args);
+            $classRes = $this->repository->getClassResource();
+            $params = $classRes[$className]['constructor']['params'] ?? [];
+            $args = $this->parameterResolver->resolve($constructor, $params, 'constructor');
+            $resolvedResource['instance'] = $class->newInstanceArgs($args);
         }
-
-        // Store in repository->resolvedResource[$className]['instance']
-        $resolved = $this->repository->getResolvedResource()[$className] ?? [];
-        $resolved['instance'] = $instance;
-        $this->repository->setResolvedResource($className, $resolved);
+        $this->repository->setResolvedResource($className, $resolvedResource);
     }
 
-    /**
-     * Resolves the method call for the class if needed, storing the return in ['returned'].
-     *
-     *
-     * @throws ReflectionException|ContainerException|InvalidArgumentException
-     */
-    private function resolveMethod(ReflectionClass $class, string|bool|null $callMethod = null): void
-    {
+    private function resolveMethod(
+        ReflectionClass $class,
+        string|bool|null $callMethod
+    ): void {
         $className = $class->getName();
-
-        // Initialize 'returned' to null in repository
         $resolvedResource = $this->repository->getResolvedResource()[$className] ?? [];
         $resolvedResource['returned'] = null;
 
-        // If $callMethod === false, we skip calling any method
         if ($callMethod === false) {
             $this->repository->setResolvedResource($className, $resolvedResource);
 
             return;
         }
 
-        // If user didn't supply a method, check classResource or defaultMethod
         $method = $callMethod
             ?: ($this->repository->getClassResource()[$className]['method']['on'] ?? null)
                 ?: ($class->getConstant('callOn') ?: $this->repository->getDefaultMethod());
 
-        // If no method found, try __invoke if available, else skip
         if (! $method && $class->hasMethod('__invoke')) {
             $method = '__invoke';
         }
-
         if (! $method || ! $class->hasMethod($method)) {
-            // No method to call
             $this->repository->setResolvedResource($className, $resolvedResource);
 
             return;
         }
 
-        // Use ReflectionResource to get a ReflectionMethod (caching)
-        $reflectionMethod = ReflectionResource::getCallableReflection([$className, $method]);
+        $refMethod = new ReflectionMethod($className, $method);
+        $classRes = $this->repository->getClassResource();
+        $params = $classRes[$className]['method']['params'] ?? [];
+        $args = $this->parameterResolver->resolve($refMethod, $params, 'method');
 
-        // Resolve method params (if any)
-        $classResource = $this->repository->getClassResource();
-        $suppliedParams = $classResource[$className]['method']['params'] ?? [];
-
-        $args = $this->parameterResolver->resolve($reflectionMethod, $suppliedParams, 'method');
-
-        // Call the method
-        $instance = $resolvedResource['instance'];
-        $returned = $reflectionMethod->invokeArgs($instance, $args);
-
-        // Store in repository
+        $returned = $refMethod->invokeArgs($resolvedResource['instance'], $args);
         $resolvedResource['returned'] = $returned;
         $this->repository->setResolvedResource($className, $resolvedResource);
     }

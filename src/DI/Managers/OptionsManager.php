@@ -12,6 +12,7 @@ use Infocyph\InterMix\Exceptions\ContainerException;
 
 /**
  * Handles toggling injection, method attributes, property attributes, etc.
+ * Optionally environment / debug toggles if you want them all in one place.
  */
 class OptionsManager
 {
@@ -19,20 +20,12 @@ class OptionsManager
         protected Repository $repository,
         protected Container  $container
     ) {
-        //
     }
 
     /**
-     * Configure injection options for the container.
+     * Basic DI toggles (like before).
      *
-     * @param  bool        $injection
-     * @param  bool        $methodAttributes
-     * @param  bool        $propertyAttributes
-     * @param  string|null $defaultMethod
-     *
-     * @return $this
-     *
-     * @throws ContainerException if container is locked
+     * @throws ContainerException if locked
      */
     public function setOptions(
         bool $injection = true,
@@ -40,25 +33,54 @@ class OptionsManager
         bool $propertyAttributes = false,
         ?string $defaultMethod = null
     ): self {
-        // Ensure not locked
-        $this->repository->checkIfLocked();
-
-        // Update repository toggles
+        // The repository does its own lock check
         $this->repository->enableMethodAttribute($methodAttributes);
         $this->repository->enablePropertyAttribute($propertyAttributes);
         $this->repository->setDefaultMethod($defaultMethod);
 
-        // Switch the container’s resolver property
+        // Switch container’s $resolver
         $this->container->setResolverClass(
             $injection ? InjectedCall::class : GenericCall::class
         );
-
         return $this;
     }
 
     /**
-     * Optionally let the user chain back to the parent Container.
+     * Optionally handle environment, debug, lazy toggles here instead of calling container directly.
      */
+    public function setEnvironment(string $env): self
+    {
+        $this->repository->setEnvironment($env);
+        return $this;
+    }
+
+    public function enableDebug(bool $enabled = true): self
+    {
+        $this->repository->setDebug($enabled);
+        return $this;
+    }
+
+    public function enableLazyLoading(bool $lazy = true): self
+    {
+        $this->repository->enableLazyLoading($lazy);
+        return $this;
+    }
+
+    public function definitions(): DefinitionManager
+    {
+        return $this->container->definitions();
+    }
+
+    public function registration(): RegistrationManager
+    {
+        return $this->container->registration();
+    }
+
+    public function invocation(): InvocationManager
+    {
+        return $this->container->invocation();
+    }
+
     public function end(): Container
     {
         return $this->container;

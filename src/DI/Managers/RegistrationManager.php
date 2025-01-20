@@ -9,8 +9,7 @@ use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Resolver\Repository;
 
 /**
- * Handles registering closures, classes, methods, and properties
- * into the Repository so they can be resolved later.
+ * Handles registering closures, classes, methods, and properties.
  */
 class RegistrationManager
 {
@@ -18,79 +17,75 @@ class RegistrationManager
         protected Repository $repository,
         protected Container  $container
     ) {
-        //
     }
 
     /**
-     * Registers a closure under a specific alias, with optional parameters.
+     * Registers a closure alias with optional parameters.
      */
     public function registerClosure(
         string $closureAlias,
         callable|Closure $function,
         array $parameters = []
     ): self {
-        $this->repository->checkIfLocked();
-
-        // Use a repository setter for closure resource
         $this->repository->addClosureResource($closureAlias, $function, $parameters);
-
         return $this;
     }
 
     /**
-     * Registers a class with given parameters (for its constructor).
+     * Registers a class with constructor parameters.
      */
     public function registerClass(string $class, array $parameters = []): self
     {
-        $this->repository->checkIfLocked();
-
-        // We store it in 'constructor' => [ 'on' => '__constructor', 'params' => $parameters ]
         $this->repository->addClassResource($class, 'constructor', [
             'on'     => '__constructor',
             'params' => $parameters,
         ]);
-
         return $this;
     }
 
     /**
-     * Registers a method for a given class with optional parameters.
+     * Registers a method for a given class with parameters.
      */
     public function registerMethod(
         string $class,
         string $method,
         array $parameters = []
     ): self {
-        $this->repository->checkIfLocked();
-
         $this->repository->addClassResource($class, 'method', [
             'on'     => $method,
             'params' => $parameters,
         ]);
-
         return $this;
     }
 
     /**
-     * Registers a property (or multiple) for a given class.
-     * Merges with any existing property definitions.
+     * Registers one or more properties for a given class.
      */
     public function registerProperty(string $class, array $property): self
     {
-        $this->repository->checkIfLocked();
-
-        // Combine with existing property array
+        // Merge with existing
         $existing = $this->repository->getClassResource()[$class]['property'] ?? [];
         $merged   = array_merge($existing, $property);
 
         $this->repository->addClassResource($class, 'property', $merged);
-
         return $this;
     }
 
-    /**
-     * Optional: let the user chain back to the parent Container.
-     */
+    public function definitions(): DefinitionManager
+    {
+        return $this->container->definitions();
+    }
+
+    public function options(): OptionsManager
+    {
+        return $this->container->options();
+    }
+
+    public function invocation(): InvocationManager
+    {
+        return $this->container->invocation();
+    }
+
     public function end(): Container
     {
         return $this->container;

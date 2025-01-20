@@ -5,158 +5,159 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Managers;
 
 use Closure;
-use Exception;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Resolver\Repository;
-use Infocyph\InterMix\Exceptions\ContainerException;
 
 /**
- * Handles "invocation"-related methods:
- *   - get(), has(), getReturn()
- *   - call(), make()
+ * Handles get(), has(), getReturn(), call(), make() with optional lazy loading.
  */
 class InvocationManager
 {
     public function __construct(
         protected Repository $repository,
-        protected Container  $container
+        protected Container $container
     ) {
-        //
     }
 
     /**
-     * Return the "returned" value from the resolved resource if it exists, otherwise the instance.
+     * Return the "returned" value from a resolved resource if it exists.
      */
     public function getReturn(string $id): mixed
     {
-        // Just call get($id) for the instance
         $resolved = $this->get($id);
-
-        // Then see if there's a "returned" value in $this->repository->resolved[$id]
         $resource = $this->repository->getResolved()[$id] ?? [];
+
         return $resource['returned'] ?? $resolved;
     }
 
     /**
-     * Main resolution routine to get an instance by ID.
+     * Main resolution routine for ID-based retrieval.
      */
     public function get(string $id): mixed
     {
-        // Already in resolved?
-        $resolvedAll = $this->repository->getResolved();
-        if (isset($resolvedAll[$id])) {
-            $existing = $resolvedAll[$id];
-            return $existing['instance'] ?? $existing;
+        // Check if already resolved
+        $allResolved = $this->repository->getResolved();
+        if (isset($allResolved[$id])) {
+            // If we did "lazy", we might store a closure or placeholder
+            $existing = $allResolved[$id];
+
+            // If it's an array with e.g. ['lazyPlaceholder' => <callable>], do real resolution now
+            if (isset($existing['lazyPlaceholder']) && is_callable($existing['lazyPlaceholder'])) {
+                $this->repository->setResolved($id, $existing['lazyPlaceholder']());
+            }
+
+            $fresh = $this->repository->getResolved()[$id];
+
+            return $fresh['instance'] ?? $fresh;
         }
 
-        // If in functionReference => we can resolve by definition
-        if ($this->repository->hasFunctionReference($id)) {
+        // If in functionReference => resolve definition
+        if (array_key_exists($id, $this->repository->getFunctionReference())) {
             return $this->resolveDefinition($id);
         }
 
-        // Otherwise, try call() with $id as a class/closure name
-        $value = $this->call($id);
-        // If returned array includes 'instance', return that, else the array itself
-        return $value['instance'] ?? $value;
+        // Otherwise, attempt call with $id as a class name
+        $resolved = $this->call($id);
+
+        $this->repository->setResolved($id, $resolved);
+
+        return $resolved['instance'] ?? $resolved;
     }
 
-    /**
-     * Whether the container has a definition or a previously-resolved instance.
-     * If neither, tries to see if get($id) can succeed without error.
-     */
     public function has(string $id): bool
     {
-        // 1) Is in function reference?
-        if ($this->repository->hasFunctionReference($id)) {
-            return true;
-        }
-        // 2) Is in resolved array?
-        if (isset($this->repository->getResolved()[$id])) {
-            return true;
-        }
-        // 3) Attempt final resolution
-        try {
-            $this->get($id);
-            return true;
-        } catch (Exception) {
-            return false;
-        }
+        return array_key_exists($id, $this->repository->getFunctionReference()) ||
+            isset($this->repository->getResolved()[$id]);
     }
 
     /**
-     * call() resolves a class or closure in multiple ways:
-     *   - If a string ID in functionReference => resolveByDefinition
-     *   - If a closure/callable => pass to the chosen resolver's closureSettler
-     *   - If a closure alias => also pass
-     *   - If a string class name => pass to resolver->classSettler
+     * call() resolves a class/closure in multiple ways
      */
-    public function call(
-        string|Closure|callable $classOrClosure,
-        string|bool|null $method = null
-    ): mixed {
-        // Determine which invoker to use (InjectedCall or GenericCall)
+    public function call(string|Closure|callable $classOrClosure, string|bool|null $method = null): mixed
+    {
         $resolverClass = $this->container->getRepositoryResolverClass();
-        $resolver      = new $resolverClass($this->repository);
+        $resolver = new $resolverClass($this->repository);
 
-        // 1) If string and is a known functionReference ID => resolve it
-        if (is_string($classOrClosure) && $this->repository->hasFunctionReference($classOrClosure)) {
+        // 1) If string & in functionReference
+        if (is_string($classOrClosure) &&
+            array_key_exists($classOrClosure, $this->repository->getFunctionReference())) {
             return $resolver->resolveByDefinition($classOrClosure);
         }
 
-        // 2) If closure or generic callable => closureSettler
+        // 2) If a closure/callable
         if ($classOrClosure instanceof Closure || is_callable($classOrClosure)) {
             return $resolver->closureSettler($classOrClosure);
         }
 
-        // 3) If it’s a closure alias in closureResource
+        // 3) If closure alias
         $closureRes = $this->repository->getClosureResource();
-        if (is_string($classOrClosure) && isset($closureRes[$classOrClosure]['on'])) {
-            $on     = $closureRes[$classOrClosure]['on'];
+        if (is_string($classOrClosure) && isset($closureRes[$classOrClosure])) {
+            $on = $closureRes[$classOrClosure]['on'];
             $params = $closureRes[$classOrClosure]['params'];
+
             return $resolver->closureSettler($on, $params);
         }
 
-        // 4) Otherwise assume it’s a class name
-        if (is_string($classOrClosure)) {
-            return $resolver->classSettler($classOrClosure, $method);
-        }
-
-        throw new ContainerException('Invalid class/closure format in call().');
+        // 4) Otherwise assume class name
+        return $resolver->classSettler($classOrClosure, $method);
     }
 
     /**
-     * Create a new instance ignoring any existing singletons/resolved.
+     * make(): always produce a fresh new instance ignoring any existing resolution.
      */
     public function make(string $class, string|bool $method = false): mixed
     {
         $resolverClass = $this->container->getRepositoryResolverClass();
-        $resolver      = new $resolverClass($this->repository);
+        $resolver = new $resolverClass($this->repository);
 
-        $resolved = $resolver->classSettler($class, $method, make: true);
-        return $method ? $resolved['returned'] : $resolved['instance'];
+        $fresh = $resolver->classSettler($class, $method, make: true);
+
+        return $method ? $fresh['returned'] : $fresh['instance'];
     }
 
     /**
-     * Helper: resolves a definition for $id and store in repository->resolved[$id].
+     * Resolve a definition & store in "resolved". If lazy loading is on, we might store a placeholder.
      */
     protected function resolveDefinition(string $id): mixed
     {
         $resolverClass = $this->container->getRepositoryResolverClass();
-        $resolver      = new $resolverClass($this->repository);
+        $resolver = new $resolverClass($this->repository);
 
-        $instance = $resolver->resolveByDefinition($id);
+        // If lazyLoading is on and we consider $id non-critical, we can store a lazy placeholder.
+        if ($this->repository->isLazyLoading()) {
+            // Example approach: store a closure that does real resolution
+            $lazy = [
+                'lazyPlaceholder' => function () use ($resolver, $id) {
+                    return $resolver->resolveByDefinition($id); // array with 'instance' etc.
+                },
+            ];
+            $this->repository->setResolved($id, $lazy);
 
-        // Store it in 'resolved'
-        $allResolved = $this->repository->getResolved();
-        $allResolved[$id] = $instance;
-        $this->repository->setResolved($id, $instance);
+            return $lazy; // user won't get a real instance until "get($id)" is re-called
+        }
 
-        return $instance['instance'] ?? $instance;
+        // Otherwise, do immediate resolution
+        $value = $resolver->resolveByDefinition($id);
+        $this->repository->setResolved($id, $value);
+
+        return is_array($value) && isset($value['instance']) ? $value['instance'] : $value;
     }
 
-    /**
-     * Optional: chain back to the parent Container if desired.
-     */
+    public function definitions(): DefinitionManager
+    {
+        return $this->container->definitions();
+    }
+
+    public function registration(): RegistrationManager
+    {
+        return $this->container->registration();
+    }
+
+    public function options(): OptionsManager
+    {
+        return $this->container->options();
+    }
+
     public function end(): Container
     {
         return $this->container;

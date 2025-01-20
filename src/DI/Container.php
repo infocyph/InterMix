@@ -6,7 +6,6 @@ namespace Infocyph\InterMix\DI;
 
 use Closure;
 use Exception;
-use Infocyph\InterMix\DI\Invoker\InjectedCall;
 use Infocyph\InterMix\DI\Managers\DefinitionManager;
 use Infocyph\InterMix\DI\Managers\InvocationManager;
 use Infocyph\InterMix\DI\Managers\OptionsManager;
@@ -19,7 +18,11 @@ use Psr\Container\ContainerInterface;
 
 /**
  * Main Container class (implements PSR-11).
- * Delegates advanced logic to sub-managers.
+ * Incorporates:
+ *   - environment-based logic (through Repository)
+ *   - debug toggles
+ *   - optional lazy loading
+ *   - concurrency safety (via ReflectionResource, if enabled)
  */
 class Container implements ContainerInterface
 {
@@ -31,19 +34,19 @@ class Container implements ContainerInterface
     protected static array $instances = [];
 
     /**
-     * Shared repository for definitions, resolved instances, etc.
+     * Shared repository
      */
     protected Repository $repository;
 
     /**
-     * Current resolver class name (e.g. InjectedCall::class or GenericCall::class)
+     * Resolver class name (InjectedCall::class or GenericCall::class or custom).
      *
      * @var class-string
      */
     protected string $resolver;
 
     /**
-     * Sub-Managers
+     * Sub-managers
      */
     protected DefinitionManager $definitionManager;
 
@@ -53,23 +56,23 @@ class Container implements ContainerInterface
 
     protected InvocationManager $invocationManager;
 
-    /**
-     * Container constructor
-     */
-    public function __construct(
-        private readonly string $instanceAlias = 'default'
-    ) {
-        // Store instance in static registry
+    public function __construct(private readonly string $instanceAlias = 'default')
+    {
+        // Store in static registry
         self::$instances[$this->instanceAlias] ??= $this;
 
-        // Initialize repository
+        // Create the repository, default alias, initial states
         $this->repository = new Repository();
-        // By default, map ContainerInterface::class => $this
-        $this->repository->functionReference = [ContainerInterface::class => $this];
-        $this->repository->alias = $this->instanceAlias;
+        $this->repository->setAlias($this->instanceAlias);
 
-        // Default resolver
-        $this->resolver = InjectedCall::class;
+        // By default, map ContainerInterface::class => $this (like your original)
+        $this->repository->setFunctionReference(
+            ContainerInterface::class,
+            $this
+        );
+
+        // Default resolver => "injected" style
+        $this->resolver = \Infocyph\InterMix\DI\Invoker\InjectedCall::class;
 
         // Create manager objects
         $this->definitionManager = new DefinitionManager($this->repository, $this);
@@ -79,7 +82,7 @@ class Container implements ContainerInterface
     }
 
     /**
-     * Retrieve (or create) a container instance for a given alias
+     * Retrieve or create a container instance by alias.
      */
     public static function instance(string $instanceAlias = 'default'): static
     {
@@ -87,7 +90,7 @@ class Container implements ContainerInterface
     }
 
     /**
-     * Removes this instance from the registry
+     * PSR-11: Remove container instance from registry.
      */
     public function unset(): void
     {
@@ -95,22 +98,18 @@ class Container implements ContainerInterface
     }
 
     /**
-     * Lock the container from future modifications
+     * Lock the container from future modifications.
      */
     public function lock(): self
     {
-        $this->repository->isLocked = true;
+        // Let the repository handle the lock
+        $this->repository->lock();
 
         return $this;
     }
 
-    /*-------------------------------------------------------------------------
-     |  (A) PSR-11 interface methods: "get" + "has".                          |
-     |  The rest of the container features are delegated to managers.        |
-     *------------------------------------------------------------------------*/
-
     /**
-     * PSR-11 standard: Retrieve an entry by its identifier
+     * PSR-11: get(id)
      */
     public function get(string $id): mixed
     {
@@ -122,7 +121,7 @@ class Container implements ContainerInterface
     }
 
     /**
-     * PSR-11 standard: Check if the container can return an entry for this identifier
+     * PSR-11: has(id)
      */
     public function has(string $id): bool
     {
@@ -133,50 +132,110 @@ class Container implements ContainerInterface
         }
     }
 
-    /*-------------------------------------------------------------------------
-     |  (B) Getters for sub-managers (all advanced usage goes through them).  |
-     *------------------------------------------------------------------------*/
-
-    public function getDefinitionManager(): DefinitionManager
+    /**
+     * Retrieve the definition manager.
+     */
+    public function definitions(): DefinitionManager
     {
         return $this->definitionManager;
     }
 
-    public function getRegistrationManager(): RegistrationManager
+    /**
+     * Retrieve the registration manager.
+     */
+    public function registration(): RegistrationManager
     {
         return $this->registrationManager;
     }
 
-    public function getOptionsManager(): OptionsManager
+    /**
+     * Retrieve the options manager.
+     */
+    public function options(): OptionsManager
     {
         return $this->optionsManager;
     }
 
-    public function getInvocationManager(): InvocationManager
+    /**
+     * Retrieve the invocation manager.
+     */
+    public function invocation(): InvocationManager
     {
         return $this->invocationManager;
     }
 
-    /*-------------------------------------------------------------------------
-     |  (C) Helpers so managers can discover the current resolver.            |
-     *------------------------------------------------------------------------*/
-
+    /**
+     * Public accessor for the repository’s $resolver
+     */
     public function getRepositoryResolverClass(): string
     {
         return $this->resolver;
     }
 
+    /**
+     * Called by OptionsManager to switch between InjectedCall & GenericCall, etc.
+     */
     public function setResolverClass(string $resolverClass): void
     {
         $this->resolver = $resolverClass;
     }
 
     /*-------------------------------------------------------------------------
-     |  (D) Utility: split() + wrapException() are still in the container.    |
+     |  For convenience, you can still provide old facade methods if desired  |
+     |  e.g. addDefinitions(), bind(), call(), make(), getReturn()            |
      *------------------------------------------------------------------------*/
 
+    public function call(string|Closure|callable $classOrClosure, string|bool|null $method = null): mixed
+    {
+        return $this->invocationManager->call($classOrClosure, $method);
+    }
+
+    public function make(string $class, string|bool $method = false): mixed
+    {
+        return $this->invocationManager->make($class, $method);
+    }
+
+    public function getReturn(string $id): mixed
+    {
+        return $this->invocationManager->getReturn($id);
+    }
+
+    /*-------------------------------------------------------------------------
+     |  Environment/Debug/Lazy convenience wrappers if you prefer            |
+     *------------------------------------------------------------------------*/
+
+    public function setEnvironment(string $env): self
+    {
+        $this->repository->setEnvironment($env);
+
+        return $this;
+    }
+
+    public function enableDebug(bool $enabled = true): self
+    {
+        $this->repository->setDebug($enabled);
+
+        return $this;
+    }
+
+    public function enableLazyLoading(bool $lazy = true): self
+    {
+        $this->repository->enableLazyLoading($lazy);
+
+        return $this;
+    }
+
     /**
-     * Splits class@method / class::method / [class, method] into [class, method].
+     * Splits class@method / class::method / [class, method] / closure or callable
+     * into [class, method].
+     *
+     * If there's no method (e.g. just a class or a closure), we return [that, null].
+     *
+     * @param  string|array|Closure|callable  $classAndMethod
+     * @return array{0:mixed,1:?string} [classOrCallable, methodOrNull]
+     *
+     * @throws InvalidArgumentException
+     * @throws ContainerException
      */
     public function split(string|array|Closure|callable $classAndMethod): array
     {
@@ -184,46 +243,47 @@ class Container implements ContainerInterface
             throw new InvalidArgumentException('No argument provided!');
         }
 
-        $isString = is_string($classAndMethod);
-
-        // If a Closure or a string that is class_exists or is_callable
-        $callableFormation = match (true) {
-            $classAndMethod instanceof Closure
-            || ($isString && (class_exists($classAndMethod) || is_callable($classAndMethod))) => [$classAndMethod, null],
-
-            is_array($classAndMethod) && class_exists($classAndMethod[0]) => [$classAndMethod[0], $classAndMethod[1] ?? null],
-
-            default => null
-        };
-
-        if ($callableFormation) {
-            return $callableFormation;
+        // (1) If closure or a string that is a class_exists or function_exists,
+        //     or a general is_callable, we return [that, null].
+        //     This handles e.g. closures or "ClassName" with no method or a global function name.
+        if ($classAndMethod instanceof Closure ||
+            (is_string($classAndMethod) && (class_exists($classAndMethod) || function_exists($classAndMethod))) ||
+            is_callable($classAndMethod)
+        ) {
+            return [$classAndMethod, null];
         }
 
-        // If we have Class@method or Class::method
-        if ($isString) {
-            return match (true) {
-                str_contains($classAndMethod, '@') => explode('@', $classAndMethod, 2),
-                str_contains($classAndMethod, '::') => explode('::', $classAndMethod, 2),
-                default => throw new ContainerException(
-                    'Unknown Class & Method format. Use [class, method], class@method, or class::method'
-                )
-            };
+        // (2) If it's an array with 2 elements => [class, method]
+        if (is_array($classAndMethod) && count($classAndMethod) === 2) {
+            return [$classAndMethod[0], $classAndMethod[1]];
+        }
+
+        // (3) If it's a string with "@" => "Class@method"
+        if (is_string($classAndMethod) && str_contains($classAndMethod, '@')) {
+            return explode('@', $classAndMethod, 2);
+        }
+
+        // (4) If it's a string with "::" => "Class::method"
+        if (is_string($classAndMethod) && str_contains($classAndMethod, '::')) {
+            return explode('::', $classAndMethod, 2);
         }
 
         throw new ContainerException(
-            'Invalid callable/class format (closure, array, string, or callable expected).'
+            sprintf(
+                "Unknown Class & Method format for '%s'. Expected closure/callable, 'class@method', 'class::method', or [class,method].",
+                is_string($classAndMethod) ? $classAndMethod : gettype($classAndMethod)
+            )
         );
     }
 
-    /**
-     * Wraps exceptions with a more meaningful error message
-     */
+    /*-------------------------------------------------------------------------
+     |  Utility: wrapException                                               |
+     *------------------------------------------------------------------------*/
     private function wrapException(Exception $exception, string $id): Exception
     {
         return match (true) {
             $exception instanceof NotFoundException => new NotFoundException("No entry found for '$id'"),
-            default => new ContainerException("Error retrieving entry '$id': ".$exception->getMessage())
+            default => new ContainerException("Error retrieving entry '$id': ".$exception->getMessage()),
         };
     }
 }

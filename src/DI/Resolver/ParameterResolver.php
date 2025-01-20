@@ -8,7 +8,6 @@ use Infocyph\InterMix\DI\Attribute\IMStdClass;
 use Infocyph\InterMix\DI\Attribute\Infuse;
 use Infocyph\InterMix\DI\Reflection\ReflectionResource;
 use Infocyph\InterMix\Exceptions\ContainerException;
-use Psr\Cache\InvalidArgumentException;
 use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionException;
@@ -17,41 +16,35 @@ use ReflectionNamedType;
 use ReflectionParameter;
 
 /**
- * Responsible for resolving function/method parameters for dependency injection.
+ * Responsible for resolving function/method parameters for DI,
+ * possibly logging debug info, and checking environment-based overrides.
  */
 class ParameterResolver
 {
-    private ClassResolver        $classResolver;
-    private readonly IMStdClass  $stdClass;
+    private ClassResolver $classResolver;
+    private readonly IMStdClass $stdClass;
 
     /**
      * Caches the final resolved parameter arrays keyed by:
-     *  (reflector identity, type, and a hash of $suppliedParameters).
+     *   (reflector identity, type, hash of $suppliedParameters).
      */
     private array $resolvedCache = [];
 
     /**
-     * Caches Infuse attributes per method/reflector for repeated usage.
+     * Caches Infuse attributes per method/reflector.
      *
      * @var array<string, ReflectionAttribute[]>
      */
     private array $infuseCache = [];
 
-    /**
-     * @param  Repository          $repository
-     * @param  DefinitionResolver  $definitionResolver
-     */
     public function __construct(
         private Repository $repository,
         private readonly DefinitionResolver $definitionResolver
     ) {
-        // An instance used when resolution fails or is a built-in type we won't inject
+        // Fallback placeholder for unresolvable references
         $this->stdClass = new IMStdClass();
     }
 
-    /**
-     * Sets the ClassResolver instance for the object.
-     */
     public function setClassResolverInstance(ClassResolver $classResolver): void
     {
         $this->classResolver = $classResolver;
@@ -59,75 +52,63 @@ class ParameterResolver
 
     /**
      * Creates a cache key for calls to resolve().
-     * Combines the reflector identity, $type, and a hash of $suppliedParameters.
      */
     private function makeResolutionCacheKey(
         ReflectionFunctionAbstract $reflector,
         array $suppliedParameters,
         string $type
     ): string {
-        // E.g. 'OwnerClass::methodName|constructor|hashOfSuppliedParams'
         $owner = $reflector->class ?? '';
         $argsHash = hash('xxh3', serialize($suppliedParameters));
-
         return "$owner::{$reflector->getName()}|$type|$argsHash";
     }
 
     /**
-     * Returns Infuse attributes for a given reflector, using an internal cache.
-     *
-     * @return ReflectionAttribute[]
+     * Fetch Infuse attributes from the reflection object (cached).
      */
     private function getInfuseAttributes(ReflectionFunctionAbstract $reflector): array
     {
-        // e.g. "OwnerClass::methodName"
         $key = ($reflector->class ?? '').'::'.$reflector->getName();
-
         return $this->infuseCache[$key] ??= $reflector->getAttributes(Infuse::class);
     }
 
     /**
-     * Resolves a function parameter by its definition name or type.
-     *
-     * @throws ContainerException|ReflectionException|InvalidArgumentException
+     * Resolves the function parameter by name or reflection type,
+     * checking environment-based overrides if it’s an interface.
      */
     public function resolveByDefinitionType(string $name, ReflectionParameter $parameter): mixed
     {
         $parameterType = $parameter->getType();
 
-        return match (true) {
-            // 1) If definition is found in the repository's functionReference
-            $this->repository->hasFunctionReference($name) =>
-            $this->definitionResolver->resolve($name),
+        // 1) Check if $name is in functionReference (like older logic)
+        if ($this->repository->hasFunctionReference($name)) {
+            return $this->definitionResolver->resolve($name);
+        }
 
-            // 2) If param type is not a ReflectionNamedType => fallback to $this->stdClass
-            ! $parameterType instanceof ReflectionNamedType =>
-            $this->stdClass,
+        // 2) If type is not ReflectionNamedType => fallback to stdClass
+        if (! $parameterType instanceof ReflectionNamedType) {
+            return $this->stdClass;
+        }
 
-            // 3) If param's type name is in functionReference => resolve that class
-            $this->repository->hasFunctionReference($parameterType->getName()) =>
-            $this->definitionResolver->resolve($parameterType->getName()),
+        $typeName = $parameterType->getName();
 
-            // 4) Otherwise fallback to $this->stdClass
-            default => $this->stdClass
-        };
+        // 3) If typeName is in functionReference => resolve that
+        if ($this->repository->hasFunctionReference($typeName)) {
+            return $this->definitionResolver->resolve($typeName);
+        }
+
+        // 4) Otherwise fallback to stdClass
+        return $this->stdClass;
     }
 
     /**
-     * Resolves the parameters of a given function or method via DI.
-     *
-     * @param  ReflectionFunctionAbstract  $reflector         The function/method to reflect
-     * @param  array                       $suppliedParameters
-     * @param  string                      $type              e.g. 'constructor' or 'method'
-     *
-     * @throws ReflectionException|ContainerException|InvalidArgumentException
+     * Main method: resolves function/method parameters.
      */
     public function resolve(
         ReflectionFunctionAbstract $reflector,
         array $suppliedParameters,
         string $type
     ): array {
-        // 1) Try cached result
         $cacheKey = $this->makeResolutionCacheKey($reflector, $suppliedParameters, $type);
         if (isset($this->resolvedCache[$cacheKey])) {
             return $this->resolvedCache[$cacheKey];
@@ -137,7 +118,14 @@ class ParameterResolver
         $applyAttribute  = $this->repository->isMethodAttributeEnabled()
             && ($type === 'constructor' xor ($reflector->class ?? null));
 
-        // If we apply method-level attributes, pre-fetch them
+        // Possibly log debug
+        if ($this->repository->isDebug()) {
+            $owner = $reflector->class ?? $reflector->getName();
+            // You might do some logging or store debug messages
+            // e.g. error_log("ParameterResolver: Resolving params for $owner::$type");
+        }
+
+        // if method-level Infuse attributes exist
         $attributeData = [];
         if ($applyAttribute) {
             $attributeData = $this->resolveMethodAttributes(
@@ -145,7 +133,7 @@ class ParameterResolver
             );
         }
 
-        // 2) Resolve associative parameters first
+        // 1) Resolve associative params
         [
             'availableParams' => $paramsLeft,
             'processed'       => $processed,
@@ -159,7 +147,7 @@ class ParameterResolver
             $attributeData
         );
 
-        // 3) Resolve numeric/default/variadic parameters
+        // 2) Resolve numeric/default/variadic
         [
             'processed' => $numProcessed,
             'variadic'  => $variadic
@@ -170,45 +158,28 @@ class ParameterResolver
             $applyAttribute
         );
 
-        // Merge them
         $processed += $numProcessed;
 
-        // 4) Handle variadic if present
+        // 3) If we have a variadic param
         if ($variadic['value'] !== null) {
             $processed = $this->processVariadic($processed, $variadic, $sort);
         }
 
-        // 5) Cache and return
         return $this->resolvedCache[$cacheKey] = $processed;
     }
 
-    /**
-     * Extract Infuse method-level data if present.
-     *
-     * Only the first attribute is used, if any.
-     */
     private function resolveMethodAttributes(array $attributes): array
     {
-        if (! $attributes || empty($attributes[0]->getArguments())) {
+        if (!$attributes || empty($attributes[0]->getArguments())) {
             return [];
         }
-
         // e.g. $attributes[0]->newInstance()->getMethodData()
-        return $attributes[0]->newInstance()->getMethodData();
+        return $attributes[0]->newInstance()->getMethodArguments();
     }
 
     /**
-     * Resolve "associative" (named) parameters by scanning the reflection params
-     * and checking multiple strategies (definition, reflectable class, method attribute, etc.).
-     *
-     * @return array{
-     *   availableParams: ReflectionParameter[],
-     *   processed: array<string,mixed>,
-     *   availableSupply: array<int|string,mixed>,
-     *   sort: array<string,int>
-     * }
-     *
-     * @throws ContainerException|ReflectionException|InvalidArgumentException
+     * Resolve "associative" parameters by scanning reflection parameters
+     * and checking definition references, class reflection, method attributes, etc.
      */
     private function resolveAssociativeParameters(
         ReflectionFunctionAbstract $reflector,
@@ -222,16 +193,14 @@ class ParameterResolver
         $sort       = [];
 
         foreach ($availableParams as $key => $param) {
-            $paramName   = $param->getName();
+            $paramName = $param->getName();
             $sort[$paramName] = $key;
 
             if ($param->isVariadic()) {
-                // We break here if we hit a variadic param
                 $paramsLeft[] = $param;
                 break;
             }
 
-            // Attempt resolution by multiple strategies
             $resolvedValue = $this->tryResolveAssociative(
                 $reflector,
                 $param,
@@ -244,12 +213,10 @@ class ParameterResolver
             if ($resolvedValue !== $this->stdClass) {
                 $processed[$paramName] = $resolvedValue;
             } else {
-                // Not resolved => put param in leftover
                 $paramsLeft[] = $param;
             }
         }
 
-        // If the last param is variadic, the "availableSupply" is the rest; otherwise only numeric keys
         $lastKey = array_key_last($paramsLeft);
         $useNumeric = ($lastKey !== null && $paramsLeft[$lastKey]->isVariadic())
             ? array_diff_key($suppliedParameters, $processed)
@@ -259,21 +226,10 @@ class ParameterResolver
             'availableParams' => $paramsLeft,
             'processed'       => $processed,
             'availableSupply' => $useNumeric,
-            'sort'            => $sort,
+            'sort'            => $sort
         ];
     }
 
-    /**
-     * Tries to resolve an associative parameter with multiple strategies:
-     *  1) By definition reference
-     *  2) By reflectable class
-     *  3) By method attributes array
-     *  4) By checking if it's in suppliedParameters
-     *
-     * Returns $this->stdClass if none of these work.
-     *
-     * @throws ContainerException|ReflectionException|InvalidArgumentException
-     */
     private function tryResolveAssociative(
         ReflectionFunctionAbstract $reflector,
         ReflectionParameter $param,
@@ -290,7 +246,7 @@ class ParameterResolver
             return $definition;
         }
 
-        // 2) By reflectable class
+        // 2) Possibly environment-based interface => concrete
         $classReflection = $this->getResolvableReflection($reflector, $param, $type, $processed);
         if ($classReflection) {
             $nameHint = $classReflection->isInterface()
@@ -304,7 +260,7 @@ class ParameterResolver
             );
         }
 
-        // 3) By method attribute data
+        // 3) Method-level attribute array
         if (isset($parameterAttribute[$paramName])) {
             $resolved = $this->resolveIndividualAttribute($param, $parameterAttribute[$paramName]);
             if ($resolved !== $this->stdClass) {
@@ -312,30 +268,14 @@ class ParameterResolver
             }
         }
 
-        // 4) If explicitly in $suppliedParameters
+        // 4) If explicitly in suppliedParameters
         if (array_key_exists($paramName, $suppliedParameters)) {
             return $suppliedParameters[$paramName];
         }
 
-        // Not resolved => fallback
         return $this->stdClass;
     }
 
-    /**
-     * Resolves numeric/default/variadic parameters.
-     *
-     * @param  ReflectionFunctionAbstract $reflector
-     * @param  ReflectionParameter[]      $availableParams
-     * @param  array                      $suppliedParameters
-     * @param  bool                       $applyAttribute
-     *
-     * @return array{
-     *   processed: array<string,mixed>,
-     *   variadic: array{type: ?ReflectionNamedType, value: mixed}
-     * }
-     *
-     * @throws ContainerException|ReflectionException|InvalidArgumentException
-     */
     private function resolveNumericDefaultParameters(
         ReflectionFunctionAbstract $reflector,
         array $availableParams,
@@ -343,12 +283,7 @@ class ParameterResolver
         bool $applyAttribute
     ): array {
         $processed = [];
-        $variadic  = [
-            'type'  => null,
-            'value' => null,
-        ];
-
-        // Convert any numeric-indexed supply to a simple list
+        $variadic  = ['type' => null, 'value' => null];
         $sequential = array_values($suppliedParameters);
 
         foreach ($availableParams as $key => $param) {
@@ -364,13 +299,11 @@ class ParameterResolver
                 break;
             }
 
-            // If there's a sequential param
             if (array_key_exists($key, $sequential)) {
                 $processed[$paramName] = $sequential[$key];
                 continue;
             }
 
-            // Attempt attribute-based resolution if enabled
             if ($applyAttribute) {
                 $data = $this->resolveParameterAttribute($param);
                 if ($data['isResolved']) {
@@ -379,10 +312,10 @@ class ParameterResolver
                 }
             }
 
-            // Fallback: default value or null if allowed
+            // fallback to default or null
             $processed[$paramName] = match (true) {
                 $param->isDefaultValueAvailable() => $param->getDefaultValue(),
-                $param->allowsNull()              => null,
+                $param->allowsNull() => null,
                 default => throw new ContainerException(
                     "Resolution failed for '$paramName' in ".
                     ($reflector->class ?? $reflector->getName()).
@@ -393,15 +326,10 @@ class ParameterResolver
 
         return [
             'processed' => $processed,
-            'variadic'  => $variadic,
+            'variadic'  => $variadic
         ];
     }
 
-    /**
-     * Attempts to get a ReflectionClass for a parameter if it is a non-builtin type.
-     *
-     * @throws ContainerException|ReflectionException
-     */
     private function getResolvableReflection(
         ReflectionFunctionAbstract $reflector,
         ReflectionParameter $parameter,
@@ -409,62 +337,58 @@ class ParameterResolver
         array $processed
     ): ?ReflectionClass {
         $paramType = $parameter->getType();
-        if (! $paramType instanceof ReflectionNamedType || $paramType->isBuiltin()) {
+        if (!$paramType instanceof ReflectionNamedType || $paramType->isBuiltin()) {
             return null;
         }
 
         $className = $paramType->getName();
         if ($declaringClass = $parameter->getDeclaringClass()) {
-            // If param type is 'self' or 'parent'
             $className = match ($className) {
                 'self' => $declaringClass->getName(),
                 'parent' => $declaringClass->getParentClass()?->getName() ?? 'parent',
                 default => $className
             };
         }
-
         if ($className === 'parent') {
             throw new ContainerException(
-                "Parameter '{$parameter->getName()}' uses 'parent' keyword but ".
-                "{$parameter->getDeclaringClass()?->getName()} has no parent class."
+                "Parameter '{$parameter->getName()}' uses 'parent' keyword but no parent class."
             );
         }
+        // (optional) environment-based interface => concrete override
+        // e.g. if $className is an interface, check $this->repository->getEnvConcrete($className)
+        $envConcrete = null;
+        if (interface_exists($className)) {
+            $envConcrete = $this->repository->getEnvConcrete($className);
+        }
+        $finalClassName = $envConcrete ?: $className;
 
-        // Attempt reflection
         try {
-            $reflection = ReflectionResource::getClassReflection($className);
+            $reflection = ReflectionResource::getClassReflection($finalClassName);
         } catch (ReflectionException $e) {
             throw new ContainerException(
-                "Failed to reflect class '{$className}' for parameter '{$parameter->getName()}'.",
+                "Failed to reflect class '{$finalClassName}' for parameter '{$parameter->getName()}'.",
                 0,
                 $e
             );
         }
 
-        // Check for circular dependency in a constructor
-        if (
-            $type === 'constructor' &&
+        if ($type === 'constructor' &&
             $parameter->getDeclaringClass()?->getName() === $reflection->getName()
         ) {
-            throw new ContainerException("Circular dependency detected on {$reflection->getName()}");
+            throw new ContainerException("Circular dependency on {$reflection->getName()}");
         }
 
-        // If we already processed the same class in $processed
         if ($this->alreadyExist($reflection->getName(), $processed)) {
             $shortName = $reflector->getShortName();
-            $owner = $reflector->class ?? $reflector->getName();
-
+            $owner     = $reflector->class ?? $reflector->getName();
             throw new ContainerException(
-                "Found multiple instances for {$reflection->getName()} in $owner::$shortName()"
+                "Multiple instances for {$reflection->getName()} in $owner::$shortName()"
             );
         }
 
         return $reflection;
     }
 
-    /**
-     * Checks if an object of the given class already exists in the array of parameters.
-     */
     private function alreadyExist(string $className, array $parameters): bool
     {
         foreach ($parameters as $value) {
@@ -475,99 +399,66 @@ class ParameterResolver
         return false;
     }
 
-    /**
-     * Resolves a class dependency by delegating to the ClassResolver.
-     *
-     * @throws ReflectionException|ContainerException|InvalidArgumentException
-     */
     private function resolveClassDependency(
         ReflectionClass $class,
         string $type,
         mixed $supplied
     ): object {
-        // If $type === 'constructor' and user supplied extra params,
-        // we can merge them into the repository->classResource[$className]['constructor']['params'] if we wish
-        if (
-            $type === 'constructor' &&
-            $supplied !== null &&
-            $class->getConstructor() !== null
-        ) {
+        if ($type === 'constructor' && $supplied !== null && $class->getConstructor()) {
             $existing = $this->repository->getClassResource()[$class->getName()]['constructor']['params'] ?? [];
+            $merged   = array_merge($existing, (array) $supplied);
             $this->repository->addClassResource(
                 $class->getName(),
                 'constructor',
-                ['on' => '__constructor', 'params' => array_merge($existing, (array) $supplied)]
+                ['on' => '__constructor','params' => $merged]
             );
         }
-
         return $this->classResolver->resolve($class)['instance'];
     }
 
-    /**
-     * Resolves an individual attribute from $parameterAttribute (#[Infuse(...)] data).
-     */
     private function resolveIndividualAttribute(
-        ReflectionParameter $parameter,
+        ReflectionParameter $param,
         string $attributeValue
     ): mixed {
-        // 1) If $attributeValue is found in the repository
-        $definition = $this->resolveByDefinitionType($attributeValue, $parameter);
+        // 1) If $attributeValue in functionReference
+        $definition = $this->resolveByDefinitionType($attributeValue, $param);
         if ($definition !== $this->stdClass) {
             return $definition;
         }
-
         // 2) If $attributeValue is a function
         if (function_exists($attributeValue)) {
             $reflectionFn = ReflectionResource::getFunctionReflection($attributeValue);
             return $attributeValue(...$this->resolve($reflectionFn, [], 'constructor'));
         }
-
-        // 3) Could not resolve => return stdClass fallback
         return $this->stdClass;
     }
 
-    /**
-     * Resolves parameter-level Infuse attributes (#[Infuse(...)] on a parameter).
-     */
     private function resolveParameterAttribute(ReflectionParameter $param): array
     {
         $attribute = $param->getAttributes(Infuse::class);
         if (!$attribute || empty($attribute[0]->getArguments())) {
             return ['isResolved' => false];
         }
-
-        // Let ClassResolver handle it
-        $infuse = $attribute[0]->newInstance();
-        $resolved = $this->classResolver->resolveInfuse($infuse);
-
+        $infuseInstance = $attribute[0]->newInstance();
+        $resolved = $this->classResolver->resolveInfuse($infuseInstance);
         return [
             'isResolved' => (null !== $resolved),
             'resolved'   => $resolved
         ];
     }
 
-    /**
-     * Processes variadic parameters by sorting the already processed named ones
-     * and appending the variadic array if any.
-     */
     private function processVariadic(
         array $processed,
         array $variadic,
         array $sort
     ): array {
-        // e.g. $variadic['value'] might be [arg1, arg2, ...]
         $variadicValue = (array) $variadic['value'];
-
-        // If the variadic array is purely numeric, keep original param order
         if (isset($variadicValue[0])) {
-            // Sort processed by the original reflection param order
             uksort($processed, static fn ($a, $b) => $sort[$a] <=> $sort[$b]);
             $processed = array_values($processed);
             array_push($processed, ...array_values($variadicValue));
             return $processed;
         }
-
-        // If variadic is associative or empty, just merge
         return array_merge($processed, $variadicValue);
     }
 }

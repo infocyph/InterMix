@@ -9,7 +9,7 @@ class ParentPropertyClass
     #[Infuse('db.port')]
     private string $dbPort;
 
-    public function getDbPort()
+    public function getDbPort(): string
     {
         return $this->dbPort;
     }

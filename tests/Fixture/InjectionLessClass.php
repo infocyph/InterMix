@@ -11,13 +11,13 @@ class InjectionLessClass
     {
     }
 
-    public function ilc(string $param)
+    public function ilc(string $param): array
     {
         return [
             'internalProperty' => $this->internalProperty ?? 'xyz',
-            'staticProperty' => self::$staticProperty ?? 'xyz',
-            'constructor' => $this->id,
-            'method' => $param
+            'staticProperty'   => self::$staticProperty ?? 'xyz',
+            'constructor'      => $this->id,
+            'method'           => $param
         ];
     }
 }

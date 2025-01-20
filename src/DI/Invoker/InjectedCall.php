@@ -21,14 +21,14 @@ use ReflectionException;
  */
 final readonly class InjectedCall
 {
-    private ParameterResolver   $parameterResolver;
-    private ClassResolver       $classResolver;
-    private DefinitionResolver  $definitionResolver;
+    private ParameterResolver $parameterResolver;
+
+    private ClassResolver $classResolver;
+
+    private DefinitionResolver $definitionResolver;
 
     /**
      * Constructor for the InjectedCall class.
-     *
-     * @param  Repository  $repository
      */
     public function __construct(
         private Repository $repository
@@ -42,7 +42,7 @@ final readonly class InjectedCall
     private function initializeResolvers(): void
     {
         $this->definitionResolver = new DefinitionResolver($this->repository);
-        $this->parameterResolver  = new ParameterResolver($this->repository, $this->definitionResolver);
+        $this->parameterResolver = new ParameterResolver($this->repository, $this->definitionResolver);
 
         $propertyResolver = new PropertyResolver($this->repository, $this->parameterResolver);
 
@@ -63,7 +63,7 @@ final readonly class InjectedCall
      * Resolves a parameter by its definition name.
      *
      * @param  string  $name  The name or identifier to be resolved.
-     * @return mixed  The resolved parameter.
+     * @return mixed The resolved parameter.
      *
      * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
@@ -75,10 +75,10 @@ final readonly class InjectedCall
     /**
      * Settles (resolves) a class with dependency injection.
      *
-     * @param  string|object  $class   The class name or object to settle.
-     * @param  string|null    $method  The method to call after construction (or null).
-     * @param  bool           $make    Whether to create a new instance (bypassing any cached instance).
-     * @return array          An associative array with keys 'instance' and possibly 'returned'.
+     * @param  string|object  $class  The class name or object to settle.
+     * @param  string|null  $method  The method to call after construction (or null).
+     * @param  bool  $make  Whether to create a new instance (bypassing any cached instance).
+     * @return array An associative array with keys 'instance' and possibly 'returned'.
      *
      * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
@@ -98,8 +98,8 @@ final readonly class InjectedCall
      * Executes a closure (or function) with the given parameters and returns its result.
      *
      * @param  string|Closure  $closure  The closure or function name to be executed.
-     * @param  array           $params   Additional parameters to be passed.
-     * @return mixed           The result of executing the closure/function.
+     * @param  array  $params  Additional parameters to be passed.
+     * @return mixed The result of executing the closure/function.
      *
      * @throws ReflectionException|ContainerException|InvalidArgumentException
      */

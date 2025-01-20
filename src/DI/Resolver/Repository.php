@@ -162,6 +162,12 @@ class Repository
      |   Public getters/setters for main arrays
      * ----------------------------------------------------------------------*/
 
+    public function hasFunctionReference(string $id): bool
+    {
+        return array_key_exists($id, $this->functionReference);
+    }
+
+
     public function getFunctionReference(): array
     {
         return $this->functionReference;
