@@ -2,5 +2,8 @@ vendor
 example
 .idea
 example.php
+test.php
 composer.lock
 git-story_media
+*~
+diffs.txt

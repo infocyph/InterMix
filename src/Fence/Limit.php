@@ -13,32 +13,36 @@ trait Limit
     protected static int $limit = 2;
 
     /**
-     * Creates a new instance of the class.
+     * Creates or retrieves an instance of the class.
      *
-     * @param string $key The key for the instance. Default is 'default'.
-     * @param array|null $constraints An optional array of constraints.
-     * @return static The new instance of the class.
-     * @throws Exception If the initialization limit has been exceeded.
+     * @param  string  $key  The key for the instance. Default is 'default'.
+     * @param  array|null  $constraints  Constraints for instance creation.
+     *
+     * @throws Exception If the initialization limit is exceeded.
      */
-    final public static function instance(string $key = 'default', array $constraints = null): static
+    final public static function instance(string $key = 'default', ?array $constraints = null): static
     {
         static::checkRequirements($constraints);
 
-        if (count(static::$instances) >= static::$limit) {
-            throw new Exception('Initialization limit exceeded!');
+        if (($count = count(static::$instances)) >= static::$limit) {
+            throw new Exception('Instance creation failed: Initialization limit ('.$count.' of '.static::$limit.' for '.static::class.') exceeded.');
         }
 
         return static::$instances[$key] ??= new static();
     }
 
     /**
-     * Sets the maximum number of instances allowed.
+     * Sets a new initialization limit.
      *
-     * @param int $number The number to set as the limit.
-     * @return void
+     * @param  int  $number  The new limit.
+     *
+     * @throws Exception
      */
-    final public function setLimit(int $number): void
+    final public static function setLimit(int $number): void
     {
+        if ($number < 1) {
+            throw new Exception('Limit must be at least 1.');
+        }
         static::$limit = $number;
     }
 }

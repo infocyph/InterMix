@@ -13,15 +13,16 @@ use ReflectionMethod;
 class ClassResolver
 {
     use Reflector;
+
     private array $entriesResolving = [];
 
     /**
      * Constructor for the class.
      *
-     * @param Repository $repository The repository object.
-     * @param ParameterResolver $parameterResolver The parameter resolver object.
-     * @param PropertyResolver $propertyResolver The property resolver object.
-     * @param DefinitionResolver $definitionResolver The definition resolver object.
+     * @param  Repository  $repository  The repository object.
+     * @param  ParameterResolver  $parameterResolver  The parameter resolver object.
+     * @param  PropertyResolver  $propertyResolver  The property resolver object.
+     * @param  DefinitionResolver  $definitionResolver  The definition resolver object.
      */
     public function __construct(
         private Repository $repository,
@@ -34,8 +35,9 @@ class ClassResolver
     /**
      * Resolves the given Infuse object and returns the result.
      *
-     * @param Infuse $infuse The Infuse object to be resolved.
+     * @param  Infuse  $infuse  The Infuse object to be resolved.
      * @return mixed The resolved value.
+     *
      * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
     public function resolveInfuse(Infuse $infuse): mixed
@@ -50,7 +52,7 @@ class ClassResolver
             return $type(
                 ...$this->parameterResolver->resolve(
                     new ReflectionFunction($type),
-                    (array)$infuse->getNonMethodData('data'),
+                    (array) $infuse->getNonMethodData('data'),
                     'constructor'
                 )
             );
@@ -62,17 +64,18 @@ class ClassResolver
     /**
      * Resolves a given class and returns the resolved resources.
      *
-     * @param ReflectionClass $class The class to be resolved.
-     * @param mixed $supplied The supplied value.
-     * @param string|bool $callMethod The method to be called.
-     * @param bool $make Whether to create a new instance of the class.
+     * @param  ReflectionClass  $class  The class to be resolved.
+     * @param  mixed  $supplied  The supplied value.
+     * @param  string|bool  $callMethod  The method to be called.
+     * @param  bool  $make  Whether to create a new instance of the class.
      * @return array The resolved resources.
+     *
      * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
     public function resolve(
         ReflectionClass $class,
         mixed $supplied = null,
-        string|bool $callMethod = null,
+        string|bool|null $callMethod = null,
         bool $make = false
     ): array {
         $class = $this->getClass($class, $supplied);
@@ -81,16 +84,18 @@ class ClassResolver
             return $this->resolveMake($class, $className, $callMethod);
         }
         $this->resolveClassResources($class, $className, $callMethod);
+
         return $this->repository->resolvedResource[$className];
     }
 
     /**
      * Rebuild the resources for the make operation for a given class name.
      *
-     * @param ReflectionClass $class The reflection class object.
-     * @param string $className The name of the class.
-     * @param string|bool|null $callMethod The method to be called.
+     * @param  ReflectionClass  $class  The reflection class object.
+     * @param  string  $className  The name of the class.
+     * @param  string|bool|null  $callMethod  The method to be called.
      * @return array The resolved resource.
+     *
      * @throws ReflectionException|ContainerException|InvalidArgumentException
      */
     private function resolveMake(ReflectionClass $class, string $className, string|bool|null $callMethod): array
@@ -101,18 +106,19 @@ class ClassResolver
         $this->resolveMethod($class, $callMethod);
         [$resolved, $this->repository->resolvedResource[$className]] = [
             $this->repository->resolvedResource[$className],
-            $existing
+            $existing,
         ];
+
         return $resolved;
     }
 
     /**
      * Resolves the class resources.
      *
-     * @param ReflectionClass $class The reflection class.
-     * @param string $className The class name.
-     * @param string|bool|null $callMethod The method to call.
-     * @return void
+     * @param  ReflectionClass  $class  The reflection class.
+     * @param  string  $className  The class name.
+     * @param  string|bool|null  $callMethod  The method to call.
+     *
      * @throws ReflectionException|ContainerException|InvalidArgumentException
      */
     private function resolveClassResources(
@@ -126,11 +132,11 @@ class ClassResolver
         $this->entriesResolving[$className] = true;
 
         try {
-            if (!isset($this->repository->resolvedResource[$className]['instance'])) {
+            if (! isset($this->repository->resolvedResource[$className]['instance'])) {
                 $this->resolveConstructor($class);
             }
 
-            if (!isset($this->repository->resolvedResource[$className]['property'])) {
+            if (! isset($this->repository->resolvedResource[$className]['property'])) {
                 $this->propertyResolver->resolve($class);
             }
 
@@ -143,39 +149,41 @@ class ClassResolver
     /**
      * Retrieves the ReflectionClass object for a given class or interface.
      *
-     * @param ReflectionClass $class The class or interface for which to retrieve the ReflectionClass object.
-     * @param mixed $supplied The name of the class to use for resolution, if the given class is an interface.
+     * @param  ReflectionClass  $class  The class or interface for which to retrieve the ReflectionClass object.
+     * @param  mixed  $supplied  The name of the class to use for resolution, if the given class is an interface.
      * @return ReflectionClass The ReflectionClass object for the given class or interface.
+     *
      * @throws ContainerException|ReflectionException
      */
     private function getClass(ReflectionClass $class, mixed $supplied): ReflectionClass
     {
         if ($class->isInterface()) {
             $className = $class->getName();
-            if (!$supplied || !class_exists($supplied)) {
+            if (! $supplied || ! class_exists($supplied)) {
                 throw new ContainerException("Resolution failed $supplied for interface $className");
             }
             [$interface, $className] = [$className, $supplied];
             $class = $this->reflectedClass($className);
-            if (!$class->implementsInterface($interface)) {
+            if (! $class->implementsInterface($interface)) {
                 throw new ContainerException("$className doesn't implement $interface");
             }
         }
+
         return $class;
     }
 
     /**
      * Resolves the constructor of a given class and initializes an instance of it.
      *
-     * @param ReflectionClass $class The reflection class object.
-     * @return void
+     * @param  ReflectionClass  $class  The reflection class object.
+     *
      * @throws ContainerException If the class is not instantiable.
      * @throws ReflectionException|InvalidArgumentException
      */
     private function resolveConstructor(ReflectionClass $class): void
     {
         $className = $class->getName();
-        if (!$class->isInstantiable()) {
+        if (! $class->isInstantiable()) {
             throw new ContainerException("$className is not instantiable!");
         }
         $constructor = $class->getConstructor();
@@ -193,12 +201,12 @@ class ClassResolver
     /**
      * Resolves the method to be called based on the given class and call method.
      *
-     * @param ReflectionClass $class The reflection class object.
-     * @param string|bool $callMethod The name of the method to be called or false if no method is specified.
-     * @return void
+     * @param  ReflectionClass  $class  The reflection class object.
+     * @param  string|bool  $callMethod  The name of the method to be called or false if no method is specified.
+     *
      * @throws ReflectionException|ContainerException|InvalidArgumentException
      */
-    private function resolveMethod(ReflectionClass $class, string|bool $callMethod = null): void
+    private function resolveMethod(ReflectionClass $class, string|bool|null $callMethod = null): void
     {
         $className = $class->getName();
 
@@ -218,7 +226,7 @@ class ClassResolver
             default => false
         };
 
-        if (!$method) {
+        if (! $method) {
             return;
         }
 

@@ -1,18 +1,18 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Infocyph\InterMix\DI;
 
+use Closure;
+use Exception;
 use Infocyph\InterMix\DI\Invoker\GenericCall;
 use Infocyph\InterMix\DI\Invoker\InjectedCall;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Exceptions\NotFoundException;
-use Closure;
-use Exception;
 use InvalidArgumentException;
-use Psr\Cache\InvalidArgumentException as InvalidArgumentExceptionInCache;
 use Psr\Container\ContainerInterface;
-use ReflectionException;
 use Symfony\Contracts\Cache\CacheInterface;
 
 /**
@@ -20,32 +20,36 @@ use Symfony\Contracts\Cache\CacheInterface;
  */
 class Container implements ContainerInterface
 {
-    protected static array $instances;
+    protected static array $instances = [];
+
     protected Repository $repository;
-    protected string $resolver = InjectedCall::class;
+
+    protected string $resolver;
 
     /**
-     * Constructs a new instance of the class.
+     * Constructor for the Container class.
      *
-     * @param string $instanceAlias The alias of the instance (default: 'default').
-     * @return void
+     * Initializes a new container instance and stores it in the static registry
+     * using the provided alias. Sets up the repository and resolver for the container.
+     *
+     * @param  string  $instanceAlias  The alias for the container instance. Defaults to 'default'.
      */
     public function __construct(private readonly string $instanceAlias = 'default')
     {
         self::$instances[$this->instanceAlias] ??= $this;
         $this->repository = new Repository();
-        $this->repository->functionReference = [
-            ContainerInterface::class => $this
-        ];
+        $this->repository->functionReference = [ContainerInterface::class => $this];
         $this->repository->alias = $this->instanceAlias;
+        $this->resolver = InjectedCall::class;
     }
 
     /**
-     * Creates a new/Get existing instance of the Container class.
+     * Retrieves the container instance associated with the specified alias.
      *
-     * @param string $instanceAlias The alias for the instance (optional, default: 'default').
-     * @return Container The existing or newly created instance of the Container class.
-     * @throws InvalidArgumentException If the instance alias is not a string.
+     * If no instance exists for the given alias, a new one is created and stored.
+     *
+     * @param  string  $instanceAlias  The alias of the container instance to retrieve.
+     * @return Container The container instance associated with the alias.
      */
     public static function instance(string $instanceAlias = 'default'): Container
     {
@@ -53,9 +57,7 @@ class Container implements ContainerInterface
     }
 
     /**
-     * Unset current instance
-     *
-     * @return void
+     * Removes the instance from the container registry.
      */
     public function unset(): void
     {
@@ -63,371 +65,377 @@ class Container implements ContainerInterface
     }
 
     /**
-     * Lock the container to prevent any further modification
+     * Locks the container. This prevents any further definitions from being added, modified or removed.
      *
-     * @return Container
+     * @return $this
      */
-    public function lock(): Container
+    public function lock(): self
     {
         $this->repository->isLocked = true;
-        return self::$instances[$this->instanceAlias];
+
+        return $this;
     }
 
     /**
-     * Adds definitions to the container.
+     * Adds multiple definitions to the container.
      *
-     * @param array $definitions The array of definitions to be added [alias/identifier => definition].
-     * @return Container The container instance.
+     * This method can be used to bulk-add definitions to the container.
+     * The definitions are stored in the container and can be accessed using the passed identifiers.
+     *
+     * @param  array  $definitions  The definitions to store, where each key is the identifier under which the definition is stored,
+     *                              and the value is the definition to store.
+     * @return $this
+     *
      * @throws ContainerException
      */
-    public function addDefinitions(array $definitions): Container
+    public function addDefinitions(array $definitions): self
     {
-        if ($definitions !== []) {
-            foreach ($definitions as $identifier => $definition) {
-                $this->bind($identifier, $definition);
-            }
+        foreach ($definitions as $id => $definition) {
+            $this->bind($id, $definition);
         }
-        return self::$instances[$this->instanceAlias];
+
+        return $this;
     }
 
     /**
-     * Binds a definition to an identifier in the container.
+     * Adds a definition to the container.
      *
-     * @param string $id The identifier to bind the definition to.
-     * @param mixed $definition The definition to bind to the identifier.
-     * @return Container The container instance.
-     * @throws ContainerException If the identifier and definition are the same.
+     * A definition can be a Closure, an object, a string (which is interpreted as a class name), or null.
+     * The definition is stored in the container and can be accessed using the passed identifier.
+     *
+     * @param  string  $id  The identifier under which the definition is stored.
+     * @param  mixed  $definition  The definition to store.
+     * @return $this
+     *
+     * @throws ContainerException If the container is locked and cannot be modified.
+     * @throws ContainerException If the id and definition are the same.
      */
-    public function bind(string $id, mixed $definition): Container
+    public function bind(string $id, mixed $definition): self
     {
         $this->repository->checkIfLocked();
         if ($id === $definition) {
-            throw new ContainerException("Id & definition cannot be same ($id)");
+            throw new ContainerException("Id and definition cannot be the same ($id)");
         }
         $this->repository->functionReference[$id] = $definition;
-        return self::$instances[$this->instanceAlias];
+
+        return $this;
     }
 
     /**
-     * Caches all definitions and returns the instance alias.
+     * Enable caching of definitions. If a definition is requested and the cache contains it,
+     * the cached definition is returned instead of resolving the definition again.
      *
-     * @param bool $forceClearFirst Whether to clear the cache before caching the definitions.
-     * @return mixed The instance alias.
-     * @throws ContainerException|InvalidArgumentExceptionInCache
+     *
+     * @return static
      */
-    public function cacheAllDefinitions(bool $forceClearFirst = false): Container
+    public function enableDefinitionCache(CacheInterface $cache): self
+    {
+        $this->repository->cacheAdapter = $cache;
+
+        return $this;
+    }
+
+    /**
+     * Caches all definitions registered with the container.
+     *
+     * If `$forceClearFirst` is `true`, it will clear the cache before caching all definitions.
+     *
+     *
+     *
+     * @throws ContainerException If no definitions are added.
+     * @throws ContainerException|\Psr\Cache\InvalidArgumentException If no cache adapter is set.
+     */
+    public function cacheAllDefinitions(bool $forceClearFirst = false): self
     {
         if (empty($this->repository->functionReference)) {
             throw new ContainerException('No definitions added.');
         }
 
-        if (!isset($this->repository->cacheAdapter)) {
+        if (! isset($this->repository->cacheAdapter)) {
             throw new ContainerException('No cache adapter set.');
         }
 
         if ($forceClearFirst) {
-            $this->repository->cacheAdapter->clear($this->repository->alias . '-');
+            $this->repository->cacheAdapter->clear($this->repository->alias.'-');
         }
 
         $resolver = new $this->resolver($this->repository);
         foreach ($this->repository->functionReference as $id => $definition) {
             $this->repository->resolvedDefinition[$id] = $this->repository->cacheAdapter->get(
-                $this->repository->alias . '-' . base64_encode($id),
+                $this->repository->alias.'-'.base64_encode($id),
                 fn () => $resolver->resolveByDefinition($id)
             );
         }
 
-        return self::$instances[$this->instanceAlias];
+        return $this;
     }
 
     /**
-     * Enable definition cache.
+     * Retrieves the returned value of the resolved instance or definition for the given identifier.
      *
-     * @param CacheInterface $cache The cache instance to use.
-     * @return Container The container instance.
-     */
-    public function enableDefinitionCache(CacheInterface $cache): Container
-    {
-        $this->repository->cacheAdapter = $cache;
-        return self::$instances[$this->instanceAlias];
-    }
-
-    /**
-     * Retrieves the return value of the function based on the provided ID.
+     * If the resolved instance or definition is a function or an invokable object, it calls it
+     * and returns the value returned from the call. If the resolved instance or definition is
+     * not a function or an invokable object, it returns the resolved instance or definition
+     * itself.
      *
-     * @param string $id The ID of the value to retrieve.
-     * @return mixed The resolved value or the returned value from the repository.
-     * @throws ContainerException|NotFoundException|InvalidArgumentExceptionInCache
+     * @param  string  $id  The identifier of the instance or definition to retrieve the returned
+     *                      value of.
+     * @return mixed The returned value of the resolved instance or definition.
+     *
+     * @throws Exception If the resolution process fails.
      */
     public function getReturn(string $id): mixed
     {
         try {
             $resolved = $this->get($id);
-            if (array_key_exists($id, $this->repository->functionReference)) {
-                return $resolved;
-            }
-            return array_key_exists('returned', $this->repository->resolved[$id])
-                ? $this->repository->resolved[$id]['returned']
-                : $resolved;
-        } catch (NotFoundException $exception) {
-            throw new NotFoundException($exception->getMessage());
-        } catch (ContainerException $exception) {
-            throw new ContainerException($exception->getMessage());
+            $resource = $this->repository->resolved[$id] ?? [];
+
+            return $resource['returned'] ?? $resolved;
+        } catch (Exception $exception) {
+            throw $this->wrapException($exception, $id);
         }
     }
 
     /**
-     * Retrieves a value from the repository based on the given ID.
+     * Retrieves the resolved instance or definition for the given identifier.
      *
-     * @param string $id The ID of the value to retrieve.
-     * @return mixed The retrieved value.
-     * @throws ContainerException|NotFoundException|InvalidArgumentExceptionInCache
+     * This method first checks if the identifier has already been resolved
+     * and is available in the resolved repository. If so, it returns the
+     * instance or resolved value. If the identifier is registered as a
+     * definition, it resolves it using the current resolver. Otherwise,
+     * it attempts to resolve the identifier by calling it.
+     *
+     * @param  string  $id  The identifier of the instance or definition to retrieve.
+     * @return mixed The resolved instance or definition.
+     *
+     * @throws Exception If the resolution process fails.
      */
     public function get(string $id): mixed
     {
         try {
-            $existsInResolved = array_key_exists($id, $this->repository->resolved);
-            if ($existsInDefinition = array_key_exists($id, $this->repository->functionReference)) {
-                return (new $this->resolver($this->repository))
-                    ->resolveByDefinition($id);
+            if (isset($this->repository->resolved[$id])) {
+                return $this->repository->resolved[$id]['instance'] ?? $this->repository->resolved[$id];
             }
 
-            if (!$existsInResolved) {
-                $this->repository->resolved[$id] = $this->call($id);
+            if (isset($this->repository->functionReference[$id])) {
+                return (new $this->resolver($this->repository))->resolveByDefinition($id);
             }
+
+            $this->repository->resolved[$id] = $this->call($id);
 
             return $this->repository->resolved[$id]['instance'] ?? $this->repository->resolved[$id];
-        } catch (ReflectionException|ContainerException|InvalidArgumentExceptionInCache $exception) {
-            throw new ContainerException("Error while retrieving the entry: " . $exception->getMessage());
         } catch (Exception $exception) {
-            if (!$existsInDefinition || !$existsInResolved) {
-                throw new NotFoundException("No entry found for '$id' identifier");
-            }
-            throw new ContainerException("Error while retrieving the entry: " . $exception->getMessage());
+            throw $this->wrapException($exception, $id);
         }
     }
 
     /**
-     * Calls the provided class or closure based on the conditions.
+     * Resolves a class/closure by its name or instance.
      *
-     * @param string|Closure|callable $classOrClosure The class, closure, or callable to be called.
-     * @param string|bool $method The method to be called (optional).
-     * @return mixed The result of the function call.
-     * @throws ContainerException|InvalidArgumentExceptionInCache
+     * Will check if the given class/closure is a registered definition.
+     * If so, it will use the {@see DefinitionResolver} to resolve it.
+     * If not, it will use the {@see Reflector} to try to resolve it.
+     *
+     * @param  string|Closure|callable  $classOrClosure  The class/closure to be resolved.
+     * @param  string|bool|null  $method  The method to be called if classOrClosure is a class.
+     * @return mixed The resolved class/closure.
+     *
+     * @throws ContainerException If the class/closure cannot be resolved.
      */
-    public function call(
-        string|Closure|callable $classOrClosure,
-        string|bool $method = null
-    ): mixed {
-        $callableIsString = is_string($classOrClosure);
+    public function call(string|Closure|callable $classOrClosure, string|bool|null $method = null): mixed
+    {
+        $resolver = new $this->resolver($this->repository);
 
         return match (true) {
-            $callableIsString && array_key_exists(
-                $classOrClosure,
-                $this->repository->functionReference
-            ) => (new $this->resolver($this->repository))
-                ->resolveByDefinition($classOrClosure),
+            is_string($classOrClosure) && isset($this->repository->functionReference[$classOrClosure]) => $resolver->resolveByDefinition($classOrClosure),
 
-            $classOrClosure instanceof Closure || (is_callable($classOrClosure) && !is_array($classOrClosure))
-            => (new $this->resolver($this->repository))
-                ->closureSettler($classOrClosure),
+            $classOrClosure instanceof Closure || is_callable($classOrClosure) => $resolver->closureSettler($classOrClosure),
 
-            !$callableIsString => throw new ContainerException('Invalid class/closure format'),
-
-            !empty($this->repository->closureResource[$classOrClosure]['on']) =>
-            (new $this->resolver($this->repository))->closureSettler(
+            isset($this->repository->closureResource[$classOrClosure]['on']) => $resolver->closureSettler(
                 $this->repository->closureResource[$classOrClosure]['on'],
                 $this->repository->closureResource[$classOrClosure]['params']
             ),
 
-            default => (new $this->resolver($this->repository))->classSettler($classOrClosure, $method)
+            is_string($classOrClosure) => $resolver->classSettler($classOrClosure, $method),
+
+            default => throw new ContainerException('Invalid class/closure format'),
         };
     }
 
     /**
-     * Generates a new uncached instance of the specified class and executes a method (if specified).
+     * Creates and returns an instance of the specified class.
      *
-     * @param string $class The name of the class to instantiate.
-     * @param string|bool $method The name of the method to execute on the class instance. Defaults to false.
-     * @return mixed The result of the method execution.
+     * @param  string  $class  The class name to instantiate.
+     * @param  string|bool  $method  The method to be called on the class instance or false for none.
+     * @return mixed The created instance or the return value of the method.
      */
     public function make(string $class, string|bool $method = false): mixed
     {
         $resolved = (new $this->resolver($this->repository))->classSettler($class, $method, true);
+
         return $method ? $resolved['returned'] : $resolved['instance'];
     }
 
     /**
-     * Checks if the given ID exists in the function reference or the resolved repository.
+     * Checks if a definition or resolved instance exists for the given identifier.
      *
-     * @param string $id The ID to check.
-     * @return bool Returns true if the ID exists, false otherwise.
+     * @param  string  $id  The identifier of the definition or instance.
+     * @return bool True if the definition or instance exists, false otherwise.
      */
     public function has(string $id): bool
     {
         try {
-            if (
-                array_key_exists($id, $this->repository->functionReference) ||
-                array_key_exists($id, $this->repository->resolved)
-            ) {
-                return true;
-            }
-            $this->get($id);
-            return array_key_exists($id, $this->repository->resolved);
-        } catch (NotFoundException|ContainerException|InvalidArgumentExceptionInCache) {
+            return isset($this->repository->functionReference[$id]) ||
+                isset($this->repository->resolved[$id]) ||
+                $this->get($id);
+        } catch (Exception) {
             return false;
         }
     }
 
     /**
-     * Registers a closure in the container.
+     * Registers a closure with the given parameters to be injected.
      *
-     * @param string $closureAlias The alias for the closure.
-     * @param callable|Closure $function The closure or callable to register.
-     * @param array $parameters The parameters to pass to the closure or callable.
-     * @return Container The container instance.
+     * @param  string  $closureAlias  The alias for the closure.
+     * @param  callable|Closure  $function  The closure to be registered.
+     * @param  array  $parameters  The parameters to be passed to the closure.
+     * @return $this
+     *
      * @throws ContainerException
      */
-    public function registerClosure(string $closureAlias, callable|Closure $function, array $parameters = []): Container
+    public function registerClosure(string $closureAlias, callable|Closure $function, array $parameters = []): self
     {
-        $this->repository
-            ->checkIfLocked()
-            ->closureResource[$closureAlias] = [
-            'on' => $function,
-            'params' => $parameters
-        ];
-        return self::$instances[$this->instanceAlias];
+        $this->repository->checkIfLocked();
+        $this->repository->closureResource[$closureAlias] = ['on' => $function, 'params' => $parameters];
+
+        return $this;
     }
 
     /**
-     * Registers a class in the container with optional parameters.
+     * Registers a class with the given parameters to be injected into the constructor.
      *
-     * @param string $class The name of the class to register.
-     * @param array $parameters An array of parameters for the class constructor. Default is an empty array.
-     * @return Container The current instance of the container.
-     * @throws ContainerException If the container is locked and cannot be modified.
-     */
-    public function registerClass(string $class, array $parameters = []): Container
-    {
-        $this->repository
-            ->checkIfLocked()
-            ->classResource[$class]['constructor'] = [
-            'on' => '__constructor',
-            'params' => $parameters
-        ];
-        return self::$instances[$this->instanceAlias];
-    }
-
-    /**
-     * Registers a method in the container.
+     * @param  string  $class  The class name.
+     * @param  array  $parameters  The parameters to be passed to the constructor.
+     * @return $this
      *
-     * @param string $class The class name.
-     * @param string $method The method name.
-     * @param array $parameters (optional) The method parameters. Default is an empty array.
-     * @return Container The container instance.
      * @throws ContainerException
      */
-    public function registerMethod(string $class, string $method, array $parameters = []): Container
+    public function registerClass(string $class, array $parameters = []): self
     {
-        $this->repository
-            ->checkIfLocked()
-            ->classResource[$class]['method'] = [
-            'on' => $method,
-            'params' => $parameters
-        ];
-        return self::$instances[$this->instanceAlias];
+        $this->repository->checkIfLocked();
+        $this->repository->classResource[$class]['constructor'] = ['on' => '__constructor', 'params' => $parameters];
+
+        return $this;
     }
 
     /**
-     * Registers a property for a given class in the container.
+     * Registers a method for a given class.
      *
-     * @param string $class The name of the class.
-     * @param array $property An array containing the properties to register.
-     * @return Container The container instance.
+     * @param  string  $class  The class name.
+     * @param  string  $method  The method name.
+     * @param  array  $parameters  The parameters to be passed to the method.
+     * @return $this
+     *
      * @throws ContainerException
      */
-    public function registerProperty(string $class, array $property): Container
+    public function registerMethod(string $class, string $method, array $parameters = []): self
     {
-        $this->repository
-            ->checkIfLocked()
-            ->classResource[$class]['property'] = array_merge(
-                $this->repository->classResource[$class]['property'] ?? [],
-                $property
-            );
-        return self::$instances[$this->instanceAlias];
+        $this->repository->checkIfLocked();
+        $this->repository->classResource[$class]['method'] = ['on' => $method, 'params' => $parameters];
+
+        return $this;
     }
 
     /**
-     * Sets the options for the Container.
+     * Register a property for a given class.
      *
-     * @param bool $injection Whether to enable injection or not. Default is true.
-     * @param bool $methodAttributes Whether to enable method attributes or not. Default is false.
-     * @param bool $propertyAttributes Whether to enable property attributes or not. Default is false.
-     * @param string|null $defaultMethod The default method to use. Null if not specified.
-     * @return Container The Container instance.
+     * @return $this
+     *
+     * @throws ContainerException
+     */
+    public function registerProperty(string $class, array $property): self
+    {
+        $this->repository->checkIfLocked();
+        $this->repository->classResource[$class]['property'] = array_merge(
+            $this->repository->classResource[$class]['property'] ?? [],
+            $property
+        );
+
+        return $this;
+    }
+
+    /**
+     * Set the options for the dependency injection.
+     *
+     * @param  bool  $injection  Enable or disable dependency injection.
+     * @param  bool  $methodAttributes  Enable or disable the ability to inject method parameters.
+     * @param  bool  $propertyAttributes  Enable or disable the ability to inject property values.
+     * @param  string|null  $defaultMethod  The default method to call when no method is provided.
+     * @return $this
+     *
      * @throws ContainerException
      */
     public function setOptions(
         bool $injection = true,
         bool $methodAttributes = false,
         bool $propertyAttributes = false,
-        string $defaultMethod = null
-    ): Container {
+        ?string $defaultMethod = null
+    ): self {
         $this->repository->checkIfLocked();
-        $this->repository->defaultMethod = $defaultMethod ?: null;
+        $this->repository->defaultMethod = $defaultMethod;
         $this->repository->enablePropertyAttribute = $propertyAttributes;
         $this->repository->enableMethodAttribute = $methodAttributes;
         $this->resolver = $injection ? InjectedCall::class : GenericCall::class;
 
-        return self::$instances[$this->instanceAlias];
+        return $this;
     }
 
     /**
-     * Splits a string or array representing a class and method into an array.
+     * @param  string|array|Closure|callable  $classAndMethod
+     *                                                         - Namespaced class string
+     *                                                         - Namespaced class string with method (namespacedClass@method/namespacedClass::method)
+     *                                                         - Array with class and method (['namespacedClass', 'method'])
+     *                                                         - Closure
+     *                                                         - Callable
+     * @return array [class, method]
      *
-     * @param string|array|Closure|callable $classAndMethod The string or array representing the class and method.
-     * @return array The array representing the split class and method.
-     * @throws ContainerException If the class and method formation is unknown.
-     * @throws InvalidArgumentException If no argument is found.
+     * @throws InvalidArgumentException
+     * @throws ContainerException
      */
     public function split(string|array|Closure|callable $classAndMethod): array
     {
         if (empty($classAndMethod)) {
-            throw new InvalidArgumentException(
-                'No argument found!'
-            );
+            throw new InvalidArgumentException('No argument provided!');
         }
 
         $isString = is_string($classAndMethod);
 
         $callableFormation = match (true) {
-            $classAndMethod instanceof Closure ||
-            ($isString && (class_exists($classAndMethod) || is_callable($classAndMethod)))
-            => [$classAndMethod, null],
-
+            $classAndMethod instanceof Closure || ($isString && (class_exists($classAndMethod) || is_callable($classAndMethod))) => [$classAndMethod, null],
             is_array($classAndMethod) && class_exists($classAndMethod[0]) => $classAndMethod + [null, null],
-
             default => null
         };
 
-        if (!$isString) {
-            throw new ContainerException(
-                'Unknown Class & Method formation
-                ([namespaced Class, method]/namespacedClass@method/namespacedClass::method)'
-            );
-        }
-
         return $callableFormation ?: match (true) {
-            str_contains($classAndMethod, '@')
-            => explode('@', $classAndMethod, 2),
+            str_contains($classAndMethod, '@') => explode('@', $classAndMethod, 2),
 
-            str_contains($classAndMethod, '::')
-            => explode('::', $classAndMethod, 2),
+            str_contains($classAndMethod, '::') => explode('::', $classAndMethod, 2),
 
             default => throw new ContainerException(
                 'Unknown Class & Method formation
                 ([namespaced Class, method]/namespacedClass@method/namespacedClass::method)'
             )
+        };
+    }
+
+    /**
+     * Wraps exceptions with a more meaningful error message
+     */
+    private function wrapException(Exception $exception, string $id): Exception
+    {
+        return match (true) {
+            $exception instanceof NotFoundException => new NotFoundException("No entry found for '$id'"),
+            default => new ContainerException("Error retrieving entry '$id': ".$exception->getMessage()),
         };
     }
 }
