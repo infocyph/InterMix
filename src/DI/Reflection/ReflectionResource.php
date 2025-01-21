@@ -47,6 +47,11 @@ final class ReflectionResource
         self::$threadSafe = $enable;
     }
 
+    /**
+     * Whether the reflection cache is thread-safe or not.
+     *
+     * @return bool thread-safety status
+     */
     public static function isThreadSafe(): bool
     {
         return self::$threadSafe;
@@ -65,8 +70,12 @@ final class ReflectionResource
         // flock(self::$lockHandle, LOCK_EX);
     }
 
+
     /**
-     * Release the lock if threadSafe.
+     * Release a lock if $threadSafe is true.
+     *
+     * If $threadSafe is true, this will release a lock acquired by {@see acquireLock()}.
+     * This is a simple placeholder; real code would use semaphores or ext-pthreads if needed.
      */
     private static function releaseLock(): void
     {
@@ -77,8 +86,13 @@ final class ReflectionResource
         // flock(self::$lockHandle, LOCK_UN);
     }
 
+
     /**
-     * Clears all reflection cache (useful in tests or dev).
+     * Clear the reflection cache.
+     *
+     * This will clear the statically cached reflection objects. This is useful
+     * in tests or when you want to force re-reflection of classes, methods,
+     * functions, or enums.
      */
     public static function clearCache(): void
     {
@@ -99,10 +113,13 @@ final class ReflectionResource
      |  Methods to retrieve reflection objects, with caching
      *-------------------------------------------------------------------------*/
 
+
     /**
-     * Returns a ReflectionClass instance for the given class or object.
+     * Retrieves a ReflectionClass instance for the given class or object.
      *
-     * @throws ReflectionException
+     * @param string|object $class The class name or an object instance to reflect.
+     * @return ReflectionClass The ReflectionClass instance representing the specified class.
+     * @throws ReflectionException If the class does not exist or cannot be reflected.
      */
     public static function getClassReflection(string|object $class): ReflectionClass
     {
@@ -117,10 +134,13 @@ final class ReflectionResource
         }
     }
 
+
     /**
-     * Returns a ReflectionEnum instance for the given enum.
+     * Retrieves a ReflectionEnum instance for the given enum name.
      *
-     * @throws ReflectionException
+     * @param string $enumName The name of the enum to reflect.
+     * @return ReflectionEnum The ReflectionEnum instance representing the specified enum.
+     * @throws ReflectionException If the enum does not exist or cannot be reflected.
      */
     public static function getEnumReflection(string $enumName): ReflectionEnum
     {
@@ -133,10 +153,17 @@ final class ReflectionResource
         }
     }
 
+
     /**
-     * Returns a ReflectionFunction for the given function or closure.
+     * Retrieves a ReflectionFunction instance for the given function or closure.
      *
-     * @throws ReflectionException
+     * This method supports both named functions and closures. For named functions,
+     * the function name is used as the cache key. For closures, the cache key is
+     * obtained using spl_object_hash() to ensure each closure has a unique key.
+     *
+     * @param string|Closure $function The name of the function or a closure instance to reflect.
+     * @return ReflectionFunction The ReflectionFunction instance representing the specified function.
+     * @throws ReflectionException If the function does not exist or cannot be reflected.
      */
     public static function getFunctionReflection(string|Closure $function): ReflectionFunction
     {
@@ -152,10 +179,21 @@ final class ReflectionResource
         }
     }
 
+
     /**
-     * Returns a ReflectionMethod for the given callable or array [class, method].
+     * Retrieves a ReflectionMethod or ReflectionFunction instance for the given callable.
      *
-     * @throws InvalidArgumentException|ReflectionException
+     * Supported callables include:
+     *
+     * 1. Closures
+     * 2. String-based functions (e.g. "strlen")
+     * 3. Arrays of [class, method] (e.g. ["MyClass", "myMethod"])
+     * 4. Objects with an __invoke() method
+     *
+     * @param callable|array|string $callable The callable to reflect.
+     * @return ReflectionMethod|ReflectionFunction The reflection instance representing the callable.
+     * @throws InvalidArgumentException If the callable is invalid or cannot be reflected.
+     * @throws ReflectionException If the callable does not exist or cannot be reflected.
      */
     public static function getCallableReflection(
         callable|array|string $callable

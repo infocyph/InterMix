@@ -9,9 +9,6 @@ namespace Infocyph\InterMix\DI\Events;
  */
 class EventDispatcher
 {
-    /**
-     * eventListeners[eventName] = array of callables
-     */
     protected array $eventListeners = [];
 
     /**
@@ -40,7 +37,6 @@ class EventDispatcher
         }
 
         foreach ($this->eventListeners[$eventName] as $listener) {
-            // Call the listener, passing the payload (or you can pass an Event object)
             $listener($payload);
         }
     }

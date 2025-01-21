@@ -6,21 +6,10 @@ namespace Infocyph\InterMix\DI\Attribute;
 
 use Attribute;
 
-/**
- * An attribute to indicate injection (property, parameter, method).
- * Example usage: #[Infuse(MyClass::class)] or #[Infuse(key => value)]
- */
 #[Attribute(Attribute::TARGET_METHOD | Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 final class Infuse
 {
-    /**
-     * Storage for user-supplied parameters
-     */
     private array $data = [];
-
-    /**
-     * The first key that was provided, used as a type or other special meaning
-     */
     private string|int|null $firstKey = null;
 
     /**
@@ -52,8 +41,6 @@ final class Infuse
      */
     public function getParameterData(int|string|null $key = null): mixed
     {
-        // The "firstKey" might be an integer if user wrote #[Infuse(SomeType::class)],
-        // in which case we "flip" it to treat that value as the 'type'.
         if (is_int($this->firstKey)) {
             $originalValue = $this->data[$this->firstKey] ?? null;
             $this->firstKey = $originalValue;            // Now store that string (type)

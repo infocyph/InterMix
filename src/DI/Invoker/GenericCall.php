@@ -2,13 +2,17 @@
 
 namespace Infocyph\InterMix\DI\Invoker;
 
-use Closure;
 use Error;
 use Exception;
 use Infocyph\InterMix\DI\Resolver\Repository;
 
 final readonly class GenericCall
 {
+    /**
+     * Constructor for the GenericCall class.
+     *
+     * @param Repository $repository The repository instance used for resource management.
+     */
     public function __construct(
         private Repository $repository
     ) {
@@ -28,7 +32,7 @@ final readonly class GenericCall
     public function classSettler(string $class, ?string $method = null): array
     {
         // Grab class info if present, else an empty array
-        $classResource = $this->repository->classResource[$class] ?? [];
+        $classResource = $this->repository->getClassResource()[$class] ?? [];
 
         // Constructor parameters
         $ctorParams = $classResource['constructor']['params'] ?? [];
@@ -39,7 +43,7 @@ final readonly class GenericCall
         $this->setProperties($instance, $props);
 
         // Determine method to invoke (method param, or classResource's configured "method", or defaultMethod)
-        $method ??= $classResource['method']['on'] ?? $this->repository->defaultMethod;
+        $method ??= $classResource['method']['on'] ?? $this->repository->getDefaultMethod();
         $returned = $this->invokeMethod($instance, $method, $classResource);
 
         return [
@@ -48,39 +52,49 @@ final readonly class GenericCall
         ];
     }
 
+
     /**
-     * Executes a closure or callable with the provided parameters and returns the result.
+     * Executes a closure with given parameters and returns the result.
      *
-     * @param callable $closure
-     * @param array $params
-     * @return mixed
+     * @param  callable  $closure  The closure to execute.
+     * @param  array  $params  Additional parameters to pass to the closure.
+     * @return mixed The result of calling the closure.
      */
     public function closureSettler(callable $closure, array $params = []): mixed
     {
         return $closure(...$params);
     }
 
+
     /**
-     * Sets public properties on the object or static properties if needed.
+     * Sets properties on an instance.
      *
-     * @param  array  $properties  [propertyName => value, ...]
+     * @param object $instance Object to set properties on
+     * @param array $properties Properties to set
+     * @return void
      */
     private function setProperties(object $instance, array $properties): void
     {
         foreach ($properties as $property => $value) {
             try {
-                // Attempt to set object property
                 $instance->$property = $value;
             } catch (Exception|Error) {
-                // If it's a static property or protected context
                 $className = $instance::class;
                 $className::$$property = $value;
             }
         }
     }
 
+
     /**
-     * Invokes a method on the given object if it exists in the classResource.
+     * Invokes a method on an object, with optional parameters.
+     *
+     * If the method does not exist, this method will simply return null.
+     *
+     * @param  object  $instance  Object on which to invoke the method.
+     * @param  string|null  $method  Method to invoke (if null, no method is invoked).
+     * @param  array  $classResource  Class resource with method parameter data.
+     * @return mixed The result of the method invocation (or null if no method was invoked).
      */
     private function invokeMethod(object $instance, ?string $method, array $classResource): mixed
     {

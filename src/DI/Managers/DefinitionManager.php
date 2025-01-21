@@ -6,23 +6,36 @@ namespace Infocyph\InterMix\DI\Managers;
 
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Resolver\Repository;
+use Infocyph\InterMix\DI\Services\ServiceProviderInterface;
 use Infocyph\InterMix\Exceptions\ContainerException;
-use Infocyph\InterMix\ServiceProvider\ServiceProviderInterface;
 use Symfony\Contracts\Cache\CacheInterface;
 
-/**
- * Handles adding/binding definitions & caching, plus optional service providers.
- */
 class DefinitionManager
 {
+    /**
+     * Initialize the definition manager.
+     *
+     * @param Repository $repository The internal repository holding all definitions.
+     * @param Container $container The container instance this manager is bound to.
+     */
     public function __construct(
         protected Repository $repository,
-        protected Container $container
+        protected Container $container,
     ) {
     }
 
+
     /**
-     * Add multiple definitions at once.
+     * Adds multiple definitions to the container.
+     *
+     * This method takes an associative array with definition names as keys and
+     * the definitions themselves as values. It then internally calls the
+     * {@see bind()} method for each definition.
+     *
+     * @param array<string, mixed> $definitions The array of definitions.
+     *
+     * @return $this
+     * @throws ContainerException
      */
     public function addDefinitions(array $definitions): self
     {
@@ -34,12 +47,23 @@ class DefinitionManager
         return $this;
     }
 
+
     /**
-     * Bind a single definition.
+     * Registers a single definition with the container.
+     *
+     * This method takes a definition name (id) and a definition value and
+     * stores it in the internal repository. It will throw a
+     * {@see ContainerException} if the id and definition are the same, as
+     * that would be ambiguous.
+     *
+     * @param string $id The id of the definition to register.
+     * @param mixed $definition The definition value to register.
+     *
+     * @return $this
+     * @throws ContainerException
      */
     public function bind(string $id, mixed $definition): self
     {
-        // Lock check inside repository->setFunctionReference()
         if ($id === $definition) {
             throw new ContainerException("Id and definition cannot be the same ($id)");
         }
@@ -49,7 +73,14 @@ class DefinitionManager
     }
 
     /**
-     * Register a "service provider" class that can bulk-register services.
+     * Registers a service provider with the container.
+     *
+     * This method allows a service provider to register its services and definitions
+     * within the container. The provider may call various methods such as
+     * `addDefinitions()`, `bind()`, `registerClass()`, etc., to register its services.
+     *
+     * @param ServiceProviderInterface $provider The service provider to register.
+     * @return $this
      */
     public function registerProvider(ServiceProviderInterface $provider): self
     {
@@ -59,8 +90,18 @@ class DefinitionManager
         return $this;
     }
 
+
     /**
-     * Enable caching for definitions.
+     * Enable definition caching.
+     *
+     * This method takes a {@see CacheInterface} and enables caching of
+     * definitions. It will throw a {@see ContainerException} if the container
+     * is locked.
+     *
+     * @param CacheInterface $cache The cache adapter to use for caching.
+     *
+     * @return $this
+     * @throws ContainerException
      */
     public function enableDefinitionCache(CacheInterface $cache): self
     {
@@ -69,8 +110,18 @@ class DefinitionManager
         return $this;
     }
 
+
     /**
-     * Cache all definitions
+     * Pre-cache all definitions.
+     *
+     * This method takes a boolean to force-clear the cache before caching
+     * definitions. It will throw a {@see ContainerException} if no definitions
+     * are added or if no cache adapter is set.
+     *
+     * @param bool $forceClearFirst Whether to clear the cache before caching all definitions.
+     *
+     * @return $this
+     * @throws ContainerException
      */
     public function cacheAllDefinitions(bool $forceClearFirst = false): self
     {
@@ -78,7 +129,7 @@ class DefinitionManager
             throw new ContainerException('No definitions added.');
         }
         $cacheAdapter = $this->repository->getCacheAdapter();
-        if (! $cacheAdapter) {
+        if (!$cacheAdapter) {
             throw new ContainerException('No cache adapter set.');
         }
         if ($forceClearFirst) {
@@ -98,16 +149,22 @@ class DefinitionManager
         return $this;
     }
 
+
     /**
      * Jump to RegistrationManager
+     *
+     * @return RegistrationManager
      */
     public function registration(): RegistrationManager
     {
         return $this->container->registration();
     }
 
+
     /**
      * Jump to OptionsManager
+     *
+     * @return OptionsManager
      */
     public function options(): OptionsManager
     {
@@ -116,6 +173,8 @@ class DefinitionManager
 
     /**
      * Jump to InvocationManager
+     *
+     * @return InvocationManager
      */
     public function invocation(): InvocationManager
     {
@@ -123,7 +182,13 @@ class DefinitionManager
     }
 
     /**
-     * End chain, return container
+     * Ends the current scope and returns the Container instance.
+     *
+     * When called, this method will return the Container instance and
+     * remove the current scope from the stack, effectively ending the
+     * current scope.
+     *
+     * @return Container The Container instance.
      */
     public function end(): Container
     {

@@ -16,16 +16,32 @@ use Infocyph\InterMix\Exceptions\ContainerException;
  */
 class OptionsManager
 {
+    /**
+     * Constructs an OptionsManager.
+     *
+     * @param Repository $repository The repository instance for managing definitions and instances.
+     * @param Container $container The container this manager is associated with.
+     */
     public function __construct(
         protected Repository $repository,
         protected Container  $container
     ) {
     }
 
+
     /**
-     * Basic DI toggles (like before).
+     * Set container options, such as enabling/disabling injection, method
+     * attributes, and property attributes, and setting a default method.
      *
-     * @throws ContainerException if locked
+     * The container will not be modified if it is locked.
+     *
+     * @param bool $injection Whether to enable injection. Defaults to true.
+     * @param bool $methodAttributes Whether to enable method attributes. Defaults to false.
+     * @param bool $propertyAttributes Whether to enable property attributes. Defaults to false.
+     * @param string|null $defaultMethod The default method to call if none is specified. Defaults to null.
+     *
+     * @return $this
+     * @throws ContainerException
      */
     public function setOptions(
         bool $injection = true,
@@ -46,7 +62,14 @@ class OptionsManager
     }
 
     /**
-     * Optionally handle environment, debug, lazy toggles here instead of calling container directly.
+     * Sets the environment for the container.
+     *
+     * This method allows you to specify the environment name, which can be
+     * used for environment-specific configurations or bindings.
+     *
+     * @param string $env The name of the environment to set.
+     * @return $this
+     * @throws ContainerException
      */
     public function setEnvironment(string $env): self
     {
@@ -54,33 +77,89 @@ class OptionsManager
         return $this;
     }
 
+    /**
+     * Enable or disable debug mode.
+     *
+     * If debug mode is enabled, the container will log additional information
+     * about the resolution process. This can be useful for debugging purposes.
+     *
+     * @param bool $enabled Whether to enable debug mode.
+     *
+     * @return $this
+     */
     public function enableDebug(bool $enabled = true): self
     {
         $this->repository->setDebug($enabled);
         return $this;
     }
 
+    /**
+     * Enables or disables lazy loading for the container.
+     *
+     * If lazy loading is enabled, the container will only resolve definitions
+     * when they are explicitly requested. This can improve performance by
+     * avoiding unnecessary resolutions. If lazy loading is disabled, the
+     * container will resolve all definitions immediately.
+     *
+     * @param bool $lazy Whether to enable lazy loading. Defaults to true.
+     *
+     * @return $this
+     * @throws ContainerException
+     */
     public function enableLazyLoading(bool $lazy = true): self
     {
         $this->repository->enableLazyLoading($lazy);
         return $this;
     }
 
+    /**
+     * Returns the definition manager for the container.
+     *
+     * The definition manager is the central hub for all definitions,
+     * and provides methods for retrieving, adding, and modifying
+     * definitions.
+     *
+     * @return DefinitionManager The definition manager for the container.
+     */
     public function definitions(): DefinitionManager
     {
         return $this->container->definitions();
     }
 
+    /**
+     * Returns the registration manager for the container.
+     *
+     * The registration manager is used to register definitions, and
+     * provides methods for registering classes, methods, and properties.
+     *
+     * @return RegistrationManager The registration manager for the container.
+     */
     public function registration(): RegistrationManager
     {
         return $this->container->registration();
     }
 
+    /**
+     * Returns the invocation manager for the container.
+     *
+     * The invocation manager is responsible for resolving definitions and
+     * calling methods or functions with the correct parameters.
+     *
+     * @return InvocationManager The invocation manager for the container.
+     */
     public function invocation(): InvocationManager
     {
         return $this->container->invocation();
     }
 
+    /**
+     * Ends the chain of method calls and returns the main container instance.
+     *
+     * This method is typically used to finalize configurations or registrations
+     * and retrieve the container instance for further operations.
+     *
+     * @return Container The main container instance.
+     */
     public function end(): Container
     {
         return $this->container;

@@ -7,6 +7,8 @@ namespace Infocyph\InterMix\DI\Resolver;
 use Closure;
 use Infocyph\InterMix\DI\Reflection\ReflectionResource;
 use Infocyph\InterMix\Exceptions\ContainerException;
+use Psr\Cache\InvalidArgumentException;
+use ReflectionException;
 
 class DefinitionResolver
 {
@@ -17,9 +19,18 @@ class DefinitionResolver
     public function __construct(
         private readonly Repository $repository
     ) {
-        //
     }
 
+    /**
+     * Sets the ClassResolver and ParameterResolver instances on this object.
+     *
+     * These resolvers are used by the resolve() method to resolve definitions
+     * that are class names or functions, and to resolve function parameters that
+     * are not provided by the user.
+     *
+     * @param ClassResolver    $classResolver    The ClassResolver instance.
+     * @param ParameterResolver $parameterResolver The ParameterResolver instance.
+     */
     public function setResolverInstance(
         ClassResolver $classResolver,
         ParameterResolver $parameterResolver
@@ -28,8 +39,19 @@ class DefinitionResolver
         $this->parameterResolver = $parameterResolver;
     }
 
+
     /**
-     * Resolve a definition by name (id).
+     * Resolve a definition by its name.
+     *
+     * First, check if the definition has already been resolved and stored in the
+     * repository. If so, return the stored result.
+     * If not, call the "getFromCacheOrResolve" method to resolve the definition.
+     * If the definition is still being resolved (circular dependency), throw an
+     * exception.
+     *
+     * @param string $name The name of the definition to resolve.
+     * @return mixed The resolved value of the definition.
+     * @throws ContainerException
      */
     public function resolve(string $name): mixed
     {
@@ -49,6 +71,14 @@ class DefinitionResolver
         }
     }
 
+    /**
+     * Tries to get a definition from the cache, otherwise resolves it using the
+     * `resolveDefinition` method and caches the result.
+     *
+     * @param string $name The name of the definition to resolve.
+     * @return mixed The resolved value of the definition.
+     * @throws InvalidArgumentException
+     */
     private function getFromCacheOrResolve(string $name): mixed
     {
         $resolvedDefs = $this->repository->getResolvedDefinition();
@@ -67,6 +97,20 @@ class DefinitionResolver
         return $this->repository->getResolvedDefinition()[$name];
     }
 
+    /**
+     * Resolves a definition by its ID and returns the resolved value.
+     *
+     * This method resolves a definition by its ID. If the definition is a closure,
+     * it is called with resolved arguments. If the definition is an array where the
+     * first element is a class name, it is resolved as an array definition. If the
+     * definition is a string class name, it is resolved as a class. Otherwise, the
+     * definition is returned as is.
+     *
+     * @param string $name The name of the definition to resolve.
+     * @return mixed The resolved value of the definition.
+     * @throws ContainerException
+     * @throws ReflectionException
+     */
     private function resolveDefinition(string $name): mixed
     {
         $definition = $this->repository->getFunctionReference()[$name] ?? null;
@@ -91,6 +135,19 @@ class DefinitionResolver
         }
     }
 
+    /**
+     * Resolves an array definition and returns the resolved value.
+     *
+     * This method accepts an array where the first element is a class name
+     * and the second element is a method name or a boolean. It uses the
+     * ClassResolver to resolve the class and either returns the result of
+     * the method call if the second element is provided, or the resolved
+     * instance if not.
+     *
+     * @param array $definition An array containing a class name and optionally a method name or boolean.
+     * @return mixed The resolved value or instance.
+     * @throws ContainerException
+     */
     private function resolveArrayDefinition(array $definition): mixed
     {
         // e.g. [$className, $methodOrBool]
