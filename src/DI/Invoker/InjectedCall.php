@@ -42,7 +42,7 @@ final readonly class InjectedCall
         $this->definitionResolver = new DefinitionResolver($this->repository);
         $this->parameterResolver = new ParameterResolver($this->repository, $this->definitionResolver);
 
-        $propertyResolver = new PropertyResolver($this->repository, $this->parameterResolver);
+        $propertyResolver = new PropertyResolver($this->repository);
 
         $this->classResolver = new ClassResolver(
             $this->repository,

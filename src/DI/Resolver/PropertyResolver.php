@@ -22,11 +22,9 @@ class PropertyResolver
      * Constructs a PropertyResolver instance.
      *
      * @param Repository $repository The Repository providing definitions, classes, functions, and parameters.
-     * @param ParameterResolver $parameterResolver The ParameterResolver resolving function/method parameters.
      */
     public function __construct(
-        private Repository $repository,
-        private readonly ParameterResolver $parameterResolver
+        private readonly Repository $repository
     ) {
     }
 
@@ -50,6 +48,7 @@ class PropertyResolver
      * Finally, mark the property resolution as complete in the repository.
      *
      * @param ReflectionClass $class The class to resolve properties for.
+     * @throws ContainerException|ReflectionException
      */
     public function resolve(ReflectionClass $class): void
     {
@@ -88,7 +87,7 @@ class PropertyResolver
      * @param ReflectionClass $class The class to resolve properties for.
      * @param array $properties The properties to resolve.
      * @param object $classInstance The instance of the class to set properties on.
-     * @throws ContainerException
+     * @throws ContainerException|ReflectionException
      */
     private function processProperties(
         ReflectionClass $class,
