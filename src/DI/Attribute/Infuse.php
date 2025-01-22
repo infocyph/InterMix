@@ -42,10 +42,7 @@ final class Infuse
     public function getParameterData(int|string|null $key = null): mixed
     {
         if (is_int($this->firstKey)) {
-            $originalValue = $this->data[$this->firstKey] ?? null;
-            $this->firstKey = $originalValue;            // Now store that string (type)
-            $this->data[$this->firstKey] = $this->firstKey; // Slightly hacky, you might want a different approach
-            unset($this->data[$this->firstKey]); // Avoid duplication
+            [$this->firstKey, $this->data[$this->firstKey]] = [$this->data[$this->firstKey], $this->firstKey];
         }
 
         $returnable = [

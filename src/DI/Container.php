@@ -6,6 +6,7 @@ namespace Infocyph\InterMix\DI;
 
 use Closure;
 use Exception;
+use Infocyph\InterMix\DI\Invoker\InjectedCall;
 use Infocyph\InterMix\DI\Managers\DefinitionManager;
 use Infocyph\InterMix\DI\Managers\InvocationManager;
 use Infocyph\InterMix\DI\Managers\OptionsManager;
@@ -65,23 +66,14 @@ class Container implements ContainerInterface
      */
     public function __construct(private readonly string $instanceAlias = 'default')
     {
-        // Store in static registry
         self::$instances[$this->instanceAlias] ??= $this;
-
-        // Create the repository, default alias, initial states
         $this->repository = new Repository();
         $this->repository->setAlias($this->instanceAlias);
-
-        // By default, map ContainerInterface::class => $this (like your original)
         $this->repository->setFunctionReference(
             ContainerInterface::class,
             $this,
         );
-
-        // Default resolver => "injected" style
-        $this->resolver = \Infocyph\InterMix\DI\Invoker\InjectedCall::class;
-
-        // Create manager objects
+        $this->resolver = InjectedCall::class;
         $this->definitionManager = new DefinitionManager($this->repository, $this);
         $this->registrationManager = new RegistrationManager($this->repository, $this);
         $this->optionsManager = new OptionsManager($this->repository, $this);
@@ -268,11 +260,6 @@ class Container implements ContainerInterface
         $this->resolver = $resolverClass;
     }
 
-    /*-------------------------------------------------------------------------
-     |  For convenience, you can still provide old facade methods if desired  |
-     |  e.g. addDefinitions(), bind(), call(), make(), getReturn()            |
-     *------------------------------------------------------------------------*/
-
     /**
      * Resolves a class with method name (if provided) and executes the method with optional parameters.
      *
@@ -318,10 +305,6 @@ class Container implements ContainerInterface
     {
         return $this->invocationManager->getReturn($id);
     }
-
-    /*-------------------------------------------------------------------------
-     |  Environment/Debug/Lazy convenience wrappers if you prefer            |
-     *------------------------------------------------------------------------*/
 
     /**
      * Sets the environment for the container.

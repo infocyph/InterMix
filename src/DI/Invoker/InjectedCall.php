@@ -79,7 +79,7 @@ final readonly class InjectedCall
      * @param  bool  $make  Whether to create a new instance (bypassing any cached instance).
      * @return array An associative array with keys 'instance' and possibly 'returned'.
      *
-     * @throws ReflectionException
+     * @throws ReflectionException|ContainerException
      */
     public function classSettler(
         string|object $class,
@@ -101,7 +101,7 @@ final readonly class InjectedCall
      * @param  array  $params  Additional parameters to be passed.
      * @return mixed The result of executing the closure/function.
      *
-     * @throws ReflectionException
+     * @throws ReflectionException|ContainerException
      */
     public function closureSettler(string|Closure $closure, array $params = []): mixed
     {

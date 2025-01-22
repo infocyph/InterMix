@@ -313,7 +313,7 @@ class ClassResolver
      *
      * @param ReflectionClass $class The class to resolve the method for.
      * @param string|bool|null $callMethod The name of the method to call, or a boolean value to indicate whether to call the constructor or not.
-     * @throws ReflectionException
+     * @throws ReflectionException|ContainerException
      */
     private function resolveMethod(
         ReflectionClass $class,
