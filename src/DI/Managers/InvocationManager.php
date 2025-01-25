@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Managers;
 
 use Closure;
-use Infocyph\InterMix\DI\Attribute\LazyPlaceholder;
+use Infocyph\InterMix\DI\Attribute\DeferredInitializer;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\Exceptions\ContainerException;
@@ -73,7 +73,7 @@ class InvocationManager
     {
         if (isset($this->repository->getResolved()[$id])) {
             $resolved = $this->repository->getResolved()[$id];
-            if ($resolved instanceof LazyPlaceholder) {
+            if ($resolved instanceof DeferredInitializer) {
                 $resolved = $resolved();
                 $this->repository->setResolved($id, $resolved);
             }
@@ -209,7 +209,7 @@ class InvocationManager
         $definition = $this->repository->getFunctionReference()[$id];
 
         if ($this->repository->isLazyLoading() && ! ($definition instanceof Closure)) {
-            $lazy = new LazyPlaceholder(fn () => $resolver->resolveByDefinition($id));
+            $lazy = new DeferredInitializer(fn () => $resolver->resolveByDefinition($id));
             $this->repository->setResolved($id, $lazy);
             return $lazy;
         }
