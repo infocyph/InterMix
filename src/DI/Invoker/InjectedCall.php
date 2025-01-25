@@ -12,6 +12,7 @@ use Infocyph\InterMix\DI\Resolver\ParameterResolver;
 use Infocyph\InterMix\DI\Resolver\PropertyResolver;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\Exceptions\ContainerException;
+use Psr\Cache\InvalidArgumentException;
 use ReflectionException;
 
 final readonly class InjectedCall
@@ -64,7 +65,7 @@ final readonly class InjectedCall
      * @param string $name The id of the definition to resolve.
      *
      * @return mixed The resolved value of the definition.
-     * @throws ContainerException
+     * @throws ContainerException|InvalidArgumentException
      */
     public function resolveByDefinition(string $name): mixed
     {

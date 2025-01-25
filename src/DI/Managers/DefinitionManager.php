@@ -8,6 +8,7 @@ use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\DI\Services\ServiceProviderInterface;
 use Infocyph\InterMix\Exceptions\ContainerException;
+use Psr\Cache\InvalidArgumentException;
 use Symfony\Contracts\Cache\CacheInterface;
 
 class DefinitionManager
@@ -121,7 +122,7 @@ class DefinitionManager
      * @param bool $forceClearFirst Whether to clear the cache before caching all definitions.
      *
      * @return $this
-     * @throws ContainerException
+     * @throws ContainerException|InvalidArgumentException
      */
     public function cacheAllDefinitions(bool $forceClearFirst = false): self
     {
@@ -138,8 +139,7 @@ class DefinitionManager
         }
 
         // Use the container’s set resolver to pre-resolve
-        $resolverClass = $this->container->getRepositoryResolverClass();
-        $resolver = new $resolverClass($this->repository);
+        $resolver = $this->container->getRepositoryResolverClass();
 
         foreach ($this->repository->getFunctionReference() as $id => $_def) {
             // This triggers definition resolution + caching

@@ -55,7 +55,7 @@ class Repository
      * If true, some definitions or services can be "lazy"
      * and not resolved until explicitly requested the first time.
      */
-    private bool $lazyLoading = false;
+    private bool $lazyLoading = true;
 
     /**
      * If true, we can log or store debug messages for diagnostic.
@@ -618,5 +618,23 @@ class Repository
     public function makeCacheKey(string $suffix): string
     {
         return $this->alias . '-' . $suffix;
+    }
+
+    /**
+     * If the given value is an array with an 'instance' key, returns the value of that key.
+     * Otherwise, returns the given value.
+     *
+     * This method is used to extract the instance from a parameter definition.
+     *
+     * @param mixed $value The value to extract the instance from.
+     *
+     * @return mixed The instance or the original value.
+     */
+    public function fetchInstanceOrValue(mixed $value): mixed
+    {
+        return match(true) {
+            is_array($value) && isset($value['instance']) => $value['instance'],
+            default => $value
+        };
     }
 }

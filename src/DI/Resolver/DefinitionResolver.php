@@ -51,7 +51,7 @@ class DefinitionResolver
      *
      * @param string $name The name of the definition to resolve.
      * @return mixed The resolved value of the definition.
-     * @throws ContainerException
+     * @throws ContainerException|InvalidArgumentException
      */
     public function resolve(string $name): mixed
     {
@@ -77,7 +77,9 @@ class DefinitionResolver
      *
      * @param string $name The name of the definition to resolve.
      * @return mixed The resolved value of the definition.
+     * @throws ContainerException
      * @throws InvalidArgumentException
+     * @throws ReflectionException
      */
     private function getFromCacheOrResolve(string $name): mixed
     {
@@ -88,11 +90,10 @@ class DefinitionResolver
             if ($cacheAdapter) {
                 $cacheKey = $this->repository->makeCacheKey('def' . base64_encode($name));
                 $value = $cacheAdapter->get($cacheKey, $resolverCallback);
-                $this->repository->setResolvedDefinition($name, $value);
             } else {
                 $value = $resolverCallback();
-                $this->repository->setResolvedDefinition($name, $value);
             }
+            $this->repository->setResolvedDefinition($name, $value);
         }
         return $this->repository->getResolvedDefinition()[$name];
     }

@@ -298,7 +298,7 @@ test('Closure definitions for a custom service', function () {
     $container = container(null, 'closure_test')
         ->definitions()
         ->bind('example.closure', function () {
-            return new ClosureExample;
+            return new ClosureExample();
         })
         ->end();
 

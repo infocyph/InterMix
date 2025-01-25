@@ -12,16 +12,8 @@ use ReflectionException;
 use ReflectionFunction;
 use ReflectionMethod;
 
-/**
- * Centralized Reflection caching with optional thread safety.
- *
- * If $threadSafe is true, we do a simple lock around the static cache
- * to avoid concurrency issues in multi-threaded PHP.
- */
 final class ReflectionResource
 {
-    private static bool $threadSafe = false;
-
     /**
      * Static reflection cache:
      * [
@@ -38,54 +30,6 @@ final class ReflectionResource
         'methods'   => [],
     ];
 
-    /**
-     * If you run in multi-thread environment, you can call setThreadSafe(true).
-     * This uses a static lock (like an ext-pcntl or pthreads approach).
-     */
-    public static function setThreadSafe(bool $enable): void
-    {
-        self::$threadSafe = $enable;
-    }
-
-    /**
-     * Whether the reflection cache is thread-safe or not.
-     *
-     * @return bool thread-safety status
-     */
-    public static function isThreadSafe(): bool
-    {
-        return self::$threadSafe;
-    }
-
-    /**
-     * Thread-safety approach: Acquire a lock if $threadSafe is true.
-     * This is a simple placeholder; real code would use semaphores or ext-pthreads if needed.
-     */
-    private static function acquireLock(): void
-    {
-        if (!self::$threadSafe) {
-            return;
-        }
-        // Placeholder: real code might do:
-        // flock(self::$lockHandle, LOCK_EX);
-    }
-
-
-    /**
-     * Release a lock if $threadSafe is true.
-     *
-     * If $threadSafe is true, this will release a lock acquired by {@see acquireLock()}.
-     * This is a simple placeholder; real code would use semaphores or ext-pthreads if needed.
-     */
-    private static function releaseLock(): void
-    {
-        if (!self::$threadSafe) {
-            return;
-        }
-        // Placeholder: real code might do:
-        // flock(self::$lockHandle, LOCK_UN);
-    }
-
 
     /**
      * Clear the reflection cache.
@@ -96,17 +40,12 @@ final class ReflectionResource
      */
     public static function clearCache(): void
     {
-        self::acquireLock();
-        try {
-            self::$reflectionCache = [
-                'classes'   => [],
-                'enums'     => [],
-                'functions' => [],
-                'methods'   => [],
-            ];
-        } finally {
-            self::releaseLock();
-        }
+        self::$reflectionCache = [
+            'classes'   => [],
+            'enums'     => [],
+            'functions' => [],
+            'methods'   => [],
+        ];
     }
 
     /*--------------------------------------------------------------------------
@@ -125,13 +64,8 @@ final class ReflectionResource
     {
         $className = is_object($class) ? $class::class : $class;
 
-        self::acquireLock();
-        try {
-            return self::$reflectionCache['classes'][$className]
-                ??= new ReflectionClass($class);
-        } finally {
-            self::releaseLock();
-        }
+        return self::$reflectionCache['classes'][$className]
+            ??= new ReflectionClass($class);
     }
 
 
@@ -144,13 +78,8 @@ final class ReflectionResource
      */
     public static function getEnumReflection(string $enumName): ReflectionEnum
     {
-        self::acquireLock();
-        try {
-            return self::$reflectionCache['enums'][$enumName]
-                ??= new ReflectionEnum($enumName);
-        } finally {
-            self::releaseLock();
-        }
+        return self::$reflectionCache['enums'][$enumName]
+            ??= new ReflectionEnum($enumName);
     }
 
 
@@ -170,13 +99,8 @@ final class ReflectionResource
         // Distinguish closures from named functions
         $key = is_string($function) ? $function : spl_object_hash($function);
 
-        self::acquireLock();
-        try {
-            return self::$reflectionCache['functions'][$key]
-                ??= new ReflectionFunction($function);
-        } finally {
-            self::releaseLock();
-        }
+        return self::$reflectionCache['functions'][$key]
+            ??= new ReflectionFunction($function);
     }
 
 
@@ -213,25 +137,15 @@ final class ReflectionResource
             }
             $key = "$class::$method";
 
-            self::acquireLock();
-            try {
-                return self::$reflectionCache['methods'][$key]
-                    ??= new ReflectionMethod($class, $method);
-            } finally {
-                self::releaseLock();
-            }
+            return self::$reflectionCache['methods'][$key]
+                ??= new ReflectionMethod($class, $method);
         }
 
         // (3) If object with __invoke
         if (is_object($callable) && method_exists($callable, '__invoke')) {
             $key = $callable::class.'::__invoke';
-            self::acquireLock();
-            try {
-                return self::$reflectionCache['methods'][$key]
-                    ??= new ReflectionMethod($callable, '__invoke');
-            } finally {
-                self::releaseLock();
-            }
+            return self::$reflectionCache['methods'][$key]
+                ??= new ReflectionMethod($callable, '__invoke');
         }
 
         throw new InvalidArgumentException('Invalid callable provided.');

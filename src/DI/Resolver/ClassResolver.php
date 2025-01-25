@@ -88,11 +88,7 @@ class ClassResolver
             }
 
             // Reflect & resolve using ClassResolver
-            $reflection = ReflectionResource::getClassReflection($type);
-            $resolved = $this->resolve($reflection);
-
-            // $resolved is typically an array with ['instance'=>..., 'returned'=>...]
-            return $resolved['instance'] ?? $resolved;
+            return $this->repository->fetchInstanceOrValue($this->resolve(ReflectionResource::getClassReflection($type)));
         }
 
         // 5) Otherwise, we have no way to resolve it

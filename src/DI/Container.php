@@ -6,6 +6,7 @@ namespace Infocyph\InterMix\DI;
 
 use Closure;
 use Exception;
+use Infocyph\InterMix\DI\Invoker\GenericCall;
 use Infocyph\InterMix\DI\Invoker\InjectedCall;
 use Infocyph\InterMix\DI\Managers\DefinitionManager;
 use Infocyph\InterMix\DI\Managers\InvocationManager;
@@ -16,6 +17,7 @@ use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Exceptions\NotFoundException;
 use InvalidArgumentException;
 use Psr\Container\ContainerInterface;
+use ReflectionException;
 
 /**
  * Main Container class (implements PSR-11).
@@ -42,9 +44,9 @@ class Container implements ContainerInterface
     /**
      * Resolver class name (InjectedCall::class or GenericCall::class or custom).
      *
-     * @var class-string
+     * @var closure|GenericCall|InjectedCall
      */
-    protected string $resolver;
+    protected closure|InjectedCall|GenericCall $resolver;
 
     /**
      * Sub-managers
@@ -73,7 +75,7 @@ class Container implements ContainerInterface
             ContainerInterface::class,
             $this,
         );
-        $this->resolver = InjectedCall::class;
+        $this->resolver = fn () => new InjectedCall($this->repository);
         $this->definitionManager = new DefinitionManager($this->repository, $this);
         $this->registrationManager = new RegistrationManager($this->repository, $this);
         $this->optionsManager = new OptionsManager($this->repository, $this);
@@ -145,7 +147,7 @@ class Container implements ContainerInterface
      * @param string $id The ID of the value to retrieve.
      *
      * @return mixed The retrieved value.
-     * @throws ContainerException|Exception If the container is unable to retrieve the value.
+     * @throws Exception|\Psr\Cache\InvalidArgumentException If the container is unable to retrieve the value.
      */
     public function get(string $id): mixed
     {
@@ -237,10 +239,13 @@ class Container implements ContainerInterface
     /**
      * Retrieves the class name of the current resolver being used by the repository.
      *
-     * @return string The class name of the resolver.
+     * @return object The class name of the resolver.
      */
-    public function getRepositoryResolverClass(): string
+    public function getRepositoryResolverClass(): Object
     {
+        if ($this->resolver instanceof Closure) {
+            $this->resolver = ($this->resolver)();
+        }
         return $this->resolver;
     }
 
@@ -257,7 +262,7 @@ class Container implements ContainerInterface
      */
     public function setResolverClass(string $resolverClass): void
     {
-        $this->resolver = $resolverClass;
+        $this->resolver = fn () => new $resolverClass($this->repository);
     }
 
     /**
@@ -268,6 +273,8 @@ class Container implements ContainerInterface
      * @param string|Closure|callable $classOrClosure The class name or closure to be resolved and executed.
      * @param string|bool|null $method The method to call on the resolved class (or null if no method should be called).
      * @return mixed The result of executing the resolved class or closure.
+     * @throws ContainerException
+     * @throws ReflectionException|\Psr\Cache\InvalidArgumentException
      */
     public function call(string|Closure|callable $classOrClosure, string|bool|null $method = null): mixed
     {
@@ -285,6 +292,8 @@ class Container implements ContainerInterface
      * @param string $class The class name to create a new instance of.
      * @param string|bool $method The method to call on the instance, or false to not call a method.
      * @return mixed The newly created instance, or the result of the called method.
+     * @throws ContainerException
+     * @throws ReflectionException
      */
     public function make(string $class, string|bool $method = false): mixed
     {
@@ -300,6 +309,9 @@ class Container implements ContainerInterface
      * @param string $id The ID of the definition to resolve and return.
      *
      * @return mixed The result of the resolved instance, or the resolved instance itself.
+     * @throws ContainerException
+     * @throws ReflectionException
+     * @throws \Psr\Cache\InvalidArgumentException
      */
     public function getReturn(string $id): mixed
     {
