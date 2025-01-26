@@ -6,7 +6,6 @@ namespace Infocyph\InterMix\DI\Managers;
 
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Resolver\Repository;
-use Infocyph\InterMix\DI\Services\ServiceProviderInterface;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\InvalidArgumentException;
 use Symfony\Contracts\Cache\CacheInterface;
@@ -69,24 +68,6 @@ class DefinitionManager
             throw new ContainerException("Id and definition cannot be the same ($id)");
         }
         $this->repository->setFunctionReference($id, $definition);
-
-        return $this;
-    }
-
-    /**
-     * Registers a service provider with the container.
-     *
-     * This method allows a service provider to register its services and definitions
-     * within the container. The provider may call various methods such as
-     * `addDefinitions()`, `bind()`, `registerClass()`, etc., to register its services.
-     *
-     * @param ServiceProviderInterface $provider The service provider to register.
-     * @return $this
-     */
-    public function registerProvider(ServiceProviderInterface $provider): self
-    {
-        // The provider might call ->addDefinitions(), ->bind(), ->registerClass(), etc.
-        $provider->register($this->container);
 
         return $this;
     }
