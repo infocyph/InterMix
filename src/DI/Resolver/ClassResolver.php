@@ -8,6 +8,7 @@ use Infocyph\InterMix\DI\Attribute\IMStdClass;
 use Infocyph\InterMix\DI\Attribute\Infuse;
 use Infocyph\InterMix\DI\Reflection\ReflectionResource;
 use Infocyph\InterMix\Exceptions\ContainerException;
+use Psr\Cache\InvalidArgumentException;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionMethod;
@@ -25,7 +26,7 @@ class ClassResolver
      * @param DefinitionResolver $definitionResolver The DefinitionResolver resolving definitions.
      */
     public function __construct(
-        private Repository $repository,
+        private readonly Repository $repository,
         private readonly ParameterResolver $parameterResolver,
         private readonly PropertyResolver $propertyResolver,
         private readonly DefinitionResolver $definitionResolver
@@ -45,7 +46,7 @@ class ClassResolver
      * @param Infuse $infuse The Infuse attribute to resolve
      * @return mixed The resolved value or null if not possible
      * @throws ContainerException
-     * @throws ReflectionException
+     * @throws ReflectionException|InvalidArgumentException
      */
     public function resolveInfuse(Infuse $infuse): mixed
     {
@@ -109,7 +110,7 @@ class ClassResolver
      * @param string|bool|null $callMethod The name of the method to call after instantiation, or true/false to call the constructor.
      * @param bool $make Whether to use the "make" method or the "resolveClassResources" method.
      * @return array An array containing the resolved instance and any returned value.
-     * @throws ContainerException
+     * @throws ContainerException|ReflectionException
      */
     public function resolve(
         ReflectionClass $class,
@@ -147,7 +148,7 @@ class ClassResolver
      * @param string $className The name of the class.
      * @param string|bool|null $callMethod The name of the method to call after instantiation, or true/false to call the constructor.
      * @return array An array containing the resolved instance and any returned value.
-     * @throws ContainerException
+     * @throws ContainerException|ReflectionException
      */
     private function resolveMake(
         ReflectionClass $class,
@@ -183,7 +184,7 @@ class ClassResolver
      * @param string $className The name of the class.
      * @param string|bool|null $callMethod The name of the method to call after instantiation, or true/false to call the constructor.
      * @return array An array containing the resolved instance and any returned value.
-     * @throws ContainerException
+     * @throws ContainerException|ReflectionException
      */
     private function resolveClassResources(
         ReflectionClass $class,
@@ -238,7 +239,7 @@ class ClassResolver
         // environment override
         $envConcrete = $this->repository->getEnvConcrete($className);
         if ($envConcrete) {
-            $class = new ReflectionClass($envConcrete);
+            $class = ReflectionResource::getClassReflection($envConcrete);
             if (! $class->implementsInterface($className)) {
                 throw new ContainerException("$envConcrete doesn't implement $className");
             }
@@ -249,7 +250,7 @@ class ClassResolver
         if (! $supplied || ! class_exists($supplied)) {
             throw new ContainerException("Resolution failed ($supplied) for interface $className");
         }
-        $reflect = new ReflectionClass($supplied);
+        $reflect = ReflectionResource::getClassReflection($supplied);
         if (! $reflect->implementsInterface($className)) {
             throw new ContainerException("$supplied doesn't implement $className");
         }

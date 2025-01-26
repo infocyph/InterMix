@@ -113,6 +113,25 @@ class OptionsManager
     }
 
     /**
+     * Binds a concrete implementation to an interface for a specific environment.
+     *
+     * The given interface will be resolved to the given concrete implementation
+     * only if the current environment matches the given environment.
+     *
+     * @param string $env the environment for which the binding should be applied
+     * @param string $interface the interface to bind
+     * @param string $concrete the concrete implementation to bind to
+     *
+     * @return $this
+     * @throws ContainerException if the container is locked
+     */
+    public function bindInterfaceForEnv(string $env, string $interface, string $concrete): self
+    {
+        $this->repository->bindInterfaceForEnv($env, $interface, $concrete);
+        return $this;
+    }
+
+    /**
      * Returns the definition manager for the container.
      *
      * The definition manager is the central hub for all definitions,

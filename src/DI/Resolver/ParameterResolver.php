@@ -8,6 +8,7 @@ use Infocyph\InterMix\DI\Attribute\IMStdClass;
 use Infocyph\InterMix\DI\Attribute\Infuse;
 use Infocyph\InterMix\DI\Reflection\ReflectionResource;
 use Infocyph\InterMix\Exceptions\ContainerException;
+use Psr\Cache\InvalidArgumentException;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionFunctionAbstract;
@@ -30,7 +31,7 @@ class ParameterResolver
      * @param DefinitionResolver $definitionResolver The resolver for definitions.
      */
     public function __construct(
-        private Repository $repository,
+        private readonly Repository $repository,
         private readonly DefinitionResolver $definitionResolver
     ) {
         // Fallback placeholder for unresolvable references
@@ -100,6 +101,8 @@ class ParameterResolver
      * @param ReflectionParameter $parameter The reflection of the parameter to be resolved.
      * @return mixed The resolved value or a fallback standard class if resolution is not possible.
      * @throws ContainerException
+     * @throws InvalidArgumentException
+     * @throws ReflectionException
      */
     public function resolveByDefinitionType(string $name, ReflectionParameter $parameter): mixed
     {
@@ -146,6 +149,8 @@ class ParameterResolver
      * @param string $type A string indicating the type of operation or context.
      * @return array An array of resolved parameters.
      * @throws ContainerException
+     * @throws InvalidArgumentException
+     * @throws ReflectionException
      */
     public function resolve(
         ReflectionFunctionAbstract $reflector,
@@ -253,6 +258,8 @@ class ParameterResolver
      * @param array $suppliedParameters An array of supplied parameters.
      * @param array $parameterAttribute An array of Infuse attributes set on the method.
      * @return array An array containing the resolved associative parameters.
+     * @throws ContainerException
+     * @throws ReflectionException
      */
     private function resolveAssociativeParameters(
         ReflectionFunctionAbstract $reflector,
@@ -320,7 +327,7 @@ class ParameterResolver
      * @param array $parameterAttribute An array of attributes set on the method.
      * @param array $processed An array of parameters that have already been processed.
      * @return mixed The resolved parameter value or a default value if resolution fails.
-     * @throws ContainerException
+     * @throws ContainerException|ReflectionException
      */
     private function tryResolveAssociative(
         ReflectionFunctionAbstract $reflector,
@@ -386,6 +393,8 @@ class ParameterResolver
      * @param bool $applyAttribute A boolean indicating whether to apply method-level attributes.
      * @return array An array containing the resolved numeric/default/variadic parameters.
      * @throws ContainerException
+     * @throws ReflectionException
+     * @throws InvalidArgumentException
      */
     private function resolveNumericDefaultParameters(
         ReflectionFunctionAbstract $reflector,
@@ -545,7 +554,7 @@ class ParameterResolver
      * @param mixed $supplied The value to supply to the constructor, if applicable.
      *
      * @return object The resolved instance.
-     * @throws ContainerException
+     * @throws ContainerException|ReflectionException
      */
     private function resolveClassDependency(
         ReflectionClass $class,
@@ -607,7 +616,7 @@ class ParameterResolver
      * @return array An array containing a boolean indicating whether the value was resolved or not,
      *               and the resolved value itself.
      * @throws ContainerException
-     * @throws ReflectionException
+     * @throws ReflectionException|\Psr\Cache\InvalidArgumentException
      */
     private function resolveParameterAttribute(ReflectionParameter $param): array
     {

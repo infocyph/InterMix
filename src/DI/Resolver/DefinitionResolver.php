@@ -51,7 +51,7 @@ class DefinitionResolver
      *
      * @param string $name The name of the definition to resolve.
      * @return mixed The resolved value of the definition.
-     * @throws ContainerException|InvalidArgumentException
+     * @throws ContainerException|InvalidArgumentException|ReflectionException
      */
     public function resolve(string $name): mixed
     {
@@ -147,11 +147,10 @@ class DefinitionResolver
      *
      * @param array $definition An array containing a class name and optionally a method name or boolean.
      * @return mixed The resolved value or instance.
-     * @throws ContainerException
+     * @throws ContainerException|ReflectionException
      */
     private function resolveArrayDefinition(array $definition): mixed
     {
-        // e.g. [$className, $methodOrBool]
         $resolved = $this->classResolver->resolve(...$definition);
         return !empty($definition[1]) ? $resolved['returned'] : $resolved['instance'];
     }

@@ -17,28 +17,15 @@ use Symfony\Contracts\Cache\CacheInterface;
  */
 class Repository
 {
-    /**
-     * Definitions
-     *  - functionReference: [id => definition]
-     *  - classResource: [className => ['constructor'=>..., 'method'=>..., 'property'=>...]]
-     *  - closureResource: [alias => [...]]
-     *  - resolved: [id => resolved instance]
-     *  - resolvedResource: [className => [...]]
-     *  - resolvedDefinition: [defName => definitionValue]
-     */
     private array $functionReference   = [];
     private array $classResource       = [];
     private array $closureResource     = [];
     private array $resolved            = [];
     private array $resolvedResource    = [];
     private array $resolvedDefinition  = [];
+    private array $conditionalBindings = [];
 
-    /** Additional arrays if you want environment or conditional logic */
-    private array $conditionalBindings = []; // e.g. [envName => [someInterface => someConcrete]]
 
-    /**
-     * Toggles and states
-     */
     private ?string $defaultMethod           = null;
     private bool $enablePropertyAttribute    = false;
     private bool $enableMethodAttribute      = false;
@@ -46,20 +33,10 @@ class Repository
     private ?CacheInterface $cacheAdapter    = null;
     private string $alias                    = 'default';
 
-    /**
-     * (Optional) environment-based overrides
-     */
     private ?string $environment = null;
 
-    /**
-     * If true, some definitions or services can be "lazy"
-     * and not resolved until explicitly requested the first time.
-     */
     private bool $lazyLoading = true;
 
-    /**
-     * If true, we can log or store debug messages for diagnostic.
-     */
     private bool $debug = false;
 
 
