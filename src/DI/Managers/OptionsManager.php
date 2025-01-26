@@ -78,22 +78,6 @@ class OptionsManager
     }
 
     /**
-     * Enable or disable debug mode.
-     *
-     * If debug mode is enabled, the container will log additional information
-     * about the resolution process. This can be useful for debugging purposes.
-     *
-     * @param bool $enabled Whether to enable debug mode.
-     *
-     * @return $this
-     */
-    public function enableDebug(bool $enabled = true): self
-    {
-        $this->repository->setDebug($enabled);
-        return $this;
-    }
-
-    /**
      * Enables or disables lazy loading for the container.
      *
      * If lazy loading is enabled, the container will only resolve definitions

@@ -60,11 +60,6 @@ class PropertyResolver
 
         $instance = $allResolved['instance'];
 
-        // Possibly debug
-        if ($this->repository->isDebug()) {
-            // e.g. error_log("PropertyResolver: injecting properties for $className");
-        }
-
         $this->processProperties($class, $class->getProperties(), $instance);
 
         if ($parentClass = $class->getParentClass()) {

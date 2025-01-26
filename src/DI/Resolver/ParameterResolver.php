@@ -166,13 +166,6 @@ class ParameterResolver
         $applyAttribute  = $this->repository->isMethodAttributeEnabled()
             && ($type === 'constructor' xor ($reflector->class ?? null));
 
-        // Possibly log debug
-        if ($this->repository->isDebug()) {
-            $owner = $reflector->class ?? $reflector->getName();
-            // You might do some logging or store debug messages
-            // e.g. error_log("ParameterResolver: Resolving params for $owner::$type");
-        }
-
         // if method-level Infuse attributes exist
         $attributeData = [];
         if ($applyAttribute) {

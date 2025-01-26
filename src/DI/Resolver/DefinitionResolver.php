@@ -55,11 +55,6 @@ class DefinitionResolver
      */
     public function resolve(string $name): mixed
     {
-        // debug?
-        if ($this->repository->isDebug()) {
-            // e.g. error_log("DefinitionResolver: resolving '$name'");
-        }
-
         if (isset($this->entriesResolving[$name])) {
             throw new ContainerException("Circular dependency for definition '$name'.");
         }

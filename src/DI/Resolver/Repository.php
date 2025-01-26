@@ -37,8 +37,6 @@ class Repository
 
     private bool $lazyLoading = true;
 
-    private bool $debug = false;
-
 
     /**
      * Throw an exception if the container is locked and we try to set/modify values.
@@ -71,16 +69,6 @@ class Repository
         $this->isLocked = true;
     }
 
-    /**
-     * Checks if the repository is locked from future modifications.
-     *
-     * @return bool if the repository is locked
-     */
-    public function isLocked(): bool
-    {
-        return $this->isLocked;
-    }
-
 
     /**
      * Set the environment for this repository.
@@ -109,32 +97,6 @@ class Repository
     public function getEnvironment(): ?string
     {
         return $this->environment;
-    }
-
-
-    /**
-     * Set the debug mode of the repository.
-     *
-     * If the debug mode is enabled, the repository will log debug information
-     * about the resolution process. This can be useful for debugging purposes.
-     *
-     * @param bool $enabled whether to enable debug mode
-     *
-     * @return void
-     */
-    public function setDebug(bool $enabled): void
-    {
-        $this->debug = $enabled;
-    }
-
-    /**
-     * Retrieve the current debug mode.
-     *
-     * @return bool whether debug mode is enabled
-     */
-    public function isDebug(): bool
-    {
-        return $this->debug;
     }
 
 

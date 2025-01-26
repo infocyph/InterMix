@@ -122,11 +122,6 @@ class ClassResolver
         $class = $this->getConcreteClassForInterface($class, $supplied);
         $className = $class->getName();
 
-        // If debug
-        if ($this->repository->isDebug()) {
-            // e.g. error_log("ClassResolver: resolving $className, make=$make");
-        }
-
         return $make
             ? $this->resolveMake($class, $className, $callMethod)
             : $this->resolveClassResources($class, $className, $callMethod);

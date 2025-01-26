@@ -337,23 +337,6 @@ class Container implements ContainerInterface
     }
 
     /**
-     * Enables or disables debug mode.
-     *
-     * If debug mode is enabled, the container will log debug information
-     * about the resolution process. This can be useful for debugging purposes.
-     *
-     * @param bool $enabled Whether to enable debug mode. Defaults to true.
-     *
-     * @return self The container instance for method chaining.
-     */
-    public function enableDebug(bool $enabled = true): self
-    {
-        $this->repository->setDebug($enabled);
-
-        return $this;
-    }
-
-    /**
      * Enables or disables lazy loading for the container.
      *
      * When lazy loading is enabled, services or definitions
