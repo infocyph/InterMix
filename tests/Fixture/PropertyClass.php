@@ -6,7 +6,7 @@ use Infocyph\InterMix\DI\Attribute\Infuse;
 
 class PropertyClass extends ParentPropertyClass
 {
-    private static string $staticValue;
+    public static string $staticValue;
 
     private string $nothing;
 
@@ -18,15 +18,16 @@ class PropertyClass extends ParentPropertyClass
 
     #[Infuse(strtotime: 'last monday')]
     private int $yesterday;
+
     #[Infuse(strtotime: ['last monday', 1678786990])]
     private int $yesterdayFromADate;
 
-    public function __get(string $key)
+    public function __get(string $key): mixed
     {
         return $this->{$key};
     }
 
-    public function getStaticValue()
+    public function getStaticValue(): ?string
     {
         return self::$staticValue;
     }

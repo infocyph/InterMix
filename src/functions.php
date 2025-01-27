@@ -7,7 +7,6 @@ use Exception;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Reflection\ReflectionResource;
 use Infocyph\InterMix\Exceptions\ContainerException;
-use Infocyph\InterMix\Exceptions\NotFoundException;
 use Infocyph\InterMix\Memoize\Cache;
 use Infocyph\InterMix\Memoize\WeakCache;
 use Psr\Cache\InvalidArgumentException;
@@ -15,29 +14,54 @@ use ReflectionException;
 
 if (! function_exists('Infocyph\InterMix\container')) {
     /**
-     * Get Container instance or direct call method/closure
+     * Get a Container instance or directly call a method/closure.
      *
-     * @param  string|Closure|callable|array|null  $closureOrClass  The closure, class, or callable array.
-     * @param  string  $alias  The alias for the container instance.
-     * @return Container|mixed Container or The return value of the function.
+     * If $closureOrClass is null, returns the Container (PSR-11).
+     * Otherwise, we interpret it as:
+     *   - A string/array describing a "class@method" or "class::method" => registerMethod, then getReturn()
+     *   - A closure/callable => call it (resolve via reflection if needed)
+     *   - A plain string => treat it as an ID/class => get it from container
      *
-     * @throws ContainerException|NotFoundException|InvalidArgumentException
+     * @return Container|mixed
+     *
+     * @throws ContainerException
+     * @throws Exception
      */
-    function container(string|Closure|callable|array|null $closureOrClass = null, string $alias = 'default')
-    {
+    function container(
+        string|Closure|callable|array|null $closureOrClass = null,
+        string $alias = 'default'
+    ): mixed {
+        // 1) Retrieve the Container instance
         $instance = Container::instance($alias);
+
+        // 2) If no class/closure is given, just return the Container
         if ($closureOrClass === null) {
             return $instance;
         }
 
-        [$class, $method] = $instance->split($closureOrClass);
+        // 3) Use the container's InvocationManager->split(...) to parse
+        //    "class@method", "class::method", [class, method], or closure/callable.
+        [$class, $method] = $instance
+            ->split($closureOrClass);
+
+        // 4) If no method is extracted => possibly a closure/callable or a direct ID.
         if (! $method) {
+            // If it's a closure or any callable, let's do invocationManager->call(...)
+            if ($class instanceof Closure || is_callable($class)) {
+                return $instance->invocation()->call($class);
+            }
+
+            // Otherwise interpret as class/ID => get($class)
             return $instance->get($class);
         }
 
-        $instance->registerMethod($class, $method);
+        // 5) If we do have a method => register that method using RegistrationManager->registerMethod(...)
+        $instance->registration()->registerMethod($class, $method);
 
+        // 6) Then call getReturn($class) to actually invoke that method and return the result
         return $instance->getReturn($class);
+        // or if you keep 'getReturn()' in the InvocationManager =>
+        // return $instance->getInvocationManager()->getReturn($class);
     }
 }
 

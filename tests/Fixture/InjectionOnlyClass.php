@@ -6,5 +6,6 @@ class InjectionOnlyClass
 {
     public function __construct()
     {
+        // No dependencies
     }
 }
