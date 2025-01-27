@@ -102,7 +102,7 @@ final readonly class InjectedCall
      * @param  array  $params  Additional parameters to be passed.
      * @return mixed The result of executing the closure/function.
      *
-     * @throws ReflectionException|ContainerException
+     * @throws ReflectionException|ContainerException|InvalidArgumentException
      */
     public function closureSettler(string|Closure $closure, array $params = []): mixed
     {

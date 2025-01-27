@@ -241,7 +241,7 @@ class Container implements ContainerInterface
      *
      * @return object The class name of the resolver.
      */
-    public function getRepositoryResolverClass(): Object
+    public function getCurrentResolver(): Object
     {
         if ($this->resolver instanceof Closure) {
             $this->resolver = ($this->resolver)();

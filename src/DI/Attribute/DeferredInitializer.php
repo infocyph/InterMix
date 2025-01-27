@@ -4,7 +4,7 @@ namespace Infocyph\InterMix\DI\Attribute;
 
 use Closure;
 
-class DeferredInitializer
+readonly class DeferredInitializer
 {
     public function __construct(private Closure $factory)
     {

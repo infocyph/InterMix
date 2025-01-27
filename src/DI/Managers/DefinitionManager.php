@@ -120,7 +120,7 @@ class DefinitionManager
         }
 
         // Use the container’s set resolver to pre-resolve
-        $resolver = $this->container->getRepositoryResolverClass();
+        $resolver = $this->container->getCurrentResolver();
 
         foreach ($this->repository->getFunctionReference() as $id => $_def) {
             // This triggers definition resolution + caching

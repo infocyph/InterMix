@@ -82,7 +82,11 @@ class InvocationManager
 
         // If in functionReference => resolve definition
         if (array_key_exists($id, $this->repository->getFunctionReference())) {
-            return $this->resolveDefinition($id);
+            $resolved = $this->resolveDefinition($id);
+            if ($resolved instanceof DeferredInitializer) {
+                $resolved = $resolved();
+            }
+            return $resolved;
         }
 
         // Otherwise, attempt call with $id as a class name
@@ -137,7 +141,7 @@ class InvocationManager
      */
     public function call(string|Closure|callable $classOrClosure, string|bool|null $method = null): mixed
     {
-        $resolver = $this->container->getRepositoryResolverClass();
+        $resolver = $this->container->getCurrentResolver();
 
         // 1) If string & in functionReference
         if (is_string($classOrClosure) &&
@@ -182,7 +186,7 @@ class InvocationManager
      */
     public function make(string $class, string|bool $method = false): mixed
     {
-        $resolver = $this->container->getRepositoryResolverClass();
+        $resolver = $this->container->getCurrentResolver();
 
         $fresh = $resolver->classSettler($class, $method, make: true);
 
@@ -205,7 +209,7 @@ class InvocationManager
      */
     protected function resolveDefinition(string $id): mixed
     {
-        $resolver = $this->container->getRepositoryResolverClass();
+        $resolver = $this->container->getCurrentResolver();
         $definition = $this->repository->getFunctionReference()[$id];
 
         if ($this->repository->isLazyLoading() && ! ($definition instanceof Closure)) {

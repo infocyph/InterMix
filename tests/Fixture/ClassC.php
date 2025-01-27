@@ -2,7 +2,7 @@
 
 namespace Infocyph\InterMix\Tests\Fixture;
 
-class ClassC implements InterfaceC
+class ClassC implements InterfaceA, InterfaceC
 {
     // minimal
 }

@@ -8,6 +8,7 @@ use Infocyph\InterMix\DI\Attribute\IMStdClass;
 use Infocyph\InterMix\DI\Attribute\Infuse;
 use Infocyph\InterMix\DI\Reflection\ReflectionResource;
 use Infocyph\InterMix\Exceptions\ContainerException;
+use Psr\Cache\InvalidArgumentException;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionNamedType;
@@ -82,7 +83,7 @@ class PropertyResolver
      * @param ReflectionClass $class The class to resolve properties for.
      * @param array $properties The properties to resolve.
      * @param object $classInstance The instance of the class to set properties on.
-     * @throws ContainerException|ReflectionException
+     * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
     private function processProperties(
         ReflectionClass $class,
@@ -100,13 +101,17 @@ class PropertyResolver
             return;
         }
 
+        /** @var ReflectionProperty $property */
         foreach ($properties as $property) {
             if ($property->isPromoted()) {
                 continue; // skip promoted
             }
             $values = $this->resolveValue($property, $registeredProps ?? [], $classInstance);
             if ($values) {
-                $property->setValue(...$values);
+                match(true) {
+                    $property->isStatic() => $class->setStaticPropertyValue($property->getName(), $values[0]),
+                    default => $property->setValue($values[0], $values[1]),
+                };
             }
         }
     }
@@ -122,7 +127,7 @@ class PropertyResolver
      * @param array $classPropertyValues The user-supplied values for the class.
      * @param object $classInstance The instance of the class to set the property on.
      * @return ?array An array of two items: the instance and the resolved value. Or null if not possible to resolve.
-     * @throws ContainerException|ReflectionException
+     * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
     private function resolveValue(
         ReflectionProperty $property,

@@ -6,7 +6,7 @@ use Infocyph\InterMix\DI\Attribute\Infuse;
 
 class PropertyClass extends ParentPropertyClass
 {
-    private static string $staticValue;
+    public static string $staticValue;
 
     private string $nothing;
 
