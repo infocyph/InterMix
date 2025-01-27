@@ -8,11 +8,9 @@
 ![Packagist Version](https://img.shields.io/packagist/v/infocyph/intermix)
 ![Packagist PHP Version](https://img.shields.io/packagist/dependency-v/infocyph/intermix/php)
 ![GitHub Code Size](https://img.shields.io/github/languages/code-size/infocyph/intermix)
-![Visitors](https://visitor-badge.laobi.icu/badge?page_id=infocyph.com)
 
 `InterMix` is a lightweight & versatile PHP library designed to provide commonly needed class-oriented tools with simplicity and efficiency. Whether you are managing dependencies or enhancing classes with macros, InterMix has you covered.
 
----
 
 ## Key Features
 
@@ -21,7 +19,6 @@
 - **Class Macro (MacroMix)**: Extend classes dynamically with powerful macros.
 - **Memoization**: Improve performance by caching function results.
 
----
 
 ## Prerequisites
 
@@ -32,7 +29,6 @@
 | 2.x.x           | 8.2.x or Higher   |
 | 1.x.x           | 8.x.x             |
 
----
 
 ## Installation
 
@@ -41,8 +37,6 @@ Install InterMix using Composer:
 ```bash
 composer require infocyph/intermix
 ```
-
----
 
 ## Getting Started
 
@@ -82,13 +76,11 @@ echo $object->greet('World'); // Hello, World!
 echo $object->whisper('John'); // psst... John
 ```
 
----
 
 ## Documentation
 
 Comprehensive documentation is available on [Read the Docs](https://intermix.readthedocs.io). It covers everything from installation to advanced use cases.
 
----
 
 ## Testing
 
@@ -99,19 +91,16 @@ composer install
 composer test
 ```
 
----
 
 ## Contributing
 
 We welcome contributions! If you encounter bugs, have feature requests, or want to help improve the library, please [create an issue](https://github.com/infocyph/InterMix/issues).
 
----
 
 ## Support
 
 Need help? Open an issue or reach out through the GitHub repository. We're here to help!
 
----
 
 ## License
 
