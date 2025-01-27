@@ -4,197 +4,222 @@
 Usage
 =====
 
-Simply, initialize using either of these lines,
+Below is a guide on how to **use** InterMix. The container implements the
+`PSR-11 <http://www.php-fig.org/psr/psr-11/>`__ standard.
+
+-----------------
+Initialization
+-----------------
+
+Use the short-hand:
 
 .. code-block:: php
 
-    $container = Infocyph\InterMix\container(); // recommended
-    $container = Infocyph\InterMix\DI\Container::instance();
-    $container = new Infocyph\InterMix\DI\Container();
+   use function Infocyph\InterMix\container;
 
-By default,
+   $container = container();  // default alias
 
-* **Autowiring** is enabled
-* **Attribute** resolution is disabled
-* No default method set
+or:
 
-.. tip::
+.. code-block:: php
 
-    You can get multiple ``container()`` instance completely isolated from each other. Simply send in an alias/identifier
-    in 2nd parameter. Identifier makes sure to keep it isolated from another identifier.
+   $container = Infocyph\InterMix\DI\Container::instance('myAlias');
+   // each alias is an isolated container
 
+**By default**:
 
-The container have following options to play with as you see fit,
+- **injection** is enabled,
+- **methodAttributes** = false,
+- **propertyAttributes** = false,
+- **lazyLoading** = true.
 
-get(string $id) & has(string $id)
----------------------------------
+You can **lock** the container after configuration:
 
-The container implements the
-`PSR-11 <http://www.php-fig.org/psr/psr-11/>`__ standard. That means it
-implements
-`Psr\\Container\\ContainerInterface <https://github.com/php-fig/container/blob/master/src/ContainerInterface.php>`__:
+.. code-block:: php
 
-.. code:: php
+   $container->lock(); // no more modifications
 
-   namespace Psr\Container;
+To free it from memory:
 
-   interface ContainerInterface
-   {
-       public function get($id);
-       public function has($id);
+.. code-block:: php
+
+   $container->unset(); // removes from static registry
+
+----------------------
+PSR-11 get($id), has($id)
+----------------------
+
+**`get($id)`** returns the resolved service.
+**`has($id)`** checks if the container *knows* about $id (either from functionReference or already resolved).
+
+.. code-block:: php
+
+   if ($container->has('myService')) {
+       $service = $container->get('myService');
    }
 
-bind(string $id, mixed $definition) & addDefinitions(array $definitions)
-------------------------------------------------------------------------
+If injection is enabled, InterMix tries reflection if `'myService'` is a class. Otherwise,
+it might throw if it can't find that definition or auto-resolve.
 
-You can set entries directly on the container using either ``bind()``:
+---------------------------------
+Definition Binding & Registration
+---------------------------------
 
-.. code:: php
+You can define entries:
 
-    $container->bind('foo', 'bar');
-    $container->bind('MyInterface', container('MyClass'));
-    $container->bind('myClosure', function() { /* ... */ });
+.. code-block:: php
 
-or ``addDefinitions()``
+   $container->definitions()
+       ->bind('foo', 'bar')
+       ->bind(MyInterface::class, MyConcrete::class)
+       ->addDefinitions([
+           'db.host' => '127.0.0.1',
+           'db.port' => '5432'
+       ]);
 
-.. code:: php
+Or register classes:
 
-    $container->addDefinitions([
-        'definition 1' => 'class reference / closure / any mixed value',
-        'foo' => 'bar',
-        'MyInterface' => 'MyClass',
-        'myClosure' => function() { /* ... */ }
-    ]);
+.. code-block:: php
 
-For details, see the :doc:`di.definitions`.
+   $container->registration()
+       ->registerClass(MyService::class, [
+           'someParam' => 'value'
+       ])
+       ->registerMethod(MyService::class, 'init', [
+           'initParam' => 'initValue'
+       ])
+       ->registerProperty(MyService::class, [
+           'propertyName' => 'propertyValue'
+       ]);
 
-getReturn(string $id)
----------------------
+**Everything** is stored in the container’s internal repository.
 
-``get()`` & ``getReturn()`` does the same except, ``getReturn()`` prioritize method returns where ``get()`` prioritizes
-class object.
+---------------------------------------
+getReturn($id), call($classOrClosure)
+---------------------------------------
 
-call(string|Closure|callable $classOrClosure, string|bool $method = null)
--------------------------------------------------------------------------
+- **`getReturn($id)`**: Similar to `get($id)` but returns the *method* output if a method was invoked.
+- **`call($classOrClosure, $method = null)`**: Instantiates the class or closure with parameter injection.
+  - For closures or global functions, it resolves parameters and calls them.
+  - For classes, it calls the specified method.
+  - Not always cached (the function call result isn’t stored unless it’s a class instance).
 
-``get()`` & ``getReturn()`` both internally calls ``call()``. Differences are, ``get()`` & ``getReturn()`` results are
-cached. In case of ``call()`` returns from method/closure are never cached (but class instances is cached as usual).
+-----------
+make($class)
+-----------
 
-make(string $class, string|bool $method = false)
-------------------------------------------------
+**By default** InterMix caches the first resolved instance of a class. If you want a fresh instance:
 
-This library only builds single instance per class (Singleton). But sometime we may need class instance/values independently.
+.. code-block:: php
 
-Though ``container()`` have 2nd parameter for completely different container instance but what if we need only one
-new instance for a single class but other dependencies from existing?
-Well, that is what ``make()`` is for! Also, it supports classes only.
+   $obj = $container->make(SomeClass::class);
 
-Providing 2nd parameter will get return from method execution. If not provided, will get the class instance only.
+No caching. If you pass a method:
 
-registerClass(string $class, array $parameters = [])
-----------------------------------------------------
+.. code-block:: php
 
-Normally, this method won't be needed unless you need to send in some extra parameter to the constructor.
+   $res = $container->make(SomeClass::class, 'doSomething');
 
-You don't need ``registerClass()`` for this
+it returns the result of `doSomething` on that new instance.
 
-.. code:: php
+------------------------
+setOptions(...) & Others
+------------------------
 
-    class GithubProfile
-    {
-        public function __construct(ApiClient $client)
-        ...
-    }
+You can set toggles:
 
-but you will need here if the variable ``$user`` is not defined via set()/addDefinitions()
+.. code-block:: php
 
-.. code:: php
+   $container->options()
+       ->setOptions(
+           injection: true,
+           methodAttributes: true,
+           propertyAttributes: true,
+           defaultMethod: 'handle'
+       )
+       ->enableLazyLoading(true)
+       ->setEnvironment('production');
 
-    class GithubProfile
-    {
-        public function __construct(ApiClient $client, $user)
-        ...
-    }
+**`injection`**: Switch between :php:class:`InjectedCall` (reflection) and
+:php:class:`GenericCall` (no reflection).
+**`methodAttributes`, `propertyAttributes`**: If you want the container to parse
+:php:class:`Infuse` attributes.
+**`defaultMethod`**: If no other method is found, call this one.
+**`enableLazyLoading(true)`**: definitions are stored as a lazy placeholder if not user closures.
+**`setEnvironment('production')`**: environment-based override checks.
 
-    // define as below
-    $container->registerClass('GithubProfile', [
-        'user' => 'some value'
-    ]);
+-----------------------------------
+Environment-Based Overrides Example
+-----------------------------------
 
-registerClosure(string $closureAlias, callable|Closure $function, array $parameters = [])
------------------------------------------------------------------------------------------
+If you want an interface to map to different classes in each environment:
 
-Same as ``registerClass()`` but for Closure.
+.. code-block:: php
 
-registerProperty(string $class, array $property), registerMethod(string $class, string $method, array $parameters = [])
------------------------------------------------------------------------------------------------------------------------
+   $container->options()
+       ->bindInterfaceForEnv('production', GeoService::class, GoogleMaps::class)
+       ->bindInterfaceForEnv('local', GeoService::class, OpenStreetMap::class);
 
-While resolving through classes, container will look for any property value registered of that class (if **attribute** &
-**property** resolutions is enabled) & will resolve it. During this if any custom property value is defined with
-``registerProperty()`` it will resolve it as well.
+Then:
 
-Register property by class,
+.. code-block:: php
 
-.. code:: php
+   $container->setEnvironment('production');
+   $service = $container->get(StoreService::class); // gets GoogleMaps internally
 
-    $container->registerProperty('GithubProfile', [
-        'someProperty' => 'some value'
-    ]);
+**No** code changes in `StoreService`, just an environment setting.
 
-Container will look for any method registered with ``registerMethod()`` & will resolve it. Even if it is not registered,
-container still may resolve some method, check the container lifecycle for details.
+-------------------------
+Chaining Example
+-------------------------
 
-register parameter in a method (also is default method to resolve for that class)
+You can chain managers:
 
-.. code:: php
+.. code-block:: php
 
-    $container->registerMethod('GithubProfile', 'aMethod', [
-        'user' => 'some value'
-    ]);
+   $container
+       ->definitions()
+           ->bind('db.host', '127.0.0.1')
+           ->bind(MyInterface::class, MyConcrete::class)
+           ->end()
+       ->registration()
+           ->registerClass(MyService::class, ['username' => 'alice'])
+           ->registerMethod(MyService::class, 'init')
+           ->end()
+       ->options()
+           ->setOptions(true, true, true, 'process')
+           ->enableLazyLoading(true)
+           ->bindInterfaceForEnv('production', SomeInterface::class, ProdImpl::class)
+           ->end()
+       ->invocation()
+           ->call(MyService::class, 'bootstrap')
+           ->end()
+       ->lock();
 
-setOptions(bool $injection = true, bool $methodAttributes = false, bool $propertyAttributes = false, string $defaultMethod = null)
-----------------------------------------------------------------------------------------------------------------------------------
+- `.definitions()` => :php:class:`DefinitionManager`
+- `.registration()` => :php:class:`RegistrationManager`
+- `.options()` => :php:class:`OptionsManager`
+- `.invocation()` => :php:class:`InvocationManager`
+- `.end()` => returns the main container instance
 
-Well, as you have seen above, the container provides lots of options. Obviously you can enable/disable them as your requirements.
-Available options are,
+The chain can be done in any order. This is a **fluent** approach.
 
-* ``injection``: Enable/disable dependency injection (Enabled by default)
-* ``methodAttributes``: Enable/disable attribute resolution on method
-* ``propertyAttributes``: Enable/disable attribute resolution on property
-* ``defaultMethod``: Set a default method to be called if method is not set already
+-----------------
+Lock & Unset
+-----------------
 
-.. attention::
+Finally:
 
-    Defaults are; ``injection`` is enabled, rests are disabled. If ``injection`` is disabled rest of the options won't work.
+.. code-block:: php
 
-split(string|array|Closure|callable $classAndMethod)
-----------------------------------------------------
+   $container->lock();
+   // no modifications
 
-Breakdown any recognizable formation to a recognizable callable format ``['class', 'method']`` or ``['closure']``. Will
-be called automatically if 1st parameter in ``container()`` function is passed.
-Applicable formats are,
+If you want to destroy that container alias:
 
-* ``class@method``
-* ``class::method``
-* ``closure()``
-* ``['class', 'method']``
-* ``['class']``
+.. code-block:: php
 
-lock()
-------
+   $container->unset();
 
-Once this method is called, you won't be able to modify the options or add anything to the class.
-
-.. code:: php
-
-    $container->lock();
-
-unset()
--------
-
-Once container is created it can be chained/piped through (to add/edit method/property/options) till the process die.
-But once **unset()** is called, no more chaining. Calling back will just simply initiate new container instance.
-
-.. code:: php
-
-    $container->unset();
+You can create a new container with the same alias afterward
+(``$container = container(null, 'someAlias')`` => fresh instance).

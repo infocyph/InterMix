@@ -1,59 +1,130 @@
 .. _di.attribute:
 
 ==========
-Attribute
+Attributes
 ==========
 
-Using **attribute** we can pass data into property or method if related options are enabled. For this there is
-some pre-requisite as given below:
+InterMix supports **property** and **method** injection via the ``Infuse`` attribute
+(:php:class:`Infocyph\\InterMix\\DI\\Attribute\\Infuse`). This lets you annotate class
+properties or method parameters so the container can **inject** values or definitions
+automatically.
 
-For method attribute,
+------------
 
-* ``methodAttributes`` parameter in ``setOptions()`` should be set to true
-* On method or arguments, attributes should be marked using ``Infocyph\InterMix\DI\Attribute\Infuse()`` class
+Prerequisites
+------------
 
-For property attribute
+- **Method Attributes**:
+  Set ``methodAttributes = true`` in :php:meth:`Infocyph\\InterMix\\DI\\Managers\\OptionsManager.setOptions`.
+- **Property Attributes**:
+  Set ``propertyAttributes = true`` in :php:meth:`Infocyph\\InterMix\\DI\\Managers\\OptionsManager.setOptions`.
 
-* ``propertyAttributes`` parameter in ``setOptions()`` should be set to true
-* Attributes should be marked using ``Infocyph\InterMix\DI\Attribute\Infuse()`` class
+Once enabled, the container checks for the :php:class:`Infocyph\\InterMix\\DI\\Attribute\\Infuse`
+attributes and resolves them accordingly during:
 
-Method attribute
-----------------
+- **Method resolution** (constructor or user-registered method).
+- **Property resolution** (if property injection is allowed).
 
-In case of method attribute, assignment is possible in 2 ways:
+-----------------
+Method Attributes
+-----------------
 
-* on argument
+Method attributes can appear in **two** ways:
 
-.. code:: php
+1. **On Individual Parameters**:
 
-    // foo will be resolved into $foo
-    function example(#[Infuse('foo')] string $foo) {}
+   .. code-block:: php
 
-* on method (with DocBlock)
+       use Infocyph\InterMix\DI\Attribute\Infuse;
 
-.. code:: php
+       class MyService
+       {
+           public function example(
+               #[Infuse('foo')] string $foo
+           ) {
+               // 'foo' is looked up in the container definitions or environment overrides
+           }
+       }
 
-    // foo will be resolved into $foo
-    #[Infuse(foo: 'data')]
-    function example(string $foo) {}
+   If no explicit parameter supply is found for ``$foo``, it tries the container definitions
+   under ``'foo'``.
 
-Property attribute
+2. **On the Entire Method** with key-value pairs:
+
+   .. code-block:: php
+
+       use Infocyph\InterMix\DI\Attribute\Infuse;
+
+       class MyService
+       {
+           #[Infuse(foo: 'data')]
+           public function example(string $foo) {
+               // $foo defaults to 'data' if no other supply or definitions override it
+           }
+       }
+
+   The container merges these attribute-provided values with any user-supplied or
+   definition-based parameters.
+
+------------------
+Property Attribute
 ------------------
 
-In case of property 2 possible ways:
+When **propertyAttributes** is true, InterMix can inject properties via
+``#[Infuse(...)]``:
 
-* Inject class
+1. **Injecting a Class**:
 
-.. code:: php
+   .. code-block:: php
 
-    // AClass will be resolved and injected
-    #[Infuse]
-    private AClass $aClassInstance;
+       use Infocyph\InterMix\DI\Attribute\Infuse;
 
-* Same as Method attribute
+       class Example
+       {
+           #[Infuse]
+           private AClass $aClassInstance;
+           // The container resolves AClass automatically if injection is enabled.
+       }
 
-.. code:: php
+2. **Injecting a Definition or Function**:
 
-    // definition will be injected (db.host)
-    #[Infuse('db.host')]
-    private string $aClassInstance;
+   .. code-block:: php
+
+       use Infocyph\InterMix\DI\Attribute\Infuse;
+
+       class Example
+       {
+           #[Infuse('db.host')]
+           private string $host;
+           // 'db.host' is fetched from container definitions
+
+           #[Infuse(strtotime: 'last monday')]
+           private int $timestamp;
+           // calls strtotime('last monday') and injects the result
+       }
+
+**Note**: If you also provided property values via
+:php:meth:`Infocyph\\InterMix\\DI\\Managers\\RegistrationManager.registerProperty()`,
+that user-supplied data **overrides** the attribute approach.
+
+----
+
+Enabling Attributes
+-------------------
+
+Just call:
+
+.. code-block:: php
+
+   $container->options()
+       ->setOptions(
+           injection: true,
+           methodAttributes: true,
+           propertyAttributes: true
+       );
+
+Now any :php:class:`Infuse` attributes on methods/parameters/properties
+are honored when the container builds or calls those classes.
+
+**Tip**: If you only want method injection, set just ``methodAttributes=true``
+and leave property as false, or vice versa.
