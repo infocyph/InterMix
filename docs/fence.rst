@@ -18,10 +18,9 @@ Key Features
 4. **Requirement Checking (`Common`):** Ensures required PHP extensions or classes are available before creating an instance.
 5. **Instance Management:** Includes utility methods like `clearInstances` or `setLimit` for enhanced lifecycle management.
 
-Usage Examples
 --------------
-
-### Basic Usage
+Basic Usage
+--------------
 
 .. code-block:: php
 
@@ -40,8 +39,9 @@ Usage Examples
    class Multiton {
        use Multi;
    }
-
-### Initialization Methods
+--------------
+Initialization Methods
+--------------
 
 Instead of using `new`, you must initialize classes with specific methods provided by the traits.
 
@@ -57,7 +57,9 @@ Instead of using `new`, you must initialize classes with specific methods provid
    $lgi = Limiton::instance('instanceName');
    $lgi->setLimit(5); // Update the instance limit.
 
-### Applying Requirements
+--------------
+Applying Requirements
+--------------
 
 The `instance` method in **Single**, **Multi**, and **Limit** accepts an optional parameter to define initialization requirements.
 
@@ -82,10 +84,9 @@ If the requirements are not met, an exception is thrown with a detailed message.
    // Missing extensions: mbstring
    // Missing classes: IteratorIterator
 
-Advanced Features
------------------
-
-### Logging
+--------------
+Logging
+--------------
 
 Fence includes built-in support for logging constraint checks. This can be extended to use custom logging solutions.
 
@@ -94,9 +95,11 @@ Fence includes built-in support for logging constraint checks. This can be exten
    // Example: Log a message during constraint validation.
    Singleton::log('Validation started for Singleton initialization.');
 
-### Instance Management
+--------------
+Instance Management
+--------------
 
-#### Clearing Instances
+- Clearing Instances
 
 Instances created through **Multi** and **Limit** can be cleared to reset the class state.
 
@@ -108,7 +111,7 @@ Instances created through **Multi** and **Limit** can be cleared to reset the cl
    // Clear Singleton instance.
    Singleton::clearInstance();
 
-#### Retrieving Instances
+- Retrieving Instances
 
 You can retrieve all active instances created by **Multi**.
 
@@ -117,7 +120,7 @@ You can retrieve all active instances created by **Multi**.
    $allInstances = Multiton::getInstances();
    print_r($allInstances);
 
-#### Updating Limits (for Limit Trait)
+- Updating Limits (for Limit Trait)
 
 You can dynamically adjust the instance creation limit.
 

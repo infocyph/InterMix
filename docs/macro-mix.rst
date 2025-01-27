@@ -18,7 +18,7 @@ and supports advanced features like:
     It uses ``__call`` & ``__callStatic`` magic methods. Be careful if your
     class already uses them, as it may result in conflicts.
 
----
+
 
 Thread Safety and Locking
 =========================
@@ -39,7 +39,7 @@ To enable locking, define the ``ENABLE_LOCK`` constant in your class:
 
 Locking is selectively applied to write operations (e.g., adding or removing macros) to avoid unnecessary overhead for read operations.
 
----
+
 
 Registering and Calling Macros
 ==============================
@@ -71,7 +71,7 @@ Add a macro dynamically:
 
     Dynamically added methods can return ``$this`` to enable method chaining.
 
----
+
 
 Checking and Removing Macros
 ============================
@@ -86,7 +86,7 @@ You can check whether a macro is registered using ``hasMacro`` and remove it usi
    House::removeMacro('example');
    echo House::hasMacro('example'); // false
 
----
+
 
 Mixing Methods
 ==============
@@ -112,7 +112,7 @@ to the target class.
    echo $house->greet('World'); // Hello, World!
    echo $house->whisper('John'); // psst... John
 
----
+
 
 Loading Macros
 ==============
@@ -162,7 +162,7 @@ Macros can also be defined using PHPDoc annotations in a class or object:
 
     Macros registered through annotations must include the ``@Macro`` tag in their PHPDoc comments.
 
----
+
 
 Retrieving All Macros
 =====================
@@ -181,7 +181,7 @@ You can retrieve all registered macros using the ``getMacros`` method:
    //     'macroTwo' => callable,
    // ]
 
----
+
 
 Error Handling
 ==============
@@ -195,7 +195,7 @@ Calling an undefined macro will throw an exception:
 
    // Exception Message: Method House::undefinedMacro does not exist.
 
----
+
 
 Advanced Notes
 ==============
@@ -218,6 +218,6 @@ Advanced Notes
 4. **Conflict Resolution**:
    - If a macro with the same name already exists, it will be overwritten only if explicitly allowed in the method call.
 
----
+
 
 ``MacroMix`` provides powerful tools to dynamically extend your classes, making your code more flexible and reusable.

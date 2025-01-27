@@ -4,6 +4,10 @@
 Dependency Injection (Container)
 ================================
 
+This section covers how to use the **InterMix** DI (Dependency Injection) container, why it helps you
+achieve simpler, decoupled architecture, and how to configure it for advanced needs
+(method/property attributes, environment-based overrides, caching, etc.).
+
 .. toctree::
     :titlesonly:
     :hidden:
@@ -14,11 +18,12 @@ Dependency Injection (Container)
     di/cache
     di/flow
 
-Using the library is pretty straight-forward.
+-------------------------------
+Use Dependency Injection (Intro)
+-------------------------------
 
-**Use dependency injection**
-
-Let’s write code using dependency injection without thinking any DI:
+Below is a simple code snippet that **does** dependency injection *without* relying heavily on any
+external container. Notice that one class **accepts** its dependency via the constructor:
 
 .. code-block:: php
 
@@ -26,11 +31,9 @@ Let’s write code using dependency injection without thinking any DI:
    {
        public function somethingHere($doIt, $doThat)
        {
-           // doing something here
+           // do something
        }
    }
-
-.. code-block:: php
 
    class MyAccessorClass
    {
@@ -38,51 +41,84 @@ Let’s write code using dependency injection without thinking any DI:
 
        public function __construct(MyInjectableClass $injectable)
        {
-           $this->mailer = $mailer;
+           $this->injectable = $injectable;
        }
 
        public function set($it, $that)
        {
            // Doing something
-           // ....
            $this->injectable->somethingHere($it, $that);
        }
    }
 
-As we can see, the ``MyAccessorClass`` takes the ``MyInjectableClass`` as a constructor parameter & this is dependency injection!
-
-**Create the container**
-
-Creating the container is as easy as it can be,
-
-.. code-block:: php
-
-   $container = new Infocyph\InterMix\container();
-
-Then simply register or setOptions as your requirements:
-
-.. code-block:: php
-
-   $container->setOptions(...)
-   $container->register...(...);
-
-**Create the objects**
-
-Without dependency injection
+`MyAccessorClass` depends on `MyInjectableClass`—this is **dependency injection**.
+However, you manually create these objects:
 
 .. code-block:: php
 
    $mic = new MyInjectableClass();
    $mac = new MyAccessorClass($mic);
 
-With our library we can just do:
+**Enter** InterMix: The container can automate this creation/wiring.
+
+------------------
+Creating the Container
+------------------
+
+You can create a **container** using:
+
+.. code-block:: php
+
+   use function Infocyph\InterMix\container;
+
+   $container = container(); // recommended short-hand
+   // or
+   $container = \Infocyph\InterMix\DI\Container::instance();
+
+Then set up options or register classes:
+
+.. code-block:: php
+
+   $container->options()
+       ->setOptions(
+           injection: true,
+           methodAttributes: true,
+           propertyAttributes: true
+       )
+       ->end();
+
+   $container->registration()
+       ->registerClass(MyInjectableClass::class)
+       ->end();
+
+   // locking if you want:
+   $container->lock();
+
+Afterwards, to get your classes:
 
 .. code-block:: php
 
    $mac = $container->get(MyAccessorClass::class);
 
-The container uses a technique called **autowiring**. This will scan the code and see what
-are the parameters needed in the constructors. Our container uses `PHP’s Reflection
-classes <http://php.net/manual/en/book.reflection.php>`__ which is pretty standard: Laravel, Zend Framework and
-many other containers do the same. Performance wise, such information is read once and then
-cached, it has (almost) no impact.
+This triggers “**autowiring**” (reflection-based). The container sees that
+`MyAccessorClass` needs `MyInjectableClass`, so it builds `MyInjectableClass` first,
+then passes it to `MyAccessorClass`.
+
+**Without** the container, you must manually create `MyInjectableClass` and pass it.
+With the container, everything is resolved automatically using reflection, caching,
+and environment-based overrides if configured.
+
+-------------------
+Further Exploration
+-------------------
+
+
+- :ref:`di.understanding` — High-level overview of DI principles
+- :ref:`di.usage`         — Detailed usage of InterMix container
+- :ref:`di.attribute`     — How to do property and method injection with `#[Infuse(...)]`
+- :ref:`di.cache`         — Definition caching for performance
+- :ref:`di.flow`          — Internal flow, lazy loading, concurrency notes
+
+We recommend starting with :ref:`di.usage` to see how to register definitions, manage options,
+and retrieve your services (e.g. `get(MyAccessorClass::class)`).
+Then explore the other pages as needed for advanced features.
