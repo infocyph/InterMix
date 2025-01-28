@@ -112,13 +112,6 @@ and environment-based overrides if configured.
 Further Exploration
 -------------------
 
-
-- :ref:`di.understanding` — High-level overview of DI principles
-- :ref:`di.usage`         — Detailed usage of InterMix container
-- :ref:`di.attribute`     — How to do property and method injection with `#[Infuse(...)]`
-- :ref:`di.cache`         — Definition caching for performance
-- :ref:`di.flow`          — Internal flow, lazy loading, concurrency notes
-
 We recommend starting with :ref:`di.usage` to see how to register definitions, manage options,
 and retrieve your services (e.g. `get(MyAccessorClass::class)`).
 Then explore the other pages as needed for advanced features.
