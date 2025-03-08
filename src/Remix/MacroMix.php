@@ -58,19 +58,14 @@ trait MacroMix
      */
     public static function loadMacrosFromAnnotations(string|object $class): void
     {
-        self::acquireLock();
-        try {
-            $reflection = ReflectionResource::getClassReflection($class);
-            foreach ($reflection->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
-                $docComment = $method->getDocComment();
-                if ($docComment && preg_match('/@Macro\("(\w+)"\)/', $docComment, $matches)) {
-                    $macroName = $matches[1];
-                    $macro = fn (...$args) => $method->invoke($class, ...$args);
-                    static::macro($macroName, $macro);
-                }
+        $reflection = ReflectionResource::getClassReflection($class);
+        foreach ($reflection->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
+            $docComment = $method->getDocComment();
+            if ($docComment && preg_match('/@Macro\("(\w+)"\)/', $docComment, $matches)) {
+                $macroName = $matches[1];
+                $macro = fn (...$args) => $method->invoke($class, ...$args);
+                static::macro($macroName, $macro);
             }
-        } finally {
-            self::releaseLock();
         }
     }
 
@@ -82,15 +77,10 @@ trait MacroMix
      */
     public static function macro(string $name, callable|object $macro): void
     {
-        self::acquireLock();
-        try {
-            if (is_callable($macro)) {
-                $macro = static::wrapWithChaining($macro);
-            }
-            static::$macros[$name] = $macro;
-        } finally {
-            self::releaseLock();
+        if (is_callable($macro)) {
+            $macro = static::wrapWithChaining($macro);
         }
+        static::$macros[$name] = $macro;
     }
 
     /**
@@ -110,12 +100,7 @@ trait MacroMix
      */
     public static function removeMacro(string $name): void
     {
-        self::acquireLock();
-        try {
-            unset(static::$macros[$name]);
-        } finally {
-            self::releaseLock();
-        }
+        unset(static::$macros[$name]);
     }
 
     /**
@@ -240,27 +225,22 @@ trait MacroMix
      */
     public static function mix(object $mixin, bool $replace = true): void
     {
-        self::acquireLock();
-        try {
-            $methods = (ReflectionResource::getClassReflection($mixin))->getMethods(
-                ReflectionMethod::IS_PUBLIC | ReflectionMethod::IS_PROTECTED
-            );
+        $methods = (ReflectionResource::getClassReflection($mixin))->getMethods(
+            ReflectionMethod::IS_PUBLIC | ReflectionMethod::IS_PROTECTED
+        );
 
-            foreach ($methods as $method) {
-                $name = $method->name;
+        foreach ($methods as $method) {
+            $name = $method->name;
 
-                if (! $replace && static::hasMacro($name)) {
-                    continue;
-                }
-
-                $macro = $method->isStatic()
-                    ? fn (...$args) => $method->invoke(null, ...$args)
-                    : fn (...$args) => $method->invoke($mixin, ...$args);
-
-                static::macro($name, $macro);
+            if (! $replace && static::hasMacro($name)) {
+                continue;
             }
-        } finally {
-            self::releaseLock();
+
+            $macro = $method->isStatic()
+                ? fn (...$args) => $method->invoke(null, ...$args)
+                : fn (...$args) => $method->invoke($mixin, ...$args);
+
+            static::macro($name, $macro);
         }
     }
 }
