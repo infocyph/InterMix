@@ -4,7 +4,7 @@ namespace Infocyph\InterMix\Remix;
 
 use Closure;
 use Exception;
-use ReflectionClass;
+use Infocyph\InterMix\DI\Reflection\ReflectionResource;
 use ReflectionException;
 use ReflectionMethod;
 
@@ -60,7 +60,7 @@ trait MacroMix
     {
         self::acquireLock();
         try {
-            $reflection = new ReflectionClass($class);
+            $reflection = ReflectionResource::getClassReflection($class);
             foreach ($reflection->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
                 $docComment = $method->getDocComment();
                 if ($docComment && preg_match('/@Macro\("(\w+)"\)/', $docComment, $matches)) {
@@ -233,15 +233,16 @@ trait MacroMix
     /**
      * Mixes methods from a given object or class into the current class.
      *
-     * @param  object  $mixin  The object or class containing methods to mix in.
-     * @param  bool  $replace  Whether to replace existing macros with the same name.
+     * @param object $mixin The object or class containing methods to mix in.
+     * @param bool $replace Whether to replace existing macros with the same name.
      *
+     * @throws ReflectionException
      */
     public static function mix(object $mixin, bool $replace = true): void
     {
         self::acquireLock();
         try {
-            $methods = (new ReflectionClass($mixin))->getMethods(
+            $methods = (ReflectionResource::getClassReflection($mixin))->getMethods(
                 ReflectionMethod::IS_PUBLIC | ReflectionMethod::IS_PROTECTED
             );
 

@@ -25,7 +25,7 @@ if (! function_exists('Infocyph\InterMix\container')) {
      * @return Container|mixed
      *
      * @throws ContainerException
-     * @throws Exception
+     * @throws Exception|InvalidArgumentException
      */
     function container(
         string|Closure|callable|array|null $closureOrClass = null,
@@ -88,7 +88,7 @@ if (! function_exists('Infocyph\InterMix\memoize')) {
 
         // Generate and retrieve the unique signature for the callable
         $signature = ReflectionResource::getSignature(
-            ReflectionResource::resolveCallable($callable)
+            ReflectionResource::getReflection($callable)
         );
 
         // Retrieve or compute the value with optional TTL and force refresh
@@ -100,19 +100,17 @@ if (! function_exists('Infocyph\InterMix\remember')) {
     /**
      * Retrieves a memoized value based on the provided class object (valid until garbage collected).
      *
-     * @param  object|null  $classObject  The class object for which the value is being retrieved.
-     * @param  callable|null  $callable  The callable for which the value is being retrieved.
-     * @param  array  $parameters  The parameters for the callable.
-     * @param  array  $tags  Tags to associate with the cache entry.
+     * @param object|null $classObject The class object for which the value is being retrieved.
+     * @param callable|null $callable The callable for which the value is being retrieved.
+     * @param array $parameters The parameters for the callable.
      * @return mixed The memoized result of the callable or the WeakCache instance if no callable is provided.
      *
-     * @throws ReflectionException|InvalidArgumentException
+     * @throws ReflectionException
      */
     function remember(
         ?object $classObject = null,
         ?callable $callable = null,
-        array $parameters = [],
-        array $tags = []
+        array $parameters = []
     ): mixed {
         $cache = WeakCache::instance();
 
@@ -128,7 +126,7 @@ if (! function_exists('Infocyph\InterMix\remember')) {
 
         // Generate the unique signature
         $signature = ReflectionResource::getSignature(
-            ReflectionResource::resolveCallable($callable)
+            ReflectionResource::getReflection($callable)
         );
 
         // Retrieve or compute the value
