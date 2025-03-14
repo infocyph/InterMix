@@ -4,7 +4,7 @@ namespace Infocyph\InterMix\Remix;
 
 use Closure;
 use Exception;
-use ReflectionClass;
+use Infocyph\InterMix\DI\Reflection\ReflectionResource;
 use ReflectionException;
 use ReflectionMethod;
 
@@ -58,19 +58,14 @@ trait MacroMix
      */
     public static function loadMacrosFromAnnotations(string|object $class): void
     {
-        self::acquireLock();
-        try {
-            $reflection = new ReflectionClass($class);
-            foreach ($reflection->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
-                $docComment = $method->getDocComment();
-                if ($docComment && preg_match('/@Macro\("(\w+)"\)/', $docComment, $matches)) {
-                    $macroName = $matches[1];
-                    $macro = fn (...$args) => $method->invoke($class, ...$args);
-                    static::macro($macroName, $macro);
-                }
+        $reflection = ReflectionResource::getClassReflection($class);
+        foreach ($reflection->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
+            $docComment = $method->getDocComment();
+            if ($docComment && preg_match('/@Macro\("(\w+)"\)/', $docComment, $matches)) {
+                $macroName = $matches[1];
+                $macro = fn (...$args) => $method->invoke($class, ...$args);
+                static::macro($macroName, $macro);
             }
-        } finally {
-            self::releaseLock();
         }
     }
 
@@ -82,15 +77,10 @@ trait MacroMix
      */
     public static function macro(string $name, callable|object $macro): void
     {
-        self::acquireLock();
-        try {
-            if (is_callable($macro)) {
-                $macro = static::wrapWithChaining($macro);
-            }
-            static::$macros[$name] = $macro;
-        } finally {
-            self::releaseLock();
+        if (is_callable($macro)) {
+            $macro = static::wrapWithChaining($macro);
         }
+        static::$macros[$name] = $macro;
     }
 
     /**
@@ -110,12 +100,7 @@ trait MacroMix
      */
     public static function removeMacro(string $name): void
     {
-        self::acquireLock();
-        try {
-            unset(static::$macros[$name]);
-        } finally {
-            self::releaseLock();
-        }
+        unset(static::$macros[$name]);
     }
 
     /**
@@ -233,33 +218,29 @@ trait MacroMix
     /**
      * Mixes methods from a given object or class into the current class.
      *
-     * @param  object  $mixin  The object or class containing methods to mix in.
-     * @param  bool  $replace  Whether to replace existing macros with the same name.
+     * @param object $mixin The object or class containing methods to mix in.
+     * @param bool $replace Whether to replace existing macros with the same name.
      *
+     * @throws ReflectionException
      */
     public static function mix(object $mixin, bool $replace = true): void
     {
-        self::acquireLock();
-        try {
-            $methods = (new ReflectionClass($mixin))->getMethods(
-                ReflectionMethod::IS_PUBLIC | ReflectionMethod::IS_PROTECTED
-            );
+        $methods = (ReflectionResource::getClassReflection($mixin))->getMethods(
+            ReflectionMethod::IS_PUBLIC | ReflectionMethod::IS_PROTECTED
+        );
 
-            foreach ($methods as $method) {
-                $name = $method->name;
+        foreach ($methods as $method) {
+            $name = $method->name;
 
-                if (! $replace && static::hasMacro($name)) {
-                    continue;
-                }
-
-                $macro = $method->isStatic()
-                    ? fn (...$args) => $method->invoke(null, ...$args)
-                    : fn (...$args) => $method->invoke($mixin, ...$args);
-
-                static::macro($name, $macro);
+            if (! $replace && static::hasMacro($name)) {
+                continue;
             }
-        } finally {
-            self::releaseLock();
+
+            $macro = $method->isStatic()
+                ? fn (...$args) => $method->invoke(null, ...$args)
+                : fn (...$args) => $method->invoke($mixin, ...$args);
+
+            static::macro($name, $macro);
         }
     }
 }
