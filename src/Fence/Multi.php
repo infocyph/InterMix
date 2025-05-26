@@ -9,6 +9,7 @@ trait Multi
     use Common;
 
     protected static array $instances = [];
+    private ?string $instanceKey = null;
 
     /**
      * Creates or retrieves a keyed instance of the class.
@@ -22,7 +23,9 @@ trait Multi
     {
         static::checkRequirements($constraints);
 
-        return static::$instances[$key] ??= new static();
+        static::$instances[$key] ??= new static();
+        (static::$instances[$key])->instanceKey = $key;
+        return static::$instances[$key];
     }
 
     /**
@@ -41,5 +44,15 @@ trait Multi
     final public static function clearInstances(): void
     {
         static::$instances = [];
+    }
+
+    /**
+     * Retrieves the instance key for the current instance.
+     *
+     * @return string|null The class name representing the instance key.
+     */
+    private function getInstanceKey(): ?string
+    {
+        return $this->instanceKey;
     }
 }

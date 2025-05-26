@@ -7,10 +7,9 @@ use Exception;
 trait Limit
 {
     use Common;
-
     protected static array $instances = [];
-
     protected static int $limit = 2;
+    private ?string $instanceKey = null;
 
     /**
      * Creates or retrieves an instance of the class.
@@ -28,7 +27,9 @@ trait Limit
             throw new Exception('Instance creation failed: Initialization limit ('.$count.' of '.static::$limit.' for '.static::class.') exceeded.');
         }
 
-        return static::$instances[$key] ??= new static();
+        static::$instances[$key] ??= new static();
+        (static::$instances[$key])->instanceKey = $key;
+        return static::$instances[$key];
     }
 
     /**
@@ -44,5 +45,15 @@ trait Limit
             throw new Exception('Limit must be at least 1.');
         }
         static::$limit = $number;
+    }
+
+    /**
+     * Retrieves the instance key for the current instance.
+     *
+     * @return string The class name representing the instance key.
+     */
+    private function getInstanceKey(): string
+    {
+        return $this->instanceKey;
     }
 }

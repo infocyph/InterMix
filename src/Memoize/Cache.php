@@ -18,29 +18,21 @@ class Cache
 
     public function __construct()
     {
-        $this->cacheAdapter = new FilesystemAdapter('intermix', 0, sys_get_temp_dir());
-    }
-
-    /**
-     * Set a custom cache driver.
-     *
-     * @param  CacheInterface  $cache  The custom cache adapter implementing CacheInterface.
-     */
-    public function setCacheDriver(CacheInterface $cache): self
-    {
-        $this->cacheAdapter = $cache;
-
-        return $this;
+        $this->cacheAdapter = new FilesystemAdapter(
+            $this->namespace = preg_replace('/[^A-Za-z0-9_\-]/', '_', $this->getInstanceKey() ?? 'default'),
+            0,
+            sys_get_temp_dir(),
+        );
     }
 
     /**
      * Retrieves a value from the cache if it exists, otherwise calls a given function
      * to generate the value and stores it in the cache for future use.
      *
-     * @param  string  $signature  The unique signature of the value to retrieve.
-     * @param  callable  $callable  The function to call if the value does not exist in the cache.
-     * @param  array  $parameters  The parameters to pass to the callable function.
-     * @param  int|null  $ttl  Time-to-live for the cached item in seconds (optional).
+     * @param string $signature The unique signature of the value to retrieve.
+     * @param callable $callable The function to call if the value does not exist in the cache.
+     * @param array $parameters The parameters to pass to the callable function.
+     * @param int|null $ttl Time-to-live for the cached item in seconds (optional).
      * @return mixed The retrieved value from the cache or the generated value from the callable function.
      *
      * @throws InvalidArgumentException
@@ -70,7 +62,7 @@ class Cache
     /**
      * Forget cache by key.
      *
-     * @param  string  $signature  The unique signature of the value to forget.
+     * @param string $signature The unique signature of the value to forget.
      *
      */
     public function forget(string $signature): void
@@ -93,7 +85,7 @@ class Cache
     /**
      * Check if a cache item exists.
      *
-     * @param  string  $signature  The unique signature of the cache item.
+     * @param string $signature The unique signature of the cache item.
      */
     public function has(string $signature): bool
     {
@@ -104,31 +96,32 @@ class Cache
         }
     }
 
+
     /**
-     * Get all cache keys (if supported by the adapter).
+     * Retrieves all cache keys in the current namespace.
+     *
+     * @return string[] An array of cache keys.
      */
     public function getKeys(): array
     {
-        if (method_exists($this->cacheAdapter, 'getAdapter')) {
-            $adapter = $this->cacheAdapter->getAdapter();
-            if ($adapter instanceof FilesystemAdapter) {
-                $directory = sys_get_temp_dir();
+        $directory = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $this->namespace;
 
-                return array_filter(
-                    array_map(fn ($file) => basename($file), scandir($directory) ?: []),
-                    fn ($file) => str_starts_with($file, $this->namespace)
-                );
-            }
-        }
-
-        return []; // Fallback for unsupported adapters
+        return array_filter(
+            array_map(fn ($file) => basename($file), scandir($directory) ?: []),
+            fn ($file) => str_starts_with($file, $this->namespace),
+        );
     }
 
+
     /**
-     * Resolve the cache key with the namespace.
+     * Resolves a cache signature by prepending the cache namespace.
+     *
+     * @param string $signature The cache signature to resolve.
+     *
+     * @return string The resolved cache signature.
      */
     private function resolveSignature(string $signature): string
     {
-        return $this->namespace.$signature;
+        return $this->namespace . $signature;
     }
 }
