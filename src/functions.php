@@ -92,7 +92,7 @@ if (! function_exists('Infocyph\InterMix\memoize')) {
         );
 
         // Retrieve or compute the value with optional TTL and force refresh
-        return $cache->get($signature, $callable, $parameters, $ttl, $forceRefresh);
+        return $cache->get($signature, $callable, $parameters, $ttl);
     }
 }
 

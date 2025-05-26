@@ -66,7 +66,7 @@ class Container implements ContainerInterface
      *                               Defaults to 'default'.
      * @throws ContainerException
      */
-    public function __construct(private readonly string $instanceAlias = 'default')
+    public function __construct(private readonly string $instanceAlias = 'intermix')
     {
         self::$instances[$this->instanceAlias] ??= $this;
         $this->repository = new Repository();

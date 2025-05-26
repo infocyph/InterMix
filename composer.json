@@ -36,6 +36,7 @@
   },
   "require": {
     "php": ">=8.2",
+    "psr/cache": "^3.0",
     "psr/container": "^2.0",
     "symfony/cache": "^7.2"
   },

@@ -2,7 +2,7 @@
 
 namespace Infocyph\InterMix\Memoize;
 
-use Infocyph\InterMix\Fence\Single;
+use Infocyph\InterMix\Fence\Multi;
 use Psr\Cache\InvalidArgumentException;
 use RuntimeException;
 use Symfony\Component\Cache\Adapter\FilesystemAdapter;
@@ -10,7 +10,7 @@ use Symfony\Contracts\Cache\CacheInterface;
 
 class Cache
 {
-    use Single;
+    use Multi;
 
     private CacheInterface $cacheAdapter;
 
@@ -18,7 +18,7 @@ class Cache
 
     public function __construct()
     {
-        $this->cacheAdapter = new FilesystemAdapter('', 0, sys_get_temp_dir());
+        $this->cacheAdapter = new FilesystemAdapter('intermix', 0, sys_get_temp_dir());
     }
 
     /**
@@ -34,18 +34,6 @@ class Cache
     }
 
     /**
-     * Set a namespace for cache keys.
-     *
-     * @param  string  $namespace  The namespace to prepend to all cache keys.
-     */
-    public function setNamespace(string $namespace): self
-    {
-        $this->namespace = rtrim($namespace, ':').':';
-
-        return $this;
-    }
-
-    /**
      * Retrieves a value from the cache if it exists, otherwise calls a given function
      * to generate the value and stores it in the cache for future use.
      *
@@ -53,16 +41,15 @@ class Cache
      * @param  callable  $callable  The function to call if the value does not exist in the cache.
      * @param  array  $parameters  The parameters to pass to the callable function.
      * @param  int|null  $ttl  Time-to-live for the cached item in seconds (optional).
-     * @param  bool  $forceRefresh  Whether to force refreshing the cache.
      * @return mixed The retrieved value from the cache or the generated value from the callable function.
      *
      * @throws InvalidArgumentException
      */
-    public function get(string $signature, callable $callable, array $parameters = [], ?int $ttl = null, bool $forceRefresh = false): mixed
+    public function get(string $signature, callable $callable, array $parameters = [], ?int $ttl = null): mixed
     {
         $signature = $this->resolveSignature($signature);
 
-        if (! $forceRefresh && $this->cacheAdapter->hasItem($signature)) {
+        if ($this->cacheAdapter->hasItem($signature)) {
             return $this->cacheAdapter->getItem($signature)->get();
         }
 
