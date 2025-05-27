@@ -68,7 +68,7 @@
       "@test:refactor"
     ],
     "git:hook": "captainhook install --only-enabled -nf",
-    "test": "pest",
+    "test": "php -d apcu.enable_cli=1 vendor/bin/pest",
     "refactor": "rector process",
     "lint": "pint",
     "post-autoload-dump": "@git:hook"

@@ -135,9 +135,9 @@ test('runtime re-namespace and directory swap', function () {
         ->and($this->cache->get('foo'))->toBe('bar');
 
     $namespaceDir = $newDir . '/cache_newns';
-    expect(is_dir($namespaceDir))->toBeTrue();
-
-    expect(glob($namespaceDir . '/*.cache'))->not->toBeEmpty();
+    expect(is_dir($namespaceDir))
+        ->toBeTrue()
+        ->and(glob($namespaceDir . '/*.cache'))->not->toBeEmpty();
 
     /* manual clean-up of this secondary dir (afterEach cleans only first dir) */
     foreach (glob($namespaceDir . '/*') as $f) {
