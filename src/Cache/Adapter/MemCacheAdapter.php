@@ -56,17 +56,7 @@ class MemCacheAdapter implements CacheItemPoolInterface, Iterator, Countable
     /* ── helpers ──────────────────────────────────────────────────── */
     private function k(string $key): string
     {
-        $this->validateKey($key);
         return $this->ns . ':' . $key;
-    }
-
-    private function validateKey(string $key): void
-    {
-        if ($key === '' || !preg_match('/^[A-Za-z0-9_.\-]+$/', $key)) {
-            throw new CacheInvalidArgumentException(
-                'Invalid Memcache key; allowed A-Z, a-z, 0-9, _, ., -',
-            );
-        }
     }
 
     /* ── fetch ------------------------------------------------------ */
@@ -149,7 +139,6 @@ class MemCacheAdapter implements CacheItemPoolInterface, Iterator, Countable
     /* ── Iterator & Countable -------------------------------------- */
     private function fetchKeys(): array
     {
-        // Warning: getAllKeys() not portable across all memcached servers.
         $raw = $this->mc->getAllKeys() ?: [];
         $pref = $this->ns . ':';
         return array_values(
