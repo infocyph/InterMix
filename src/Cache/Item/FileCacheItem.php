@@ -22,8 +22,13 @@ use Infocyph\InterMix\Cache\Adapter\FileCacheAdapter;
  */
 class FileCacheItem implements CacheItemInterface
 {
-    public function __construct(private readonly FileCacheAdapter $pool, private string $key, private mixed $value = null, private bool $hit = false, private ?DateTimeInterface $exp = null)
-    {
+    public function __construct(
+        private readonly FileCacheAdapter $pool,
+        private string $key,
+        private mixed $value = null,
+        private bool $hit = false,
+        private ?DateTimeInterface $exp = null,
+    ) {
     }
 
     /* -----------------------------------------------------------------
@@ -50,7 +55,7 @@ class FileCacheItem implements CacheItemInterface
     public function set(mixed $value): static
     {
         $this->value = ValueSerializer::wrap($value);
-        $this->hit   = true;
+        $this->hit = true;
         return $this;
     }
 
@@ -88,18 +93,18 @@ class FileCacheItem implements CacheItemInterface
     public function __serialize(): array
     {
         return [
-            'key'   => $this->key,
+            'key' => $this->key,
             'value' => $this->value,                    // already wrapped
-            'hit'   => $this->hit,
-            'exp'   => $this->exp?->format(DateTimeInterface::ATOM),
+            'hit' => $this->hit,
+            'exp' => $this->exp?->format(DateTimeInterface::ATOM),
         ];
     }
 
     public function __unserialize(array $data): void
     {
-        $this->key   = $data['key'];
+        $this->key = $data['key'];
         $this->value = ValueSerializer::unwrap($data['value']);  // restore stream
-        $this->hit   = $data['hit'];
-        $this->exp   = isset($data['exp']) ? new DateTime($data['exp']) : null;
+        $this->hit = $data['hit'];
+        $this->exp = isset($data['exp']) ? new DateTime($data['exp']) : null;
     }
 }
