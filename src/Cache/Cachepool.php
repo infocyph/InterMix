@@ -38,6 +38,15 @@ class Cachepool implements
         return new self(new Adapter\ApcuCacheAdapter($namespace));
     }
 
+    public static function memcache(
+        string $namespace = 'default',
+        array  $servers   = [['127.0.0.1',11211,0]],
+        ?\Memcached $client = null
+    ): self {
+        return new self(new Adapter\MemCacheAdapter($namespace, $servers, $client));
+    }
+
+
     /* ---------------------------------------------------------------------
      *  PSR-6 pool delegation
      * -------------------------------------------------------------------*/
