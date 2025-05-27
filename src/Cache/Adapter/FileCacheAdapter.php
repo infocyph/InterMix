@@ -1,182 +1,238 @@
 <?php
 
+// src/Cache/Adapter/FileCacheAdapter.php
+
+declare(strict_types=1);
+
 namespace Infocyph\InterMix\Cache\Adapter;
 
-use DateInterval;
-use DateTime;
-use DateTimeInterface;
-use Exception;
-use Infocyph\InterMix\Cache\CachePool;
-use Infocyph\InterMix\Exceptions\CacheInvalidArgumentException;
+use Countable;
+use Infocyph\InterMix\Serializer\ValueSerializer;
+use Iterator;
 use Psr\Cache\CacheItemInterface;
+use Psr\Cache\CacheItemPoolInterface;
+use Infocyph\InterMix\Cache\Item\FileCacheItem;
+use Infocyph\InterMix\Exceptions\CacheInvalidArgumentException;
+use RuntimeException;
 
-class FileCacheAdapter implements CacheItemInterface
+/**
+ * Filesystem-backed PSR-6 adapter.
+ *
+ *  • full ValueSerializer support (closures, objects, resources …)
+ *  • deferred queue obeys commit()
+ *  • Iterator exposes original keys and values
+ */
+class FileCacheAdapter implements CacheItemPoolInterface, Iterator, Countable
 {
-    public function __construct(
-        private readonly CachePool $pool,
-        private string $key,
-        private mixed $value = null,
-        private bool $hit = false,
-        private ?DateTimeInterface $expiration = null
-    ) {
+    /* -----------------------------------------------------------------
+     *  Internal state
+     * ----------------------------------------------------------------*/
+    private string $dir;                // cache directory
+    private array $deferred = [];      // [key => FileCacheItem]
+    private array $fileList = [];      // iterator: absolute cache files
+    private int $pos = 0;
+
+    /* -----------------------------------------------------------------
+     *  Construction
+     * ----------------------------------------------------------------*/
+    public function __construct(string $namespace = 'default', ?string $baseDir = null)
+    {
+        $this->createDirectory($namespace, $baseDir);
     }
 
-    /**
-     * {@inheritDoc}
-     */
-    public function getKey(): string
+    /* -----------------------------------------------------------------
+ *  Runtime switch of namespace and/or base directory
+ * ----------------------------------------------------------------*/
+    public function setNamespaceAndDirectory(string $namespace, ?string $baseDir = null): void
     {
-        return $this->key;
+        // Reset internal state to the new location
+        $this->createDirectory($namespace, $baseDir);
+
+        // Clear any iterator snapshot and deferred queue
+        $this->fileList = [];
+        $this->pos = 0;
+        $this->deferred = [];
     }
 
-    /**
-     * Retrieves the value of the cache item.
-     *
-     * @return mixed The value stored in the cache item.
-     */
-    public function get(): mixed
-    {
-        return $this->value;
-    }
 
-    /**
-     * Checks if the cache item is a hit or a miss.
-     *
-     * A cache item is considered a hit if it is not expired and was not
-     * constructed with a value of null. If the cache item has no expiration
-     * date, it is considered a hit.
-     *
-     * @return bool True if the cache item is a hit, false otherwise.
-     */
-    public function isHit(): bool
+    private function createDirectory(string $ns, ?string $base): void
     {
-        return match (true) {
-            ! $this->hit => false,
-            $this->expiration === null => true,
-            default => (new DateTime()) < $this->expiration,
-        };
-    }
+        $base = rtrim($base ?? sys_get_temp_dir(), DIRECTORY_SEPARATOR);
+        $ns = preg_replace('/[^A-Za-z0-9_\-]/', '_', $ns);
 
-    /**
-     * Sets the value for the cache item and marks it as a hit.
-     *
-     * @param mixed $value The value to be stored in the cache item.
-     *
-     * @return static Returns the current instance for method chaining.
-     */
-    public function set(mixed $value): static
-    {
-        $this->value = $value;
-        $this->hit   = true;
-        return $this;
-    }
+        $this->dir = "$base/cache_$ns/";
 
-    /**
-     * Sets the expiration time for the cache item.
-     *
-     * @param DateTimeInterface|null $expiration The expiration time, or null for no expiration.
-     *
-     * @return static
-     */
-    public function expiresAt(?DateTimeInterface $expiration): static
-    {
-        if ($expiration !== null && ! $expiration instanceof DateTimeInterface) {
-            throw new CacheInvalidArgumentException('Expiration must be null or DateTimeInterface');
+        if (file_exists($this->dir) && !is_dir($this->dir)) {
+            throw new RuntimeException("'{$this->dir}' exists and is not a directory");
         }
-        $this->expiration = $expiration;
-        return $this;
+        if (!is_dir($this->dir) && !@mkdir($this->dir, 0770, true)) {
+            $err = error_get_last()['message'] ?? 'unknown error';
+            throw new RuntimeException("Failed to create '{$this->dir}': {$err}");
+        }
+        if (!is_writable($this->dir)) {
+            throw new RuntimeException("Cache directory '{$this->dir}' is not writable");
+        }
     }
 
-    /**
-     * Sets the expiration time for the cache item.
-     *
-     * @param int|DateInterval|null $time
-     *      The expiration time. If an integer, it is interpreted as the number of
-     *      seconds after the present time. If a DateInterval, it is added to the
-     *      current time to determine the expiration. If null, the expiration is
-     *      set to the maximum possible value.
-     *
-     * @return static
-     *
-     * @throws CacheInvalidArgumentException If the time is not an integer, DateInterval or null.
-     */
-    public function expiresAfter(int|DateInterval|null $time): static
+    /* -----------------------------------------------------------------
+     *  Helper: map key → filename
+     * ----------------------------------------------------------------*/
+    private function fileFor(string $key): string
     {
-        $this->expiration = match(true) {
-            is_int($time) => (new DateTime())->add(new DateInterval("PT{$time}S")),
-            $time instanceof DateInterval => (new DateTime())->add($time),
-            $time === null => null,
-            default => throw new CacheInvalidArgumentException('Time must be integer seconds, DateInterval or null'),
-        };
-        return $this;
+        return $this->dir . hash('sha256', $key) . '.cache';
     }
 
-    /**
-     * Serialize the cache item into an array.
-     *
-     * The following keys are always present in the returned array:
-     *
-     * - `key`: The cache key.
-     * - `value`: The cache value.
-     * - `hit`: A boolean indicating whether the cache item is a hit.
-     *
-     * If the cache item has an expiration date, the array will also contain
-     * the key `expiration` with the value being the expiration date in the
-     * format defined by {@see DateTimeInterface::format()} with the
-     * `DateTime::ATOM` format code.
-     *
-     * @return array<string, mixed>
-     */
-    public function __serialize(): array
+    /* -----------------------------------------------------------------
+     *  PSR-6: fetch
+     * ----------------------------------------------------------------*/
+    public function getItem(string $key): CacheItemInterface
     {
-        return [
-            'key'        => $this->key,
-            'value'      => $this->value,
-            'hit'        => $this->hit,
-            'expiration' => $this->expiration?->format(DateTimeInterface::ATOM),
-        ];
+        $file = $this->fileFor($key);
+
+        if (is_file($file)) {
+            $raw = file_get_contents($file);
+            $item = ValueSerializer::unserialize($raw);
+
+            if ($item instanceof FileCacheItem && $item->isHit()) {
+                return $item;
+            }
+            @unlink($file); // expired or corrupted
+        }
+
+        return new FileCacheItem($this, $key);
     }
 
-    /**
-     * Restores the object from a serialized array.
-     *
-     * @param array{key: string, value: mixed, hit: bool, expiration?: string|null} $data
-     * @throws Exception
-     */
-    public function __unserialize(array $data): void
+    public function getItems(array $keys = []): iterable
     {
-        $this->key        = $data['key'];
-        $this->value      = $data['value'];
-        $this->hit        = $data['hit'];
-        $this->expiration = isset($data['expiration'])
-            ? new DateTime($data['expiration'])
-            : null;
+        foreach ($keys as $k) {
+            yield $k => $this->getItem($k);
+        }
     }
 
-    /**
-     * Save the cache item.
-     *
-     * This method is a shortcut to {@see CacheItemPoolInterface::save()}.
-     *
-     * @return static The current instance for method chaining.
-     */
-    public function save(): static
+    public function hasItem(string $key): bool
     {
-        $this->pool->save($this);
-        return $this;
+        return $this->getItem($key)->isHit();
     }
 
-
-    /**
-     * Defer the saving of the cache item.
-     *
-     * This method is a shortcut to {@see CacheItemPoolInterface::saveDeferred()}.
-     *
-     * @return static The current instance for method chaining.
-     */
-    public function saveDeferred(): static
+    /* -----------------------------------------------------------------
+     *  PSR-6: deletion & clear
+     * ----------------------------------------------------------------*/
+    public function deleteItem(string $key): bool
     {
-        $this->pool->saveDeferred($this);
-        return $this;
+        return @unlink($this->fileFor($key));
+    }
+
+    public function deleteItems(array $keys): bool
+    {
+        $ok = true;
+        foreach ($keys as $k) {
+            $ok = $ok && $this->deleteItem($k);
+        }
+        return $ok;
+    }
+
+    public function clear(): bool
+    {
+        $ok = true;
+        foreach (glob("{$this->dir}*.cache") as $f) {
+            $ok = $ok && @unlink($f);
+        }
+        $this->deferred = [];
+        return $ok;
+    }
+
+    /* -----------------------------------------------------------------
+     *  PSR-6: save / saveDeferred / commit
+     * ----------------------------------------------------------------*/
+    public function save(CacheItemInterface $item): bool
+    {
+        if (!$item instanceof FileCacheItem) {
+            throw new CacheInvalidArgumentException('Invalid item type for FileCacheAdapter');
+        }
+
+        $blob = ValueSerializer::serialize($item);
+        return (bool)file_put_contents($this->fileFor($item->getKey()), $blob, LOCK_EX);
+    }
+
+    public function saveDeferred(CacheItemInterface $item): bool
+    {
+        if (!$item instanceof FileCacheItem) {
+            return false;
+        }
+        $this->deferred[$item->getKey()] = $item;
+        return true; // queued
+    }
+
+    public function commit(): bool
+    {
+        $ok = true;
+        foreach ($this->deferred as $key => $item) {
+            $ok = $ok && $this->save($item);
+            unset($this->deferred[$key]);
+        }
+        return $ok;
+    }
+
+    /* -----------------------------------------------------------------
+     *  Iterator implementation (keys & values)
+     * ----------------------------------------------------------------*/
+    public function rewind(): void
+    {
+        $this->fileList = glob("{$this->dir}*.cache", GLOB_NOSORT);
+        $this->pos = 0;
+    }
+
+    public function current(): mixed
+    {
+        $item = $this->loadItem($this->fileList[$this->pos]);
+        return $item->get();
+    }
+
+    public function key(): mixed
+    {
+        $item = $this->loadItem($this->fileList[$this->pos]);
+        return $item->getKey(); // original user key
+    }
+
+    public function next(): void
+    {
+        $this->pos++;
+    }
+
+    public function valid(): bool
+    {
+        return isset($this->fileList[$this->pos]);
+    }
+
+    /* -----------------------------------------------------------------
+     *  Countable
+     * ----------------------------------------------------------------*/
+    public function count(): int
+    {
+        return count(glob("{$this->dir}*.cache"));
+    }
+
+    /* -----------------------------------------------------------------
+     *  Support methods
+     * ----------------------------------------------------------------*/
+    private function loadItem(string $file): FileCacheItem
+    {
+        $raw = file_get_contents($file);
+        /** @var FileCacheItem $item */
+        $item = ValueSerializer::unserialize($raw);
+        return $item;
+    }
+
+    /* -----------------------------------------------------------------
+     *  Extra helpers used by FileCacheItem
+     * ----------------------------------------------------------------*/
+    public function internalPersist(FileCacheItem $item): bool
+    {
+        return $this->save($item);
+    }
+
+    public function internalQueue(FileCacheItem $item): bool
+    {
+        return $this->saveDeferred($item);
     }
 }
