@@ -1,4 +1,4 @@
-.. _container:
+.. _macro-mix:
 
 ====================
 Macro Mix (Mixin)

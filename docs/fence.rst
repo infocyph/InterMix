@@ -1,4 +1,4 @@
-.. _container:
+.. _fence:
 
 ==========================================
 Fence (Class Initialization Barrier)
