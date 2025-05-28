@@ -30,6 +30,9 @@ class MemCacheAdapter implements CacheItemPoolInterface, Iterator, Countable
     private array $deferred = [];      // key => MemCacheItem
     private array $keyList = [];      // iterator snapshot
     private int $pos = 0;
+    /** keys inserted during this PHP run (k => true) */
+    private array $knownKeys = [];
+
 
     /**
      * @param string $namespace cache prefix
@@ -63,7 +66,7 @@ class MemCacheAdapter implements CacheItemPoolInterface, Iterator, Countable
     public function getItem(string $key): MemCacheItem
     {
         $raw = $this->mc->get($this->k($key));
-        if ($this->mc->getResultCode() === MEMCACHED_SUCCESS && is_string($raw)) {
+        if ($this->mc->getResultCode() === Memcached::RES_SUCCESS && is_string($raw)) {
             $item = ValueSerializer::unserialize($raw);
             if ($item instanceof MemCacheItem && $item->isHit()) {
                 return $item;
@@ -88,6 +91,7 @@ class MemCacheAdapter implements CacheItemPoolInterface, Iterator, Countable
     public function deleteItem(string $key): bool
     {
         $this->mc->delete($this->k($key));
+        $this->unregister($key);
         return true;
     }
 
@@ -103,6 +107,7 @@ class MemCacheAdapter implements CacheItemPoolInterface, Iterator, Countable
     {
         $this->mc->flush();
         $this->deferred = [];
+        $this->knownKeys  = [];
         return true;
     }
 
@@ -114,7 +119,11 @@ class MemCacheAdapter implements CacheItemPoolInterface, Iterator, Countable
         }
         $blob = ValueSerializer::serialize($item);
         $ttl = $item->ttlSeconds();
-        return $this->mc->set($this->k($item->getKey()), $blob, $ttl ?? 0);
+        $ok = $this->mc->set($this->k($item->getKey()), $blob, $ttl ?? 0);
+        if ($ok) {
+            $this->register($item->getKey());
+        }
+        return $ok;
     }
 
     public function saveDeferred(CacheItemInterface $item): bool
@@ -137,17 +146,77 @@ class MemCacheAdapter implements CacheItemPoolInterface, Iterator, Countable
     }
 
     /* ── Iterator & Countable -------------------------------------- */
+    /* ---------- public wrapper ------------------------------------------------ */
+
     private function fetchKeys(): array
     {
-        $raw = $this->mc->getAllKeys() ?: [];
+        if ($quick = $this->fastKnownKeys()) {                 // 1
+            return $quick;
+        }
+
         $pref = $this->ns . ':';
-        return array_values(
-            array_map(
-                fn ($k) => substr((string) $k, strlen($pref)),
-                array_filter($raw, fn ($k) => str_starts_with((string) $k, $pref)),
-            ),
-        );
+
+        if ($keys = $this->keysFromGetAll($pref)) {            // 2
+            return $keys;
+        }
+
+        return $this->keysFromSlabDump($pref);                 // 3
     }
+
+    /* ---------- 1) in-process registry --------------------------------------- */
+
+    private function fastKnownKeys(): array
+    {
+        return $this->knownKeys ? array_keys($this->knownKeys) : [];
+    }
+
+    /* ---------- 2) Memcached::getAllKeys() ----------------------------------- */
+
+    private function keysFromGetAll(string $pref): array
+    {
+        $all = $this->mc->getAllKeys();                // false if disabled
+        if (!is_array($all)) {
+            return [];
+        }
+        return $this->stripNamespace($all, $pref);
+    }
+
+    /* ---------- 3) slab walk fallback ---------------------------------------- */
+
+    private function keysFromSlabDump(string $pref): array
+    {
+        $out   = [];
+        $stats = $this->mc->getStats('items');
+
+        foreach ($stats as $server => $items) {
+            foreach ($items as $name => $_) {
+                if (!preg_match('/items:(\d+):number/', (string) $name, $m)) {
+                    continue;
+                }
+                $slabId = (int) $m[1];
+                $dump   = $this->mc->getStats("cachedump $slabId 0");
+                if (!isset($dump[$server])) {
+                    continue;
+                }
+                $out = array_merge(
+                    $out,
+                    $this->stripNamespace(array_keys($dump[$server]), $pref)
+                );
+            }
+        }
+        return array_values(array_unique($out));
+    }
+
+    /* ---------- helper ------------------------------------------------------- */
+
+    private function stripNamespace(array $fullKeys, string $pref): array
+    {
+        return array_values(array_map(
+            fn (string $k) => substr($k, strlen($pref)),
+            array_filter($fullKeys, fn (string $k) => str_starts_with($k, $pref))
+        ));
+    }
+
 
     public function rewind(): void
     {
@@ -191,4 +260,14 @@ class MemCacheAdapter implements CacheItemPoolInterface, Iterator, Countable
     {
         return $this->saveDeferred($i);
     }
+
+    private function register(string $key): void
+    {
+        $this->knownKeys[$key] = true;
+    }
+    private function unregister(string $key): void
+    {
+        unset($this->knownKeys[$key]);
+    }
+
 }

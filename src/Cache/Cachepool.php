@@ -46,6 +46,12 @@ class Cachepool implements
         return new self(new Adapter\MemCacheAdapter($namespace, $servers, $client));
     }
 
+    public static function sqlite(
+        string $namespace = 'default',
+        ?string $file     = null,
+    ): self {
+        return new self(new Adapter\SqliteCacheAdapter($namespace, $file));
+    }
 
     /* ---------------------------------------------------------------------
      *  PSR-6 pool delegation
