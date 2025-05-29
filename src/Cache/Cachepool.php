@@ -53,6 +53,15 @@ class Cachepool implements
         return new self(new Adapter\SqliteCacheAdapter($namespace, $file));
     }
 
+    public static function redis(
+        string  $namespace = 'default',
+        string  $dsn       = 'redis://127.0.0.1:6379',
+        ?\Redis  $client    = null
+    ): self {
+        return new self(new Adapter\RedisCacheAdapter($namespace, $dsn, $client));
+    }
+
+
     /* ---------------------------------------------------------------------
      *  PSR-6 pool delegation
      * -------------------------------------------------------------------*/
