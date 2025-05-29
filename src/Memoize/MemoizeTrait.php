@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Infocyph\InterMix\Remix;
+namespace Infocyph\InterMix\Memoize;
 
 trait MemoizeTrait
 {

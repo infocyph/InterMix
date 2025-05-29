@@ -1,6 +1,6 @@
 <?php
 
-use Infocyph\InterMix\Remix\MemoizeTrait;
+use Infocyph\InterMix\Memoize\MemoizeTrait;
 
 class MemoStub
 {

@@ -1,58 +1,21 @@
 <?php
 
-namespace Infocyph\InterMix\Fence;
+// src/Fence/Multi.php
+declare(strict_types=1);
 
-use Exception;
+namespace Infocyph\InterMix\Fence;
 
 trait Multi
 {
-    use Common;
-
-    protected static array $instances = [];
-    private ?string $instanceKey = null;
+    use Fence;
 
     /**
-     * Creates or retrieves a keyed instance of the class.
-     *
-     * @param  string  $key  The key for the instance (default: 'default').
-     * @param  array|null  $constraints  Constraints for instance creation.
-     *
-     * @throws Exception
+     * Multiton: keyed instances allowed.
      */
-    final public static function instance(string $key = 'default', ?array $constraints = null): static
-    {
-        static::checkRequirements($constraints);
-
-        static::$instances[$key] ??= new static();
-        (static::$instances[$key])->instanceKey = $key;
-        return static::$instances[$key];
-    }
+    public const FENCE_KEYED = true;
 
     /**
-     * Gets all active instances.
-     *
-     * @return array The array of active instances.
+     * Unlimited instances.
      */
-    final public static function getInstances(): array
-    {
-        return static::$instances;
-    }
-
-    /**
-     * Clears all active instances.
-     */
-    final public static function clearInstances(): void
-    {
-        static::$instances = [];
-    }
-
-    /**
-     * Retrieves the instance key for the current instance.
-     *
-     * @return string|null The class name representing the instance key.
-     */
-    private function getInstanceKey(): ?string
-    {
-        return $this->instanceKey;
-    }
+    public const FENCE_LIMIT = PHP_INT_MAX;
 }

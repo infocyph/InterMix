@@ -18,5 +18,6 @@ Contents
     start
     container
     fence
+    serializer
     remix
     memoize

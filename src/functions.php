@@ -1,12 +1,9 @@
 <?php
 
 use Infocyph\InterMix\DI\Container;
-use Infocyph\InterMix\DI\Reflection\ReflectionResource;
 use Infocyph\InterMix\Exceptions\ContainerException;
-use Infocyph\InterMix\Memoize\Cache;
-use Infocyph\InterMix\Memoize\WeakCache;
+use Infocyph\InterMix\Memoize\Memoizer;
 use Infocyph\InterMix\Remix\TapProxy;
-use Psr\Cache\InvalidArgumentException;
 
 if (!function_exists('container')) {
     /**
@@ -21,7 +18,7 @@ if (!function_exists('container')) {
      * @return Container|mixed
      *
      * @throws ContainerException
-     * @throws Exception|InvalidArgumentException
+     * @throws Exception|InvalidArgumentException|\Psr\Cache\InvalidArgumentException
      */
     function container(
         string|Closure|callable|array|null $closureOrClass = null,
@@ -56,81 +53,54 @@ if (!function_exists('container')) {
 
         // 6) Then call getReturn($class) to actually invoke that method and return the result
         return $instance->getReturn($class);
-        // or if you keep 'getReturn()' in the InvocationManager =>
-        // return $instance->getInvocationManager()->getReturn($class);
     }
 }
 
 if (!function_exists('memoize')) {
     /**
-     * Retrieves a memoized value of the provided callable.
+     * Global memoization: caches a callable once for the entire process.
      *
-     * @param callable|null $callable The callable to be memoized. Defaults to null.
-     * @param array $parameters The parameters to be passed to the callable. Defaults to an empty array.
-     * @param int|null $ttl Time-to-live for the cached item in seconds. Defaults to null (no expiration).
-     * @param bool $forceRefresh Whether to force cache refresh. Defaults to false.
-     * @return mixed The memoized result of the callable or the Cache instance if no callable is provided.
+     * If $callable is null, returns the Memoizer instance.
      *
-     * @throws ReflectionException|Exception|InvalidArgumentException
+     * @param callable|null $callable The function to memoize.
+     * @param array $params The parameters to pass the callable (optional).
+     *
+     * @return mixed The result of the memoized callable.
+     * @throws Exception
      */
-    function memoize(
-        ?callable $callable = null,
-        array $parameters = [],
-        ?int $ttl = null,
-        bool $forceRefresh = false,
-    ): mixed {
-        $cache = Cache::instance();
-
-        // Return the Cache instance if no callable is provided
+    function memoize(callable $callable = null, array $params = []): mixed
+    {
+        $m = Memoizer::instance();
         if ($callable === null) {
-            return $cache;
+            return $m;
         }
-
-        // Generate and retrieve the unique signature for the callable
-        $signature = ReflectionResource::getSignature(
-            ReflectionResource::getReflection($callable),
-        );
-
-        // Retrieve or compute the value with optional TTL and force refresh
-        return $cache->get($signature, $callable, $parameters, $ttl);
+        return $m->get($callable, $params);
     }
 }
 
 if (!function_exists('remember')) {
     /**
-     * Retrieves a memoized value based on the provided class object (valid until garbage collected).
+     * Object-scoped memoization: caches a callable once per instance.
      *
-     * @param object|null $classObject The class object for which the value is being retrieved.
-     * @param callable|null $callable The callable for which the value is being retrieved.
-     * @param array $parameters The parameters for the callable.
-     * @return mixed The memoized result of the callable or the WeakCache instance if no callable is provided.
+     * @param object|null $object $object The object to scope the cache for.
+     * @param callable|null $callable $callable The function to memoize.
+     * @param array $params The parameters to pass the callable (optional).
      *
-     * @throws ReflectionException
+     * @return mixed The result of the memoized callable.
+     *
+     * @throws Exception
      */
-    function remember(
-        ?object $classObject = null,
-        ?callable $callable = null,
-        array $parameters = [],
-    ): mixed {
-        $cache = WeakCache::instance();
+    function remember(object $object = null, callable $callable = null, array $params = []): mixed
+    {
+        $m = Memoizer::instance();
 
-        // Return the cache instance if no class object is provided
-        if ($classObject === null) {
-            return $cache;
+        if ($object === null) {
+            return $m;
         }
-
-        // Validate callable
         if ($callable === null) {
-            throw new \InvalidArgumentException('A callable must be provided to remember a value.');
+            throw new InvalidArgumentException('remember() requires both object and callable');
         }
-
-        // Generate the unique signature
-        $signature = ReflectionResource::getSignature(
-            ReflectionResource::getReflection($callable),
-        );
-
-        // Retrieve or compute the value
-        return $cache->get($classObject, $signature, $callable, $parameters);
+        return $m->getFor($object, $callable, $params);
     }
 }
 

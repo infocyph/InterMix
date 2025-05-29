@@ -14,5 +14,4 @@ fluency to any PHP code-base—without pulling the whole framework.
    remix/conditionable-tappable
    remix/tap-proxy
    remix/helpers
-   remix/memoize
    remix/macro-mix

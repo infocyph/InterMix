@@ -4,39 +4,31 @@ use Infocyph\InterMix\Fence\Multi;
 class MultiTraitTest
 {
     use Multi;
-
-    public static function resetInstances(): void
-    {
-        static::$instances = [];
-    }
-
-    public static function getInstances(): array
-    {
-        return static::$instances;
-    }
 }
 
 beforeEach(function () {
-    MultiTraitTest::resetInstances(); // Reset instances before each test.
+    MultiTraitTest::clearInstances();
 });
 
 test('it creates unique instances for different keys', function () {
-    $instance1 = MultiTraitTest::instance('key1');
-    $instance2 = MultiTraitTest::instance('key2');
+    $a = MultiTraitTest::instance('key1');
+    $b = MultiTraitTest::instance('key2');
 
-    expect($instance1)->not->toBe($instance2)
-        ->and($instance1)->toBeInstanceOf(MultiTraitTest::class);
+    expect($a)->not->toBe($b)
+        ->and($a)->toBeInstanceOf(MultiTraitTest::class);
 });
 
 test('it retrieves the same instance for the same key', function () {
-    $instance1 = MultiTraitTest::instance('key1');
-    $instance2 = MultiTraitTest::instance('key1');
+    $x = MultiTraitTest::instance('same');
+    $y = MultiTraitTest::instance('same');
 
-    expect($instance1)->toBe($instance2);
+    expect($x)->toBe($y);
 });
 
 test('it clears all instances', function () {
-    MultiTraitTest::instance('key1');
+    MultiTraitTest::instance('foo');
+    MultiTraitTest::instance('bar');
+
     MultiTraitTest::clearInstances();
 
     expect(MultiTraitTest::getInstances())->toBeEmpty();

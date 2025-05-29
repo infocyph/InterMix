@@ -52,6 +52,11 @@ final class ValueSerializer
         return self::unwrapRecursive($value);
     }
 
+    public static function clearResourceHandlers(): void
+    {
+        self::$resourceHandlers = [];
+    }
+
     /* ---------- internals ---------------------------------------- */
 
     private static function wrapRecursive(mixed $v): mixed
