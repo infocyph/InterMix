@@ -18,5 +18,5 @@ Contents
     start
     container
     fence
-    macro-mix
+    remix
     memoize

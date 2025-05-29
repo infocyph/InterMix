@@ -2,8 +2,6 @@
 
 use Infocyph\InterMix\Tests\Fixture\InjectionLessClass;
 
-use function Infocyph\InterMix\container;
-
 container(null, 'injection_less')
     ->setOptions(false)
     ->registerClass(InjectionLessClass::class, [123])
@@ -18,15 +16,15 @@ test('Instance', function () {
 $get2 = container(null, 'injection_less')
     ->getReturn(InjectionLessClass::class);
 
-test('Return', function () use($get2) {
+test('Return', function () use ($get2) {
     expect($get2)->toBeArray();
 });
 
-test('Promoted property/Constructor Parameter', function () use($get2) {
+test('Promoted property/Constructor Parameter', function () use ($get2) {
     expect($get2['constructor'])->toBe('123');
 });
 
-test('Method parameter', function () use($get2) {
+test('Method parameter', function () use ($get2) {
     expect($get2['method'])->toBe('456');
 });
 

@@ -17,7 +17,6 @@ use Infocyph\InterMix\Tests\Fixture\PropertyClass;
 use Infocyph\InterMix\Tests\Fixture\EmailService;
 use Infocyph\InterMix\Tests\Fixture\TestLoggerStorage;
 
-use function Infocyph\InterMix\container;
 
 beforeEach(function () {
     // Reset any static logs or other global states

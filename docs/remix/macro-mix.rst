@@ -1,23 +1,22 @@
-.. _macro-mix:
+.. _remix.macro-mix:
 
-====================
-Macro Mix (Mixin)
-====================
+=========================
+Macro Mix (Mixin Trait)
+=========================
 
-Have you ever wished that a PHP class had another method that you’d like to use? ``MacroMix`` makes this dream come true.
-This trait allows you to dynamically add methods (macros) to a class at runtime, execute them as if they were natively defined,
-and supports advanced features like:
+*(The content below blends your original text with new goodies.)*
 
-- Method chaining for dynamically added methods.
-- Structured macro definitions through configurations and annotations.
-- Dynamic mixing of an entire class of methods into another.
-- Thread-safe operations using an optional lock switcher.
+`MacroMix` lets you **add methods to a class at runtime** – macros –
+without a base‐class dependency.
 
-.. caution::
+Key Features
+============
 
-    It uses ``__call`` & ``__callStatic`` magic methods. Be careful if your
-    class already uses them, as it may result in conflicts.
-
+* Dynamically register, remove, list macros.
+* Method-chaining-friendly (macros return ``$this`` by default).
+* Load macros from *config arrays* or *PHPDoc annotations*.
+* **Mixin** an entire helper object/class in one call.
+* Optional **thread-safe** writes via the ``ENABLE_LOCK`` constant.
 
 
 Thread Safety and Locking
@@ -221,3 +220,4 @@ Advanced Notes
 
 
 ``MacroMix`` provides powerful tools to dynamically extend your classes, making your code more flexible and reusable.
+

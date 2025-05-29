@@ -28,14 +28,11 @@ class ConditionalProxy
     /**
      * Create a new ConditionalProxy instance.
      *
-     * @param  mixed  $target
+     * @param mixed $target
      * @return void
      */
     public function __construct(
-        /**
-         * The target object being conditionally operated on.
-         */
-        protected $target
+        protected mixed $target,
     ) {
     }
 
@@ -74,9 +71,9 @@ class ConditionalProxy
      */
     public function __get(string $key)
     {
-        if (! $this->hasCondition) {
+        if (!$this->hasCondition) {
             $condition = $this->target->{$key};
-            return $this->condition($this->negateConditionOnCapture ? ! $condition : $condition);
+            return $this->condition($this->negateConditionOnCapture ? !$condition : (bool)$condition);
         }
         return $this->condition ? $this->target->{$key} : $this->target;
     }
@@ -93,10 +90,30 @@ class ConditionalProxy
      */
     public function __call(string $method, array $parameters)
     {
-        if (! $this->hasCondition) {
+        if (!$this->hasCondition) {
             $condition = $this->target->{$method}(...$parameters);
-            return $this->condition($this->negateConditionOnCapture ? ! $condition : $condition);
+            return $this->condition($this->negateConditionOnCapture ? !$condition : (bool)$condition);
         }
         return $this->condition ? $this->target->{$method}(...$parameters) : $this->target;
+    }
+
+    public function __set(string $key, mixed $value): void
+    {
+        if ($this->hasCondition && $this->condition) {
+            $this->target->{$key} = $value;
+        }
+    }
+
+    /**
+     * Do not allow creating dynamic properties on the proxy.
+     */
+    public function __unset(string $key): void
+    {
+        // no-op to prevent dynamic deletes
+    }
+
+    public function __isset(string $key): bool
+    {
+        return $this->hasCondition && $this->condition && isset($this->target->{$key});
     }
 }

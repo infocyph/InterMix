@@ -218,14 +218,15 @@ trait MacroMix
     /**
      * Mixes methods from a given object or class into the current class.
      *
-     * @param object $mixin The object or class containing methods to mix in.
+     * @param object|string $mixin The object or class containing methods to mix in.
      * @param bool $replace Whether to replace existing macros with the same name.
      *
      * @throws ReflectionException
      */
-    public static function mix(object $mixin, bool $replace = true): void
+    public static function mix(object|string $mixin, bool $replace = true): void
     {
-        $methods = (ReflectionResource::getClassReflection($mixin))->getMethods(
+        $instance = is_object($mixin) ? $mixin : new $mixin();
+        $methods = (ReflectionResource::getClassReflection($instance))->getMethods(
             ReflectionMethod::IS_PUBLIC | ReflectionMethod::IS_PROTECTED
         );
 
@@ -238,7 +239,7 @@ trait MacroMix
 
             $macro = $method->isStatic()
                 ? fn (...$args) => $method->invoke(null, ...$args)
-                : fn (...$args) => $method->invoke($mixin, ...$args);
+                : fn (...$args) => $method->invoke($instance, ...$args);
 
             static::macro($name, $macro);
         }
