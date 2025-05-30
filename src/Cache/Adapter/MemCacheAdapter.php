@@ -63,6 +63,27 @@ class MemCacheAdapter implements CacheItemPoolInterface, Iterator, Countable
     }
 
     /* ── fetch ------------------------------------------------------ */
+    public function multiFetch(array $keys): array
+    {
+        $prefixed = array_map(fn ($k) => $this->ns .':'. $k, $keys);
+        $raw      = $this->mc->getMulti($prefixed, Memcached::GET_PRESERVE_ORDER) ?: [];
+
+        $items = [];
+        foreach ($keys as $k) {
+            $p = $this->ns .':'. $k;
+            if (isset($raw[$p])) {
+                $val = ValueSerializer::unserialize($raw[$p]);
+                if ($val instanceof CacheItemInterface) {
+                    $val = $val->get();
+                }
+                $items[$k] = new MemCacheItem($this, $k, $val, true);
+            } else {
+                $items[$k] = new MemCacheItem($this, $k);
+            }
+        }
+        return $items;
+    }
+
     public function getItem(string $key): MemCacheItem
     {
         $raw = $this->mc->get($this->k($key));

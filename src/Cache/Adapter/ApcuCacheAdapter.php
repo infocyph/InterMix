@@ -36,6 +36,30 @@ class ApcuCacheAdapter implements CacheItemPoolInterface, Iterator, Countable
     }
 
     /* ── PSR-6 fetch ─────────────────────────────────────────────────── */
+    public function multiFetch(array $keys): array
+    {
+        if ($keys === []) {
+            return [];
+        }
+        $prefixed = array_map(fn ($k) => $this->ns . ':' . $k, $keys);
+        $raw      = apcu_fetch($prefixed);
+
+        $items = [];
+        foreach ($keys as $k) {
+            $p = $this->ns . ':' . $k;
+            if (array_key_exists($p, $raw)) {
+                $val = ValueSerializer::unserialize($raw[$p]);
+                if ($val instanceof CacheItemInterface) {
+                    $val = $val->get();
+                }
+                $items[$k] = new ApcuCacheItem($this, $k, $val, true);
+            } else {
+                $items[$k] = new ApcuCacheItem($this, $k);
+            }
+        }
+        return $items;
+    }
+
     public function getItem(string $key): ApcuCacheItem
     {
         $apcuKey = $this->map($key);

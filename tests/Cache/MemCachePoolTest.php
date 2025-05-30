@@ -1,4 +1,5 @@
 <?php
+
 /**
  * tests/MemCachePoolTest.php
  *
@@ -113,9 +114,11 @@ test('Iterator & Countable', function () {
     expect(count($this->cache))->toBe(2);
 
     $vals = [];
-    foreach ($this->cache as $k => $v) $vals[$k] = $v;
+    foreach ($this->cache as $k => $v) {
+        $vals[$k] = $v;
+    }
 
-    expect($vals)->toMatchArray(['k1'=>'v1','k2'=>'v2']);
+    expect($vals)->toMatchArray(['k1' => 'v1','k2' => 'v2']);
 });
 
 test('TTL expiration', function () {
@@ -125,25 +128,39 @@ test('TTL expiration', function () {
 });
 
 test('closure round-trip', function () {
-    $fn = fn($n)=>$n*3;
+    $fn = fn ($n) => $n * 3;
     $this->cache->getItem('cb')->set($fn)->save();
     $g = $this->cache->getItem('cb')->get();
     expect($g(3))->toBe(9);
 });
 
 test('stream resource round-trip', function () {
-    $s=fopen('php://memory','r+');fwrite($s,'data');rewind($s);
+    $s = fopen('php://memory', 'r+');
+    fwrite($s, 'data');
+    rewind($s);
     $this->cache->getItem('stream')->set($s)->save();
-    $r=$this->cache->getItem('stream')->get();
+    $r = $this->cache->getItem('stream')->get();
     expect(stream_get_contents($r))->toBe('data');
 });
 
 test('invalid key throws', function () {
-    expect(fn()=> $this->cache->set('bad key','v'))
+    expect(fn () => $this->cache->set('bad key', 'v'))
         ->toThrow(CacheInvalidArgumentException::class);
 });
 
 test('clear() flushes cache', function () {
-    $this->cache->set('z',9); $this->cache->clear();
+    $this->cache->set('z', 9);
+    $this->cache->clear();
     expect($this->cache->hasItem('z'))->toBeFalse();
+});
+
+test('Memcached adapter multiFetch()', function () {
+    $this->cache->set('m1', 'foo');
+    $this->cache->set('m2', 'bar');
+
+    $items = $this->cache->getItems(['m1', 'm2', 'missing']);
+
+    expect($items['m1']->get())->toBe('foo')
+        ->and($items['m2']->get())->toBe('bar')
+        ->and($items['missing']->isHit())->toBeFalse();
 });

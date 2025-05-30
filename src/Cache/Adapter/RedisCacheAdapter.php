@@ -82,6 +82,27 @@ class RedisCacheAdapter implements CacheItemPoolInterface, Iterator, Countable
     }
 
     /* ── fetch --------------------------------------------------- */
+    public function multiFetch(array $keys): array
+    {
+        $prefixed = array_map(fn ($k) => $this->ns .':'. $k, $keys);
+        $rawVals  = $this->redis->mget($prefixed);   // ordered list
+
+        $items = [];
+        foreach ($keys as $idx => $k) {
+            $v = $rawVals[$idx];
+            if ($v !== null && $v !== false) {
+                $val = ValueSerializer::unserialize($v);
+                if ($val instanceof CacheItemInterface) {
+                    $val = $val->get();
+                }
+                $items[$k] = new RedisCacheItem($this, $k, $val, true);
+            } else {
+                $items[$k] = new RedisCacheItem($this, $k);
+            }
+        }
+        return $items;
+    }
+
     public function getItem(string $key): RedisCacheItem
     {
         $raw = $this->redis->get($this->k($key));
@@ -111,7 +132,7 @@ class RedisCacheAdapter implements CacheItemPoolInterface, Iterator, Countable
     public function save(CacheItemInterface $item): bool
     {
         if (!$item instanceof RedisCacheItem) {
-            throw new CacheInvalidArgumentException('Wrong item class');
+            throw new CacheInvalidArgumentException('RedisCacheAdapter expects RedisCacheItem');
         }
         $blob = ValueSerializer::serialize($item);
         $ttl = $item->ttlSeconds();

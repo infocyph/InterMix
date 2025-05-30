@@ -62,6 +62,58 @@ class SqliteCacheAdapter implements CacheItemPoolInterface, Iterator, Countable
     }
 
     /* ── fetch ------------------------------------------------------ */
+    public function multiFetch(array $keys): array
+    {
+        if ($keys === []) {
+            return [];
+        }
+
+        // ---- build placeholder list (?, ?, ...) ---------------------------
+        $marks = implode(',', array_fill(0, count($keys), '?'));
+
+        // Each row = [key,value,expires]
+        $stmt = $this->pdo->prepare(
+            "SELECT key, value, expires
+           FROM cache
+          WHERE key IN ($marks)"
+        );
+        $stmt->execute($keys);
+
+        /** @var array<string,array{value:string,expires:int|null}> $rows */
+        $rows = [];
+        foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) as $r) {
+            $rows[$r['key']] = ['value' => $r['value'], 'expires' => $r['expires']];
+        }
+
+        // ---- build CacheItemInterface array in original order -------------
+        $items = [];
+        $now   = time();
+
+        foreach ($keys as $k) {
+            if (isset($rows[$k])) {
+                $row = $rows[$k];
+
+                // honour TTL
+                if ($row['expires'] === null || $row['expires'] > $now) {
+                    $val         = ValueSerializer::unserialize($row['value']);
+                    if ($val instanceof CacheItemInterface) {
+                        $val = $val->get();
+                    }
+                    $items[$k]   = new SqliteCacheItem($this, $k, $val, true);
+                    continue;
+                }
+
+                // expired → fall through to miss (and optionally delete row)
+                $this->pdo->prepare("DELETE FROM cache WHERE key = ?")->execute([$k]);
+            }
+
+            // cache miss
+            $items[$k] = new SqliteCacheItem($this, $k);
+        }
+
+        return $items; // iterable keyed by requested keys
+    }
+
     public function getItem(string $key): SqliteCacheItem
     {
         $this->validateKey($key);

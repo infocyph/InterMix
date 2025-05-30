@@ -1,4 +1,5 @@
 <?php
+
 /**
  * tests/RedisCachePoolTest.php
  *
@@ -15,14 +16,16 @@ use Infocyph\InterMix\Exceptions\CacheInvalidArgumentException;
 
 /* ── skip whole file when Redis unavailable ───────────────────────── */
 if (!class_exists(Redis::class)) {
-    test('phpredis ext not loaded – skipping')->skip(); return;
+    test('phpredis ext not loaded – skipping')->skip();
+    return;
 }
 try {
     $probe = new Redis();
     $probe->connect('127.0.0.1', 6379, 0.5);
     $probe->ping();
 } catch (Throwable) {
-    test('Redis server unreachable – skipping')->skip(); return;
+    test('Redis server unreachable – skipping')->skip();
+    return;
 }
 
 /* ── bootstrap / teardown ────────────────────────────────────────── */
@@ -108,8 +111,10 @@ test('Iterator & Countable (redis)', function () {
     expect(count($this->cache))->toBe(2);
 
     $out = [];
-    foreach ($this->cache as $k => $v) $out[$k] = $v;
-    expect($out)->toMatchArray(['k1'=>'v1','k2'=>'v2']);
+    foreach ($this->cache as $k => $v) {
+        $out[$k] = $v;
+    }
+    expect($out)->toMatchArray(['k1' => 'v1','k2' => 'v2']);
 });
 
 /* ── 6. TTL expiration ─────────────────────────────────────────── */
@@ -121,7 +126,7 @@ test('expiration honours TTL (redis)', function () {
 
 /* ── 7. closure round-trip ──────────────────────────────────────── */
 test('closure persists in redis', function () {
-    $double = fn($n)=>$n*2;
+    $double = fn ($n) => $n * 2;
     $this->cache->getItem('cb')->set($double)->save();
     $fn = $this->cache->getItem('cb')->get();
     expect($fn(5))->toBe(10);
@@ -129,15 +134,17 @@ test('closure persists in redis', function () {
 
 /* ── 8. stream resource round-trip ─────────────────────────────── */
 test('stream resource round-trip (redis)', function () {
-    $s=fopen('php://memory','r+');fwrite($s,'blob');rewind($s);
+    $s = fopen('php://memory', 'r+');
+    fwrite($s, 'blob');
+    rewind($s);
     $this->cache->getItem('stream')->set($s)->save();
-    $rest=$this->cache->getItem('stream')->get();
+    $rest = $this->cache->getItem('stream')->get();
     expect(stream_get_contents($rest))->toBe('blob');
 });
 
 /* ── 9. invalid key guard ───────────────────────────────────────── */
 test('invalid key throws (redis)', function () {
-    expect(fn()=> $this->cache->set('bad key','v'))
+    expect(fn () => $this->cache->set('bad key', 'v'))
         ->toThrow(CacheInvalidArgumentException::class);
 });
 
@@ -146,4 +153,15 @@ test('clear() wipes entries (redis)', function () {
     $this->cache->set('z', 9);
     $this->cache->clear();
     expect($this->cache->hasItem('z'))->toBeFalse();
+});
+
+test('Redis adapter multiFetch()', function () {
+    $this->cache->set('r1', 10);
+    $this->cache->set('r2', 20);
+
+    $items = $this->cache->getItems(['r1', 'r2', 'none']);
+
+    expect($items['r1']->get())->toBe(10)
+        ->and($items['r2']->get())->toBe(20)
+        ->and($items['none']->isHit())->toBeFalse();
 });

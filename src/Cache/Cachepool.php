@@ -79,10 +79,28 @@ class Cachepool implements
         $this->validateKey($key);
         return $this->adapter->getItem($key);
     }
-    public function getItems(array $keys = []): iterable
+    public function getItemsIterator(array $keys = []): iterable
     {
         return $this->adapter->getItems($keys);
     }
+
+    public function getItems(array $keys = []): iterable
+    {
+        if ($keys === []) {
+            return new \EmptyIterator();
+        }
+
+        if (method_exists($this->adapter, 'multiFetch')) {
+            return $this->adapter->multiFetch($keys);
+        }
+
+        $out = [];
+        foreach ($keys as $k) {
+            $out[$k] = $this->getItem($k);
+        }
+        return $out;
+    }
+
     public function hasItem(string $key): bool
     {
         $this->validateKey($key);

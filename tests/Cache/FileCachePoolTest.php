@@ -211,3 +211,15 @@ test('clear() removes everything', function () {
     expect($this->cache->hasItem('a'))->toBeFalse()
         ->and($this->cache->hasItem('b'))->toBeFalse();
 });
+
+test('file adapter bulk getItems()', function () {
+    $this->cache->set('a', 1);
+    $this->cache->set('b', 2);
+
+    $items = $this->cache->getItems(['a', 'b', 'c']);
+
+    expect($items['a']->isHit())->toBeTrue()
+        ->and($items['a']->get())->toBe(1)
+        ->and($items['b']->get())->toBe(2)
+        ->and($items['c']->isHit())->toBeFalse();
+});

@@ -145,3 +145,15 @@ test('clear() wipes all entries (apcu)', function () {
     $this->cache->clear();
     expect($this->cache->hasItem('q'))->toBeFalse();
 });
+
+test('APCu adapter multiFetch()', function () {
+    $this->cache->set('x', 'X');
+    $this->cache->set('y', 'Y');
+
+    $items = $this->cache->getItems(['x', 'y', 'z']);
+
+    expect($items['x']->isHit())->toBeTrue()
+        ->and($items['x']->get())->toBe('X')
+        ->and($items['y']->get())->toBe('Y')
+        ->and($items['z']->isHit())->toBeFalse();
+});

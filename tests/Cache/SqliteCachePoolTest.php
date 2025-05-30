@@ -138,3 +138,14 @@ test('clear() flushes table (sqlite)', function () {
     $this->cache->clear();
     expect($this->cache->hasItem('z'))->toBeFalse();
 });
+
+test('SQLite adapter multiFetch()', function () {
+    $this->cache->set('s1', 'A');
+    $this->cache->set('s2', 'B');
+
+    $items = $this->cache->getItems(['s1', 's2', 'void']);
+
+    expect($items['s1']->get())->toBe('A')
+        ->and($items['s2']->get())->toBe('B')
+        ->and($items['void']->isHit())->toBeFalse();
+});
