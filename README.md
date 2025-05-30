@@ -26,7 +26,7 @@
 
 | Library Version | PHP Version       |
 |-----------------|-------------------|
-| 2.x.x           | 8.2.x or Higher   |
+| 2.x.x or Higher | 8.2.x or Higher   |
 | 1.x.x           | 8.x.x             |
 
 
