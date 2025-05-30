@@ -106,12 +106,13 @@ if (!function_exists('remember')) {
 
 if (!function_exists('tap')) {
     /**
-     * Invokes the given callback with the provided value and returns the value.
-     * If no callback is provided, returns a TapProxy instance for the value.
+     * Pass the given value to the callback and return the value.
      *
-     * @param mixed $value The value to be passed to the callback or wrapped in a TapProxy.
-     * @param callable|null $callback The callback to invoke with the value. Defaults to null.
-     * @return mixed The original value or a TapProxy instance if no callback is provided.
+     * If no callback is provided, returns a TapProxy that allows method chaining on the value.
+     *
+     * @param mixed $value The value to be passed to the callback.
+     * @param callable|null $callback The callback to execute with the value (optional).
+     * @return mixed The original value after the callback is applied, or a TapProxy if no callback is given.
      */
     function tap(mixed $value, ?callable $callback = null): mixed
     {
