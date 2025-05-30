@@ -115,9 +115,11 @@ if (!function_exists('tap')) {
      */
     function tap(mixed $value, ?callable $callback = null): mixed
     {
-        return is_null($callback)
-            ? new TapProxy($value)
-            : ($callback($value) ?? $value);
+        if (is_null($callback)) {
+            return new TapProxy($value);
+        }
+        $callback($value);
+        return $value;
     }
 }
 
