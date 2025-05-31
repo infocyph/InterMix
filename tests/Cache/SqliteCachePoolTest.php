@@ -1,4 +1,5 @@
 <?php
+
 /**
  * tests/SqliteCachePoolTest.php
  *
@@ -44,13 +45,13 @@ beforeEach(function () {
             return $s;                                 // <- real resource
         }
     );
-//    ValueSerializer::registerResourceHandler(
-//        'stream',
-//        fn ($r) => ['mode'=>stream_get_meta_data($r)['mode'],
-//            'content'=>tap($r, fn()=>rewind($r)) && stream_get_contents($r)],
-//        fn ($d)  => tap(fopen('php://memory', $d['mode']),
-//            fn ($s)=>fwrite($s,$d['content'])&&rewind($s))
-//    );
+//        ValueSerializer::registerResourceHandler(
+//            'stream',
+//            fn ($r) => ['mode'=>stream_get_meta_data($r)['mode'],
+//                'content'=>tap($r, fn()=>rewind($r)) && stream_get_contents($r)],
+//            fn ($d)  => tap(fopen('php://memory', $d['mode']),
+//                fn ($s)=>fwrite($s,$d['content'])&&rewind($s))
+//        );
 });
 
 afterEach(function () {
@@ -92,18 +93,6 @@ test('ArrayAccess & magic (sqlite)', function () {
     expect($this->cache->alpha)->toBe('ω');
 });
 
-/* ── 5. Iterator & Countable ────────────────────────────────────── */
-test('Iterator & Countable (sqlite)', function () {
-    $this->cache->set('k1', 'v1');
-    $this->cache->set('k2', 'v2');
-
-    expect(count($this->cache))->toBe(2);
-
-    $vals = [];
-    foreach ($this->cache as $k => $v) $vals[$k] = $v;
-    expect($vals)->toMatchArray(['k1'=>'v1','k2'=>'v2']);
-});
-
 /* ── 6. TTL expiration ─────────────────────────────────────────── */
 test('expiration honours TTL (sqlite)', function () {
     $this->cache->getItem('ttl')->set('x')->expiresAfter(1)->save();
@@ -113,22 +102,24 @@ test('expiration honours TTL (sqlite)', function () {
 
 /* ── 7. closure round-trip ──────────────────────────────────────── */
 test('closure survives sqlite', function () {
-    $fn = fn($n)=>$n+3;
+    $fn = fn ($n) => $n + 3;
     $this->cache->getItem('cb')->set($fn)->save();
     expect(($this->cache->getItem('cb')->get())(4))->toBe(7);
 });
 
 /* ── 8. stream resource round-trip ─────────────────────────────── */
 test('stream resource round-trip (sqlite)', function () {
-    $s=fopen('php://memory','r+');fwrite($s,'hello');rewind($s);
+    $s = fopen('php://memory', 'r+');
+    fwrite($s, 'hello');
+    rewind($s);
     $this->cache->getItem('stream')->set($s)->save();
-    $rest=$this->cache->getItem('stream')->get();
+    $rest = $this->cache->getItem('stream')->get();
     expect(stream_get_contents($rest))->toBe('hello');
 });
 
 /* ── 9. invalid key guard ───────────────────────────────────────── */
 test('invalid key throws (sqlite)', function () {
-    expect(fn()=> $this->cache->set('bad key','v'))
+    expect(fn () => $this->cache->set('bad key', 'v'))
         ->toThrow(CacheInvalidArgumentException::class);
 });
 

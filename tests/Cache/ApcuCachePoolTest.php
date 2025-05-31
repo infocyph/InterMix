@@ -93,20 +93,6 @@ test('ArrayAccess & magic props (apcu)', function () {
     expect($this->cache->alpha)->toBe('β');
 });
 
-/* ─── Iterator & Countable ────────────────────────────────────────── */
-test('Iterator & Countable (apcu)', function () {
-    $this->cache->set('a', 1);
-    $this->cache->set('b', 2);
-
-    expect(count($this->cache))->toBe(2);
-
-    $seen = [];
-    foreach ($this->cache as $k => $v) {
-        $seen[$k] = $v;
-    }
-    expect($seen)->toMatchArray(['a' => 1, 'b' => 2]);
-});
-
 /* ─── TTL / expiration ───────────────────────────────────────────── */
 test('expiration honours TTL (apcu)', function () {
     $this->cache->getItem('ttl')->set('live')->expiresAfter(1)->save();

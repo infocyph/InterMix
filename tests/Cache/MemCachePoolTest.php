@@ -107,20 +107,6 @@ test('ArrayAccess & magic props', function () {
     expect($this->cache->alpha)->toBe('ω');
 });
 
-test('Iterator & Countable', function () {
-    $this->cache->set('k1', 'v1');
-    $this->cache->set('k2', 'v2');
-
-    expect(count($this->cache))->toBe(2);
-
-    $vals = [];
-    foreach ($this->cache as $k => $v) {
-        $vals[$k] = $v;
-    }
-
-    expect($vals)->toMatchArray(['k1' => 'v1','k2' => 'v2']);
-});
-
 test('TTL expiration', function () {
     $this->cache->getItem('ttl')->set('x')->expiresAfter(1)->save();
     sleep(2);

@@ -41,6 +41,12 @@
         "psr/container": "^2.0",
         "symfony/cache": "^7.2"
     },
+    "suggest": {
+        "ext-apcu": "For APCu-based caching (in-memory, per-process)",
+        "ext-redis": "For Redis-based caching (persistent, networked)",
+        "ext-memcached": "For Memcached-based caching (distributed, RAM)",
+        "ext-sqlite3": "For SQLite-based caching (file-based, portable)"
+    },
     "minimum-stability": "stable",
     "prefer-stable": true,
     "config": {

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\Cache\Adapter;
 
 use Countable;
-use Iterator;
 use Redis;
 use RuntimeException;
 use Psr\Cache\CacheItemInterface;
@@ -14,23 +13,21 @@ use Infocyph\InterMix\Cache\Item\RedisCacheItem;
 use Infocyph\InterMix\Serializer\ValueSerializer;
 use Infocyph\InterMix\Exceptions\CacheInvalidArgumentException;
 
-/**
- * PSR-6 pool backed by phpredis.
- *
- * • Namespaced keys:  "<ns>:<userKey>"
- * • ValueSerializer handles closures/resources
- * • Deferred queue obeys commit()
- * • Iterator & Countable use SCAN (non-blocking)
- */
-class RedisCacheAdapter implements CacheItemPoolInterface, Iterator, Countable
+class RedisCacheAdapter implements CacheItemPoolInterface, Countable
 {
-    /* ── state ─────────────────────────────────────────────────── */
     private readonly Redis $redis;
     private readonly string $ns;
-    private array $deferred = [];   // key => RedisCacheItem
-    private array $scanBuffer = [];   // iterator
-    private ?string $scanCursor = null;
+    private array $deferred = [];
 
+    /**
+     * Constructs a RedisCacheAdapter.
+     *
+     * @param string $namespace The cache key prefix (namespace).
+     * @param string $dsn The Data Source Name for the Redis server.
+     * @param Redis|null $client An optional pre-configured Redis client instance.
+     *
+     * @throws RuntimeException If the phpredis extension is not enabled.
+     */
     public function __construct(
         string $namespace = 'default',
         string $dsn = 'redis://127.0.0.1:6379',
@@ -44,7 +41,21 @@ class RedisCacheAdapter implements CacheItemPoolInterface, Iterator, Countable
         $this->redis = $client ?? $this->connect($dsn);
     }
 
-    /* ── connection helper ─────────────────────────────────────── */
+
+    /**
+     * Establish a connection to Redis using a DSN (Data Source Name).
+     *
+     * The DSN is a string in the format:
+     *   `redis://[pass@]host[:port][/db]`
+     *   • `pass` is the password for Redis.
+     *   • `host` is the host name or IP address.
+     *   • `port` is the port number (default: 6379).
+     *   • `db` is the database number (default: 0).
+     *
+     * @param string $dsn The DSN string.
+     * @return Redis The connected Redis instance.
+     * @throws RuntimeException If the DSN is invalid.
+     */
     private function connect(string $dsn): Redis
     {
         $r = new Redis();
@@ -65,13 +76,32 @@ class RedisCacheAdapter implements CacheItemPoolInterface, Iterator, Countable
         return $r;
     }
 
-    /* ── key helpers ───────────────────────────────────────────── */
+
+    /**
+     * Namespaced key constructor.
+     *
+     * @param string $key Key without namespace prefix.
+     *
+     * @return string "<ns>:<userKey>"
+     */
     private function k(string $key): string
     {
         $this->validateKey($key);
         return $this->ns . ':' . $key;
     }
 
+    /**
+     * Validates the format of a cache key.
+     *
+     * This method ensures that the given key conforms to the allowed character set
+     * and is not an empty string. The allowed characters are A-Z, a-z, 0-9, underscores (_),
+     * periods (.), and hyphens (-). If the key is invalid, a CacheInvalidArgumentException
+     * is thrown.
+     *
+     * @param string $key The cache key to validate.
+     *
+     * @throws CacheInvalidArgumentException if the key is empty or contains invalid characters.
+     */
     private function validateKey(string $key): void
     {
         if ($key === '' || !preg_match('/^[A-Za-z0-9_.\-]+$/', $key)) {
@@ -81,7 +111,18 @@ class RedisCacheAdapter implements CacheItemPoolInterface, Iterator, Countable
         }
     }
 
-    /* ── fetch --------------------------------------------------- */
+
+    /**
+     * Retrieves multiple cache items by their unique keys.
+     *
+     * This method retrieves multiple cache items efficiently by leveraging
+     * Redis's `MGET` command to fetch all items in a single call.
+     * Each key is prefixed with the namespace to avoid collisions.
+     *
+     * @param array $keys List of keys identifying the cache items to retrieve.
+     *
+     * @return array An associative array of RedisCacheItem objects, keyed by the original cache key.
+     */
     public function multiFetch(array $keys): array
     {
         $prefixed = array_map(fn ($k) => $this->ns .':'. $k, $keys);
@@ -103,6 +144,15 @@ class RedisCacheAdapter implements CacheItemPoolInterface, Iterator, Countable
         return $items;
     }
 
+    /**
+     * {@inheritdoc}
+     *
+     * @param string $key The key of the item to retrieve.
+     *
+     * @return RedisCacheItem
+     *      The retrieved cache item or a newly created
+     *      RedisCacheItem if the key was not found.
+     */
     public function getItem(string $key): RedisCacheItem
     {
         $raw = $this->redis->get($this->k($key));
@@ -115,6 +165,14 @@ class RedisCacheAdapter implements CacheItemPoolInterface, Iterator, Countable
         return new RedisCacheItem($this, $key); // cache miss
     }
 
+    /**
+     * {@inheritdoc}
+     *
+     * @param array $keys The keys of the items to retrieve.  If empty, an
+     *      empty iterable is returned.
+     *
+     * @return iterable An iterable of CacheItemInterface objects.
+     */
     public function getItems(array $keys = []): iterable
     {
         foreach ($keys as $k) {
@@ -122,13 +180,31 @@ class RedisCacheAdapter implements CacheItemPoolInterface, Iterator, Countable
         }
     }
 
+    /**
+     * Checks if a cache item exists for the given key.
+     *
+     * This method checks if the cache item associated with the specified key
+     * is a cache hit, indicating that the item exists in the cache and has not expired.
+     *
+     * @param string $key The key of the cache item to check.
+     * @return bool Returns true if the cache item exists and is a cache hit, false otherwise.
+     */
     public function hasItem(string $key): bool
     {
         return $this->redis->exists($this->k($key)) === 1
             && $this->getItem($key)->isHit();
     }
 
-    /* ── save / delete / clear ----------------------------------- */
+
+    /**
+     * Saves the cache item to the cache.
+     *
+     * @param CacheItemInterface $item The cache item to save.
+     *
+     * @return bool TRUE if the item was successfully saved, FALSE otherwise.
+     *
+     * @throws CacheInvalidArgumentException If the given item is not an instance of RedisCacheItem.
+     */
     public function save(CacheItemInterface $item): bool
     {
         if (!$item instanceof RedisCacheItem) {
@@ -141,17 +217,39 @@ class RedisCacheAdapter implements CacheItemPoolInterface, Iterator, Countable
             : $this->redis->set($this->k($item->getKey()), $blob);
     }
 
+    /**
+     * Removes a single item from the cache.
+     *
+     * @param string $key The key to remove from the cache
+     * @return bool True if the item was successfully deleted, false otherwise
+     */
     public function deleteItem(string $key): bool
     {
         return (bool)$this->redis->del($this->k($key));
     }
 
+    /**
+     * Removes multiple items from the cache.
+     *
+     * @param string[] $keys The identifiers to remove from the cache
+     * @return bool True if all items were successfully deleted, false otherwise
+     */
     public function deleteItems(array $keys): bool
     {
         $full = array_map(fn ($k) => $this->k($k), $keys);
         return $this->redis->del($full) === count($keys);
     }
 
+    /**
+     * Clears all cache items in the current namespace.
+     *
+     * This method uses the SCAN command to iterate over keys within the
+     * current namespace and deletes them from the Redis store. It is
+     * efficient for large datasets as it iterates in chunks, preventing
+     * server overload. After clearing, the deferred queue is also emptied.
+     *
+     * @return bool Returns true upon successful completion.
+     */
     public function clear(): bool
     {
         /* use SCAN to delete only this namespace */
@@ -166,7 +264,18 @@ class RedisCacheAdapter implements CacheItemPoolInterface, Iterator, Countable
         return true;
     }
 
-    /* ── deferred queue ------------------------------------------ */
+
+    /**
+     * Queues the given cache item for deferred saving in the Redis cache pool.
+     *
+     * If the provided item is not an instance of RedisCacheItem, the method
+     * returns false. Otherwise, the item is added to the internal deferred
+     * queue and true is returned. The item will be persisted in the cache
+     * when the commit() method is called.
+     *
+     * @param CacheItemInterface $item The cache item to be deferred.
+     * @return bool True if the item was successfully deferred, false otherwise.
+     */
     public function saveDeferred(CacheItemInterface $item): bool
     {
         if (!$item instanceof RedisCacheItem) {
@@ -176,6 +285,11 @@ class RedisCacheAdapter implements CacheItemPoolInterface, Iterator, Countable
         return true;
     }
 
+    /**
+     * Commit any deferred cache items.
+     *
+     * @return bool true if all deferred items were successfully committed.
+     */
     public function commit(): bool
     {
         $ok = true;
@@ -186,53 +300,16 @@ class RedisCacheAdapter implements CacheItemPoolInterface, Iterator, Countable
         return $ok;
     }
 
-    /* ── iterator ------------------------------------------------ */
-    public function rewind(): void
-    {
-        $this->scanCursor = null;
-        $this->scanBuffer = [];
-        $this->next();                     // prefetch first batch
-    }
-
-    public function current(): mixed
-    {
-        $key = $this->key();
-        return $key ? $this->getItem($key)->get() : null;
-    }
-
-    public function key(): mixed
-    {
-        return $this->scanBuffer[0] ?? null;
-    }
-
-    public function next(): void
-    {
-        /* pop current */
-        if ($this->scanBuffer) {
-            array_shift($this->scanBuffer);
-        }
-
-        /* refill buffer if empty */
-        while (!$this->scanBuffer && ($this->scanCursor !== 0)) {
-            $this->scanBuffer = $this->redis->scan(
-                $this->scanCursor,
-                $this->ns . ':*',
-                100,
-            ) ?: [];
-            /* strip namespace prefix */
-            $this->scanBuffer = array_map(
-                fn ($k) => substr($k, strlen($this->ns) + 1),
-                $this->scanBuffer,
-            );
-        }
-    }
-
-    public function valid(): bool
-    {
-        return !empty($this->scanBuffer);
-    }
-
-    /* ── countable ----------------------------------------------- */
+    /**
+     * @return int the number of cache items in the pool
+     *
+     * This implementation uses the SCAN iterator to count the number of keys
+     * in the namespace, without loading the values.  The maximum number of
+     * keys returned per iteration is 1000.
+     *
+     * CAUTION: This method is not atomic.  If items are added or removed while
+     * this method is running, the count may not reflect the final state.
+     */
     public function count(): int
     {
         $iter = null;
@@ -243,12 +320,34 @@ class RedisCacheAdapter implements CacheItemPoolInterface, Iterator, Countable
         return $count;
     }
 
-    /* ── item callbacks ------------------------------------------ */
+
+    /**
+     * @internal
+     * Persists a cache item in the cache pool.
+     *
+     * This method is called by the cache item when it is persisted
+     * using the `save()` method. It is not intended to be called
+     * directly.
+     *
+     * @param RedisCacheItem $i The cache item to persist.
+     *
+     * @return bool TRUE if the item was successfully persisted, FALSE otherwise.
+     */
     public function internalPersist(RedisCacheItem $i): bool
     {
         return $this->save($i);
     }
 
+    /**
+     * Adds the given cache item to the internal deferred queue.
+     *
+     * This method enqueues the cache item for later persistence in
+     * the cache pool. The item will not be saved immediately, but
+     * will be stored when the commit() method is called.
+     *
+     * @param RedisCacheItem $i The cache item to be queued for deferred saving.
+     * @return bool True if the item was successfully queued, false otherwise.
+     */
     public function internalQueue(RedisCacheItem $i): bool
     {
         return $this->saveDeferred($i);

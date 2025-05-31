@@ -107,25 +107,6 @@ test('magic __get/__set/__isset/__unset', function () {
     unset($this->cache->alpha);
     expect(isset($this->cache->alpha))->toBeFalse();
 });
-
-test('Iterator and Countable', function () {
-    $this->cache->clear();
-    $this->cache->set('k1', 'v1');
-    $this->cache->set('k2', 'v2');
-
-    expect(count($this->cache))->toBe(2);
-
-    $collected = [];
-    foreach ($this->cache as $k => $v) {
-        $collected[$k] = $v;
-    }
-
-    expect($collected)->toMatchArray([
-        'k1' => 'v1',
-        'k2' => 'v2',
-    ]);
-});
-
 test('runtime re-namespace and directory swap', function () {
     $newDir = sys_get_temp_dir() . '/pest_cache_new_' . uniqid();
 

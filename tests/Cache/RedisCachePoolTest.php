@@ -103,20 +103,6 @@ test('ArrayAccess & magic (redis)', function () {
     expect($this->cache->alpha)->toBe('ζ');
 });
 
-/* ── 5. Iterator & Countable ────────────────────────────────────── */
-test('Iterator & Countable (redis)', function () {
-    $this->cache->set('k1', 'v1');
-    $this->cache->set('k2', 'v2');
-
-    expect(count($this->cache))->toBe(2);
-
-    $out = [];
-    foreach ($this->cache as $k => $v) {
-        $out[$k] = $v;
-    }
-    expect($out)->toMatchArray(['k1' => 'v1','k2' => 'v2']);
-});
-
 /* ── 6. TTL expiration ─────────────────────────────────────────── */
 test('expiration honours TTL (redis)', function () {
     $this->cache->getItem('ttl')->set('x')->expiresAfter(1)->save();
