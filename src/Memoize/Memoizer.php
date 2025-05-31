@@ -16,7 +16,7 @@ use WeakMap;
  */
 final class Memoizer
 {
-    use Single;  // your existing single-instance trait
+    use Single;
 
     /** @var array<string,mixed> */
     private array $staticCache = [];
@@ -27,7 +27,12 @@ final class Memoizer
     private int $hits   = 0;
     private int $misses = 0;
 
-    /** Prevent direct construction */
+
+    /**
+     * Creates a new Memoizer instance.
+     *
+     * This constructor initializes an empty WeakMap for object-scoped memoization.
+     */
     protected function __construct()
     {
         $this->objectCache = new WeakMap();
@@ -37,8 +42,9 @@ final class Memoizer
      * Memoize a callable for the **entire** process.
      *
      * @param callable $callable
-     * @param array     $params
+     * @param array $params
      * @return mixed
+     * @throws ReflectionException
      */
     public function get(callable $callable, array $params = []): mixed
     {
@@ -72,7 +78,6 @@ final class Memoizer
             ReflectionResource::getReflection($callable)
         );
 
-        // initialize that object's bucket
         $bucket = $this->objectCache[$object] ?? [];
         if (array_key_exists($sig, $bucket)) {
             $this->hits++;
@@ -80,13 +85,18 @@ final class Memoizer
         }
 
         $this->misses++;
-        $v = $callable(...$params);
-        $bucket[$sig] = $v;
+        $value = $callable(...$params);
+        $bucket[$sig] = $value;
         $this->objectCache[$object] = $bucket;
-        return $v;
+        return $value;
     }
 
-    /** Clear **all** caches (static & object). */
+    /**
+     * Clears all cached entries and resets statistics.
+     *
+     * This method empties both the static and object-specific caches,
+     * and resets the hit and miss counters to zero.
+     */
     public function flush(): void
     {
         $this->staticCache = [];
@@ -94,7 +104,15 @@ final class Memoizer
         $this->hits = $this->misses = 0;
     }
 
-    /** Retrieve statistics. */
+
+    /**
+     * Retrieve memoization statistics.
+     *
+     * @return array An associative array containing:
+     *               - 'hits': The number of cache hits.
+     *               - 'misses': The number of cache misses.
+     *               - 'total': The total number of cache accesses (hits + misses).
+     */
     public function stats(): array
     {
         return [

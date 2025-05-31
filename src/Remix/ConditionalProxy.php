@@ -5,22 +5,16 @@ namespace Infocyph\InterMix\Remix;
 class ConditionalProxy
 {
     /**
-     * The evaluated condition result.
-     *
      * @var bool|null
      */
     protected ?bool $condition = null;
 
     /**
-     * Whether a condition has been set.
-     *
      * @var bool
      */
     protected bool $hasCondition = false;
 
     /**
-     * Whether to negate the first captured condition.
-     *
      * @var bool
      */
     protected bool $negateConditionOnCapture = false;
@@ -97,6 +91,13 @@ class ConditionalProxy
         return $this->condition ? $this->target->{$method}(...$parameters) : $this->target;
     }
 
+    /**
+     * Sets a property on the target if a condition has been set and is truthy.
+     *
+     * @param string $key
+     * @param mixed $value
+     * @return void
+     */
     public function __set(string $key, mixed $value): void
     {
         if ($this->hasCondition && $this->condition) {
@@ -104,14 +105,26 @@ class ConditionalProxy
         }
     }
 
+
     /**
-     * Do not allow creating dynamic properties on the proxy.
+     * No-op to prevent dynamic deletes.
+     *
+     * Prevents dynamic properties from being unset when a condition is set and true.
+     *
+     * @param string $key
+     * @return void
      */
     public function __unset(string $key): void
     {
         // no-op to prevent dynamic deletes
     }
 
+    /**
+     * Checks if a property exists on the target when a condition is set and true.
+     *
+     * @param string $key
+     * @return bool
+     */
     public function __isset(string $key): bool
     {
         return $this->hasCondition && $this->condition && isset($this->target->{$key});

@@ -11,31 +11,41 @@ use ReflectionMethod;
 trait MacroMix
 {
     /**
-     * The registered macros for the current class.
-     *
      * @var array<string, callable|object>
      */
     protected static array $macros = [];
 
     /**
-     * Lock file handle for ensuring thread-safe operations.
-     *
      * @var resource|null
      */
     private static $lockHandle = null;
 
     /**
-     * Determines if locking is enabled.
+     * Checks if the locking mechanism is enabled.
+     *
+     * Determines whether the locking feature is enabled by checking the
+     * 'ENABLE_LOCK' constant in the class. If the constant is defined
+     * and true, locking is enabled; otherwise, it is disabled.
+     *
+     * @return bool True if locking is enabled, false otherwise.
      */
     private static function isLockEnabled(): bool
     {
         return defined('static::ENABLE_LOCK') ? static::ENABLE_LOCK : false;
     }
 
+
     /**
-     * Registers macros from a structured configuration.
+     * Loads macros from a given configuration array.
      *
-     * @param  array<string, callable|object>  $config  An array where keys are macro names and values are callable or object definitions.
+     * This method iterates over the provided configuration array, registering each
+     * macro by name. It ensures thread safety by acquiring a lock before modifying
+     * the shared state and releasing the lock afterward.
+     *
+     * @param array<string, callable> $config An associative array where keys are
+     *        macro names and values are callable macros.
+     *
+     * @return void
      */
     public static function loadMacrosFromConfig(array $config): void
     {
@@ -49,11 +59,16 @@ trait MacroMix
         }
     }
 
+
     /**
-     * Registers macros from annotations in a given class or object.
+     * Loads macros from a class based on annotations.
      *
-     * @param  string|object  $class  The class name or object containing annotations.
+     * This method searches for PHPDoc annotations in the form of `@Macro("<name>")`
+     * on public methods of the given class. For each found annotation, it registers a
+     * macro with the given name, pointing to the corresponding method.
      *
+     * @param string|object $class The class to load macros from. Can be a class name
+     *        or an instance of the class.
      * @throws ReflectionException
      */
     public static function loadMacrosFromAnnotations(string|object $class): void
@@ -69,11 +84,18 @@ trait MacroMix
         }
     }
 
+
     /**
-     * Registers a custom macro.
+     * Registers a macro.
      *
-     * @param  string  $name  The macro name.
-     * @param  callable|object  $macro  The macro definition.
+     * Registers a macro with the given name. If the macro is a callable, it will be
+     * wrapped with the chaining mechanism. If the macro is an object, it will be
+     * stored directly.
+     *
+     * @param string $name The macro name.
+     * @param callable|object $macro The macro to register.
+     *
+     * @return void
      */
     public static function macro(string $name, callable|object $macro): void
     {
@@ -83,66 +105,95 @@ trait MacroMix
         static::$macros[$name] = $macro;
     }
 
+
     /**
      * Checks if a macro is registered.
      *
-     * @param  string  $name  The macro name.
+     * Determines if a macro with the specified name exists in the
+     * registered macros array.
+     *
+     * @param string $name The name of the macro to check.
+     * @return bool True if the macro is registered, false otherwise.
      */
     public static function hasMacro(string $name): bool
     {
         return isset(static::$macros[$name]);
     }
 
+
     /**
-     * Removes a registered macro.
+     * Removes a macro.
      *
-     * @param  string  $name  The macro name.
+     * Removes a macro with the specified name from the registered macros array.
+     *
+     * @param string $name The name of the macro to remove.
+     *
+     * @return void
      */
     public static function removeMacro(string $name): void
     {
         unset(static::$macros[$name]);
     }
 
+
     /**
      * Handles static calls to the class.
      *
-     * @param  string  $method  The method name.
-     * @param  array  $parameters  Parameters to pass to the method.
+     * This method processes calls to class methods that do not exist and
+     * delegates the call to the registered macro if it exists.
      *
-     * @throws Exception
+     * @param string $method The method name.
+     * @param array $parameters Parameters to pass to the method.
+     *
+     * @return mixed The result of the macro call.
+     *
+     * @throws Exception If the macro does not exist.
      */
     public static function __callStatic(string $method, array $parameters): mixed
     {
         return self::process(null, $method, $parameters);
     }
 
+
     /**
-     * Handles dynamic calls to the class.
+     * Handles dynamic calls to the object.
      *
-     * @param  string  $method  The method name.
-     * @param  array  $parameters  Parameters to pass to the method.
+     * This method processes calls to object methods that do not exist and
+     * delegates the call to the registered macro if it exists.
      *
-     * @throws Exception
+     * @param string $method The method name.
+     * @param array $parameters Parameters to pass to the method.
+     *
+     * @return mixed The result of the macro call.
+     *
+     * @throws Exception If the macro does not exist.
      */
     public function __call(string $method, array $parameters): mixed
     {
         return self::process($this, $method, $parameters);
     }
 
+
     /**
-     * Processes the given method call and returns the result.
+     * Process a macro call.
      *
-     * @param  object|null  $bind  The object to bind the macro to (for dynamic calls).
-     * @param  string  $method  The method name.
-     * @param  array  $parameters  Parameters to pass to the method.
+     * Process a call to a macro on the class or object. If the macro does not
+     * exist, an exception is thrown.
+     *
+     * @param object|null $bind The object to bind the macro call to, or null
+     *     for static calls.
+     * @param string $method The method name to call.
+     * @param array $parameters Parameters to pass to the macro.
+     *
+     * @return mixed The result of the macro call.
      *
      * @throws Exception If the macro does not exist.
      */
     private static function process(?object $bind, string $method, array $parameters): mixed
     {
-        if (! static::hasMacro($method)) {
+        if (!static::hasMacro($method)) {
             throw new Exception(
-                sprintf('Method %s::%s does not exist.', static::class, $method)
+                sprintf('Method %s::%s does not exist.', static::class, $method),
             );
         }
 
@@ -155,10 +206,20 @@ trait MacroMix
         return $macro(...$parameters);
     }
 
+
     /**
-     * Wraps a callable with method chaining support.
+     * Wraps a callable to chain method calls.
      *
-     * @param  callable  $callable  The callable to wrap.
+     * If the callable is a closure, it is bound to the current object (if
+     * available) and called with the given arguments. If the callable is not a
+     * closure, it is called directly with the given arguments.
+     *
+     * If the result of the callable is not set, the method returns the current
+     * object (if available) or the class name (if not available).
+     *
+     * @param callable $callable The callable to wrap.
+     *
+     * @return callable The wrapped callable.
      */
     private static function wrapWithChaining(callable $callable): callable
     {
@@ -171,22 +232,32 @@ trait MacroMix
         };
     }
 
+
     /**
-     * Retrieves all registered macros.
+     * Returns all registered macros.
      *
-     * @return array<string, callable|object>
+     * Retrieves a list of all macros currently registered with the class.
+     *
+     * @return array<string, callable|object> An array of all registered macros.
      */
     public static function getMacros(): array
     {
         return static::$macros;
     }
 
+
     /**
      * Acquires a lock to ensure thread-safe operations.
+     *
+     * This method checks if locking is enabled and acquires an exclusive lock
+     * on the current file. It initializes the lock handle if it is not already set.
+     * If the lock handle is valid, it uses `flock` to apply an exclusive lock.
+     *
+     * @return void
      */
     private static function acquireLock(): void
     {
-        if (! self::isLockEnabled()) {
+        if (!self::isLockEnabled()) {
             return;
         }
 
@@ -200,11 +271,19 @@ trait MacroMix
     }
 
     /**
-     * Releases a lock to ensure thread-safe operations.
+     * Releases the lock to allow other processes to access the resource.
+     *
+     * This method checks if locking is enabled and releases the exclusive lock
+     * on the current file by using `flock` to remove the lock. It then closes
+     * the lock handle and sets it to null to indicate that the lock is no longer
+     * held. If locking is not enabled or the lock handle is not set, the method
+     * returns without taking any action.
+     *
+     * @return void
      */
     private static function releaseLock(): void
     {
-        if (! self::isLockEnabled() || is_null(self::$lockHandle)) {
+        if (!self::isLockEnabled() || is_null(self::$lockHandle)) {
             return;
         }
 
@@ -218,22 +297,28 @@ trait MacroMix
     /**
      * Mixes methods from a given object or class into the current class.
      *
-     * @param object|string $mixin The object or class containing methods to mix in.
-     * @param bool $replace Whether to replace existing macros with the same name.
+     * This method takes an object or class name as the first argument and an optional
+     * boolean flag for whether to replace existing macros with the same names.
+     * It then iterates over all public and protected methods of the given object
+     * or class and registers each as a macro with the same name.
      *
+     * @param object|string $mixin The object or class to mix methods from.
+     * @param bool $replace Whether to replace existing macros with the same names.
+     *
+     * @return void
      * @throws ReflectionException
      */
     public static function mix(object|string $mixin, bool $replace = true): void
     {
         $instance = is_object($mixin) ? $mixin : new $mixin();
         $methods = (ReflectionResource::getClassReflection($instance))->getMethods(
-            ReflectionMethod::IS_PUBLIC | ReflectionMethod::IS_PROTECTED
+            ReflectionMethod::IS_PUBLIC | ReflectionMethod::IS_PROTECTED,
         );
 
         foreach ($methods as $method) {
             $name = $method->name;
 
-            if (! $replace && static::hasMacro($name)) {
+            if (!$replace && static::hasMacro($name)) {
                 continue;
             }
 

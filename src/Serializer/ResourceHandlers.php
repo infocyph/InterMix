@@ -7,11 +7,13 @@ namespace Infocyph\InterMix\Serializer;
 abstract class ResourceHandlers
 {
     /**
-     * Register all resource handlers.
+     * Registers all default resource handlers.
      *
      * This method iterates over all class methods prefixed with "register" and
-     * invokes them. This is a convenient way to register all resource handlers
-     * at once.
+     * invokes them. This is a convenient way to register all default resource
+     * handlers at once.
+     *
+     * @return void
      */
     public static function registerDefaults(): void
     {
