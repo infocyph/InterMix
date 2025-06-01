@@ -22,13 +22,8 @@ It provides:
   - **ArrayAccess** (`$cache['id']`)
   - **Countable** (`count($cache)`)
 * **Bulk fetch** (`getItems([...])`) that defers to adapter for single-round-trip performance
-* **Iteration** (`foreach ($cache as $k => $v)`)
+* **Iteration** (`foreach ($cache->getItemsIterator() as $k => $v)`)
 * Automatic **serialization** of closures, resources, and arbitrary PHP values
-
-.. tip::
-
-   You no longer need an external bridge for PSR-16: the façade’s `get()` and `set()`
-   methods fully satisfy the PSR-16 “Simple Cache” interface **and** preserve PSR-6 compatibility.
 
 Quick Start
 ===========
@@ -111,29 +106,21 @@ PSR-16 Methods (implemented on top of PSR-6):
 
 Magic props & ArrayAccess & Countable:
 
-.. list-table::
-   :widths: 15, 75
-   :header-rows: 0
-
-   * - **Magic props:**
-     - `$cache->foo`  ↔  `$cache->get('foo')`
-     - `$cache->foo = 'bar'`  ↔ `$cache->set('foo','bar')`
-     - `isset($cache->foo)`  ↔  `$cache->hasItem('foo')`
-     - `unset($cache->foo)`  ↔  `$cache->deleteItem('foo')`
-   * - **ArrayAccess:**
-     - `$cache['id'] = 123` ; `$val = $cache['id']` ; `isset($cache['id'])` ; `unset($cache['id'])`
-   * - **Countable:**
-     - `count($cache)` delegates to either adapter’s `count()` or does a manual scan if the adapter is not `Countable`.
+* **Magic props:**
+ - `$cache->foo`  ↔  `$cache->get('foo')`
+ - `$cache->foo = 'bar'`  ↔ `$cache->set('foo','bar')`
+ - `isset($cache->foo)`  ↔  `$cache->hasItem('foo')`
+ - `unset($cache->foo)`  ↔  `$cache->deleteItem('foo')`
+* **ArrayAccess:**
+ - `$cache['id'] = 123` ; `$val = $cache['id']` ; `isset($cache['id'])` ; `unset($cache['id'])`
+* **Countable:**
+ - `count($cache)` delegates to either adapter’s `count()` or does a manual scan if the adapter is not `Countable`.
 
 Optional:
 
-.. list-table::
-   :widths: 20, 80
-   :header-rows: 0
-
-   * - `setNamespaceAndDirectory(string $namespace, string|null $dir)`
-     - Only supported if the adapter implements it (FileCacheAdapter is the primary one).
-     - Allows changing namespace and/or storage location at runtime.
+* - `setNamespaceAndDirectory(string $namespace, string|null $dir)`
+ - Only supported if the adapter implements it (FileCacheAdapter is the primary one).
+ - Allows changing namespace and/or storage location at runtime.
 
 Why use “getItems”?
 -------------------
@@ -141,21 +128,17 @@ Why use “getItems”?
 Most adapters implement a batched “multiFetch()” call that fetches **N** keys
 in **one** round-trip—rather than doing **N** separate `getItem()` calls. This
 significantly improves performance when talking to remote stores (Redis,
-Memcached, SQLite). The façade automatically detects `method_exists($adapter, 'multiFetch')`
+Memcached, SQLite). The facade automatically detects `method_exists($adapter, 'multiFetch')`
 and uses it if available.
 
 .. toctree::
-   :maxdepth: 1
-   :caption: Back-end Adapters
+    :maxdepth: 1
+    :titlesonly:
+    :hidden:
 
-   adapters/file
-   adapters/apcu
-   adapters/memcached
-   adapters/redis
-   adapters/sqlite
-
-.. toctree::
-   :maxdepth: 1
-   :caption: Internals
-
-   serialization
+    adapters/file
+    adapters/apcu
+    adapters/memcached
+    adapters/redis
+    adapters/sqlite
+    adapters/serialization
