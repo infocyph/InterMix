@@ -4,257 +4,193 @@
 Fence (Class Initialization Barrier)
 ==========================================
 
-The **`Fence`** package provides a unified way to control
-how your PHP classes instantiate, by centralizing requirement checks,
-singleton/multiton behavior, and instance‐count limits into a single trait
-(`Fence`) plus three lightweight adapters (`Single`, `Multi`, `Limit`).  You
-never call `new` directly—instead, you use `::instance()` to get your object.
+The `Fence` package provides a single core trait (Fence)
+and three lightweight wrappers (Single, Multi, Limit) that let you:
 
-Key Features
+- Control exactly how many objects of a class may exist.
+- Choose whether instances are “keyed” by string or always a singleton.
+- Enforce optional PHP‐extension/class requirements at startup.
+- Inspect or reset active instances.
+
+Everything lives in one place—no base classes, just include the trait you need.
+
+Key Concepts
 ------------
 
-- **Unified core (`Fence` trait)**
-  All logic for “keyed vs. singleton” behavior, requirement‐checking, and
-  instance‐limit enforcement lives in one place.
+- **Unified base (Fence)**
+  Implements all logic for requirement checks, keyed vs. singleton behavior,
+  and instance‐count limits.  You do **not** use Fence directly; one of the three
+  wrapper traits sets two class‐constants, and the core logic runs on every
+  ::instance() call.
 
-- **Singleton (`Single` wrapper)**
+- **Singleton (Single)**
+  Example::
+  .. code-block:: php
+      namespace App;
 
-.. code-block:: php
-use Infocyph\InterMix\Fence\Single;
-class OnlyOne { use Single; }
-// Only one instance ever:
-\$a = OnlyOne::instance();
-\$b = OnlyOne::instance();
-// \$a === \$b
+      use Infocyph\InterMix\Fence\Single;
 
+      class Config
+      {
+          use Single;
+      }
 
-- **Multiton (`Multi` wrapper)**
+      # Usage:
+      $cfgA = Config::instance();       # new Config
+      $cfgB = Config::instance();       # same object as $cfgA
+      Config::hasInstance();            # true
+      Config::countInstances();         # 1
+      Config::getKeys();                # ["__single"]
+      Config::clearInstances();         # resets so next instance() yields new object
 
-.. code-block:: php
-use Infocyph\InterMix\Fence\Multi;
-class Many { use Multi; }
-// Keyed instances, unlimited count:
-\$x = Many::instance('key1');
-\$y = Many::instance('key2');
-// \$x !== \$y
+- **Multiton (Multi)**
+  Example::
+  .. code-block:: php
+      namespace App;
 
-- **Limited Multiton (`Limit` wrapper)**
+      use Infocyph\InterMix\Fence\Multi;
 
-.. code-block:: php
-use Infocyph\InterMix\Fence\Limit;
-class Few { use Limit; }
-// By default, limit = 2 (can be changed via Few::setLimit()):
-Few::instance('A');
-Few::instance('B');
-// Few::instance('C') throws LimitExceededException
+      class Connection
+      {
+          use Multi;
+      }
 
+      # Usage:
+      $conn1 = Connection::instance("db1");
+      $conn2 = Connection::instance("db2");
+      $conn3 = Connection::instance("db1");  # returns same as $conn1
+      Connection::countInstances();          # 2
+      Connection::getKeys();                 # ["db1", "db2"]
+      Connection::hasInstance("db3");        # false
+      Connection::clearInstances();
+
+- **Limited Multiton (Limit)**
+  Example::
+  .. code-block:: php
+      namespace App;
+
+      use Infocyph\InterMix\Fence\Limit;
+
+      class ReportCache
+      {
+          use Limit;
+      }
+
+      # By default, Limit uses 2.  Override at runtime:
+      ReportCache::setLimit(5);
+      ReportCache::instance("rA");
+      ReportCache::instance("rB");
+      ReportCache::instance("rC");           # throws LimitExceededException if >2 and setLimit not called
+      ReportCache::setLimit(3);
+      ReportCache::instance("rC");           # now allowed
 
 - **Requirement Checking**
-Pass an optional `['extensions'=>[…], 'classes'=>[…]]` array to `instance()`.
-If any required PHP extension or class is missing, a `RequirementException` is thrown.
+  ::instance() accepts an optional constraints array with `extensions` and/or
+  `classes`.  If any extension or class is missing, a RequirementException is thrown
+  before any instance is created.
 
 - **Limit Enforcement**
-If you exceed the configured instance limit, a `LimitExceededException` is thrown.
+  Attempting to create more instances than the configured limit throws
+  LimitExceededException.
 
-- **Introspection & Management**
-- `hasInstance($key = null)` — check if an instance exists for a given key
-- `countInstances()` — how many instances are active
-- `getInstances()` — raw array of `[key => instance, …]`
-- `getKeys()` — list of active keys
-- `clearInstances()` — reset/remove all instances
-- `setLimit(int $n)` — override the limit at runtime (for `Limit` classes)
+- **Instance Inspection & Management**
+  The wrapper traits supply static helpers:
+
+  - `hasInstance(?string $key = "default")` → bool
+  - `countInstances()` → int
+  - `getInstances()` → array(key → instance)
+  - `getKeys()` → array of slots/keys
+  - `clearInstances()` → resets to empty
+  - `setLimit(int $n)` (only on Limit)
 
 Exceptions
 ----------
 
-- **`RequirementException`** – Thrown if a required extension or class is not available.
-- **`LimitExceededException`** – Thrown if attempting to instantiate beyond the allowed limit.
-- **`InvalidArgumentException`** – Thrown if `setLimit($n)` receives a value `< 1`.
+- **RequirementException**
+  Raised if provided constraints refer to missing extensions or classes.  The
+  message lists exactly which items were not found.
 
-Basic Usage
------------
+- **LimitExceededException**
+  Raised if you attempt to create a new instance when the count of existing
+  instances has reached the configured limit.
 
-First, pick the wrapper trait that matches your desired behavior:
+- **InvalidArgumentException**
+  Raised by `setLimit()` if you pass an integer less than 1.
 
-.. code-block:: php
-
- use Infocyph\InterMix\Fence\Single;
- use Infocyph\InterMix\Fence\Multi;
- use Infocyph\InterMix\Fence\Limit;
-
- // 1) Singleton (no keys, exactly one instance):
- class OnlyOne {
-     use Single;
- }
-
- // 2) Multiton (keyed, unlimited instances):
- class Many {
-     use Multi;
- }
-
- // 3) Limited Multiton (keyed, bounded by a limit):
- class Few {
-     use Limit;
-     // default limit is 2; override with Few::setLimit(…)
- }
-
-Initialization
+Usage Examples
 --------------
 
-Instead of `new SomeClass()`, call `SomeClass::instance($key, $constraints)`:
+Defining classes::
 
-- **Singleton** (`Single`): `$key` is ignored (always one slot).
+    .. code-block:: php
+    namespace App;
 
-.. code-block:: php
-$a = OnlyOne::instance();
-$b = OnlyOne::instance();
-// $a === $b
+    use Infocyph\InterMix\Fence\Single;
+    use Infocyph\InterMix\Fence\Multi;
+    use Infocyph\InterMix\Fence\Limit;
 
+    class Config {
+        use Single;
+    }
 
-* **Multiton** (`Multi`): `$key` can be any string; each distinct key gets its own instance.
+    class Connection {
+        use Multi;
+    }
 
-.. code-block:: php
-  $x = Many::instance('alpha');
-  $y = Many::instance('beta');
-  // $x !== $y
-  // Re‐calling Many::instance('alpha') yields the same $x.
+    class ReportCache {
+        use Limit;
+    }
 
+Creating and inspecting instances::
 
-* **Limited Multiton** (`Limit`): Behaves like `Multi`, but enforces a maximum count.
+    .. code-block:: php
+    # SINGLETON:
+    $cfgA = Config::instance();       # new Config
+    $cfgB = Config::instance();       # same object as $cfgA
+    Config::hasInstance();            # true
+    Config::countInstances();         # 1
+    Config::getKeys();                # ["__single"]
+    Config::clearInstances();         # resets so next instance() is new
 
-.. code-block:: php
-  // By default, FENCE_LIMIT = 2
-  Few::instance('red');
-  Few::instance('blue');
-  // Few::instance('green') ⇒ throws LimitExceededException
+    # MULTITON:
+    $conn1 = Connection::instance("db1");
+    $conn2 = Connection::instance("db2");
+    $conn3 = Connection::instance("db1");  # returns same as $conn1
+    Connection::countInstances();          # 2
+    Connection::getKeys();                 # ["db1","db2"]
+    Connection::hasInstance("db3");        # false
+    Connection::clearInstances()
 
+    # LIMITED MULTITON:
+    ReportCache::instance("rA");
+    ReportCache::instance("rB");
+    # Next line throws LimitExceededException (limit=2 by default):
+    ReportCache::instance("rC");
 
-## Applying Requirements
+    # Change limit to 3:
+    ReportCache::setLimit(3);
+    ReportCache::instance("rC");           # now allowed
+    ReportCache::countInstances();         # 3
 
-You can optionally supply an array of requirements:
+Applying requirements::
 
-.. code-block:: php
+    .. code-block:: php
+    # Suppose you need 'curl' and 'mbstring' extensions and 'PDO' class:
+    try:
+        $db = Connection::instance("main", [
+            'extensions' => ['curl','mbstring'],
+            'classes'    => ['PDO'],
+        ]);
+    catch RequirementException as $e:
+        echo $e->getMessage();
+    end
+    # If any extension/class is missing → RequirementException thrown earlier.
 
-use Infocyph\InterMix\Fence\Single;
-use Infocyph\InterMix\Exceptions\RequirementException;
+Best Practices
+--------------
 
-class OnlyOne {
-use Single;
-}
-
-try {
-// Require 'curl' extension and PDO class before instantiating:
-\$obj = OnlyOne::instance(
-key: null,
-constraints: \[
-'extensions' => \['curl', 'mbstring'],
-'classes'    => \['PDO', 'DateTime'],
-]
-);
-} catch (RequirementException \$e) {
-// e.g. "Requirements not met: Extensions not loaded: mbstring; Classes not found: PDO"
-echo \$e->getMessage();
-}
-
-
-If any specified extension is not loaded, or any specified class is not declared,
-`RequirementException` is thrown.  Passing `null` or omitting `$constraints` bypasses checks.
-
-## Instance Introspection & Management
-
-Once you have a class using one of the Fence traits, you can inspect or adjust
-the instance pool at any time:
-
-.. code-block:: php
-
-// For a Limited class (Few), temporarily increase limit:
-Few::setLimit(5);
-
-// Check if a particular key exists:
-if (Few::hasInstance('red')) {
-// … do something
-}
-
-// How many total instances are active?
-\$count = Few::countInstances();
-
-// List all active instances (key ⇒ object)
-\$all = Many::getInstances();
-
-// Just their keys
-\$keys = Many::getKeys();
-
-// Remove all instances (useful in unit tests)
-Many::clearInstances();
-
-// For a Singleton:
-OnlyOne::hasInstance();   // true/false
-OnlyOne::clearInstances(); // after this, instance() will create a fresh object
-
-Limit Override (for `Limit`-wrapped classes)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-By default, a class using `Limit` has:
-
-* `public const FENCE_KEYED = true;`
-* `public const FENCE_LIMIT = 2;`
-
-You can call `setLimit($n)` to raise (or lower) the maximum number of instances:
-
-.. code-block:: php
-
-Few::setLimit(10);
-Few::instance('A');
-// … up to 10 distinct keys without exception.
-
-
-## Putting It All Together
-
-1. **Choose the behavior you need**
-
-   * `Single` – exactly one instance, ignore `$key`.
-   * `Multi` – unlimited, keyed instances.
-   * `Limit` – keyed instances, but enforce a finite limit (default 2).
-
-2. **Write your class**
-
-   ```php
-   use Infocyph\InterMix\Fence\Limit;
-
-   class CacheService {
-       use Limit;
-       // By default, up to 2 distinct CacheService::instance('A'), instance('B').
-   }
-   ```
-
-3. **Instantiate (and enforce requirements)**
-
-   ```php
-   try {
-       // Require the ‘json’ extension and PDO class before instantiating:
-       $svc = CacheService::instance('main', ['extensions'=>['json'], 'classes'=>['PDO']]);
-   } catch (\Infocyph\InterMix\Exceptions\RequirementException $e) {
-       // Handle missing dependencies…
-   } catch (\Infocyph\InterMix\Exceptions\LimitExceededException $e) {
-       // Too many instances…
-   }
-   ```
-
-4. **Inspect & adjust**
-
-   ```php
-   // Check if 'main' already exists:
-   if (CacheService::hasInstance('main')) { … }
-
-   // How many active instances?
-   $count = CacheService::countInstances();
-
-   // Get all instances:
-   $all = CacheService::getInstances(); // [ 'main' => CacheService-object, … ]
-
-   // Clear them (e.g. in tearDown of your unit tests):
-   CacheService::clearInstances();
-
-   // If you need to raise the limit from 2 to 5 at runtime:
-   CacheService::setLimit(5);
-   ```
+* **Always call `::instance()`** instead of `new`.
+* If your class must remain a singleton, use `Single`.
+* If you need per‐key instances, use `Multi`.
+* If you want to cap how many objects can coexist, use `Limit`.
+* To enforce startup requirements, pass a constraints array to `::instance()` and catch RequirementException.
