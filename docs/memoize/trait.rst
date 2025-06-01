@@ -5,30 +5,30 @@ MemoizeTrait
 ==================
 
 Sometimes you want per‐instance memoization, but you do not need or want the
-global `Memoizer`.  In that case, you can use `Infocyph\InterMix\Memoize\MemoizeTrait`
-in any class.  It stores results in a **private array** on the object itself, so
+global ``Memoizer``. In that case, you can use ``Infocyph\InterMix\Memoize\MemoizeTrait``
+in any class. It stores results in a **private array** on the object itself, so
 when the object is destroyed, its cache goes away.
 
 Trait API
 ---------
 
-.. py:trait:: MemoizeTrait
+.. php:trait:: MemoizeTrait
 
    **Protected methods:**
 
-   .. py:method:: mixed memoize(string $key, callable $producer)
+   .. php:method:: mixed memoize(string $key, callable $producer)
 
-      - Check if `$this->__memo[$key]` already exists.
+      - Check if ``$this->__memo[$key]`` already exists.
         - If yes, return it (cache hit).
-        - If no, invoke `$producer()`, store the result under `$key`, and return it (cache miss).
+        - If no, invoke ``$producer()``, store the result under ``$key``, and return it (cache miss).
 
-      - `$key` is typically something like `__METHOD__` (a unique string).
-      - `$producer` is a zero‐argument closure that returns whatever you want cached.
+      - ``$key`` is typically something like ``__METHOD__`` (a unique string).
+      - ``$producer`` is a zero‐argument closure that returns whatever you want cached.
 
-   .. py:method:: void memoizeClear(?string $key = null)
+   .. php:method:: void memoizeClear(?string $key = null)
 
-      - If `$key` is `null`, removes **all** memoized entries (`$this->__memo = []`).
-      - If `$key` is provided, only unsets `$this->__memo[$key]` if it exists.
+      - If ``$key`` is ``null``, removes **all** memoized entries (``$this->__memo = []``).
+      - If ``$key`` is provided, only unsets ``$this->__memo[$key]`` if it exists.
 
 Usage Example
 -------------
@@ -80,7 +80,7 @@ Example Scenario
 Key Points
 ~~~~~~~~~~
 
-- The cache is strictly **per‐object**.  Two different `Repo` instances have separate caches.
-- The cached value is stored in `$this->__memo[$key]`.  You choose a unique `$key` (often `__METHOD__`).
-- If you want to clear one entry, call `memoizeClear(__METHOD__)`.  Otherwise pass `null` to wipe all.
-- No external dependencies—uses only a plain PHP array on `$this`.
+- The cache is strictly **per‐object**. Two different ``Repo`` instances have separate caches.
+- The cached value is stored in ``$this->__memo[$key]``. You choose a unique ``$key`` (often ``__METHOD__``).
+- If you want to clear one entry, call ``memoizeClear(__METHOD__)``. Otherwise pass ``null`` to wipe all.
+- No external dependencies—uses only a plain PHP array on ``$this``.

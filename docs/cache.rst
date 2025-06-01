@@ -25,6 +25,17 @@ It provides:
 * **Iteration** (`foreach ($cache->getItemsIterator() as $k => $v)`)
 * Automatic **serialization** of closures, resources, and arbitrary PHP values
 
+.. toctree::
+    :titlesonly:
+    :hidden:
+
+    adapters/file
+    adapters/apcu
+    adapters/memcached
+    adapters/redis
+    adapters/sqlite
+    adapters/serialization
+
 Quick Start
 ===========
 
@@ -118,9 +129,9 @@ Magic props & ArrayAccess & Countable:
 
 Optional:
 
-* - `setNamespaceAndDirectory(string $namespace, string|null $dir)`
- - Only supported if the adapter implements it (FileCacheAdapter is the primary one).
- - Allows changing namespace and/or storage location at runtime.
+- `setNamespaceAndDirectory(string $namespace, string|null $dir)`
+- Only supported if the adapter implements it (FileCacheAdapter is the primary one).
+- Allows changing namespace and/or storage location at runtime.
 
 Why use “getItems”?
 -------------------
@@ -130,15 +141,3 @@ in **one** round-trip—rather than doing **N** separate `getItem()` calls. This
 significantly improves performance when talking to remote stores (Redis,
 Memcached, SQLite). The facade automatically detects `method_exists($adapter, 'multiFetch')`
 and uses it if available.
-
-.. toctree::
-    :maxdepth: 1
-    :titlesonly:
-    :hidden:
-
-    adapters/file
-    adapters/apcu
-    adapters/memcached
-    adapters/redis
-    adapters/sqlite
-    adapters/serialization
