@@ -1,186 +1,176 @@
 .. _remix.conditionable-tappable:
 
-==================================
+=========================================
 Conditionable & Tappable Trait
-==================================
+=========================================
 
-`Infocyph\InterMix\Remix\ConditionableTappable` bundles three very handy
-“fluent helpers” into a single trait:
+The ``ConditionableTappable`` trait bundles three very handy fluent helpers into a single utility:
 
-  1. **when()**   – Run a callback only if a condition is *truthy*.
-  2. **unless()** – Run a callback only if a condition is *falsy*.
-  3. **tap()**    – “Peek” into an object chain without breaking the chain.
+1. **when()** – Run a callback only if a condition is *truthy*.
+2. **unless()** – Run a callback only if a condition is *falsy*.
+3. **tap()** – “Peek” into an object chain without breaking the chain.
 
-By including this single trait, any class gains these three methods.  They are
-modeled after Laravel’s exact API, but you pay *zero* cost unless you call
-them.
+By including this single trait, any class gains these three methods. They are modeled after Laravel’s API, but incur no overhead unless used.
 
 Why use it?
------------
+===========
 
-- **Fluent conditionals**
-  Instead of wrapping entire code blocks in `if ($x) { … } else { … }`, you
-  can chain:
+**Fluent conditionals**
 
-  ```php
-  $order->when($order->total > 100, fn($o) => $o->applyDiscount());
-````
+Instead of wrapping code in::
 
-* **Inverse fluency**
-  The companion `unless()` allows “if not” without confusion:
+    if ($x) {
+        ...
+    }
 
-  ```php
-  $user->unless($isGuest, fn($u) => $u->attachProfile($profile));
-  ```
+you can write::
 
-* **Tap into pipelines**
-  The `tap()` method is great when you want to inspect or log intermediate
-  state in a chain, but still return the original object:
+    $order->when($order->total > 100, fn($o) => $o->applyDiscount());
 
-  ```php
-  $cart
-      ->applyTax()
-      ->tap(fn($c) => logger()->debug("Cart total is “{$c->total}”"))
-      ->checkout();
-  ```
+**Inverse fluency**
 
-# Usage
+The companion ``unless()`` allows “if not” without confusion::
 
-Enable the trait on any class:
+    $user->unless($isGuest, fn($u) => $u->attachProfile($profile));
+
+**Tap into pipelines**
+
+The ``tap()`` method is helpful to inspect or log intermediate states in a chain::
+
+    $cart
+        ->applyTax()
+        ->tap(fn($c) => logger()->debug("Cart total is {$c->total}"))
+        ->checkout();
+
+Usage
+=====
+
+Enable the trait on any class::
+
+    namespace App;
+
+    use Infocyph\InterMix\Remix\ConditionableTappable;
+
+    class Order
+    {
+        use ConditionableTappable;
+
+        public float $total = 0.0;
+        public bool  $discounted = false;
+
+        public function applyDiscount(): static
+        {
+            $this->discounted = true;
+            $this->total -= 10.0;
+            return $this;
+        }
+    }
+
+when()
+======
 
 .. code-block:: php
 
-namespace App;
+    public function when(
+        mixed $value = null,
+        ?callable $callback = null,
+        ?callable $default = null
+    ): static|mixed
 
-use Infocyph\InterMix\Remix\ConditionableTappable;
+**Behavior:**
 
-class Order
-{
-use ConditionableTappable;
-
-```
-   public float $total = 0.0;
-   public bool  $discounted = false;
-
-   public function applyDiscount(): static
-   {
-       $this->discounted = true;
-       $this->total -= 10.0;
-       return $this;
-   }
-```
-
-}
-
-````
-
-### when()
-
-```php
-public function when(
-    mixed $value = null,
-    ?callable $callback = null,
-    ?callable $default = null
-): static|mixed
-````
-
-* **If called with no arguments**, it returns a `ConditionalProxy` that lets you
-  “capture the next property or method” as the Boolean condition. See below.
-* **If called with one argument `$value` only**, it returns a proxy on which
-  `$value` is the condition. You can then chain property/method checks.
-* **If called with `$value` + `$callback`**:
-
-  * If `$value` is truthy (or if `$value()` returns truthy when `$value` is a
-    `Closure`), it invokes `$callback($this, $value)` and returns the result
-    (or `$this` if the callback returns null).
-  * Otherwise, if a `$default` callback was provided, it invokes
-    `$default($this, $value)` and returns that (or `$this` if null).
-  * If neither applies, it simply returns `$this`.
+- **No arguments:** Returns a ``ConditionalProxy`` that captures the next property or method as the condition.
+- **One argument `$value`:** Returns a proxy using `$value` as the condition.
+- **With `$value` and `$callback`:**
+  - If `$value` is truthy (or `$value()` returns truthy), runs `$callback($this, $value)` and returns the result (or `$this` if null).
+  - Otherwise, if a `$default` is provided, runs `$default($this, $value)` and returns that (or `$this` if null).
+  - If neither applies, returns `$this`.
 
 **Example:**
 
-```php
-$order = new Order();
-$order->total = 150.0;
+.. code-block:: php
 
-// Only applies discount if total > 100
-$order->when($order->total > 100, fn($o) => $o->applyDiscount());
-// $order->discounted is now true
-```
+    $order = new Order();
+    $order->total = 150.0;
 
-### unless()
+    // Only applies discount if total > 100
+    $order->when($order->total > 100, fn($o) => $o->applyDiscount());
+    // $order->discounted is now true
 
-```php
-public function unless(
-    mixed $value = null,
-    ?callable $callback = null,
-    ?callable $default = null
-): static|mixed
-```
+unless()
+========
 
-Same signature as `when()`, but inverts the condition:
+.. code-block:: php
 
-* If `$value` is falsy (or `$value()` returns falsy), run `$callback($this, $value)`.
-* Else, if `$default` is provided, run `$default($this, $value)`.
-* Otherwise return `$this`.
+    public function unless(
+        mixed $value = null,
+        ?callable $callback = null,
+        ?callable $default = null
+    ): static|mixed
+
+**Behavior:**
+
+Same as ``when()``, but with inverted condition:
+
+- If `$value` is falsy (or `$value()` returns falsy), run `$callback($this, $value)`.
+- Else, if `$default` is provided, run `$default($this, $value)`.
+- Otherwise return `$this`.
 
 **Example:**
 
-```php
-$user = new User();
-$user->isGuest = false;
+.. code-block:: php
 
-$user->unless($user->isGuest, fn($u) => $u->attachProfile());
-// Because isGuest===false, attachProfile() runs.
-```
+    $user = new User();
+    $user->isGuest = false;
 
-### tap()
+    $user->unless($user->isGuest, fn($u) => $u->attachProfile());
+    // Because isGuest === false, attachProfile() runs.
 
-```php
-public function tap(?callable $callback = null): static|TapProxy
-```
+tap()
+=====
 
-* **With a `$callback`**: simply calls ` $callback($this)` and returns `$this`.
+.. code-block:: php
 
-  * Great for logging or debugging mid-chain.
+    public function tap(?callable $callback = null): static|TapProxy
 
-* **With no arguments**: returns a `TapProxy` wrapping `$this`.  Any method you
-  call on that proxy is “forwarded” to the target, but the proxy always returns
-  the *original* object itself at the end.
+**Behavior:**
+
+- **With `$callback` provided:** Executes ``$callback($this)`` and returns `$this`.
+- **With no arguments:** Returns a ``TapProxy``. Any method you call on it will run, but return the original object.
 
 **Examples:**
 
-```php
-// 1) Immediate peek + return
-$cart->tap(fn($c) => logger()->info("Cart total {$c->total}"))->checkout();
+.. code-block:: php
 
-// 2) Proxy style
-$cart
-    ->addItem($item1)
-    ->tap()         // returns TapProxy($cart)
-        ->log("just after addItem")
-        ->applyTax()
-    ->checkout();
-```
+    // Immediate callback and return
+    $cart->tap(fn($c) => logger()->info("Cart total {$c->total}"))->checkout();
 
-### Zero-argument proxy capture
+    // Proxy chaining
+    $cart
+        ->addItem($item1)
+        ->tap()         // returns TapProxy($cart)
+            ->log("after addItem")
+            ->applyTax()
+        ->checkout();
 
-When you call `when()` or `unless()` **with zero arguments**, you get a
-`ConditionalProxy` (not the original object).  The proxy waits to “capture”
-the next property or method invocation as the condition. Example:
+Zero-argument Proxy Capture
+===========================
 
-```php
-$user = new User();
-$user->active = true;
+Calling ``when()`` or ``unless()`` with zero arguments returns a ``ConditionalProxy``. This proxy “captures” the next method or property to determine whether the condition is truthy or falsy.
 
-// Because ->active is read, condition = true, so ->sendNewsletter() runs.
-$user->when()->active->activate();
+.. code-block:: php
 
-// If that property or method returns false, the chain short-circuits
-$user->when()->isActive()->status = 'OK';
-// Here isActive() is false, so “status” is not set.
-```
+    $user = new User();
+    $user->active = true;
 
-Internally, `ConditionalProxy` uses PHP magic (`__get`, `__call`) to check
-“have I already captured a condition?” and either evaluate the callback or
-return `$this`.
+    // Since ->active is truthy, activate() runs
+    $user->when()->active->activate();
+
+    // Suppose isActive() returns false
+    $user->when()->isActive()->status = 'OK';
+    // Because isActive() is false, status is not set.
+
+Internals
+=========
+
+The ``ConditionalProxy`` uses PHP magic methods ``__get()`` and ``__call()`` to intercept the first interaction and then forward or suppress behavior based on the evaluated condition.

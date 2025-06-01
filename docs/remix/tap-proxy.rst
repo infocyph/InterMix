@@ -1,66 +1,69 @@
 .. _remix.tap-proxy:
 
 ========================
-Tap Proxy (`TapProxy`)
+Tap Proxy (``TapProxy``)
 ========================
 
-`Infocyph\InterMix\Remix\TapProxy` is the “engine” behind the zero‐argument
-`tap()` call.  Whenever you write:
+``Infocyph\InterMix\Remix\TapProxy`` is the engine behind the zero‐argument
+``tap()`` call. Whenever you write:
 
 .. code-block:: php
 
    $someObject->tap()->foo()->bar()->baz();
 
-this actually creates a `TapProxy($someObject)`. Then each chained method
-(`foo()`, `bar()`, `baz()`) is invoked on the real target, **but the proxy
-always returns the original target** (not the proxy). That means your chain
-never breaks, and you never have to assign the result manually.
+this actually creates a ``TapProxy($someObject)``. Then each chained method
+(``foo()``, ``bar()``, ``baz()``) is invoked on the real target, **but the proxy
+always returns the original target** (not the proxy itself). That means your
+chain never breaks, and you never have to assign the result manually.
 
-**Class definition:**
+Class Definition
+================
 
-```php
-namespace Infocyph\InterMix\Remix;
+.. code-block:: php
 
-class TapProxy
-{
-    public function __construct(public mixed $target) {}
+   namespace Infocyph\InterMix\Remix;
 
-    public function __call(string $method, array $parameters)
-    {
-        // Forward the method call to the real object...
-        $this->target->{$method}(...$parameters);
-        // …then return the original object for further chaining
-        return $this->target;
-    }
-}
-````
+   class TapProxy
+   {
+       public function __construct(public mixed $target) {}
 
-**Global helper function `tap()`:**
+       public function __call(string $method, array $parameters)
+       {
+           // Forward the method call to the real object...
+           $this->target->{$method}(...$parameters);
+           // …then return the original object for further chaining
+           return $this->target;
+       }
+   }
 
-```php
-if (!function_exists('tap')) {
-    function tap(mixed $value, ?callable $callback = null): mixed
-    {
-        if (is_null($callback)) {
-            // No callback? Return a TapProxy to let you chain methods.
-            return new TapProxy($value);
-        }
-        // With callback: invoke it and then return the original value.
-        $callback($value);
-        return $value;
-    }
-}
-```
+Global Helper Function ``tap()``
+================================
 
-**Usage examples:**
+.. code-block:: php
 
-```php
-// 1) With a callback: let me “observe” $user and still return $user.
-$user = tap($user, fn($u) => logger()->info("User id={$u->id}"));
+   if (!function_exists('tap')) {
+       function tap(mixed $value, ?callable $callback = null): mixed
+       {
+           if (is_null($callback)) {
+               // No callback? Return a TapProxy to let you chain methods.
+               return new TapProxy($value);
+           }
+           // With callback: invoke it and then return the original value.
+           $callback($value);
+           return $value;
+       }
+   }
 
-// 2) Proxy method chaining: call methods but keep $user at end.
-tap($user)
-    ->setName('Alice')
-    ->activate()
-    ->sendWelcomeEmail();
-```
+Usage Examples
+==============
+
+.. code-block:: php
+
+   // 1) With a callback: let me “observe” $user and still return $user.
+   $user = tap($user, fn($u) => logger()->info("User id={$u->id}"));
+
+   // 2) Proxy method chaining: call methods but keep $user at end.
+   tap($user)
+       ->setName('Alice')
+       ->activate()
+       ->sendWelcomeEmail();

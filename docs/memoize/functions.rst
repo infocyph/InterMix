@@ -5,37 +5,43 @@ Global Memoization API
 ========================
 
 Memoization is the process of caching the results of expensive function calls so that
-subsequent calls with the same arguments return immediately from cache.  In this section,
-we expose **two** global helper functions—`memoize()` and `remember()`—that rely on a
-shared singleton `Memoizer`.  The cache lives for the duration of the PHP process (or until
+subsequent calls with the same arguments return immediately from cache. In this section,
+we expose **two** global helper functions—``memoize()`` and ``remember()``—that rely on a
+shared singleton ``Memoizer``. The cache lives for the duration of the PHP process (or until
 you explicitly clear it).
 
-These functions are declared in `Infocyph\InterMix\Memoize\functions.php` and rely on
-the `Infocyph\InterMix\Memoize\Memoizer` class under the hood.  They throw
-`InvalidArgumentException` when misused.
+These functions are declared in ``Infocyph\InterMix\Memoize\functions.php`` and rely on
+the ``Infocyph\InterMix\Memoize\Memoizer`` class under the hood. They throw
+``InvalidArgumentException`` when misused.
 
 Functions
 ---------
 
-.. py:function:: mixed memoize(?callable $fn = null, array $params = []): mixed
+.. php:function:: mixed memoize(?callable $fn = null, array $params = []): mixed
 
-   - **Behavior**
-     1. If called with **no** arguments, returns the shared `Memoizer` instance.
-     2. If `$fn` is provided but not `null`, it computes a unique **signature** for that callable
-        (via `ReflectionResource::getSignature()`) and either returns a cached result (cache hit)
-        or invokes `$fn(...$params)`, stores the return value in the process‐local cache (cache miss),
+   **Behavior**
+
+   1. If called with **no** arguments, returns the shared ``Memoizer`` instance.
+   2. If ``$fn`` is provided and not ``null``, it computes a unique **signature** for that callable
+      (via ``ReflectionResource::getSignature()``) and either:
+
+      - returns a cached result (cache hit), or
+      - invokes ``$fn(...$params)``, stores the return value in the process‐local cache (cache miss),
         and returns it.
 
-   - **Signature generation**
-     Every callable (closure, function name, object method, etc.) is assigned a deterministic string
-     signature by reflecting on its code/location.  That signature is used as the cache key.
+   **Signature generation**
 
-   - **Return value**
-     - When called with no arguments: returns `Memoizer::instance()`.
-     - When `$fn` is provided: returns the callable’s return value (either cached or newly computed).
+   Every callable (closure, function name, object method, etc.) is assigned a deterministic string
+   signature by reflecting on its code/location. That signature is used as the cache key.
 
-   - **Exceptions**
-     - Throws `ReflectionException` if introspecting the callable fails.
+   **Return value**
+
+   - When called with no arguments: returns ``Memoizer::instance()``.
+   - When ``$fn`` is provided: returns the callable’s return value (either cached or newly computed).
+
+   **Exceptions**
+
+   - Throws ``ReflectionException`` if introspecting the callable fails.
 
    **Example:**
 
@@ -59,24 +65,28 @@ Functions
       $stats = memoize()->stats();
       // e.g. ['hits' => 1, 'misses' => 1, 'total' => 2]
 
-.. py:function:: mixed remember(?object $obj = null, ?callable $fn = null, array $params = []): mixed
+.. php:function:: mixed remember(?object $obj = null, ?callable $fn = null, array $params = []): mixed
 
-   - **Behavior**
-     1. If called with **no** arguments, returns the same shared `Memoizer` instance.
-     2. If `$obj` is provided but `$fn` is `null`, throws `InvalidArgumentException`.
-     3. If both `$obj` and `$fn` are provided:
-        - Computes a signature for `$fn` (using `ReflectionResource::getSignature()`).
-        - Looks up the cache bucket for that particular object instance (stored in a `WeakMap`).
-        - If a cached value exists for that signature under `$obj`, returns it (hit).
-        - Otherwise, invokes `$fn(...$params)`, stores the result in this object’s bucket, and returns it (miss).
+   **Behavior**
 
-   - **Return value**
-     - When called with no arguments: returns `Memoizer::instance()`.
-     - When `$obj` and `$fn` are provided: returns the callable’s return value, cached per‐object.
+   1. If called with **no** arguments, returns the same shared ``Memoizer`` instance.
+   2. If ``$obj`` is provided but ``$fn`` is ``null``, throws ``InvalidArgumentException``.
+   3. If both ``$obj`` and ``$fn`` are provided:
 
-   - **Exceptions**
-     - Throws `InvalidArgumentException` if `$obj` is non‐null and `$fn` is `null`.
-     - Throws `ReflectionException` if reflecting on `$fn` fails.
+      - Computes a signature for ``$fn`` (using ``ReflectionResource::getSignature()``).
+      - Looks up the cache bucket for that particular object instance (stored in a ``WeakMap``).
+      - If a cached value exists for that signature under ``$obj``, returns it (hit).
+      - Otherwise, invokes ``$fn(...$params)``, stores the result in this object’s bucket, and returns it (miss).
+
+   **Return value**
+
+   - When called with no arguments: returns ``Memoizer::instance()``.
+   - When ``$obj`` and ``$fn`` are provided: returns the callable’s return value, cached per‐object.
+
+   **Exceptions**
+
+   - Throws ``InvalidArgumentException`` if ``$obj`` is non‐null and ``$fn`` is ``null``.
+   - Throws ``ReflectionException`` if reflecting on ``$fn`` fails.
 
    **Example:**
 
@@ -106,4 +116,3 @@ Functions
       memoize()->flush();
 
       // After this, every new memoize()/remember() call will be a cache miss.
-
