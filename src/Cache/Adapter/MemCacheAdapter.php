@@ -317,7 +317,7 @@ class MemCacheAdapter implements CacheItemPoolInterface, Countable
         $stats = $this->mc->getStats('items');
 
         foreach ($stats as $server => $items) {
-            foreach ($items as $name => $_) {
+            foreach ($items as $name => $value) {
                 if (!preg_match('/items:(\d+):number/', (string) $name, $m)) {
                     continue;
                 }
