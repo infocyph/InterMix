@@ -9,11 +9,6 @@ use Infocyph\InterMix\Fence\Single;
 use ReflectionException;
 use WeakMap;
 
-/**
- * A singleton that provides:
- *  - global memoization (per signature)
- *  - object-scoped memoization (per-instance + signature)
- */
 final class Memoizer
 {
     use Single;

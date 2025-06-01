@@ -4,9 +4,9 @@
 Remix – Fluent PHP Helpers
 ===========================
 
-`Infocyph\InterMix\Remix` is a small collection of *opt-in* traits,
-proxies and global helper functions that add ergonomic, Laravel-style
-fluency to any PHP code-base—without pulling the whole framework.
+`Infocyph\InterMix\Remix` is a small collection of *opt-in* traits, proxies, and
+global helper functions that add fluency to any PHP codebase. Each component is purely “opt-in.”
+You pick and choose only what you need.
 
 .. toctree::
    :maxdepth: 1

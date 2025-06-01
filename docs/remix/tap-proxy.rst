@@ -4,21 +4,63 @@
 Tap Proxy (`TapProxy`)
 ========================
 
-`Infocyph\InterMix\Remix\TapProxy` underpins ``tap()`` when it is invoked
-*without* a callback:
+`Infocyph\InterMix\Remix\TapProxy` is the “engine” behind the zero‐argument
+`tap()` call.  Whenever you write:
 
 .. code-block:: php
 
-   tap($user)
-       ->updateLastSeen()
-       ->notify('Welcome back!');
-   // returns the original $user instance
+   $someObject->tap()->foo()->bar()->baz();
 
-Any method you call on the proxy is forwarded to the original target,
-and the proxy then yields **the target again**, keeping chains alive.
+this actually creates a `TapProxy($someObject)`. Then each chained method
+(`foo()`, `bar()`, `baz()`) is invoked on the real target, **but the proxy
+always returns the original target** (not the proxy). That means your chain
+never breaks, and you never have to assign the result manually.
 
-This global helper is defined in ``Remix\functions.php``:
+**Class definition:**
 
-.. code-block:: php
+```php
+namespace Infocyph\InterMix\Remix;
 
-   function tap(mixed $value, ?callable $cb = null): mixed
+class TapProxy
+{
+    public function __construct(public mixed $target) {}
+
+    public function __call(string $method, array $parameters)
+    {
+        // Forward the method call to the real object...
+        $this->target->{$method}(...$parameters);
+        // …then return the original object for further chaining
+        return $this->target;
+    }
+}
+````
+
+**Global helper function `tap()`:**
+
+```php
+if (!function_exists('tap')) {
+    function tap(mixed $value, ?callable $callback = null): mixed
+    {
+        if (is_null($callback)) {
+            // No callback? Return a TapProxy to let you chain methods.
+            return new TapProxy($value);
+        }
+        // With callback: invoke it and then return the original value.
+        $callback($value);
+        return $value;
+    }
+}
+```
+
+**Usage examples:**
+
+```php
+// 1) With a callback: let me “observe” $user and still return $user.
+$user = tap($user, fn($u) => logger()->info("User id={$u->id}"));
+
+// 2) Proxy method chaining: call methods but keep $user at end.
+tap($user)
+    ->setName('Alice')
+    ->activate()
+    ->sendWelcomeEmail();
+```
