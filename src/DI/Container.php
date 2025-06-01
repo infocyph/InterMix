@@ -19,14 +19,6 @@ use InvalidArgumentException;
 use Psr\Container\ContainerInterface;
 use ReflectionException;
 
-/**
- * Main Container class (implements PSR-11).
- * Incorporates:
- *   - environment-based logic (through Repository)
- *   - debug toggles
- *   - optional lazy loading
- *   - concurrency safety (via ReflectionResource, if enabled)
- */
 class Container implements ContainerInterface
 {
     /**
@@ -66,7 +58,7 @@ class Container implements ContainerInterface
      *                               Defaults to 'default'.
      * @throws ContainerException
      */
-    public function __construct(private readonly string $instanceAlias = 'default')
+    public function __construct(private readonly string $instanceAlias = 'intermix')
     {
         self::$instances[$this->instanceAlias] ??= $this;
         $this->repository = new Repository();

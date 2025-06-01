@@ -25,7 +25,6 @@ use Infocyph\InterMix\Tests\Fixture\ServiceB;
 use Infocyph\InterMix\Tests\Fixture\TestLoggerStorage;
 use Infocyph\InterMix\Tests\Fixture\UserService;
 
-use function Infocyph\InterMix\container;
 
 // -------------------------------------------------------------------------
 //   HELPER: For clarity, we define a "fresh container()" in each test or

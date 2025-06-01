@@ -1,38 +1,21 @@
 <?php
 
-namespace Infocyph\InterMix\Fence;
+// src/Fence/Single.php
+declare(strict_types=1);
 
-use Exception;
+namespace Infocyph\InterMix\Fence;
 
 trait Single
 {
-    use Common;
-
-    protected static ?self $instance = null;
+    use Fence;
 
     /**
-     * Creates and returns the singleton instance of the class.
-     *
-     * @param  array|null  $constraints  Constraints for instance creation.
-     *
-     * @throws Exception
+     * Always singleton (ignore key).
      */
-    final public static function instance(?array $constraints = null): static
-    {
-        static::checkRequirements($constraints);
-
-        if (static::$instance === null) {
-            static::$instance = new static();
-        }
-
-        return static::$instance;
-    }
+    public const FENCE_KEYED = false;
 
     /**
-     * Clears the current instance.
+     * Only one instance allowed.
      */
-    final public static function clearInstance(): void
-    {
-        static::$instance = null;
-    }
+    public const FENCE_LIMIT = 1;
 }

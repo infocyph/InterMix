@@ -5,22 +5,16 @@ namespace Infocyph\InterMix\Remix;
 class ConditionalProxy
 {
     /**
-     * The evaluated condition result.
-     *
      * @var bool|null
      */
     protected ?bool $condition = null;
 
     /**
-     * Whether a condition has been set.
-     *
      * @var bool
      */
     protected bool $hasCondition = false;
 
     /**
-     * Whether to negate the first captured condition.
-     *
      * @var bool
      */
     protected bool $negateConditionOnCapture = false;
@@ -28,14 +22,11 @@ class ConditionalProxy
     /**
      * Create a new ConditionalProxy instance.
      *
-     * @param  mixed  $target
+     * @param mixed $target
      * @return void
      */
     public function __construct(
-        /**
-         * The target object being conditionally operated on.
-         */
-        protected $target
+        protected mixed $target,
     ) {
     }
 
@@ -74,9 +65,9 @@ class ConditionalProxy
      */
     public function __get(string $key)
     {
-        if (! $this->hasCondition) {
+        if (!$this->hasCondition) {
             $condition = $this->target->{$key};
-            return $this->condition($this->negateConditionOnCapture ? ! $condition : $condition);
+            return $this->condition($this->negateConditionOnCapture ? !$condition : (bool)$condition);
         }
         return $this->condition ? $this->target->{$key} : $this->target;
     }
@@ -93,10 +84,49 @@ class ConditionalProxy
      */
     public function __call(string $method, array $parameters)
     {
-        if (! $this->hasCondition) {
+        if (!$this->hasCondition) {
             $condition = $this->target->{$method}(...$parameters);
-            return $this->condition($this->negateConditionOnCapture ? ! $condition : $condition);
+            return $this->condition($this->negateConditionOnCapture ? !$condition : (bool)$condition);
         }
         return $this->condition ? $this->target->{$method}(...$parameters) : $this->target;
+    }
+
+    /**
+     * Sets a property on the target if a condition has been set and is truthy.
+     *
+     * @param string $key
+     * @param mixed $value
+     * @return void
+     */
+    public function __set(string $key, mixed $value): void
+    {
+        if ($this->hasCondition && $this->condition) {
+            $this->target->{$key} = $value;
+        }
+    }
+
+
+    /**
+     * No-op to prevent dynamic deletes.
+     *
+     * Prevents dynamic properties from being unset when a condition is set and true.
+     *
+     * @param string $key
+     * @return void
+     */
+    public function __unset(string $key): void
+    {
+        // no-op to prevent dynamic deletes
+    }
+
+    /**
+     * Checks if a property exists on the target when a condition is set and true.
+     *
+     * @param string $key
+     * @return bool
+     */
+    public function __isset(string $key): bool
+    {
+        return $this->hasCondition && $this->condition && isset($this->target->{$key});
     }
 }

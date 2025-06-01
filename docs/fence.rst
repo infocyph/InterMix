@@ -1,135 +1,143 @@
-.. _container:
+.. _fence:
 
 ==========================================
 Fence (Class Initialization Barrier)
 ==========================================
 
-**Fence** is a collection of traits that, when included and invoked through specific methods, apply barriers and constraints to class initialization.
-
-.. note::
-   Fence does not restrict `new` initialization directly. Instead, it provides controlled initialization methods. Check the examples below for details.
+The `Infocyph\InterMix\Fence` package delivers a **single** core trait,
+`Fence`, plus three thin wrappers—`Single`, `Multi`, and `Limit`—to
+give you fine-grained control over how classes instantiate:
 
 Key Features
 ------------
 
-1. **Singleton (`Single`):** Ensures only one instance of the class is created.
-2. **Multiton (`Multi`):** Allows multiple instances, each identified by a unique key.
-3. **Limited Multiton (`Limit`):** Like `Multi`, but restricts the total number of instances.
-4. **Requirement Checking (`Common`):** Ensures required PHP extensions or classes are available before creating an instance.
-5. **Instance Management:** Includes utility methods like `clearInstances` or `setLimit` for enhanced lifecycle management.
+- **Unified base (`Fence`)**
+  All of the logic—requirement checks, keyed vs. singleton behaviour,
+  and instance-count limits—lives in one place.
+- **Singleton (`Single`)**
+  `$keyed = false; $limit = 1` → exactly one instance ever.
+- **Multiton (`Multi`)**
+  `$keyed = true;  $limit = ∞` → keyed instances, unlimited count.
+- **Limited Multiton (`Limit`)**
+  `$keyed = true;  $limit = configurable` → keyed instances, bounded count.
+- **Requirement Checking**
+  Throw `RequirementException` if required PHP extensions or classes
+  are missing.
+- **Limit Enforcement**
+  Throw `LimitExceededException` when you exceed the `$limit`.
+- **Instance Inspection & Management**
+  Methods like `hasInstance()`, `countInstances()`, `getInstances()`,
+  `getKeys()`, `clearInstances()`, and `setLimit()` let you inspect
+  and control the pool.
 
---------------
+Exceptions
+----------
+
+- **`RequirementException`** — missing extensions or classes
+- **`LimitExceededException`** — tried to create too many instances
+- **`InvalidArgumentException`** — bad arguments to `setLimit()`
+
 Basic Usage
---------------
+-----------
+
+Define your classes using one of the three wrappers:
 
 .. code-block:: php
 
    use Infocyph\InterMix\Fence\Single;
-   use Infocyph\InterMix\Fence\Limit;
    use Infocyph\InterMix\Fence\Multi;
+   use Infocyph\InterMix\Fence\Limit;
 
-   class Singleton {
+   class OnlyOne {
        use Single;
    }
 
-   class Limiton {
-       use Limit;
-   }
-
-   class Multiton {
+   class Many {
        use Multi;
    }
---------------
+
+   class Few {
+       use Limit;
+       // default limit is 2; call Few::setLimit(5) to change
+   }
+
 Initialization Methods
---------------
+----------------------
 
-Instead of using `new`, you must initialize classes with specific methods provided by the traits.
+Instead of `new`, call `::instance()`:
 
 .. code-block:: php
 
-   // Singleton: Returns the same instance every time.
-   $sgi = Singleton::instance();
+   // Singleton: same object every time
+   $a = OnlyOne::instance();
+   $b = OnlyOne::instance();
+   // $a === $b
 
-   // Multiton: Returns an instance identified by a key. Same key returns the same instance.
-   $mgi = Multiton::instance('myInstance');
+   // Multiton: different per key
+   $x = Many::instance('x');
+   $y = Many::instance('y');
+   // $x !== $y
 
-   // Limiton: Works like Multiton but enforces a limit on the total number of instances.
-   $lgi = Limiton::instance('instanceName');
-   $lgi->setLimit(5); // Update the instance limit.
+   // Limited: up to N instances
+   Few::setLimit(3);
+   Few::instance('a');
+   Few::instance('b');
+   Few::instance('c');
+   // Few::instance('d') would throw LimitExceededException
 
---------------
 Applying Requirements
---------------
+---------------------
 
-The `instance` method in **Single**, **Multi**, and **Limit** accepts an optional parameter to define initialization requirements.
-
-.. code-block:: php
-
-   $sgi = Singleton::instance([
-       'extensions' => [ // Required PHP extensions.
-           'curl',
-           'mbstring',
-       ],
-       'classes' => [ // Required PHP classes (with namespace).
-           'Directory',
-           'IteratorIterator',
-       ],
-   ]);
-
-If the requirements are not met, an exception is thrown with a detailed message.
+You may pass an optional constraints array to `instance()`:
 
 .. code-block:: php
 
-   // Example Exception:
-   // Missing extensions: mbstring
-   // Missing classes: IteratorIterator
+   try:
+       $obj = OnlyOne::instance(key: null, constraints: [
+           'extensions' => ['curl','mbstring'],
+           'classes'    => ['PDO','DateTime'],
+       ]);
+   catch (RequirementException $e):
+       echo $e->getMessage();
+   endtry
 
---------------
-Logging
---------------
+Instance Inspection & Management
+--------------------------------
 
-Fence includes built-in support for logging constraint checks. This can be extended to use custom logging solutions.
-
-.. code-block:: php
-
-   // Example: Log a message during constraint validation.
-   Singleton::log('Validation started for Singleton initialization.');
-
---------------
-Instance Management
---------------
-
-- Clearing Instances
-
-Instances created through **Multi** and **Limit** can be cleared to reset the class state.
+Use the following public APIs to inspect or mutate your instance pool:
 
 .. code-block:: php
 
-   // Clear all Multiton instances.
-   Multiton::clearInstances();
+   // Has an instance for the given key?
+   Few::hasInstance('a');           // true
 
-   // Clear Singleton instance.
-   Singleton::clearInstance();
+   // How many instances exist?
+   Few::countInstances();           // e.g. 3
 
-- Retrieving Instances
+   // Get the raw array of instances
+   $all = Many::getInstances();
 
-You can retrieve all active instances created by **Multi**.
+   // Get just the keys
+   $keys = Many::getKeys();
 
-.. code-block:: php
+   // Remove all instances
+   Many::clearInstances();
 
-   $allInstances = Multiton::getInstances();
-   print_r($allInstances);
+   // Change the limit dynamically
+   Few::setLimit(10);
 
-- Updating Limits (for Limit Trait)
-
-You can dynamically adjust the instance creation limit.
-
-.. code-block:: php
-
-   Limiton::setLimit(10); // Set the limit to 10 instances.
+   // Check if singleton already created
+   OnlyOne::hasInstance();          // true/false
 
 Conclusion
 ----------
 
-The **Fence** traits provide a flexible and extensible way to manage class instantiation, enforce initialization
-constraints, and streamline instance management. By leveraging these traits, you can ensure stricter control over object creation in your application.
+By unifying your initialization logic into one core trait and three simple
+configuration wrappers, **Fence** gives you:
+
+- **Strict control** over how many objects can exist
+- **Safe startup** via extension/class requirement checks
+- **Easy introspection** of active instances
+
+All that without any extra base classes—just pull in the trait you need
+and use `::instance()` instead of `new`.

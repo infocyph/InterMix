@@ -13,7 +13,7 @@ trait ConditionableTappable
      * @param  (Closure($this): mixed)|mixed|null  $value    Condition value (or closure that returns it).
      * @param  callable|null  $callback  Callback to apply if condition is truthy.
      * @param  callable|null  $default   Callback to apply if condition is falsy.
-     * @return $this|mixed    Result of the callback when executed, or $this (fluently, if condition is falsy or no callback).
+     * @return static|mixed    Result of the callback when executed, or static (fluently, if condition is falsy or no callback).
      */
     public function when(mixed $value = null, ?callable $callback = null, ?callable $default = null)
     {
@@ -39,7 +39,7 @@ trait ConditionableTappable
      * @param  (Closure($this): mixed)|mixed|null  $value    Condition value (or closure that returns it).
      * @param  callable|null  $callback  Callback to apply if condition is falsy.
      * @param  callable|null  $default   Callback to apply if condition is truthy.
-     * @return $this|mixed    Result of the callback when executed, or $this.
+     * @return static|mixed    Result of the callback when executed, or $this.
      */
     public function unless(mixed $value = null, ?callable $callback = null, ?callable $default = null)
     {
@@ -66,7 +66,7 @@ trait ConditionableTappable
      * @param  callable|null  $callback  Callback to invoke with this instance.
      * @return $this|TapProxy  The original instance ($this) or a tap proxy if no callback was given.
      */
-    public function tap(?callable $callback = null)
+    public function tap(?callable $callback = null): TapProxy|static
     {
         if (is_null($callback)) {
             return new TapProxy($this);

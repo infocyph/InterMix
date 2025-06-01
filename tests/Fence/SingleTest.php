@@ -4,31 +4,23 @@ use Infocyph\InterMix\Fence\Single;
 class SingleTraitTest
 {
     use Single;
-    public static function resetInstances(): void
-    {
-        static::$instance = null;
-    }
-    public static function getInstance()
-    {
-        return static::$instance;
-    }
 }
 
 beforeEach(function () {
-    SingleTraitTest::resetInstances(); // Reset instances before each test = null; // Reset the singleton instance.
+    SingleTraitTest::clearInstances();
 });
 
 test('it creates only one instance', function () {
-    $instance1 = SingleTraitTest::instance();
-    $instance2 = SingleTraitTest::instance();
+    $i1 = SingleTraitTest::instance();
+    $i2 = SingleTraitTest::instance();
 
-    expect($instance1)->toBe($instance2)
-        ->and($instance1)->toBeInstanceOf(SingleTraitTest::class);
+    expect($i1)->toBe($i2)
+        ->and($i1)->toBeInstanceOf(SingleTraitTest::class);
 });
 
 test('it clears the singleton instance', function () {
     SingleTraitTest::instance();
-    SingleTraitTest::clearInstance();
+    SingleTraitTest::clearInstances();
 
-    expect(SingleTraitTest::getInstance())->toBeNull();
+    expect(SingleTraitTest::countInstances())->toBe(0);
 });
