@@ -4,28 +4,26 @@
 APCu Adapter
 =====================
 
-The **ApcuCacheAdapter** leverages PHP’s in-process APCu extension. Ideal for:
+The **ApcuCacheAdapter** uses PHP’s in-process APCu extension. Ideal for:
 
-* **Single‐server web applications** (shared memory across FPM workers)
-* **CLI scripts** (if `apc.enable_cli=1`)
+* **Single-server web applications** (shared memory across FPM workers)
+* **CLI scripts** (requires `apc.enable_cli=1`)
 
 Key Points
 ----------
 
-* **Namespacing**: every key is prefixed as `<namespace>:<key>`.
-* **multiFetch()** uses one `apcu_fetch(array $keys)` call (O(1) in number of round trips).
-* **TTL** is handled natively by APCu. Expired keys are purged lazily by PHP.
-* **Atomic-save** is best attemped by `apcu_cas`, but in practice, saving an entire serialized
-  blob is usually atomic enough in a single call (APCu is mutex‐protected internally).
+* **Namespace prefix**: every key is stored under `<namespace>:<key>`.
+* **multiFetch()** uses one `apcu_fetch(array $keys)` call (one round-trip).
+* **TTL** is honored natively by APCu; expired keys are purged lazily.
+* **Atomic-save** is best-effort via `apcu_cas`, but storing a serialized blob is generally atomic.
 
 Requirements
 ------------
 
-* `ext-apcu` must be installed and enabled
-* CLI usage requires `apc.enable_cli=1` (otherwise, FPM/web might work, but
-  your CLI tests will be skipped)
+* `ext-apcu` must be installed and enabled.
+* For CLI testing, `apc.enable_cli=1` must be set.
 
-Example
+Example:
 
 .. code-block:: php
 
@@ -38,20 +36,20 @@ Example
    // Retrieve or null if missing
    $n = $pool->get('dashboard_count');
 
-Bulk fetch:
+Bulk Fetch:
 
 .. code-block:: php
 
    $results = $pool->getItems(['a','b','c']);
-   // yields ApcuCacheItem instances; .isHit() tells you if it was present.
+   // Returns ApcuCacheItem instances; .isHit() tells you if each key was present.
 
-Note on `ValueSerializer`
--------------------------
+Note on ValueSerializer
+-----------------------
 
-APCu stores only strings; we wrap/unserialize via:
+APCu stores only strings. We wrap/unserialize via:
 
-1. `ValueSerializer::serialize($item)` → store as blob
-2. On fetch, `ValueSerializer::unserialize($blob)` → reconstruct a `CacheItem` object
+1. `ValueSerializer::serialize($item)` → store as string blob
+2. On fetch, `ValueSerializer::unserialize($blob)` → reconstruct the `ApcuCacheItem` object
 
-In other words, each stored APCu value is a serialized `ApcuCacheItem` array.
+In other words, each APCu entry is a serialized `ApcuCacheItem` containing key, value, hit, and expiration.
 

@@ -13,6 +13,7 @@ use Infocyph\InterMix\Cache\Cache;
 use Infocyph\InterMix\Cache\Item\RedisCacheItem;
 use Infocyph\InterMix\Serializer\ValueSerializer;
 use Infocyph\InterMix\Exceptions\CacheInvalidArgumentException;
+use Psr\Cache\InvalidArgumentException as Psr6InvalidArgumentException;
 
 /* ── skip whole file when Redis unavailable ───────────────────────── */
 if (!class_exists(Redis::class)) {
@@ -68,11 +69,31 @@ afterEach(function () {
     $this->cache->clear();
 });
 
-/* ── 1. convenience helpers ─────────────────────────────────────── */
+/* ── 1. convenience set()/get() ───────────────────────────────────── */
 test('Redis set()/get()', function () {
     expect($this->cache->get('none'))->toBeNull()
         ->and($this->cache->set('foo', 'bar'))->toBeTrue()
         ->and($this->cache->get('foo'))->toBe('bar');
+});
+
+/* ─── PSR-16 get($key, $default) ───────────────────────────────── */
+test('get returns default when key missing (redis)', function () {
+    expect($this->cache->get('nobody', 'dflt'))->toBe('dflt');
+
+    $val = $this->cache->get('dynamic', function (RedisCacheItem $item) {
+        $item->expiresAfter(1);
+        return 'xyz';
+    });
+    expect($val)->toBe('xyz');
+    expect($this->cache->get('dynamic'))->toBe('xyz');
+
+    sleep(2);
+    expect($this->cache->get('dynamic', 'again'))->toBe('again');
+});
+
+test('get throws for invalid key (redis)', function () {
+    expect(fn () => $this->cache->get('bad key', 'v'))
+        ->toThrow(CacheInvalidArgumentException::class);
 });
 
 /* ── 2. PSR-6 behaviour ─────────────────────────────────────────── */
@@ -131,7 +152,7 @@ test('stream resource round-trip (redis)', function () {
 /* ── 9. invalid key guard ───────────────────────────────────────── */
 test('invalid key throws (redis)', function () {
     expect(fn () => $this->cache->set('bad key', 'v'))
-        ->toThrow(CacheInvalidArgumentException::class);
+        ->toThrow(InvalidArgumentException::class);
 });
 
 /* ── 10. clear wipes namespace ----------------------------------- */

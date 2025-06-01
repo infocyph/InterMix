@@ -7,13 +7,22 @@ namespace Infocyph\InterMix\Cache;
 use ArrayAccess;
 use BadMethodCallException;
 use Countable;
+use DateInterval;
+use DateTime;
 use Infocyph\InterMix\Exceptions\CacheInvalidArgumentException;
 use Psr\Cache\CacheItemInterface;
 use Psr\Cache\CacheItemPoolInterface;
-use Psr\Cache\InvalidArgumentException;
+use Psr\Cache\InvalidArgumentException as Psr6InvalidArgumentException;
+use Psr\SimpleCache\CacheInterface as SimpleCacheInterface;
+use Psr\SimpleCache\InvalidArgumentException as SimpleCacheInvalidArgument;
 
-readonly class Cache implements
+/**
+ * @implements CacheItemPoolInterface<string, mixed>
+ * @implements SimpleCacheInterface<string, mixed>
+ */
+class Cache implements
     CacheItemPoolInterface,
+    SimpleCacheInterface,
     ArrayAccess,
     Countable
 {
@@ -22,17 +31,15 @@ readonly class Cache implements
      *
      * @param CacheItemPoolInterface $adapter Any PSR-6 cache pool.
      */
-    public function __construct(private CacheItemPoolInterface $adapter)
+    public function __construct(private readonly CacheItemPoolInterface $adapter)
     {
     }
-
 
     /**
      * Static factory for file-based cache.
      *
-     * @param string $namespace Cache prefix. Will be suffixed to each key.
-     * @param ?string $dir Directory to store cache files. If null, uses the system temporary directory.
-     *
+     * @param string      $namespace Cache prefix. Will be suffixed to each key.
+     * @param string|null $dir       Directory to store cache files (or null → sys temp dir).
      * @return static
      */
     public static function file(string $namespace = 'default', ?string $dir = null): self
@@ -40,12 +47,10 @@ readonly class Cache implements
         return new self(new Adapter\FileCacheAdapter($namespace, $dir));
     }
 
-
     /**
      * Static factory for APCu cache.
      *
      * @param string $namespace Cache prefix. Will be suffixed to each key.
-     *
      * @return static
      */
     public static function apcu(string $namespace = 'default'): self
@@ -56,16 +61,15 @@ readonly class Cache implements
     /**
      * Static factory for Memcached cache.
      *
-     * @param string $namespace Cache prefix.
-     * @param array $servers List of [host, port, weight] triples. Defaults to 127.0.0.1:11211.
-     * @param ?\Memcached $client Optional pre-configured Memcached instance.
-     *
-     * @return self
+     * @param string        $namespace Cache prefix.
+     * @param array<string[]> $servers   List of [host, port, weight] triples.
+     * @param \Memcached|null $client    Optional preconfigured Memcached instance.
+     * @return static
      */
     public static function memcache(
         string $namespace = 'default',
         array $servers = [['127.0.0.1', 11211, 0]],
-        ?\Memcached $client = null,
+        ?\Memcached $client = null
     ): self {
         return new self(new Adapter\MemCacheAdapter($namespace, $servers, $client));
     }
@@ -73,106 +77,89 @@ readonly class Cache implements
     /**
      * Static factory for SQLite cache.
      *
-     * @param string $namespace The namespace prefix for cache keys.
-     * @param string|null $file The file path for the SQLite database.
-     *     If `null`, the system temporary directory will be used.
-     * @return self An instance of Cache configured with a SQLite adapter.
+     * @param string      $namespace The namespace prefix for cache keys.
+     * @param string|null $file      The file path for the SQLite database (or null → sys temp).
+     * @return static
      */
-    public static function sqlite(
-        string $namespace = 'default',
-        ?string $file = null,
-    ): self {
+    public static function sqlite(string $namespace = 'default', ?string $file = null): self
+    {
         return new self(new Adapter\SqliteCacheAdapter($namespace, $file));
     }
 
     /**
      * Static factory for Redis cache.
      *
-     * @param string $namespace The namespace prefix for cache keys.
-     * @param string $dsn The Data Source Name for the Redis server.
-     * @param \Redis|null $client An optional pre-configured Redis client instance.
-     * @return self An instance of Cache configured with a Redis adapter.
+     * @param string       $namespace Cache prefix.
+     * @param string       $dsn       Redis DSN (e.g. "redis://127.0.0.1:6379").
+     * @param \Redis|null $client    Optional preconfigured Redis client.
+     * @return static
      */
     public static function redis(
         string $namespace = 'default',
         string $dsn = 'redis://127.0.0.1:6379',
-        ?\Redis $client = null,
+        ?\Redis $client = null
     ): self {
         return new self(new Adapter\RedisCacheAdapter($namespace, $dsn, $client));
     }
 
     /**
-     * Validates the format of a cache key.
+     * Validates a cache key per PSR-16 rules (and reuses for PSR-6).
      *
-     * Ensures the key is non-empty and consists only of
-     * alphanumeric characters, underscores, periods, and hyphens.
-     * Throws a CacheInvalidArgumentException if the key is invalid.
-     *
-     * @param string $key The cache key to validate.
-     *
-     * @throws CacheInvalidArgumentException If the key is invalid.
+     * @throws CacheInvalidArgumentException if the key is invalid.
      */
     private function validateKey(string $key): void
     {
+        // PSR-16 stipulates that keys must be strings that do not contain
+        // {}()/\: @ or control characters; we restrict further to A-Z, a-z, 0-9, _ . and -.
         if ($key === '' || !preg_match('/^[A-Za-z0-9_.\-]+$/', $key)) {
             throw new CacheInvalidArgumentException(
-                'Invalid cache key; allowed characters: A-Z, a-z, 0-9, _, ., -',
+                'Invalid cache key; allowed characters: A-Z, a-z, 0-9, _, ., -'
             );
         }
     }
 
     /**
-     * Retrieves a cache item by its unique key.
-     *
-     * This method validates the provided key and delegates the retrieval
-     * of the cache item to the underlying adapter. If the key is invalid,
-     * a CacheInvalidArgumentException is thrown.
-     *
-     * @param string $key The unique key of the cache item to retrieve.
-     * @return CacheItemInterface The cache item associated with the specified key.
-     * @throws CacheInvalidArgumentException|InvalidArgumentException If the key is invalid.
+     * Converts a PSR-16 TTL (int|DateInterval|null) into an integer number of seconds.
      */
+    private function normalizeTtl(mixed $ttl): ?int
+    {
+        if ($ttl === null) {
+            return null;
+        }
+
+        if (is_int($ttl)) {
+            return $ttl >= 0 ? $ttl : throw new CacheInvalidArgumentException('Negative TTL not allowed');
+        }
+
+        if ($ttl instanceof DateInterval) {
+            $now = new DateTime();
+            return max(0, $now->add($ttl)->getTimestamp() - (new DateTime())->getTimestamp());
+        }
+
+        throw new CacheInvalidArgumentException(sprintf(
+            'Invalid TTL type; expected null, int, or DateInterval, got %s',
+            get_debug_type($ttl)
+        ));
+    }
+
+    //
+    // ────────────────────────── PSR-6 METHODS ──────────────────────────
+    //
+
     public function getItem(string $key): CacheItemInterface
     {
         $this->validateKey($key);
         return $this->adapter->getItem($key);
     }
 
-    /**
-     * Retrieves multiple cache items as an iterator.
-     *
-     * This method fetches cache items corresponding to the provided keys
-     * and returns them as an iterable collection. If the keys array is empty,
-     * an empty iterable is returned.
-     *
-     * @param array $keys The keys of the cache items to retrieve.
-     * @return iterable An iterable collection of CacheItemInterface objects.
-     * @throws InvalidArgumentException If any of the keys are invalid.
-     */
-    public function getItemsIterator(array $keys = []): iterable
-    {
-        return $this->adapter->getItems($keys);
-    }
-
-    /**
-     * PSR-6 method to retrieve multiple items from the cache.
-     *
-     * Implementations may choose to use an adapter-specific method (e.g.
-     * `multiFetch`) if available, or fall back to calling `getItem` for each
-     * key.
-     *
-     * If the input array is empty, an empty iterator is returned.
-     *
-     * @param array $keys cache keys
-     * @return iterable an iterator over CacheItemInterface objects
-     * @throws InvalidArgumentException
-     */
     public function getItems(array $keys = []): iterable
     {
+        // If empty, return empty iterator
         if ($keys === []) {
             return new \EmptyIterator();
         }
 
+        // Attempt adapter-specific multiFetch
         if (method_exists($this->adapter, 'multiFetch')) {
             return $this->adapter->multiFetch($keys);
         }
@@ -184,144 +171,312 @@ readonly class Cache implements
         return $out;
     }
 
-    /**
-     * Checks if a cache item exists for the given key.
-     *
-     * This method validates the key format and delegates the existence check
-     * to the underlying adapter.
-     *
-     * @param string $key The key of the cache item to check.
-     * @return bool Returns true if the cache item exists, false otherwise.
-     * @throws CacheInvalidArgumentException|InvalidArgumentException if the key is invalid.
-     */
+    /** Alias for iteration-based access */
+    public function getItemsIterator(array $keys = []): iterable
+    {
+        return $this->getItems($keys);
+    }
+
     public function hasItem(string $key): bool
     {
         $this->validateKey($key);
         return $this->adapter->hasItem($key);
     }
 
-    /**
-     * Clears all cache items.
-     *
-     * This method delegates the clearing operation to the underlying adapter,
-     * which removes all items from the cache.
-     *
-     * @return bool Returns true if the cache was successfully cleared, false otherwise.
-     */
     public function clear(): bool
     {
         return $this->adapter->clear();
     }
 
-    /**
-     * Deletes a cache item by its key.
-     *
-     * Validates the key format and delegates the deletion to the underlying adapter.
-     *
-     * @param string $key The key of the cache item to delete.
-     *
-     * @return bool Returns true if the item was successfully deleted, false otherwise.
-     * @throws CacheInvalidArgumentException|InvalidArgumentException if the key is invalid.
-     */
     public function deleteItem(string $key): bool
     {
         $this->validateKey($key);
         return $this->adapter->deleteItem($key);
     }
 
-    /**
-     * Removes multiple cache items in a single operation.
-     *
-     * @param array $keys identifiers of the cache items to delete
-     *
-     * @return bool true on success; false if any of the items could not be deleted
-     * @throws InvalidArgumentException
-     */
     public function deleteItems(array $keys): bool
     {
+        foreach ($keys as $k) {
+            $this->validateKey((string)$k);
+        }
         return $this->adapter->deleteItems($keys);
     }
 
-    /**
-     * Saves a cache item.
-     *
-     * @param CacheItemInterface $item cache item to save
-     *
-     * @return bool true on success; false if the item could not be saved
-     */
     public function save(CacheItemInterface $item): bool
     {
         return $this->adapter->save($item);
     }
 
-    /**
-     * Defer saving of a cache item until commit() is explicitly called.
-     *
-     * @see commit()
-     *
-     * @param CacheItemInterface $item
-     *
-     * @return bool true on success; false if the item could not be deferred
-     */
     public function saveDeferred(CacheItemInterface $item): bool
     {
         return $this->adapter->saveDeferred($item);
     }
 
-    /**
-     * Commit any deferred cache items.
-     *
-     * @return bool true on success; false if any deferred item failed to commit
-     */
     public function commit(): bool
     {
         return $this->adapter->commit();
     }
 
+    //
+    // ────────────────────────── PSR-16 METHODS ──────────────────────────
+    //
 
     /**
-     * Retrieve a cache item by key.
+     * Fetches a value from the cache. If the key does not exist, returns $default.
      *
-     * If the underlying adapter has a dedicated get() method, it will be used.
-     * Otherwise, the getItem() method will be used to fetch the item, and its
-     * get() method will return the cached value.
-     *
-     * @param string $key cache key
-     *
-     * @return mixed the cached value, or null if not found
-     * @throws InvalidArgumentException
+     * @param string $key
+     * @param mixed  $default
+     * @return mixed
+     * @throws SimpleCacheInvalidArgument if the key is invalid
      */
-    public function get(string $key): mixed
+    public function get(string $key, mixed $default = null): mixed
     {
-        return method_exists($this->adapter, 'get')
-            ? $this->adapter->get($key)
-            : $this->getItem($key)->get();
-    }
+        $this->validateKey($key);
 
-    /**
-     * Sets a value in the cache with an optional time-to-live (TTL).
-     *
-     * If the underlying adapter supports a direct 'set' method, it will be used.
-     * Otherwise, the key-value pair is stored using a cache item, with the TTL
-     * specified if provided.
-     *
-     * @param string $key The key under which to store the value.
-     * @param mixed $value The value to be stored.
-     * @param int|null $ttl Optional. The time-to-live in seconds. If null, the item
-     *                      may persist indefinitely based on the adapter's behavior.
-     *
-     * @return bool Returns true if the operation was successful, false otherwise.
-     * @throws InvalidArgumentException
-     */
-    public function set(string $key, mixed $value, ?int $ttl = null): bool
-    {
-        if (method_exists($this->adapter, 'set')) {
-            return $this->adapter->set($key, $value, $ttl);
+        // If $default is a callable, do a PSR-6 “compute & save” on cache miss.
+        if (is_callable($default)) {
+            try {
+                // Fetch the PSR-6 item (may be a miss or a hit)
+                $item = $this->getItem($key);
+            } catch (Psr6InvalidArgumentException $e) {
+                throw new CacheInvalidArgumentException($e->getMessage(), 0, $e);
+            }
+
+            // If we already have it, just return
+            if ($item->isHit()) {
+                return $item->get();
+            }
+
+            // Otherwise, call the user’s callback, passing in the (empty) CacheItem
+            // They can set expiresAfter(...) inside the callback if desired.
+            /** @var CacheItemInterface $item */
+            $computed = $default($item);
+
+            // Store the returned value in the cache item, then persist it
+            $item->set($computed);
+            $this->save($item);
+
+            return $computed;
         }
-        $item = $this->getItem($key)->set($value)->expiresAfter($ttl);
-        return $this->save($item);
+
+        // If $default is not callable, proceed as before…
+
+        // 1) If the adapter itself exposes a direct get($key), use it:
+        if (method_exists($this->adapter, 'get')) {
+            try {
+                $value = $this->adapter->get($key);
+            } catch (Psr6InvalidArgumentException $e) {
+                throw new CacheInvalidArgumentException($e->getMessage(), 0, $e);
+            }
+            return $value ?? $default;
+        }
+
+        // 2) Otherwise, fall back to PSR-6 getItem():
+        try {
+            $item = $this->getItem($key);
+        } catch (Psr6InvalidArgumentException $e) {
+            throw new CacheInvalidArgumentException($e->getMessage(), 0, $e);
+        }
+
+        return $item->isHit() ? $item->get() : $default;
     }
 
+    /**
+     * Persists a value in the cache, optionally with a TTL.
+     *
+     * @param string                $key
+     * @param mixed                 $value
+     * @param int|DateInterval|null $ttl   Time-to-live in seconds or a DateInterval
+     * @return bool
+     * @throws SimpleCacheInvalidArgument if the key or TTL is invalid
+     */
+    public function set(string $key, mixed $value, mixed $ttl = null): bool
+    {
+        $this->validateKey($key);
+        $ttlSeconds = $this->normalizeTtl($ttl);
+
+        if (method_exists($this->adapter, 'set')) {
+            try {
+                return $this->adapter->set($key, $value, $ttlSeconds);
+            } catch (Psr6InvalidArgumentException $e) {
+                throw new CacheInvalidArgumentException($e->getMessage(), 0, $e);
+            }
+        }
+
+        // Fall back to PSR-6 approach
+        try {
+            $item = $this->getItem($key)->set($value)->expiresAfter($ttlSeconds);
+            return $this->save($item);
+        } catch (Psr6InvalidArgumentException $e) {
+            throw new CacheInvalidArgumentException($e->getMessage(), 0, $e);
+        }
+    }
+
+    /**
+     * Delete an item from the cache.
+     *
+     * @param string $key
+     * @return bool
+     * @throws SimpleCacheInvalidArgument if the key is invalid
+     */
+    public function delete(string $key): bool
+    {
+        $this->validateKey($key);
+
+        if (method_exists($this->adapter, 'delete')) {
+            try {
+                return $this->adapter->delete($key);
+            } catch (\Psr\SimpleCache\InvalidArgumentException $e) {
+                throw $e;
+            }
+        }
+
+        // Fall back to PSR-6 deleteItem()
+        try {
+            return $this->deleteItem($key);
+        } catch (Psr6InvalidArgumentException $e) {
+            throw new CacheInvalidArgumentException($e->getMessage(), 0, $e);
+        }
+    }
+
+    /**
+     * Wipes out the entire cache.
+     *
+     * @return bool
+     */
+    public function clearCache(): bool
+    {
+        return $this->clear();
+    }
+
+    /**
+     * Obtains multiple values by their keys.
+     *
+     * @param iterable<int|string, string> $keys
+     * @param mixed                        $default
+     * @return iterable<string, mixed>
+     * @throws SimpleCacheInvalidArgument if any key is invalid
+     */
+    public function getMultiple(iterable $keys, mixed $default = null): iterable
+    {
+        $result = [];
+        foreach ($keys as $k) {
+            /** @var string $k */
+            $this->validateKey($k);
+            $result[$k] = $this->get($k, $default);
+        }
+        return $result;
+    }
+
+    /**
+     * Persists multiple key ⇒ value pairs to the cache.
+     *
+     * @param iterable<int|string, mixed> $values  key ⇒ value mapping
+     * @param int|DateInterval|null       $ttl     TTL for all items
+     * @return bool
+     * @throws SimpleCacheInvalidArgument if any key is invalid
+     */
+    public function setMultiple(iterable $values, mixed $ttl = null): bool
+    {
+        $ttlSeconds = $this->normalizeTtl($ttl);
+        $allSucceeded = true;
+
+        foreach ($values as $k => $v) {
+            /** @var string $k */
+            $this->validateKey($k);
+            $ok = $this->set($k, $v, $ttlSeconds);
+            if (! $ok) {
+                $allSucceeded = false;
+            }
+        }
+
+        return $allSucceeded;
+    }
+
+    /**
+     * Deletes multiple keys from the cache.
+     *
+     * @param iterable<int|string, string> $keys
+     * @return bool
+     * @throws SimpleCacheInvalidArgument if any key is invalid
+     */
+    public function deleteMultiple(iterable $keys): bool
+    {
+        $allSucceeded = true;
+        foreach ($keys as $k) {
+            /** @var string $k */
+            $this->validateKey($k);
+            if (! $this->delete($k)) {
+                $allSucceeded = false;
+            }
+        }
+        return $allSucceeded;
+    }
+
+    /**
+     * Determines whether an item exists in the cache.
+     *
+     * @param string $key
+     * @return bool
+     * @throws SimpleCacheInvalidArgument if the key is invalid
+     */
+    public function has(string $key): bool
+    {
+        return $this->hasItem($key);
+    }
+
+    //
+    // ────────────────────────── ArrayAccess / Magic ──────────────────────────
+    //
+
+    public function offsetExists(mixed $offset): bool
+    {
+        return $this->has((string)$offset);
+    }
+
+    public function offsetGet(mixed $offset): mixed
+    {
+        return $this->get((string)$offset);
+    }
+
+    public function offsetSet(mixed $offset, mixed $value): void
+    {
+        // Default TTL to null
+        $this->set((string)$offset, $value, null);
+    }
+
+    public function offsetUnset(mixed $offset): void
+    {
+        $this->delete((string)$offset);
+    }
+
+    public function __get(string $name): mixed
+    {
+        return $this->get($name);
+    }
+
+    public function __set(string $name, mixed $value): void
+    {
+        $this->set($name, $value, null);
+    }
+
+    public function __isset(string $name): bool
+    {
+        return $this->has($name);
+    }
+
+    public function __unset(string $name): void
+    {
+        $this->delete($name);
+    }
+
+    public function count(): int
+    {
+        // Delegate to adapter if it implements Countable
+        return $this->adapter instanceof Countable
+            ? count($this->adapter)
+            : iterator_count($this->adapter->getItems([]));
+    }
 
     /**
      * Changes the namespace and directory for the pool.
@@ -343,142 +498,5 @@ readonly class Cache implements
         throw new BadMethodCallException(
             sprintf('%s does not support setNamespaceAndDirectory()', $this->adapter::class),
         );
-    }
-
-
-    /**
-     * Determine if a cache key exists.
-     *
-     * This method implements the ArrayAccess interface, allowing the use of
-     * the `isset()` language construct to determine if a cache key is set,
-     * e.g. `isset($cache['key'])`.
-     *
-     * @param mixed $offset The key of the cache item to check.
-     * @return bool True if the cache item exists, false otherwise.
-     * @throws InvalidArgumentException
-     */
-    public function offsetExists(mixed $offset): bool
-    {
-        return $this->hasItem((string)$offset);
-    }
-
-    /**
-     * Retrieve a cache item.
-     *
-     * This method implements the ArrayAccess interface, allowing access
-     * to cache items using the square bracket syntax, e.g. `$value = $cache['key'];`.
-     *
-     * @param mixed $offset The key of the cache item to retrieve.
-     * @return mixed The value of the cache item, or null if not found.
-     * @throws InvalidArgumentException
-     */
-    public function offsetGet(mixed $offset): mixed
-    {
-        return $this->get((string)$offset);
-    }
-
-    /**
-     * Set a cache item.
-     *
-     * Implements the ArrayAccess interface, for use with the square bracket
-     * syntax, e.g. `$cache['key'] = $value;`.
-     *
-     * @param mixed $offset The key of the cache item to set.
-     * @param mixed $value The value to set the cache item to.
-     * @throws InvalidArgumentException
-     */
-    public function offsetSet(mixed $offset, mixed $value): void
-    {
-        $this->set((string)$offset, $value);
-    }
-
-    /**
-     * Unset a cache item.
-     *
-     * Implements the ArrayAccess interface, for use with the `unset()` language construct.
-     *
-     * @param mixed $offset The key of the cache item to remove.
-     * @return void
-     * @throws InvalidArgumentException
-     */
-    public function offsetUnset(mixed $offset): void
-    {
-        $this->deleteItem((string)$offset);
-    }
-
-
-    /**
-     * Magic method to get a property from the cache.
-     *
-     * This method allows for the use of property access syntax on the cache,
-     * which internally calls get() to retrieve the specified item from the
-     * cache.
-     *
-     * @param string $name The name of the property to retrieve.
-     * @return mixed The stored value, or null if it does not exist.
-     * @throws InvalidArgumentException
-     */
-    public function __get(string $name): mixed
-    {
-        return $this->get($name);
-    }
-
-    /**
-     * Magic method to set a property in the cache.
-     *
-     * This method allows for the use of the assignment operator on cache items,
-     * which internally calls set() to store the specified item in the cache.
-     *
-     * @param string $name The name of the property to set.
-     * @param mixed $value The value to store in the cache.
-     * @return void
-     * @throws InvalidArgumentException
-     */
-    public function __set(string $name, mixed $value): void
-    {
-        $this->set($name, $value);
-    }
-
-    /**
-     * Magic method to check if a property is set in the cache.
-     *
-     * This method allows for the use of the isset() function on cache items,
-     * which internally calls hasItem() to check if the specified item exists in the cache.
-     *
-     * @param string $name The name of the property to check.
-     * @return bool True if the property exists in the cache, false otherwise.
-     * @throws InvalidArgumentException
-     */
-    public function __isset(string $name): bool
-    {
-        return $this->hasItem($name);
-    }
-
-    /**
-     * Magic method to unset a property from the cache.
-     *
-     * This method allows for the use of the unset() function on cache items,
-     * which internally calls deleteItem() to remove the specified item from the cache.
-     *
-     * @param string $name The name of the cache item to unset.
-     * @throws InvalidArgumentException
-     */
-    public function __unset(string $name): void
-    {
-        $this->deleteItem($name);
-    }
-
-    /**
-     * Get the number of items in the cache.
-     *
-     * If the adapter is a Countable, we delegate to it. Otherwise, we
-     * manually count the number of items returned by getItems().
-     * @throws InvalidArgumentException
-     */
-    public function count(): int
-    {
-        return $this->adapter instanceof Countable
-            ? count($this->adapter)
-            : iterator_count($this->adapter->getItems());
     }
 }

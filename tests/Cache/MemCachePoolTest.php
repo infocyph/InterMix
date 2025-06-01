@@ -11,6 +11,7 @@ use Infocyph\InterMix\Cache\Cache;
 use Infocyph\InterMix\Cache\Item\MemCacheItem;
 use Infocyph\InterMix\Serializer\ValueSerializer;
 use Infocyph\InterMix\Exceptions\CacheInvalidArgumentException;
+use Psr\Cache\InvalidArgumentException as Psr6InvalidArgumentException;
 
 /* ── Skip suite if Memcached unavailable ─────────────────────────── */
 
@@ -76,12 +77,36 @@ afterEach(function () {
 
 /* ── Convenience helpers ────────────────────────────────────────── */
 
+/* ─── convenience set()/get() ─────────────────────────────────── */
 test('memcache set()/get()', function () {
     expect($this->cache->get('miss'))->toBeNull()
         ->and($this->cache->set('foo', 'bar'))->toBeTrue()
         ->and($this->cache->get('foo'))->toBe('bar');
 });
 
+/* ─── PSR-16 get($key, $default) ───────────────────────────────── */
+test('get returns default when key missing (memcached)', function () {
+    // Scalar
+    expect($this->cache->get('nobody', 'dflt'))->toBe('dflt');
+
+    // Callable
+    $val = $this->cache->get('call', function (MemCacheItem $item) {
+        $item->expiresAfter(1);
+        return 'hello';
+    });
+    expect($val)->toBe('hello');
+    expect($this->cache->get('call'))->toBe('hello');
+
+    sleep(2);
+    expect($this->cache->get('call', 'again'))->toBe('again');
+});
+
+test('get throws for invalid key (memcached)', function () {
+    expect(fn () => $this->cache->get('bad key', 'x'))
+        ->toThrow(CacheInvalidArgumentException::class);
+});
+
+/* ─── PSR-6 getItem()/save() ───────────────────────────────────── */
 test('PSR-6 getItem()/save()', function () {
     $it = $this->cache->getItem('psr');
     expect($it)->toBeInstanceOf(MemCacheItem::class)
@@ -131,7 +156,7 @@ test('stream resource round-trip', function () {
 
 test('invalid key throws', function () {
     expect(fn () => $this->cache->set('bad key', 'v'))
-        ->toThrow(CacheInvalidArgumentException::class);
+        ->toThrow(InvalidArgumentException::class);
 });
 
 test('clear() flushes cache', function () {

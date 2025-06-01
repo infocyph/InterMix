@@ -18,8 +18,8 @@ Key Features
   instance‐limit enforcement lives in one place.
 
 - **Singleton (`Single` wrapper)**
-```
 
+.. code-block:: php
 use Infocyph\InterMix\Fence\Single;
 class OnlyOne { use Single; }
 // Only one instance ever:
@@ -27,11 +27,10 @@ class OnlyOne { use Single; }
 \$b = OnlyOne::instance();
 // \$a === \$b
 
-```
 
 - **Multiton (`Multi` wrapper)**
-```
 
+.. code-block:: php
 use Infocyph\InterMix\Fence\Multi;
 class Many { use Multi; }
 // Keyed instances, unlimited count:
@@ -39,11 +38,9 @@ class Many { use Multi; }
 \$y = Many::instance('key2');
 // \$x !== \$y
 
-```
-
 - **Limited Multiton (`Limit` wrapper)**
-```
 
+.. code-block:: php
 use Infocyph\InterMix\Fence\Limit;
 class Few { use Limit; }
 // By default, limit = 2 (can be changed via Few::setLimit()):
@@ -51,7 +48,6 @@ Few::instance('A');
 Few::instance('B');
 // Few::instance('C') throws LimitExceededException
 
-````
 
 - **Requirement Checking**
 Pass an optional `['extensions'=>[…], 'classes'=>[…]]` array to `instance()`.
@@ -108,29 +104,30 @@ Initialization
 Instead of `new SomeClass()`, call `SomeClass::instance($key, $constraints)`:
 
 - **Singleton** (`Single`): `$key` is ignored (always one slot).
-```php
+
+.. code-block:: php
 $a = OnlyOne::instance();
 $b = OnlyOne::instance();
 // $a === $b
-````
+
 
 * **Multiton** (`Multi`): `$key` can be any string; each distinct key gets its own instance.
 
-  ```php
+.. code-block:: php
   $x = Many::instance('alpha');
   $y = Many::instance('beta');
   // $x !== $y
   // Re‐calling Many::instance('alpha') yields the same $x.
-  ```
+
 
 * **Limited Multiton** (`Limit`): Behaves like `Multi`, but enforces a maximum count.
 
-  ```php
+.. code-block:: php
   // By default, FENCE_LIMIT = 2
   Few::instance('red');
   Few::instance('blue');
   // Few::instance('green') ⇒ throws LimitExceededException
-  ```
+
 
 ## Applying Requirements
 
@@ -158,6 +155,7 @@ constraints: \[
 // e.g. "Requirements not met: Extensions not loaded: mbstring; Classes not found: PDO"
 echo \$e->getMessage();
 }
+
 
 If any specified extension is not loaded, or any specified class is not declared,
 `RequirementException` is thrown.  Passing `null` or omitting `$constraints` bypasses checks.
@@ -209,143 +207,6 @@ Few::setLimit(10);
 Few::instance('A');
 // … up to 10 distinct keys without exception.
 
-## Exceptions in Detail
-
-* **`LimitExceededException`** (`Infocyph\InterMix\Exceptions\LimitExceededException`)
-  Thrown by `Fence::instance()` when `count(self::$instances) >= $limit` and you attempt
-  to create another instance.  Error message:
-
-  ```
-  "Instance limit of {limit} exceeded for {ClassName}"
-  ```
-
-* **`RequirementException`** (`Infocyph\InterMix\Exceptions\RequirementException`)
-  Thrown by `Fence::checkRequirements()` if any required extension or class is missing.
-  Error message composition depends on which dependencies are absent, for example:
-
-  ```
-  "Requirements not met: Extensions not loaded: mbstring; Classes not found: NonExistentClass"
-  ```
-
-* **`InvalidArgumentException`**
-  Thrown by `setLimit($n)` if `$n < 1`:
-
-  ```
-  "Limit must be at least 1"
-  ```
-
-## Complete Reference (Trait API)
-
-.. code-block:: php
-
-namespace Infocyph\InterMix\Fence;
-
-trait Fence
-{
-/\*\* @var array\<string,object> \*/
-private static array \$instances = \[];
-
-```
-   /** @var array<string,int> */
-   private static array $classLimits = [];
-
-   /** @var array|null */
-   private static ?array $cachedExtensions = null;
-   private static ?array $cachedClasses    = null;
-
-   /**
-    * Get or create an instance.
-    *
-    * @param string|null $key        Key for keyed classes, or null for singleton classes (converted to '__single').
-    * @param array|null  $constraints ['extensions'=>string[], 'classes'=>string[]] to check before instantiation.
-    * @return static
-    * @throws RequirementException|LimitExceededException
-    */
-   final public static function instance(
-       ?string $key = 'default',
-       ?array  $constraints = null
-   ): static { /* … */ }
-
-   /**
-    * Override the per‐class limit at runtime.
-    *
-    * @param int $n  Must be ≥ 1.
-    * @return void
-    * @throws InvalidArgumentException
-    */
-   final public static function setLimit(int $n): void { /* … */ }
-
-   /**
-    * Check if an instance exists for the given key (or for '__single' in singleton classes).
-    *
-    * @param string|null $key
-    * @return bool
-    */
-   final public static function hasInstance(?string $key = 'default'): bool { /* … */ }
-
-   /**
-    * Return an associative array of [key=>instance, …].
-    *
-    * @return array<string, static>
-    */
-   final public static function getInstances(): array { /* … */ }
-
-   /**
-    * Return the list of keys under which instances are stored.
-    *
-    * @return string[]
-    */
-   final public static function getKeys(): array { /* … */ }
-
-   /**
-    * Remove all instances (reset to empty).  Useful in tests.
-    *
-    * @return void
-    */
-   final public static function clearInstances(): void { /* … */ }
-
-   /**
-    * Get the total number of instances currently stored.
-    *
-    * @return int
-    */
-   final public static function countInstances(): int { /* … */ }
-```
-
-}
-
-trait Limit
-{
-use Fence;
-
-```
-   public const FENCE_KEYED = true;
-   public const FENCE_LIMIT = 2;
-```
-
-}
-
-trait Multi
-{
-use Fence;
-
-```
-   public const FENCE_KEYED = true;
-   public const FENCE_LIMIT = PHP_INT_MAX;
-```
-
-}
-
-trait Single
-{
-use Fence;
-
-```
-   public const FENCE_KEYED = false;
-   public const FENCE_LIMIT = 1;
-```
-
-}
 
 ## Putting It All Together
 

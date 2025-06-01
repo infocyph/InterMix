@@ -4,22 +4,51 @@
 Serialization Internals
 =====================
 
-All cache adapters rely on **`Infocyph\InterMix\Serializer\ValueSerializer`**
-to handle arbitrary PHP values—scalars, arrays, closures, and even resources.
+All cache adapters rely on **`ValueSerializer`**
+to handle arbitrary PHP values—scalars, arrays, closures, and resources.
 
-That component “wraps” any native PHP resource using a user‐registered handler,
-then uses Opis Closure v4 (`oc_serialize/oc_unserialize`) to produce a string
-blob. When loading back, it “unwraps” resources via your handler, restores
-closures, and returns exactly what you put in.
+That component:
 
-Why? PSR-6 requires that a value be serializable if the adapter is storing
-it as a string or BLOB (Redis, Memcached, SQLite, File). If you want to cache:
+1. **Wraps** native PHP resources using user-registered handlers
+2. Uses Opis Closure v4 (`serialize` / `unserialize`) to serialize closures
+3. Produces a string blob via PHP’s native `serialize()` internally if no closures are involved
+4. On fetch, **unwraps** resources via your handler and restores closures
+
+Why is this necessary? PSR-6 requires that any stored value must be safely serializable if the adapter
+stores it as a string or BLOB (Redis, Memcached, SQLite, File). If you want to cache:
 
 * A **closure** (`fn(int $x) => $x + 5`)
 * A **stream** (e.g. `fopen('php://memory','r+')`)
-* A **Curl resource**, **XML parser**, **GD image resource**, etc.
+* A **cURL resource**, **XML parser**, or **GD image resource**, etc.
 
-Then you must teach `ValueSerializer` how to handle that resource type.
+Then you must teach `ValueSerializer` how to handle that resource type by registering a handler:
+
+.. code-block:: php
+
+   use Infocyph\InterMix\Serializer\ValueSerializer;
+
+   ValueSerializer::registerResourceHandler(
+       'stream',
+       function (mixed $res): array {
+           if (!is_resource($res)) {
+               throw new InvalidArgumentException('Expected resource');
+           }
+           $meta = stream_get_meta_data($res);
+           rewind($res);
+           return [
+               'mode'    => $meta['mode'],
+               'content' => stream_get_contents($res),
+           ];
+       },
+       function (array $data): mixed {
+           $s = fopen('php://memory', $data['mode']);
+           fwrite($s, $data['content']);
+           rewind($s);
+           return $s;
+       }
+   );
+
+See also:
 
 :ref:`serializer.value_serializer`
 :ref:`serializer.resource_handlers`

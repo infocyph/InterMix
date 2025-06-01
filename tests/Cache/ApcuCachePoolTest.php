@@ -12,6 +12,7 @@ use Infocyph\InterMix\Cache\Cache;
 use Infocyph\InterMix\Cache\Item\ApcuCacheItem;
 use Infocyph\InterMix\Serializer\ValueSerializer;
 use Infocyph\InterMix\Exceptions\CacheInvalidArgumentException;
+use Psr\Cache\InvalidArgumentException as Psr6InvalidArgumentException;
 
 /* ── skip entirely if APCu unavailable ─────────────────────────────── */
 if (!extension_loaded('apcu')) {
@@ -27,7 +28,7 @@ if (!apcu_enabled()) {
 /* ── boilerplate ──────────────────────────────────────────────────── */
 beforeEach(function () {
     apcu_clear_cache();                           // fresh memory
-    $this->cache = Cache::apcu('tests');      // APCu-backed pool
+    $this->cache = Cache::apcu('tests');          // APCu-backed pool
 
     /* register stream handler for resource tests */
     ValueSerializer::registerResourceHandler(
@@ -63,6 +64,31 @@ test('convenience set() and get() (apcu)', function () {
     expect($this->cache->get('nope'))->toBeNull()
         ->and($this->cache->set('foo', 'bar', 60))->toBeTrue()
         ->and($this->cache->get('foo'))->toBe('bar');
+});
+
+/* ─── PSR-16 get($key, $default) ─────────────────────────────────── */
+test('get returns default when key missing (apcu)', function () {
+    // Scalar default
+    expect($this->cache->get('missing', 'default'))->toBe('default');
+
+    // Callable default without prior set
+    $computed = $this->cache->get('dyn', function (ApcuCacheItem $item) {
+        $item->expiresAfter(1);
+        return 'computed';
+    });
+    expect($computed)->toBe('computed');
+
+    // Now that it’s been set, get() returns the cached value
+    expect($this->cache->get('dyn'))->toBe('computed');
+
+    // After expiry, returns the new default again
+    sleep(2);
+    expect($this->cache->get('dyn', 'fallback'))->toBe('fallback');
+});
+
+test('get throws for invalid key (apcu)', function () {
+    expect(fn () => $this->cache->get('bad key', 'x'))
+        ->toThrow(CacheInvalidArgumentException::class);
 });
 
 /* ─── PSR-6 behaviour ─────────────────────────────────────────────── */
@@ -122,7 +148,7 @@ test('stream resource round-trip (apcu)', function () {
 /* ─── invalid key triggers exception ─────────────────────────────── */
 test('invalid key throws (apcu)', function () {
     expect(fn () => $this->cache->set('bad key', 'v'))
-        ->toThrow(CacheInvalidArgumentException::class);
+        ->toThrow(InvalidArgumentException::class);
 });
 
 /* ─── clear() empties cache ───────────────────────────────────────── */
