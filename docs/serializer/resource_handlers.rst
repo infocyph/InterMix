@@ -135,7 +135,7 @@ To support additional resources:
 Example: cURL Handler
 ~~~~~~~~~~~~~~~~~~~~~
 
-```php
+.. code-block:: php
 <?php
 namespace App\\Serializer;
 
@@ -166,16 +166,14 @@ class MyResourceHandlers extends ResourceHandlers
 // Usage:
 MyResourceHandlers::registerDefaults();
 // now you can ValueSerializer::serialize($my_curl_handle) safely.
-````
+
 
 Empty‐State and Testing
-
-````
-
+~~~~~~~~~~~~~~~~~~~~~~~
 - By default, **no resource handlers** are registered.  If you call
   `ValueSerializer::wrap($someResource)` before any `registerResourceHandler()`,
   you get an `InvalidArgumentException`.
-- In tests, you can always start with a clean slate:
+- You can always start with a clean slate:
 
   .. code-block:: php
 

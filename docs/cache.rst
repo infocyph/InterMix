@@ -4,7 +4,7 @@
 Cache – Unified Facade
 ===========================
 
-The **`Infocyph\InterMix\Cache\Cache`** class is a PSR-6–compliant cache‐item pool
+The **`Cache`** class is a PSR-6–compliant cache‐item pool
 with a consistent, adapter‐agnostic façade. It provides:
 
 * **Static factories** for common back‐ends:
@@ -21,7 +21,7 @@ with a consistent, adapter‐agnostic façade. It provides:
 * **Bulk fetch** (`getItems([...])`) that defers to adapter‐specific `multiFetch()`
   for single‐round-trip performance
 * **Iteration + Countable** (so you can `foreach ($cache as $k => $v)` or `count($cache)`)
-* Automatic **serialization** (via `Infocyph\InterMix\Serializer\ValueSerializer`) to
+* Automatic **serialization** to
   support closures, resources, and arbitrary PHP values
 
 .. tip::

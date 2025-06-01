@@ -10,6 +10,7 @@ use Infocyph\InterMix\Cache\Cache;
 use Infocyph\InterMix\Cache\Item\SqliteCacheItem;
 use Infocyph\InterMix\Serializer\ValueSerializer;
 use Infocyph\InterMix\Exceptions\CacheInvalidArgumentException;
+use Psr\Cache\InvalidArgumentException as Psr6InvalidArgumentException;
 
 /* ── Skip entire suite if SQLite missing ─────────────────────────── */
 if (!in_array('sqlite', PDO::getAvailableDrivers(), true)) {
@@ -45,13 +46,6 @@ beforeEach(function () {
             return $s;                                 // <- real resource
         }
     );
-//        ValueSerializer::registerResourceHandler(
-//            'stream',
-//            fn ($r) => ['mode'=>stream_get_meta_data($r)['mode'],
-//                'content'=>tap($r, fn()=>rewind($r)) && stream_get_contents($r)],
-//            fn ($d)  => tap(fopen('php://memory', $d['mode']),
-//                fn ($s)=>fwrite($s,$d['content'])&&rewind($s))
-//        );
 });
 
 afterEach(function () {
@@ -63,6 +57,26 @@ test('sqlite set()/get()', function () {
     expect($this->cache->get('none'))->toBeNull()
         ->and($this->cache->set('foo', 'bar'))->toBeTrue()
         ->and($this->cache->get('foo'))->toBe('bar');
+});
+
+/* ─── PSR-16 get($key, $default) ───────────────────────────────── */
+test('get returns default when key missing (sqlite)', function () {
+    expect($this->cache->get('none', 'dflt'))->toBe('dflt');
+
+    $val = $this->cache->get('compute', function (SqliteCacheItem $item) {
+        $item->expiresAfter(1);
+        return 'val';
+    });
+    expect($val)->toBe('val');
+    expect($this->cache->get('compute'))->toBe('val');
+
+    sleep(2);
+    expect($this->cache->get('compute', 'again'))->toBe('again');
+});
+
+test('get throws for invalid key (sqlite)', function () {
+    expect(fn () => $this->cache->get('bad key', 'v'))
+        ->toThrow(CacheInvalidArgumentException::class);
 });
 
 /* ── 2. PSR-6 behaviour ─────────────────────────────────────────── */
@@ -120,7 +134,7 @@ test('stream resource round-trip (sqlite)', function () {
 /* ── 9. invalid key guard ───────────────────────────────────────── */
 test('invalid key throws (sqlite)', function () {
     expect(fn () => $this->cache->set('bad key', 'v'))
-        ->toThrow(CacheInvalidArgumentException::class);
+        ->toThrow(InvalidArgumentException::class);
 });
 
 /* ── 10. clear wipes all entries ───────────────────────────────── */

@@ -38,7 +38,8 @@
         "php": ">=8.2",
         "opis/closure": "^4.3",
         "psr/cache": "^3.0",
-        "psr/container": "^2.0"
+        "psr/container": "^2.0",
+        "psr/simple-cache": "^3.0"
     },
     "suggest": {
         "ext-apcu": "For APCu-based caching (in-memory, per-process)",

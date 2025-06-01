@@ -6,6 +6,7 @@ use Infocyph\InterMix\Cache\Cache;
 use Infocyph\InterMix\Cache\Item\FileCacheItem;
 use Infocyph\InterMix\Exceptions\CacheInvalidArgumentException;
 use Infocyph\InterMix\Serializer\ValueSerializer;
+use Psr\Cache\InvalidArgumentException as Psr6InvalidArgumentException;
 
 beforeEach(function () {
     /* fresh temp directory for each run */
@@ -55,12 +56,37 @@ afterEach(function () {
 
 /* ───────────────────────────────────────────────────────────── */
 
+/* ─── convenience set()/get() ─────────────────────────────────── */
 test('convenience set() and get()', function () {
     expect($this->cache->get('nope'))->toBeNull()
         ->and($this->cache->set('foo', 'bar', 60))->toBeTrue()
         ->and($this->cache->get('foo'))->toBe('bar');
 });
 
+/* ─── PSR-16 get($key, $default) ───────────────────────────────── */
+test('get returns default when key missing (file)', function () {
+    // Scalar default
+    expect($this->cache->get('missing', 'def'))->toBe('def');
+
+    // Callable default
+    $computed = $this->cache->get('x', function (FileCacheItem $item) {
+        $item->expiresAfter(1);
+        return 'xyz';
+    });
+    expect($computed)->toBe('xyz');
+    expect($this->cache->get('x'))->toBe('xyz');
+
+    // After TTL expires, fallback
+    sleep(2);
+    expect($this->cache->get('x', 'fallback'))->toBe('fallback');
+});
+
+test('get throws for invalid key (file)', function () {
+    expect(fn () => $this->cache->get('bad key', 'v'))
+        ->toThrow(CacheInvalidArgumentException::class);
+});
+
+/* ─── PSR-6 getItem()/save() ───────────────────────────────────── */
 test('PSR-6 getItem()/save()', function () {
     $item = $this->cache->getItem('psr');
 
@@ -147,7 +173,6 @@ test('stream resource round-trip', function () {
     fwrite($s, 'hello');
     rewind($s);
     $this->cache->getItem('stream')->set($s)->save();
-
     $r = $this->cache->getItem('stream')->get();
     expect(stream_get_contents($r))->toBe('hello');
 });
@@ -173,7 +198,7 @@ test('custom resource handler works', function () {
 
 test('invalid cache key throws', function () {
     expect(fn () => $this->cache->set('space key', 'v'))
-        ->toThrow(CacheInvalidArgumentException::class);
+        ->toThrow(InvalidArgumentException::class);
 });
 
 test('persistence across pool instances', function () {

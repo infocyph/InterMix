@@ -69,11 +69,7 @@ Public API
    Finds any array nodes tagged with `__wrapped_resource = true`, looks up the
    registered “restore” callback, and returns a real PHP resource.
 
-.. py:function:: void ValueSerializer::registerResourceHandler(
-       string $type,
-       callable $wrapFn,
-       callable $restoreFn
-   )
+.. py:function:: void ValueSerializer::registerResourceHandler(string $type, callable $wrapFn, callable $restoreFn)
 
    Register a new handler for a resource of type `$type` (as returned by
    `get_resource_type()`).
