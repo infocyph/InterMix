@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Resolver;
 
 use Infocyph\InterMix\Exceptions\ContainerException;
-use Symfony\Contracts\Cache\CacheInterface;
+use Psr\Cache\CacheItemPoolInterface;
 
 /**
  * Central storage for the container’s definitions, resolved instances, etc.
@@ -30,7 +30,7 @@ class Repository
     private bool $enablePropertyAttribute    = false;
     private bool $enableMethodAttribute      = false;
     private bool $isLocked                   = false;
-    private ?CacheInterface $cacheAdapter    = null;
+    private ?CacheItemPoolInterface $cacheAdapter    = null;
     private string $alias                    = 'default';
 
     private ?string $environment = null;
@@ -488,9 +488,9 @@ class Repository
     /**
      * Gets the cache adapter instance.
      *
-     * @return CacheInterface|null The cache adapter, or null if no cache adapter is set.
+     * @return CacheItemPoolInterface|null The cache adapter, or null if no cache adapter is set.
      */
-    public function getCacheAdapter(): ?CacheInterface
+    public function getCacheAdapter(): ?CacheItemPoolInterface
     {
         return $this->cacheAdapter;
     }
@@ -502,11 +502,11 @@ class Repository
      * definitions. If the container is locked, an exception will be
      * thrown.
      *
-     * @param CacheInterface $adapter The cache adapter to set.
+     * @param CacheItemPoolInterface $adapter The cache adapter to set.
      *
      * @throws ContainerException if the container is locked.
      */
-    public function setCacheAdapter(CacheInterface $adapter): void
+    public function setCacheAdapter(CacheItemPoolInterface $adapter): void
     {
         $this->checkIfLocked();
         $this->cacheAdapter = $adapter;

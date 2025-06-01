@@ -4,88 +4,181 @@
 ResourceHandlers
 =====================
 
-`Infocyph\InterMix\Serializer\ResourceHandlers` is a **base class**
-that discovers and invokes your custom `registerXxx()` methods via
-`registerDefaults()`.  You extend it to add real handlers:
+`ResourceHandlers` is a **convenience base
+class** intended to help you register multiple resource handlers via a single
+static call (`registerDefaults()`).
+
+It does **not** itself define any handlers; instead, you must extend it and
+implement named `registerXxx()` methods.  When you call
+`YourSubclass::registerDefaults()`, it automatically invokes every static
+method that begins with `"register"`.
+
+Why?
+----
+
+When your application or library needs to support *many* resource types (e.g.
+streams, cURL handles, XML parsers, GD images, sockets, etc.), you can:
+
+1. Group them in one “bundle” class that extends `ResourceHandlers`.
+2. Inside it, write one `registerXxx()` method per resource type:
+   - e.g. `registerStream()`, `registerCurl()`, `registerXmlParser()`, etc.
+3. Call `YourSubclass::registerDefaults()` to register all of them at once.
+
+This approach keeps your resource‐wrapper logic organized and self-documenting.
+
+Class API
+---------
+
+.. py:function:: void ResourceHandlers::registerDefaults()
+
+   Iterates over all public static methods on `self::class` whose names start
+   with `"register"`, except `registerDefaults` itself, and invokes each one.
+   In other words, every `registerXxx()` method in your subclass runs.
+
+   Does nothing if no `registerXxx()` methods exist.
+
+You **cannot** instantiate `ResourceHandlers` (its constructor is private).
+It exists only to host static registration methods.
+
+Example: Registering a Stream Handler
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Suppose you want to support PHP streams:
 
 .. code-block:: php
 
-   use Infocyph\InterMix\Serializer\ValueSerializer;
-   use Infocyph\InterMix\Serializer\ResourceHandlers;
+   <?php
+   namespace App\\Serializer;
+
+   use Infocyph\\InterMix\\Serializer\\ResourceHandlers;
+   use Infocyph\\InterMix\\Serializer\\ValueSerializer;
 
    class MyResourceHandlers extends ResourceHandlers
    {
+       /**
+        * Handles stream resources (both file‐ and network‐based).
+        */
        public static function registerStream(): void
        {
            ValueSerializer::registerResourceHandler(
                'stream',
-               fn($r): array => [
-                   'mode'    => stream_get_meta_data($r)['mode'],
-                   'content' => tap($r, fn()=>rewind($r)) && stream_get_contents($r),
-               ],
-               fn(array $d) => tap(fopen('php://memory', $d['mode']),
-                                   fn($s)=>fwrite($s,$d['content'])&&rewind($s))
+               // ---------- wrapFn -----------------------------------
+               function (resource $res): array {
+                   $meta = stream_get_meta_data($res);
+                   rewind($res);
+                   return [
+                       'mode'    => $meta['mode'],
+                       'content' => stream_get_contents($res),
+                   ];
+               },
+               // -------- restoreFn ---------------------------------
+               function (array $data): resource {
+                   $s = fopen('php://memory', $data['mode']);
+                   fwrite($s, $data['content']);
+                   rewind($s);
+                   return $s;
+               }
            );
        }
-
-       public static function registerCurl(): void { /* … */ }
-       public static function registerXmlParser(): void { /* … */ }
    }
 
-Registering Handlers
---------------------
+Once you have that subclass, you can register the handler in two ways:
 
-- **Per-type**: call `MyResourceHandlers::registerStream()`, etc.
-- **All-at-once**: `MyResourceHandlers::registerDefaults()` invokes every
-  `registerXxx()` method it finds.
+1. **Call `registerStream()` directly**:
 
-Example: Streams
----------------
+   .. code-block:: php
 
-.. code-block:: php
+      MyResourceHandlers::registerStream();
 
-   MyResourceHandlers::registerStream();
+2. **Call `registerDefaults()` to pick up every `registerXxx()`**:
 
-   $s   = fopen('php://memory','r+');
-   fwrite($s,'hello'); rewind($s);
+   .. code-block:: php
 
-   // Now ValueSerializer knows how to handle streams:
-   $blob = ValueSerializer::serialize($s);
-   $rest = ValueSerializer::unserialize($blob);
+      MyResourceHandlers::registerDefaults();
+      // → automatically calls registerStream(), plus any other registerXxx()
 
-   echo stream_get_contents($rest);   // outputs 'hello'
+   Then use ValueSerializer as usual:
 
-Example: registerDefaults()
----------------------------
+   .. code-block:: php
 
-.. code-block:: php
+      $fp   = fopen('php://memory','r+');
+      fwrite($fp,'hello'); rewind($fp);
 
-   MyResourceHandlers::registerDefaults();
-   // calls registerStream(), registerCurl(), registerXmlParser(), …
+      $blob    = ValueSerializer::serialize($fp);
+      $restored = ValueSerializer::unserialize($blob);
+      echo stream_get_contents($restored); // "hello"
 
-   // Then you can serialize any of those:
-   $blob = ValueSerializer::serialize($resource);
-   $val  = ValueSerializer::unserialize($blob);
+Adding More Resource Types
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Extending for New Resource Types
---------------------------------
+To support additional resources:
 
-1. Subclass `ResourceHandlers`.
-2. Add `public static function registerYourType(): void`.
-3. In it, call `ValueSerializer::registerResourceHandler(...)`.
-4. Optionally call `registerDefaults()` to pick it up.
+1. **Extend** `ResourceHandlers`.
+2. **Add** a new public static method named `registerFoo()` where “Foo” is any
+   string you like (e.g. `registerCurl()`, `registerXmlParser()`, etc.).
+3. Inside it, call:
+
+   .. code-block:: php
+
+      ValueSerializer::registerResourceHandler(
+          '<type>',    // e.g. 'curl'
+          fn(resource $res): array => /* wrap logic */,
+          fn(array $data): resource   => /* restore logic */
+      );
+
+4. If you want all handlers applied at once, simply call:
+
+   .. code-block:: php
+
+      MyResourceHandlers::registerDefaults();
+
+Example: cURL Handler
+~~~~~~~~~~~~~~~~~~~~~
 
 ```php
-class ExtraHandlers extends ResourceHandlers
+<?php
+namespace App\\Serializer;
+
+use Infocyph\\InterMix\\Serializer\\ResourceHandlers;
+use Infocyph\\InterMix\\Serializer\\ValueSerializer;
+
+class MyResourceHandlers extends ResourceHandlers
 {
-    public static function registerGd(): void
+    public static function registerCurl(): void
     {
+        if (!extension_loaded('curl')) {
+            return;
+        }
         ValueSerializer::registerResourceHandler(
-            'gd',
-            fn($im): array => ['png'=> imagepng($im, null, 0, PNG_NO_FILTER)],
-            fn($d): resource => imagecreatefromstring($d['png'])
+            'curl',
+            // wrapFn: store only the effective URL
+            function ($ch): array {
+                return ['url' => curl_getinfo($ch, CURLINFO_EFFECTIVE_URL)];
+            },
+            // restoreFn: open a new cURL handle with the same URL
+            function (array $data): resource {
+                return curl_init($data['url'] ?? '');
+            }
         );
     }
 }
 
-ExtraHandlers::registerGd();
+// Usage:
+MyResourceHandlers::registerDefaults();
+// now you can ValueSerializer::serialize($my_curl_handle) safely.
+````
+
+Empty‐State and Testing
+
+````
+
+- By default, **no resource handlers** are registered.  If you call
+  `ValueSerializer::wrap($someResource)` before any `registerResourceHandler()`,
+  you get an `InvalidArgumentException`.
+- In tests, you can always start with a clean slate:
+
+  .. code-block:: php
+
+     use Infocyph\\InterMix\\Serializer\\ValueSerializer;
+
+     ValueSerializer::clearResourceHandlers(); // removes all handlers

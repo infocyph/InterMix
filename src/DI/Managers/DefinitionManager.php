@@ -7,8 +7,8 @@ namespace Infocyph\InterMix\DI\Managers;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\Exceptions\ContainerException;
+use Psr\Cache\CacheItemPoolInterface;
 use Psr\Cache\InvalidArgumentException;
-use Symfony\Contracts\Cache\CacheInterface;
 
 class DefinitionManager
 {
@@ -76,16 +76,16 @@ class DefinitionManager
     /**
      * Enable definition caching.
      *
-     * This method takes a {@see CacheInterface} and enables caching of
+     * This method takes a {@see CacheItemPoolInterface} and enables caching of
      * definitions. It will throw a {@see ContainerException} if the container
      * is locked.
      *
-     * @param CacheInterface $cache The cache adapter to use for caching.
+     * @param CacheItemPoolInterface $cache The cache adapter to use for caching.
      *
      * @return $this
      * @throws ContainerException
      */
-    public function enableDefinitionCache(CacheInterface $cache): self
+    public function enableDefinitionCache(CacheItemPoolInterface $cache): self
     {
         $this->repository->setCacheAdapter($cache);
 

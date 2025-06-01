@@ -140,7 +140,6 @@ if (!function_exists('when')) {
     }
 }
 
-
 if (!function_exists('pipe')) {
     /**
      * Pass the value through the callback and return the callback's result.

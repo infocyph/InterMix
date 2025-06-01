@@ -1,223 +1,232 @@
 .. _remix.macro-mix:
 
 =========================
-Macro Mix (Mixin Trait)
+MacroMix (Mixin Trait)
 =========================
 
-*(The content below blends your original text with new goodies.)*
+Have you ever wished your PHP class had a certain method—even though it’s
+not defined in the class? `MacroMix` lets you **dynamically add methods
+(macros) at runtime** to any class without requiring a base class. It works
+purely via PHP’s `__call` / `__callStatic` magic under the hood.
 
-`MacroMix` lets you **add methods to a class at runtime** – macros –
-without a base‐class dependency.
+Advantages
+----------
 
-Key Features
-============
+- **Zero coupling** — You don’t need to extend a base class. Just `use MacroMix;`.
+- **Method chaining** — If your macro returns `null`, it automatically returns
+  `$this` so you can continue chaining.
+- **Config or annotation loading** — Bulk‐load macros from arrays or
+  `@Macro("name")` annotations.
+- **Thread safety** (optional) — Enable a lock if you care about concurrency.
 
-* Dynamically register, remove, list macros.
-* Method-chaining-friendly (macros return ``$this`` by default).
-* Load macros from *config arrays* or *PHPDoc annotations*.
-* **Mixin** an entire helper object/class in one call.
-* Optional **thread-safe** writes via the ``ENABLE_LOCK`` constant.
+Basic usage
+===========
 
+Include the trait in any class:
 
-Thread Safety and Locking
-=========================
+.. code-block:: php
 
-The ``MacroMix`` trait supports thread-safe operations for concurrent environments. By enabling the ``ENABLE_LOCK`` constant
-in your class, all operations that modify shared state will be protected with a locking mechanism. If the constant is not defined
-or set to ``false``, locking will be bypassed for better performance in non-concurrent environments.
+   namespace App;
 
-To enable locking, define the ``ENABLE_LOCK`` constant in your class:
+   use Infocyph\\InterMix\\Remix\\MacroMix;
 
-.. code:: php
-
-   class House {
+   class House
+   {
        use MacroMix;
 
+       // Optional: enable thread-safe macro registration
        public const ENABLE_LOCK = true;
+
+       protected string $color = 'gold';
    }
+```
 
-Locking is selectively applied to write operations (e.g., adding or removing macros) to avoid unnecessary overhead for read operations.
+### Registering a macro
 
+```php
+public static function macro(string $name, callable|object $macro): void
+```
 
+* **\$name**: method name you want to add.
+* **\$macro**: a callable or an object.  If it’s a closure, it will be wrapped
+  so that if it returns `null`, `$this` is returned instead (method chaining
+  enabled).
 
-Registering and Calling Macros
-==============================
+**Example:**
 
-You can dynamically add methods (macros) to a class using the ``macro`` method. Macros can be defined as closures or callable objects.
+```php
+House::macro('fill', function (string $color) {
+    $this->color = $color;
+    return $this;  // ensure chaining
+});
 
-.. code:: php
+$house = new House();
+$house->fill('blue')->fill('green');
+echo $house->color;  // "green"
+```
 
-   class House {
-       use MacroMix;
+### Checking & removing
 
-       protected $color = 'gold';
-   }
+```php
+public static function hasMacro(string $name): bool
+public static function removeMacro(string $name): void
+```
 
-Add a macro dynamically:
+**Example:**
 
-.. code:: php
+```php
+House::macro('sayHello', fn() => 'Hello');
+echo House::hasMacro('sayHello'); // true
 
-   House::macro('fill', function ($value) {
-       $this->color = $value;
-       return $this; // Enable method chaining
-   });
+House::removeMacro('sayHello');
+echo House::hasMacro('sayHello'); // false
+```
 
-   $house = new House();
-   $house->fill('blue')->fill('green'); // Method chaining supported
-   echo $house->color; // green
+### Calling macros
 
-.. tip::
+Any time you call an undefined method (static or instance), `MacroMix` checks
+its internal registry:
 
-    Dynamically added methods can return ``$this`` to enable method chaining.
+* If the macro exists, it invokes it—binding `$this` if needed.
+* If the macro returns `null`, the trait yields `$this` (or the class name, if
+  invoked statically).
+* If the macro is not found, it throws:
 
+  ```
+  Exception: Method ClassName::missingMacro does not exist.
+  ```
 
+**Example:**
 
-Checking and Removing Macros
-============================
+```php
+House::macro('floor', fn() => 'I am the floor');
+echo House::floor();  // “I am the floor”
+```
 
-You can check whether a macro is registered using ``hasMacro`` and remove it using ``removeMacro``:
+### Loading from configuration
 
-.. code:: php
+```php
+public static function loadMacrosFromConfig(array $config): void
+```
 
-   House::macro('example', fn() => 'Example Macro');
-   echo House::hasMacro('example'); // true
+* **\$config**: `['name' => fn(...), 'otherName' => fn(...)]`
+* Before registering, this method acquires a lock if `ENABLE_LOCK` is true.
 
-   House::removeMacro('example');
-   echo House::hasMacro('example'); // false
+**Example:**
 
+```php
+$config = [
+    'toUpper' => fn($s) => strtoupper($s),
+    'reverse' => fn($s) => strrev($s),
+];
+House::loadMacrosFromConfig($config);
 
+$h = new House();
+echo $h->toUpper('gtk');   // “GTK”
+echo $h->reverse('php');    // “php” reversed = “php”
+```
 
-Mixing Methods
-==============
+### Loading from annotations
 
-You can mix an entire object or class (with multiple methods) into the current class. Methods from the mixin are added dynamically
-to the target class.
+```php
+public static function loadMacrosFromAnnotations(string|object $class): void
+```
 
-.. code:: php
+* Scans PHPDoc of all public methods for `@Macro("name")`.
+* Registers each matching method as a macro under `"name"`.
 
-   $mixin = new class {
-       public function greet($name) {
-           return "Hello, $name!";
-       }
+**Example:**
 
-       protected function whisper($message) {
-           return "psst... $message";
-       }
-   };
-
-   House::mix($mixin);
-
-   $house = new House();
-   echo $house->greet('World'); // Hello, World!
-   echo $house->whisper('John'); // psst... John
-
-
-
-Loading Macros
-==============
-
-Macros can be loaded from a configuration array or annotations.
-
-Loading from Configuration
----------------------------
-
-Macros can be defined in a configuration array and loaded into the class:
-
-.. code:: php
-
-   $config = [
-       'toUpperCase' => fn($value) => strtoupper($value),
-       'reverse' => fn($value) => strrev($value),
-   ];
-
-   House::loadMacrosFromConfig($config);
-
-   $house = new House();
-   echo $house->toUpperCase('gold'); // GOLD
-   echo $house->reverse('gold'); // dlog
-
-Loading from Annotations
--------------------------
-
-Macros can also be defined using PHPDoc annotations in a class or object:
-
-.. code:: php
-
-   class MyMixin {
-       /**
-        * @Macro("shout")
-        */
-       public function shout($value) {
-           return strtoupper($value) . '!';
-       }
-   }
-
-   House::loadMacrosFromAnnotations(MyMixin::class);
-
-   $house = new House();
-   echo $house->shout('hello'); // HELLO!
-
-.. note::
-
-    Macros registered through annotations must include the ``@Macro`` tag in their PHPDoc comments.
-
-
-
-Retrieving All Macros
-=====================
-
-You can retrieve all registered macros using the ``getMacros`` method:
-
-.. code:: php
-
-   House::macro('macroOne', fn() => 'Macro 1');
-   House::macro('macroTwo', fn() => 'Macro 2');
-
-   print_r(House::getMacros());
-   // Output:
-   // [
-   //     'macroOne' => callable,
-   //     'macroTwo' => callable,
-   // ]
-
-
-
-Error Handling
-==============
-
-Calling an undefined macro will throw an exception:
-
-.. code:: php
-
-   $house = new House();
-   echo $house->undefinedMacro(); // Throws an exception
-
-   // Exception Message: Method House::undefinedMacro does not exist.
-
-
-
-Advanced Notes
-==============
-
-1. **Thread Safety**:
-   - Locking can be enabled by defining the ``ENABLE_LOCK`` constant as ``true``.
-   - Write operations (e.g., ``macro`` and ``removeMacro``) are protected with locks to ensure thread safety.
-   - Read operations (e.g., ``getMacros`` and ``hasMacro``) are not locked to improve performance.
-
-2. **Backtracing**:
-   If you're using IDEs or static analysis tools, they may not recognize dynamically added methods. In such cases, use the PHPDoc format:
-
-   .. code:: php
-
-      /** @var Namespace\ClassName $this */
-
-3. **Method Chaining**:
-   - Ensure dynamically added methods return the calling object (`$this`) where necessary.
-
-4. **Conflict Resolution**:
-   - If a macro with the same name already exists, it will be overwritten only if explicitly allowed in the method call.
-
-
-
-``MacroMix`` provides powerful tools to dynamically extend your classes, making your code more flexible and reusable.
-
+```php
+class MyMixin
+{
+    /**
+     * @Macro("shout")
+     */
+    public function shout(string $text): string
+    {
+        return strtoupper($text) . '!';
+    }
+}
+
+// Load it:
+House::loadMacrosFromAnnotations(MyMixin::class);
+
+$h = new House();
+echo $h->shout('hello');  // “HELLO!”
+```
+
+### Retrieving all macros
+
+```php
+public static function getMacros(): array
+```
+
+* Returns `['macroName' => callable, ...]` of everything registered.
+
+**Example:**
+
+```php
+House::macro('one', fn()=>1);
+House::macro('two', fn()=>2);
+
+$macros = House::getMacros();
+// $macros = ['one' => <callable>, 'two' => <callable>];
+```
+
+### Mixing in an entire class/object
+
+```php
+public static function mix(object|string $mixin, bool $replace = true): void
+```
+
+* **\$mixin** can be an object or a fully-qualified class name string.
+* It will reflect on **all public+protected methods** of that object (or a new
+  instance if you passed a class name).
+* If a method is static in `$mixin`, the macro wraps a static invocation;
+  otherwise it wraps an invocation bound to the passed instance.
+* Set `$replace = false` if you want to skip any macro names that already exist.
+
+**Example:**
+
+```php
+$mixin = new class {
+    public function greet(string $name): string {
+        return "Hello, $name!";
+    }
+    protected function whisper(string $msg): string {
+        return "psst... $msg";
+    }
+};
+
+House::mix($mixin);
+$h = new House();
+echo $h->greet('World');  // “Hello, World!”
+echo $h->whisper('John'); // “psst... John”
+```
+
+### Error if undefined macro
+
+If you call `$house->nonexistent()`, you get:
+
+```text
+Exception: Method App\House::nonexistent does not exist.
+```
+
+### Thread safety (optional)
+
+By default, no locking is done.  If you set
+
+```php
+class House {
+    use MacroMix;
+    public const ENABLE_LOCK = true;
+}
+```
+
+then:
+
+* All register/write operations (`macro()`, `removeMacro()`, `loadMacrosFromConfig()`)
+  acquire an exclusive flock on the MacroMix source file, preventing
+  concurrent writes from racing.
+* Read-only checks (`hasMacro()`, `getMacros()`, calls to existing macros) bypass locking.
