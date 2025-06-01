@@ -4,19 +4,20 @@
 Redis Adapter
 ==================
 
-The **RedisCacheAdapter** uses the phpredis (`Redis` class). It can connect to:
+The **RedisCacheAdapter** uses the `Redis` (phpredis) extension. It supports:
 
-* **Single or clustered Redis** (sentinels, cluster mode, or UNIX socket).
-* Supports ACL/username/password if you provide a DSN like `redis://:pass@host:6379/0`.
+* **Single or clustered Redis** (including Sentinel or Cluster modes)
+* **ACL/username/password** via DSN (e.g. `redis://:pass@host:6379/0`)
+* **UNIX socket** connections (`redis:///path/to/socket`)
 
 Highlights
 ----------
 
-* **multiFetch()** via `MGET` → single round-trip for any number of keys.
-* **Native TTL** → `SETEX` or `EXPIRE` on each key.
-* **Atomic** operations guaranteed by Redis.
-* **Persistence** depends on your Redis config (RDB/AOF).
-* Values are stored as plain strings—the result of `ValueSerializer::serialize($item)`.
+* **multiFetch()** via `MGET` → one round-trip for any number of keys
+* **Native TTL** → uses `SETEX` or `EXPIRE`
+* **Atomic** operations guaranteed by Redis
+* **Persistence** depends on your Redis configuration (RDB/AOF)
+* Values are stored as plain strings (the result of `ValueSerializer::serialize($item)`)
 
 Quick Setup
 -----------
@@ -28,7 +29,7 @@ Quick Setup
    // (a) Let adapter parse a DSN and create the client:
    $pool = Cache::redis('site', 'redis://127.0.0.1:6379');
 
-   // (b) Pass an existing Redis instance you’ve already authenticated and selected DB:
+   // (b) Pass an existing Redis instance you’ve already authenticated:
    $r = new Redis();
    $r->connect('127.0.0.1', 6379);
    $r->auth('myPassword');
@@ -63,18 +64,12 @@ Bulk Fetch Example
 Clearing a Namespace
 --------------------
 
-`clear(): bool` uses `SCAN` to iterate over all keys in `“ns:*”` and deletes them
-in batches. This approach avoids blocking large sets of keys.
+`clear(): bool` uses `SCAN` to iterate over all keys in the `“ns:*”` pattern and deletes them in batches,
+avoiding large blocking operations.
 
-```php
-// Clear all keys under “site:” prefix
-$pool->clear();
-````
-
-Example
+Example:
 
 .. code-block:: php
 
-// Connect + clear:
-\$pool = Cache::redis('sessions');
-\$pool->clear(); // deletes all “sessions:\*” keys
+   // Clear all keys under “site:” prefix
+   $pool->clear();

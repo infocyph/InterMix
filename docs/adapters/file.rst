@@ -7,15 +7,15 @@ FileCache Adapter
 The **FileCacheAdapter** stores one file **per key** under a namespaced directory.
 It is:
 
-* **Zero‐dependencies**
-* **Debug‐friendly** (you can open the .cache files and inspect)
-* **Portable** (runs on any filesystem)
+* **Zero-dependencies** (no external PHP extensions needed)
+* **Debug-friendly** (you can open the .cache files and inspect)
+* **Portable** (runs on any local filesystem)
 
-—but also:
+…but also:
 
-* **Not suitable** for NFS or network filesystems (possible stale locks or contention)
+* **Not suitable** for NFS or network shares (file‐locking issues)
 * **Creates many small files** if you have thousands of keys
-* **Potentially slower** on spinning disks if directories get huge
+* **Potentially slower** on spinning disks when directories grow large
 
 Directory Layout
 ----------------
@@ -23,7 +23,7 @@ Directory Layout
 By default:
 
 * Base directory: `sys_get_temp_dir()` (e.g. `/tmp` on Linux)
-* Per‐namespace subdirectory: `cache_<namespace>`
+* Per-namespace subdirectory: `cache_<namespace>`
 * Each key → `hash('xxh128', $key) . '.cache'`
 
 Example:
@@ -38,12 +38,12 @@ Example:
 Concurrency & Locks
 -------------------
 
-* When you `save()`, the adapter uses `file_put_contents(..., LOCK_EX)`
+* When you call `save()`, the adapter uses `file_put_contents(..., LOCK_EX)`
   to avoid partial writes.
-* Reading does not use locks (race‐condition: two processes may read a stale file if it is in the middle of writing).
+* Reading does **not** use locks (there is a small race-condition if a write is in progress).
 * Bulk `getItems()` scans the directory once, checks each file’s content, and unserializes hits.
 
-Hot‐Reload / Namespace Change
+Hot-Reload / Namespace Change
 -----------------------------
 
 You can call:
@@ -55,8 +55,8 @@ You can call:
 This will:
 
 1. Create (if needed) `/path/to/custom-dir/cache_newns/`
-2. Drop any deferred queue or existing iterator snapshot
-3. All subsequent calls use the new directory/namespace
+2. Discard any existing deferred queue or iterator snapshot
+3. Subsequent calls use the new directory/namespace
 
 Example Usage
 -------------
@@ -65,7 +65,7 @@ Example Usage
 
    use Infocyph\InterMix\Cache\Cache;
 
-   // Create a file-based cache “thumbs”, under /var/tmp
+   // Create a file-based cache “thumbs” under /var/tmp
    $pool = Cache::file('thumbs', '/var/tmp');
 
    // Lazy compute a thumbnail on cache miss:
