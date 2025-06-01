@@ -7,7 +7,7 @@
  * a Memcached daemon is reachable at 127.0.0.1:11211.
  */
 
-use Infocyph\InterMix\Cache\Cachepool;
+use Infocyph\InterMix\Cache\Cache;
 use Infocyph\InterMix\Cache\Item\MemCacheItem;
 use Infocyph\InterMix\Serializer\ValueSerializer;
 use Infocyph\InterMix\Exceptions\CacheInvalidArgumentException;
@@ -34,7 +34,7 @@ beforeEach(function () {
     $client->addServer('127.0.0.1', 11211);
     $client->flush();                          // fresh slate
 
-    $this->cache = Cachepool::memcache(
+    $this->cache = Cache::memcache(
         'tests',
         [['127.0.0.1', 11211, 0]],
         $client

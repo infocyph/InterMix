@@ -15,13 +15,6 @@ use Infocyph\InterMix\Exceptions\CacheInvalidArgumentException;
 use Psr\Cache\InvalidArgumentException;
 use RuntimeException;
 
-/**
- * Filesystem-backed PSR-6 adapter.
- *
- *  • full ValueSerializer support (closures, objects, resources …)
- *  • deferred queue obeys commit()
- *  • Iterator exposes original keys and values
- */
 class FileCacheAdapter implements CacheItemPoolInterface, Countable
 {
     private string $dir;
@@ -53,7 +46,6 @@ class FileCacheAdapter implements CacheItemPoolInterface, Countable
      */
     public function setNamespaceAndDirectory(string $namespace, ?string $baseDir = null): void
     {
-        // Reset internal state to the new location
         $this->createDirectory($namespace, $baseDir);
         $this->deferred = [];
     }
@@ -99,7 +91,7 @@ class FileCacheAdapter implements CacheItemPoolInterface, Countable
      * Generates the file path for a given cache key.
      *
      * This method constructs the file path by hashing the provided key
-     * using SHA-256 and appending a '.cache' extension. The file is
+     * and appending a '.cache' extension. The file is
      * located within the cache directory specific to the current namespace.
      *
      * @param string $key The cache key for which to generate the file path.
@@ -107,7 +99,7 @@ class FileCacheAdapter implements CacheItemPoolInterface, Countable
      */
     private function fileFor(string $key): string
     {
-        return $this->dir . hash('sha256', $key) . '.cache';
+        return $this->dir . hash('xxh128', $key) . '.cache';
     }
 
 
@@ -133,7 +125,7 @@ class FileCacheAdapter implements CacheItemPoolInterface, Countable
             if ($item instanceof FileCacheItem && $item->isHit()) {
                 return $item;
             }
-            @unlink($file); // expired or corrupted
+            @unlink($file);
         }
 
         return new FileCacheItem($this, $key);
@@ -168,7 +160,7 @@ class FileCacheAdapter implements CacheItemPoolInterface, Countable
      *
      * @param string $key The key of the cache item to check.
      * @return bool Returns true if the cache item exists, false otherwise.
-     * @throws CacheInvalidArgumentException|InvalidArgumentException if the key is invalid.
+     * @throws CacheInvalidArgumentException if the key is invalid.
      */
     public function hasItem(string $key): bool
     {
@@ -185,7 +177,7 @@ class FileCacheAdapter implements CacheItemPoolInterface, Countable
      * @param string $key The key of the cache item to delete.
      *
      * @return bool True if the item was successfully deleted, false otherwise.
-     * @throws CacheInvalidArgumentException|InvalidArgumentException if the key is invalid.
+     * @throws CacheInvalidArgumentException if the key is invalid.
      */
     public function deleteItem(string $key): bool
     {
@@ -222,7 +214,7 @@ class FileCacheAdapter implements CacheItemPoolInterface, Countable
     public function clear(): bool
     {
         $ok = true;
-        foreach (glob("{$this->dir}*.cache") as $f) {
+        foreach (glob("$this->dir*.cache") as $f) {
             $ok = $ok && @unlink($f);
         }
         $this->deferred = [];
@@ -266,7 +258,7 @@ class FileCacheAdapter implements CacheItemPoolInterface, Countable
             return false;
         }
         $this->deferred[$item->getKey()] = $item;
-        return true; // queued
+        return true;
     }
 
     /**
@@ -291,7 +283,7 @@ class FileCacheAdapter implements CacheItemPoolInterface, Countable
      */
     public function count(): int
     {
-        return count(glob("{$this->dir}*.cache"));
+        return count(glob("$this->dir*.cache"));
     }
 
     /**

@@ -1,13 +1,13 @@
-.. _cachepool:
+.. _cache:
 
 ===========================
-Cachepool – Unified Facade
+Cache – Unified Facade
 ===========================
 
-`Infocyph.InterMix.Cache.Cachepool` is an **adapter-agnostic** PSR-6 pool
+`Infocyph.InterMix.Cache.Cache` is an **adapter-agnostic** PSR-6 pool
 with ergonomic extras:
 
-* **Static factories** – `Cachepool::file()`, `::apcu()`, `::memcached()`,
+* **Static factories** – `Cache::file()`, `::apcu()`, `::memcached()`,
   `::redis()`, `::sqlite()`
 * **Convenience API** – `set()`, `get()`, magic props, `ArrayAccess`
 * **Bulk fetch** – `getItems()` delegates to adapter-specific
@@ -17,7 +17,7 @@ with ergonomic extras:
 
 .. tip::
 
-   Cachepool is PSR-6–only by design.
+   Cache is PSR-6–only by design.
    Wrap it in *Symfony Cache* or *PSR-16 bridge* if you need those APIs.
 
 Quick start
@@ -25,7 +25,7 @@ Quick start
 
 .. code-block:: php
 
-   $cache = Cachepool::file('docs');
+   $cache = Cache::file('docs');
 
    // simple set / get
    $cache->set('answer', 42, ttl:3600);

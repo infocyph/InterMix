@@ -13,7 +13,7 @@ Connection
 
    $mc = new Memcached();
    $mc->addServer('127.0.0.1', 11211);
-   $pool = Cachepool::memcached('site', $mc);
+   $pool = Cache::memcached('site', $mc);
 
 Features
 --------

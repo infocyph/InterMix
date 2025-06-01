@@ -30,7 +30,7 @@ class SqliteCacheAdapter implements CacheItemPoolInterface, Countable
         string $dbPath = null,
     ) {
         $this->ns = preg_replace('/[^A-Za-z0-9_\-]/', '_', $namespace);
-        $file = $dbPath ?: sys_get_temp_dir() . "/cache_{$this->ns}.sqlite";
+        $file = $dbPath ?: sys_get_temp_dir() . "/cache_$this->ns.sqlite";
 
         $this->pdo = new PDO('sqlite:' . $file);
         $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -46,28 +46,6 @@ class SqliteCacheAdapter implements CacheItemPoolInterface, Countable
         $this->pdo->exec('CREATE INDEX IF NOT EXISTS exp_idx ON cache(expires)');
     }
 
-
-    /**
-     * Validates the format of a cache key.
-     *
-     * This method ensures that the given key conforms to the allowed character set
-     * and is not an empty string. The allowed characters are A-Z, a-z, 0-9, underscores (_),
-     * periods (.), and hyphens (-). If the key is invalid, a CacheInvalidArgumentException
-     * is thrown.
-     *
-     * @param string $key The cache key to validate.
-     *
-     * @throws CacheInvalidArgumentException if the key is empty or contains invalid characters.
-     */
-    private function validateKey(string $key): void
-    {
-        if ($key === '' || !preg_match('/^[A-Za-z0-9_.\-]+$/', $key)) {
-            throw new CacheInvalidArgumentException(
-                'Invalid SQLite cache key; allowed A-Z, a-z, 0-9, _, ., -',
-            );
-        }
-    }
-
     /**
      * {@inheritDoc}
      *
@@ -81,10 +59,8 @@ class SqliteCacheAdapter implements CacheItemPoolInterface, Countable
             return [];
         }
 
-        // ---- build placeholder list (?, ?, ...) ---------------------------
         $marks = implode(',', array_fill(0, count($keys), '?'));
 
-        // Each row = [key,value,expires]
         $stmt = $this->pdo->prepare(
             "SELECT key, value, expires
            FROM cache
@@ -98,7 +74,6 @@ class SqliteCacheAdapter implements CacheItemPoolInterface, Countable
             $rows[$r['key']] = ['value' => $r['value'], 'expires' => $r['expires']];
         }
 
-        // ---- build CacheItemInterface array in original order -------------
         $items = [];
         $now = time();
 
@@ -106,7 +81,6 @@ class SqliteCacheAdapter implements CacheItemPoolInterface, Countable
             if (isset($rows[$k])) {
                 $row = $rows[$k];
 
-                // honour TTL
                 if ($row['expires'] === null || $row['expires'] > $now) {
                     $val = ValueSerializer::unserialize($row['value']);
                     if ($val instanceof CacheItemInterface) {
@@ -120,11 +94,10 @@ class SqliteCacheAdapter implements CacheItemPoolInterface, Countable
                 $this->pdo->prepare("DELETE FROM cache WHERE key = ?")->execute([$k]);
             }
 
-            // cache miss
             $items[$k] = new SqliteCacheItem($this, $k);
         }
 
-        return $items; // iterable keyed by requested keys
+        return $items;
     }
 
     /**
@@ -138,8 +111,6 @@ class SqliteCacheAdapter implements CacheItemPoolInterface, Countable
      */
     public function getItem(string $key): SqliteCacheItem
     {
-        $this->validateKey($key);
-
         $stmt = $this->pdo->prepare(
             'SELECT value, expires FROM cache WHERE key = :k LIMIT 1',
         );
@@ -237,7 +208,6 @@ class SqliteCacheAdapter implements CacheItemPoolInterface, Countable
      */
     public function deleteItem(string $key): bool
     {
-        $this->validateKey($key);
         $this->pdo->prepare('DELETE FROM cache WHERE key = :k')->execute([':k' => $key]);
         return true;
     }

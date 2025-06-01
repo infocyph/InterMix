@@ -15,7 +15,6 @@ use Infocyph\InterMix\Exceptions\CacheInvalidArgumentException;
 
 class ApcuCacheAdapter implements CacheItemPoolInterface, Countable
 {
-    /* ── state ───────────────────────────────────────────────────────── */
     private readonly string $ns;
     private array $deferred = [];
 
@@ -64,12 +63,12 @@ class ApcuCacheAdapter implements CacheItemPoolInterface, Countable
         if ($keys === []) {
             return [];
         }
-        $prefixed = array_map(fn ($k) => $this->ns . ':' . $k, $keys);
+        $prefixed = array_map(fn ($k) => $this->map($k), $keys);
         $raw = apcu_fetch($prefixed);
 
         $items = [];
         foreach ($keys as $k) {
-            $p = $this->ns . ':' . $k;
+            $p = $this->map($k);
             if (array_key_exists($p, $raw)) {
                 $val = ValueSerializer::unserialize($raw[$p]);
                 if ($val instanceof CacheItemInterface) {
@@ -105,7 +104,7 @@ class ApcuCacheAdapter implements CacheItemPoolInterface, Countable
                 return $item;
             }
         }
-        return new ApcuCacheItem($this, $key); // cache miss
+        return new ApcuCacheItem($this, $key);
     }
 
     /**

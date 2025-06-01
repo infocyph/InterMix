@@ -6,7 +6,7 @@
  * Runs only when the PDO SQLite driver is available.
  */
 
-use Infocyph\InterMix\Cache\Cachepool;
+use Infocyph\InterMix\Cache\Cache;
 use Infocyph\InterMix\Cache\Item\SqliteCacheItem;
 use Infocyph\InterMix\Serializer\ValueSerializer;
 use Infocyph\InterMix\Exceptions\CacheInvalidArgumentException;
@@ -20,7 +20,7 @@ if (!in_array('sqlite', PDO::getAvailableDrivers(), true)) {
 /* ── bootstrap / teardown ────────────────────────────────────────── */
 beforeEach(function () {
     $this->dbFile = sys_get_temp_dir() . '/pest_sqlite_' . uniqid() . '.sqlite';
-    $this->cache  = Cachepool::sqlite('tests', $this->dbFile);
+    $this->cache  = Cache::sqlite('tests', $this->dbFile);
 
     /* stream handler for resource test */
     ValueSerializer::registerResourceHandler(

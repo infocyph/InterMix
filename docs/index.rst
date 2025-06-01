@@ -19,6 +19,6 @@ Contents
     container
     fence
     serializer
-    cachepool
+    cache
     remix
     memoize

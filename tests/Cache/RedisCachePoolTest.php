@@ -9,7 +9,7 @@
  *   • no Redis server answers at 127.0.0.1:6379.
  */
 
-use Infocyph\InterMix\Cache\Cachepool;
+use Infocyph\InterMix\Cache\Cache;
 use Infocyph\InterMix\Cache\Item\RedisCacheItem;
 use Infocyph\InterMix\Serializer\ValueSerializer;
 use Infocyph\InterMix\Exceptions\CacheInvalidArgumentException;
@@ -34,7 +34,7 @@ beforeEach(function () {
     $client->connect('127.0.0.1', 6379);
     $client->flushDB();                               // fresh DB 0
 
-    $this->cache = Cachepool::redis(
+    $this->cache = Cache::redis(
         'tests',
         'redis://127.0.0.1:6379',
         $client

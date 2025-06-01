@@ -181,7 +181,7 @@ class MemCacheItem implements CacheItemInterface
             'key' => $this->key,
             'value' => $this->value,
             'hit' => $this->hit,
-            'exp' => $this->exp?->format(DateTime::ATOM),
+            'exp' => $this->exp?->format(DateTimeInterface::ATOM),
         ];
     }
 

@@ -12,17 +12,17 @@ use Psr\Cache\CacheItemInterface;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Cache\InvalidArgumentException;
 
-class Cachepool implements
+readonly class Cache implements
     CacheItemPoolInterface,
     ArrayAccess,
     Countable
 {
     /**
-     * Cachepool constructor.
+     * Cache constructor.
      *
      * @param CacheItemPoolInterface $adapter Any PSR-6 cache pool.
      */
-    public function __construct(private readonly CacheItemPoolInterface $adapter)
+    public function __construct(private CacheItemPoolInterface $adapter)
     {
     }
 
@@ -76,7 +76,7 @@ class Cachepool implements
      * @param string $namespace The namespace prefix for cache keys.
      * @param string|null $file The file path for the SQLite database.
      *     If `null`, the system temporary directory will be used.
-     * @return self An instance of Cachepool configured with a SQLite adapter.
+     * @return self An instance of Cache configured with a SQLite adapter.
      */
     public static function sqlite(
         string $namespace = 'default',
@@ -91,7 +91,7 @@ class Cachepool implements
      * @param string $namespace The namespace prefix for cache keys.
      * @param string $dsn The Data Source Name for the Redis server.
      * @param \Redis|null $client An optional pre-configured Redis client instance.
-     * @return self An instance of Cachepool configured with a Redis adapter.
+     * @return self An instance of Cache configured with a Redis adapter.
      */
     public static function redis(
         string $namespace = 'default',
@@ -326,7 +326,7 @@ class Cachepool implements
     /**
      * Changes the namespace and directory for the pool.
      *
-     * If the adapter implements {@see \Psr\Cache\CacheItemPoolInterface::setNamespaceAndDirectory},
+     * If the adapter implements {@see CacheItemPoolInterface::setNamespaceAndDirectory},
      * this call is forwarded to the adapter. Otherwise, a {@see \BadMethodCallException} is thrown.
      *
      * @param string      $namespace The new namespace.
@@ -416,6 +416,7 @@ class Cachepool implements
      *
      * @param string $name The name of the property to retrieve.
      * @return mixed The stored value, or null if it does not exist.
+     * @throws InvalidArgumentException
      */
     public function __get(string $name): mixed
     {
@@ -428,9 +429,10 @@ class Cachepool implements
      * This method allows for the use of the assignment operator on cache items,
      * which internally calls set() to store the specified item in the cache.
      *
-     * @param string $name  The name of the property to set.
-     * @param mixed  $value The value to store in the cache.
+     * @param string $name The name of the property to set.
+     * @param mixed $value The value to store in the cache.
      * @return void
+     * @throws InvalidArgumentException
      */
     public function __set(string $name, mixed $value): void
     {
@@ -471,6 +473,7 @@ class Cachepool implements
      *
      * If the adapter is a Countable, we delegate to it. Otherwise, we
      * manually count the number of items returned by getItems().
+     * @throws InvalidArgumentException
      */
     public function count(): int
     {

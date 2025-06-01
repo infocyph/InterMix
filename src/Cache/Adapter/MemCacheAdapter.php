@@ -6,6 +6,7 @@ namespace Infocyph\InterMix\Cache\Adapter;
 
 use Countable;
 use Memcached;
+use Psr\Cache\InvalidArgumentException;
 use RuntimeException;
 use Psr\Cache\CacheItemInterface;
 use Psr\Cache\CacheItemPoolInterface;
@@ -15,7 +16,6 @@ use Infocyph\InterMix\Exceptions\CacheInvalidArgumentException;
 
 class MemCacheAdapter implements CacheItemPoolInterface, Countable
 {
-    /* ── state ─────────────────────────────────────────────────────── */
     private readonly Memcached $mc;
     private readonly string $ns;
     private array $deferred = [];
@@ -55,7 +55,7 @@ class MemCacheAdapter implements CacheItemPoolInterface, Countable
      * @param string $key Unprefixed key.
      * @return string Prefixed key (e.g. "ns:foo").
      */
-    private function k(string $key): string
+    private function map(string $key): string
     {
         return $this->ns . ':' . $key;
     }
@@ -73,12 +73,12 @@ class MemCacheAdapter implements CacheItemPoolInterface, Countable
      */
     public function multiFetch(array $keys): array
     {
-        $prefixed = array_map(fn ($k) => $this->ns .':'. $k, $keys);
+        $prefixed = array_map(fn ($k) => $this->map($k), $keys);
         $raw      = $this->mc->getMulti($prefixed, Memcached::GET_PRESERVE_ORDER) ?: [];
 
         $items = [];
         foreach ($keys as $k) {
-            $p = $this->ns .':'. $k;
+            $p = $this->map($k);
             if (isset($raw[$p])) {
                 $val = ValueSerializer::unserialize($raw[$p]);
                 if ($val instanceof CacheItemInterface) {
@@ -101,14 +101,14 @@ class MemCacheAdapter implements CacheItemPoolInterface, Countable
      */
     public function getItem(string $key): MemCacheItem
     {
-        $raw = $this->mc->get($this->k($key));
+        $raw = $this->mc->get($this->map($key));
         if ($this->mc->getResultCode() === Memcached::RES_SUCCESS && is_string($raw)) {
             $item = ValueSerializer::unserialize($raw);
             if ($item instanceof MemCacheItem && $item->isHit()) {
                 return $item;
             }
         }
-        return new MemCacheItem($this, $key);        // cache miss
+        return new MemCacheItem($this, $key);
     }
 
     /**
@@ -134,6 +134,7 @@ class MemCacheAdapter implements CacheItemPoolInterface, Countable
      *
      * @param string $key The key of the cache item to check.
      * @return bool Returns true if the cache item exists and is a cache hit, false otherwise.
+     * @throws InvalidArgumentException
      */
     public function hasItem(string $key): bool
     {
@@ -150,8 +151,7 @@ class MemCacheAdapter implements CacheItemPoolInterface, Countable
      */
     public function deleteItem(string $key): bool
     {
-        $this->mc->delete($this->k($key));
-        $this->unregister($key);
+        $this->mc->delete($this->map($key));
         return true;
     }
 
@@ -203,10 +203,8 @@ class MemCacheAdapter implements CacheItemPoolInterface, Countable
         }
         $blob = ValueSerializer::serialize($item);
         $ttl = $item->ttlSeconds();
-        $ok = $this->mc->set($this->k($item->getKey()), $blob, $ttl ?? 0);
-        if ($ok) {
-            $this->register($item->getKey());
-        }
+        $ok = $this->mc->set($this->map($item->getKey()), $blob, $ttl ?? 0);
+        $ok && $this->mc->getResultCode() === Memcached::RES_SUCCESS;
         return $ok;
     }
 
@@ -256,17 +254,17 @@ class MemCacheAdapter implements CacheItemPoolInterface, Countable
      */
     private function fetchKeys(): array
     {
-        if ($quick = $this->fastKnownKeys()) {                 // 1
+        if ($quick = $this->fastKnownKeys()) {
             return $quick;
         }
 
         $pref = $this->ns . ':';
 
-        if ($keys = $this->keysFromGetAll($pref)) {            // 2
+        if ($keys = $this->keysFromGetAll($pref)) {
             return $keys;
         }
 
-        return $this->keysFromSlabDump($pref);                 // 3
+        return $this->keysFromSlabDump($pref);
     }
 
     /**
@@ -386,7 +384,7 @@ class MemCacheAdapter implements CacheItemPoolInterface, Countable
      * the cache pool. The item will not be saved immediately, but
      * will be stored when the commit() method is called.
      *
-     * @param MemCacheItem $item The cache item to be queued for deferred saving.
+     * @param MemCacheItem $i The cache item to be queued for deferred saving.
      * @return bool True if the item was successfully queued, false otherwise.
      * @internal
      */
@@ -394,24 +392,4 @@ class MemCacheAdapter implements CacheItemPoolInterface, Countable
     {
         return $this->saveDeferred($i);
     }
-
-    /**
-     * Adds a key to the known keys list.
-     *
-     * @param string $key
-     */
-    private function register(string $key): void
-    {
-        $this->knownKeys[$key] = true;
-    }
-    /**
-     * Removes a key from the known keys list.
-     *
-     * @param string $key
-     */
-    private function unregister(string $key): void
-    {
-        unset($this->knownKeys[$key]);
-    }
-
 }

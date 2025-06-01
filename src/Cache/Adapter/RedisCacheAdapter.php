@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\Cache\Adapter;
 
 use Countable;
+use Psr\Cache\InvalidArgumentException;
 use Redis;
 use RuntimeException;
 use Psr\Cache\CacheItemInterface;
@@ -84,31 +85,9 @@ class RedisCacheAdapter implements CacheItemPoolInterface, Countable
      *
      * @return string "<ns>:<userKey>"
      */
-    private function k(string $key): string
+    private function map(string $key): string
     {
-        $this->validateKey($key);
         return $this->ns . ':' . $key;
-    }
-
-    /**
-     * Validates the format of a cache key.
-     *
-     * This method ensures that the given key conforms to the allowed character set
-     * and is not an empty string. The allowed characters are A-Z, a-z, 0-9, underscores (_),
-     * periods (.), and hyphens (-). If the key is invalid, a CacheInvalidArgumentException
-     * is thrown.
-     *
-     * @param string $key The cache key to validate.
-     *
-     * @throws CacheInvalidArgumentException if the key is empty or contains invalid characters.
-     */
-    private function validateKey(string $key): void
-    {
-        if ($key === '' || !preg_match('/^[A-Za-z0-9_.\-]+$/', $key)) {
-            throw new CacheInvalidArgumentException(
-                'Invalid Redis key: allowed A-Z, a-z, 0-9, _, ., -',
-            );
-        }
     }
 
 
@@ -125,8 +104,8 @@ class RedisCacheAdapter implements CacheItemPoolInterface, Countable
      */
     public function multiFetch(array $keys): array
     {
-        $prefixed = array_map(fn ($k) => $this->ns .':'. $k, $keys);
-        $rawVals  = $this->redis->mget($prefixed);   // ordered list
+        $prefixed = array_map(fn ($k) => $this->map($k), $keys);
+        $rawVals  = $this->redis->mget($prefixed);
 
         $items = [];
         foreach ($keys as $idx => $k) {
@@ -155,14 +134,14 @@ class RedisCacheAdapter implements CacheItemPoolInterface, Countable
      */
     public function getItem(string $key): RedisCacheItem
     {
-        $raw = $this->redis->get($this->k($key));
+        $raw = $this->redis->get($this->map($key));
         if (is_string($raw)) {
             $item = ValueSerializer::unserialize($raw);
             if ($item instanceof RedisCacheItem && $item->isHit()) {
                 return $item;
             }
         }
-        return new RedisCacheItem($this, $key); // cache miss
+        return new RedisCacheItem($this, $key);
     }
 
     /**
@@ -188,10 +167,11 @@ class RedisCacheAdapter implements CacheItemPoolInterface, Countable
      *
      * @param string $key The key of the cache item to check.
      * @return bool Returns true if the cache item exists and is a cache hit, false otherwise.
+     * @throws InvalidArgumentException
      */
     public function hasItem(string $key): bool
     {
-        return $this->redis->exists($this->k($key)) === 1
+        return $this->redis->exists($this->map($key)) === 1
             && $this->getItem($key)->isHit();
     }
 
@@ -213,8 +193,8 @@ class RedisCacheAdapter implements CacheItemPoolInterface, Countable
         $blob = ValueSerializer::serialize($item);
         $ttl = $item->ttlSeconds();
         return $ttl
-            ? $this->redis->setex($this->k($item->getKey()), $ttl, $blob)
-            : $this->redis->set($this->k($item->getKey()), $blob);
+            ? $this->redis->setex($this->map($item->getKey()), $ttl, $blob)
+            : $this->redis->set($this->map($item->getKey()), $blob);
     }
 
     /**
@@ -225,7 +205,7 @@ class RedisCacheAdapter implements CacheItemPoolInterface, Countable
      */
     public function deleteItem(string $key): bool
     {
-        return (bool)$this->redis->del($this->k($key));
+        return (bool)$this->redis->del($this->map($key));
     }
 
     /**
@@ -236,7 +216,7 @@ class RedisCacheAdapter implements CacheItemPoolInterface, Countable
      */
     public function deleteItems(array $keys): bool
     {
-        $full = array_map(fn ($k) => $this->k($k), $keys);
+        $full = array_map(fn ($k) => $this->map($k), $keys);
         return $this->redis->del($full) === count($keys);
     }
 

@@ -20,5 +20,5 @@ Key points
 
 .. code-block:: php
 
-   $pool = Cachepool::apcu('docs');
+   $pool = Cache::apcu('docs');
    $pool->set('stat', computeStats(), 120);

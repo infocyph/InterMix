@@ -30,7 +30,7 @@ Example
 .. code-block:: php
 
    $file = sys_get_temp_dir().'/my.db';
-   $pool = Cachepool::sqlite('tmp', $file);
+   $pool = Cache::sqlite('tmp', $file);
 
    $data = $pool->get('chart', function ($i) {
        $i->expiresAfter(300);

@@ -2,7 +2,7 @@
 
 /**  tests/FileCachePoolTest.php  */
 
-use Infocyph\InterMix\Cache\Cachepool;
+use Infocyph\InterMix\Cache\Cache;
 use Infocyph\InterMix\Cache\Item\FileCacheItem;
 use Infocyph\InterMix\Exceptions\CacheInvalidArgumentException;
 use Infocyph\InterMix\Serializer\ValueSerializer;
@@ -12,7 +12,7 @@ beforeEach(function () {
     $this->cacheDir = sys_get_temp_dir() . '/pest_cache_' . uniqid();
 
     /* build a file-backed cachepool via static factory */
-    $this->cache = Cachepool::file('tests', $this->cacheDir);
+    $this->cache = Cache::file('tests', $this->cacheDir);
     /* register stream handler only for the test run */
     ValueSerializer::registerResourceHandler(
         'stream',
@@ -179,7 +179,7 @@ test('invalid cache key throws', function () {
 test('persistence across pool instances', function () {
     $this->cache->set('persist', 'yes');
 
-    $again = Cachepool::file('tests', $this->cacheDir); // new instance
+    $again = Cache::file('tests', $this->cacheDir); // new instance
     expect($again->get('persist'))->toBe('yes');
 });
 

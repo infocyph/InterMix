@@ -29,7 +29,7 @@ Example
 
 .. code-block:: php
 
-   $pool = Cachepool::file('thumbs', '/var/tmp');
+   $pool = Cache::file('thumbs', '/var/tmp');
    $img  = $pool->get('page_1', function ($i) {
        $i->expiresAfter(300);
        return generateThumbnail(1);

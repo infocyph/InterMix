@@ -8,7 +8,7 @@
  * suite is skipped.
  */
 
-use Infocyph\InterMix\Cache\Cachepool;
+use Infocyph\InterMix\Cache\Cache;
 use Infocyph\InterMix\Cache\Item\ApcuCacheItem;
 use Infocyph\InterMix\Serializer\ValueSerializer;
 use Infocyph\InterMix\Exceptions\CacheInvalidArgumentException;
@@ -27,7 +27,7 @@ if (!apcu_enabled()) {
 /* ── boilerplate ──────────────────────────────────────────────────── */
 beforeEach(function () {
     apcu_clear_cache();                           // fresh memory
-    $this->cache = Cachepool::apcu('tests');      // APCu-backed pool
+    $this->cache = Cache::apcu('tests');      // APCu-backed pool
 
     /* register stream handler for resource tests */
     ValueSerializer::registerResourceHandler(

@@ -1,7 +1,5 @@
 <?php
 
-// src/Cache/Item/FileCacheItem.php
-
 declare(strict_types=1);
 
 namespace Infocyph\InterMix\Cache\Item;
@@ -158,7 +156,7 @@ class FileCacheItem implements CacheItemInterface
     {
         return [
             'key' => $this->key,
-            'value' => $this->value,                    // already wrapped
+            'value' => $this->value,
             'hit' => $this->hit,
             'exp' => $this->exp?->format(DateTimeInterface::ATOM),
         ];
@@ -173,7 +171,7 @@ class FileCacheItem implements CacheItemInterface
     public function __unserialize(array $data): void
     {
         $this->key = $data['key'];
-        $this->value = ValueSerializer::unwrap($data['value']);  // restore stream
+        $this->value = ValueSerializer::unwrap($data['value']);
         $this->hit = $data['hit'];
         $this->exp = isset($data['exp']) ? new DateTime($data['exp']) : null;
     }
