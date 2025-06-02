@@ -25,17 +25,6 @@ It provides:
 * **Iteration** (`foreach ($cache->getItemsIterator() as $k => $v)`)
 * Automatic **serialization** of closures, resources, and arbitrary PHP values
 
-.. toctree::
-    :titlesonly:
-    :hidden:
-
-    adapters/file
-    adapters/apcu
-    adapters/memcached
-    adapters/redis
-    adapters/sqlite
-    adapters/serialization
-
 -------------------------------
 Quick Start
 -------------------------------
@@ -135,3 +124,14 @@ Optional:
 - `setNamespaceAndDirectory(string $namespace, string|null $dir)`
 - Only supported if the adapter implements it (FileCacheAdapter is the primary one).
 - Allows changing namespace and/or storage location at runtime.
+
+.. toctree::
+    :titlesonly:
+    :hidden:
+
+    adapters/file
+    adapters/apcu
+    adapters/memcached
+    adapters/redis
+    adapters/sqlite
+    adapters/serialization
