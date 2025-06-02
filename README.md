@@ -8,99 +8,100 @@
 ![Packagist PHP Version](https://img.shields.io/packagist/dependency-v/infocyph/intermix/php)
 ![GitHub Code Size](https://img.shields.io/github/languages/code-size/infocyph/intermix)
 
-`InterMix` is a lightweight & versatile PHP library designed to provide commonly needed class-oriented tools with simplicity and efficiency. Whether you are managing dependencies or enhancing classes with macros, InterMix has you covered.
+`InterMix` is a lightweight and versatile PHP toolkit focused on class-oriented programming. It provides frequently-needed utilities like dependency injection, memoization, class macro support and more — all optimized for speed, simplicity and scalability.
 
+---
 
-## Key Features
+## 🚀 Key Features
 
-- **Dependency Injector (Container)**: Fully PSR-11 compliant for seamless integration.
-- **Class Initialization Barrier (Fence)**: Ensures safe and controlled initialization of classes.
-- **Class Macro (MacroMix)**: Extend classes dynamically with powerful macros.
-- **Memoization**: Improve performance by caching function results.
+- **Dependency Injection (Container)** — PSR-11 compatible, extensible container.
+- **Class Barrier (Fence)** — Protects class lifecycle via single-entry enforcement.
+- **Class Macros (MacroMix)** — Dynamically attach behavior to classes.
+- **Memoization** — Instance-based caching via `MemoizeTrait`.
+- **Global Helpers** — Intuitive tools like `pipe()`, `retry()`, `measure()` and `once()` for clean and expressive code.
 
+---
 
-## Prerequisites
-
-- PHP 8.2 or higher
-
-| Library Version | PHP Version       |
-|-----------------|-------------------|
-| 2.x.x or Higher | 8.2.x or Higher   |
-| 1.x.x           | 8.x.x             |
-
-
-## Installation
-
-Install InterMix using Composer:
+## 📦 Installation
 
 ```bash
 composer require infocyph/intermix
-```
+````
 
-## Getting Started
+Supported PHP versions:
 
-Here's how you can quickly get started with InterMix:
+| InterMix Version | PHP Version        |
+| ---------------- | ------------------ |
+| 2.x.x and above  | 8.2 or newer       |
+| 1.x.x            | 8.0–8.1 compatible |
 
-### Dependency Injection Example
+---
+
+## 🧪 Quick Examples
+
+### Dependency Injection
 
 ```php
 use Infocyph\InterMix\Container;
 
 $container = new Container();
-
-// Resolve and use the service
-$exampleService = $container->get('example_service');
-$exampleService->performAction();
+$service = $container->get('my_service');
+// Use the service...
 ```
 
-### Using Class Macros
+### Class Macros
 
 ```php
-$mixin = new class
-    {
-        public function greet($name)
-        {
-            return "Hello, $name!";
-        }
+MacroTestClass::mix(new class {
+    public function greet($name) {
+        return "Hello, $name!";
+    }
+});
 
-        protected function whisper($message)
-        {
-            return "psst... $message";
-        }
-    };
-
-    MacroTestClass::mix($mixin);
-$object = new MacroTestClass;
-echo $object->greet('World'); // Hello, World!
-echo $object->whisper('John'); // psst... John
+echo (new MacroTestClass)->greet('Alice'); // Hello, Alice!
 ```
 
+### Per-Call-Site Memoization with `once()`
 
-## Documentation
+```php
+use function Infocyph\InterMix\Remix\once;
 
-Comprehensive documentation is available on [Read the Docs](https://intermix.readthedocs.io). It covers everything from installation to advanced use cases.
+$value1 = once(fn() => rand(1, 999)); // Runs and caches
+$value2 = once(fn() => rand(1, 999)); // Returns cached result from same file:line
+```
 
+---
 
-## Testing
+## 📚 Documentation
 
-To ensure the library is functioning as expected, you can run the test suite. Make sure you have the necessary dependencies installed:
+Full documentation is hosted on **[Read the Docs](https://intermix.readthedocs.io)**.
+You’ll find:
+
+* 🧩 Module overviews
+* 🧪 Code examples
+* 📖 API references
+* 📘 PDF/ePub downloads
+
+View latest: [https://intermix.readthedocs.io](https://intermix.readthedocs.io)
+
+---
+
+## ✅ Testing
 
 ```bash
 composer install
 composer test
 ```
 
+---
 
-## Contributing
+## 🤝 Contributing
 
-We welcome contributions! If you encounter bugs, have feature requests, or want to help improve the library, please [create an issue](https://github.com/infocyph/InterMix/issues).
+Want to help? File issues, request features, or open pull requests here:
+👉 [github.com/infocyph/InterMix/issues](https://github.com/infocyph/InterMix/issues)
 
+---
 
-## Support
+## 🛡 License
 
-Need help? Open an issue or reach out through the GitHub repository. We're here to help!
-
-
-## License
-
-InterMix is licensed under the [MIT License](https://opensource.org/licenses/MIT). Feel free to use and modify it as needed.
+This project is open-source under the **[MIT License](https://opensource.org/licenses/MIT)**.
