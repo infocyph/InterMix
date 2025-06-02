@@ -84,7 +84,17 @@ html_theme_options = {
     'collapse_navigation': False,
     'display_version': False
 }
+html_show_sourcelink = True
+html_last_updated_fmt = '%Y-%m-%d'
 
+# Enable PDF metadata (optional, not critical)
+latex_engine = 'xelatex'
+latex_elements = {
+    'papersize': 'a4paper',
+    'pointsize': '11pt',
+    'preamble': '',
+    'figure_align': 'H',
+}
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
