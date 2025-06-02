@@ -16,5 +16,3 @@ formats:
   - pdf
   - epub
 
-submodules:
-  include: true  # If you use submodules
