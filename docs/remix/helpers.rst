@@ -12,6 +12,7 @@ and are automatically available (no extra ``use`` is required).
 - **pipe()**    – passes a value through a callback and returns the callback’s result.
 - **measure()** – times a callback and returns its result plus elapsed ms.
 - **retry()**   – runs a callback repeatedly until success or max attempts.
+- **once()**    – ensures a callback is evaluated only once per call site.
 
 pipe()
 ======
@@ -106,3 +107,56 @@ Parameters:
        backoff: 2.0
    );
    // After two failures, on the third try it returns "ok".
+
+once()
+======
+
+.. code-block:: php
+
+   function once(callable $callback, ?Container $container = null): mixed
+
+**Goal**: Execute a zero-argument callback exactly once **per call site** (determined by `file:line`). On the first invocation at that source location, ``once()`` runs the callback and caches its result. All subsequent calls from that same location return the stored value, never re-evaluating the callback.
+
+- ``$callback`` – A zero-argument callable to evaluate.
+- ``$container`` *(optional)* – A dependency container that supports registration via `registerClosure($key, $callback)`. If supplied, it is used instead of the internal static cache.
+
+This ensures memoization based on where ``once()`` is called—regardless of class or function.
+
+**Behavior:**
+
+- If called without a container, a function-local static array stores values per `file:line`.
+- If called with a container, it uses the container’s registration system to store results and return from cache.
+
+**Example (using built-in static cache)**:
+
+.. code-block:: php
+
+   // First time: runs the closure, caches result
+   $a = once(fn() => rand(1, 999));
+
+   // Same line = cached result
+   $b = once(fn() => rand(1, 999));
+   // $a === $b
+
+   // Different line = new execution
+   $c = once(fn() => rand(1, 999)); // this is a new line = new result
+
+**Example (with container)**:
+
+.. code-block:: php
+
+   $container = new ArrayContainer(); // must support registerClosure(), has(), get()
+
+   $val = once(
+       fn() => computeSomething(),
+       $container
+   );
+
+   // Will always return cached value from container on subsequent calls at same line
+
+**Use Cases**:
+
+- Expensive initialization code
+- Runtime configuration values
+- Deterministic memoization per exact file+line
+- Optional use of a shared container for testability or multi-scope consistency

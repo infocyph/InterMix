@@ -47,8 +47,9 @@ class Cache implements
         return new self(new Adapter\FileCacheAdapter($namespace, $dir));
     }
 
+
     /**
-     * Static factory for APCu cache.
+     * Static factory for APCu-based cache.
      *
      * @param string $namespace Cache prefix. Will be suffixed to each key.
      * @return static
@@ -58,12 +59,14 @@ class Cache implements
         return new self(new Adapter\ApcuCacheAdapter($namespace));
     }
 
+
     /**
-     * Static factory for Memcached cache.
+     * Static factory for Memcached-based cache.
      *
-     * @param string        $namespace Cache prefix.
-     * @param array<string[]> $servers   List of [host, port, weight] triples.
-     * @param \Memcached|null $client    Optional preconfigured Memcached instance.
+     * @param string $namespace Cache prefix. Will be suffixed to each key.
+     * @param array $servers Memcached servers as an array of `[host, port, weight]`.
+     *                       The `weight` is a float between 0 and 1, and defaults to 0.
+     * @param \Memcached|null $client Optional preconfigured Memcached instance.
      * @return static
      */
     public static function memcache(
@@ -74,11 +77,12 @@ class Cache implements
         return new self(new Adapter\MemCacheAdapter($namespace, $servers, $client));
     }
 
+
     /**
-     * Static factory for SQLite cache.
+     * Static factory for SQLite-based cache.
      *
-     * @param string      $namespace The namespace prefix for cache keys.
-     * @param string|null $file      The file path for the SQLite database (or null → sys temp).
+     * @param string      $namespace Cache prefix. Will be suffixed to each key.
+     * @param string|null $file       Path to SQLite file (or null → sys temp dir).
      * @return static
      */
     public static function sqlite(string $namespace = 'default', ?string $file = null): self
@@ -86,12 +90,14 @@ class Cache implements
         return new self(new Adapter\SqliteCacheAdapter($namespace, $file));
     }
 
+
     /**
      * Static factory for Redis cache.
      *
-     * @param string       $namespace Cache prefix.
-     * @param string       $dsn       Redis DSN (e.g. "redis://127.0.0.1:6379").
-     * @param \Redis|null $client    Optional preconfigured Redis client.
+     * @param string      $namespace Cache prefix.
+     * @param string      $dsn        DSN for Redis connection (e.g. 'redis://127.0.0.1:6379'),
+     *                                or null to use the default ('redis://127.0.0.1:6379').
+     * @param \Redis|null $client     Optional preconfigured Redis instance.
      * @return static
      */
     public static function redis(

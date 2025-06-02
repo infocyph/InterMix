@@ -36,8 +36,9 @@ It provides:
     adapters/sqlite
     adapters/serialization
 
+-------------------------------
 Quick Start
-===========
+-------------------------------
 
 .. code-block:: php
 
@@ -61,8 +62,9 @@ Quick Start
    $items = $cache->getItems(['foo', 'bar', 'baz']);
    // $items['foo']->isHit() ? $items['foo']->get() : null
 
+-------------------------------
 Feature Matrix
-==============
+-------------------------------
 
 .. csv-table::
    :widths: 20, 10, 10, 10, 10, 10
@@ -76,8 +78,9 @@ Feature Matrix
 
 † Tag support (cache invalidations by tag) is planned for a future version.
 
+-------------------------------
 Public API
-==========
+-------------------------------
 
 PSR-6 Methods (delegated to the underlying adapter):
 
@@ -132,12 +135,3 @@ Optional:
 - `setNamespaceAndDirectory(string $namespace, string|null $dir)`
 - Only supported if the adapter implements it (FileCacheAdapter is the primary one).
 - Allows changing namespace and/or storage location at runtime.
-
-Why use “getItems”?
--------------------
-
-Most adapters implement a batched “multiFetch()” call that fetches **N** keys
-in **one** round-trip—rather than doing **N** separate `getItem()` calls. This
-significantly improves performance when talking to remote stores (Redis,
-Memcached, SQLite). The facade automatically detects `method_exists($adapter, 'multiFetch')`
-and uses it if available.
