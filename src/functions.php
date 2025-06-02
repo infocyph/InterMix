@@ -24,34 +24,26 @@ if (!function_exists('container')) {
         string|Closure|callable|array|null $closureOrClass = null,
         string $alias = 'default',
     ): mixed {
-        // 1) Retrieve the Container instance
         $instance = Container::instance($alias);
 
-        // 2) If no class/closure is given, just return the Container
         if ($closureOrClass === null) {
             return $instance;
         }
 
-        // 3) Use the container's InvocationManager->split(...) to parse
         //    "class@method", "class::method", [class, method], or closure/callable.
         [$class, $method] = $instance
             ->split($closureOrClass);
 
-        // 4) If no method is extracted => possibly a closure/callable or a direct ID.
         if (!$method) {
-            // If it's a closure or any callable, let's do invocationManager->call(...)
             if ($class instanceof Closure || is_callable($class)) {
                 return $instance->invocation()->call($class);
             }
 
-            // Otherwise interpret as class/ID => get($class)
             return $instance->get($class);
         }
 
-        // 5) If we do have a method => register that method using RegistrationManager->registerMethod(...)
         $instance->registration()->registerMethod($class, $method);
 
-        // 6) Then call getReturn($class) to actually invoke that method and return the result
         return $instance->getReturn($class);
     }
 }
@@ -217,5 +209,39 @@ if (!function_exists('retry')) {
             $sleep = (int)($sleep * $backoff);
             goto beginning;
         }
+    }
+}
+if (!function_exists('once')) {
+    /**
+     * Execute the given zero‐argument callback once at this call site (file:line).
+     * On subsequent calls from the same file and line, return the cached result.
+     *
+     * @param callable $callback A zero‐argument function to run once.
+     * @param Container|null $container
+     * @return mixed The callback’s return value (cached on repeat calls).
+     * @throws ContainerException
+     * @throws \Psr\Cache\InvalidArgumentException
+     */
+    function once(callable $callback, ?Container $container = null): mixed
+    {
+        static $cache = [];
+        $bt = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
+        $key = ($bt[1]['file'] ?? '(unknown)') . ':' . ($bt[1]['line'] ?? 0);
+
+        if ($container !== null) {
+            if (!$container->has($key)) {
+                $container->registration()->registerClosure($key, $callback);
+            }
+
+            return $container->get($key);
+        }
+
+        if (array_key_exists($key, $cache)) {
+            return $cache[$key];
+        }
+
+        $value = $callback();
+        $cache[$key] = $value;
+        return $value;
     }
 }

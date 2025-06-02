@@ -10,31 +10,14 @@ Ideal for:
 * **CLI tools** or single-host PHP processes
 * **Small apps** needing persistence without a full Redis/Memcached setup
 
-Schema
-------
-
-.. code-block:: sql
-
-   CREATE TABLE IF NOT EXISTS cache (
-       key      TEXT PRIMARY KEY,
-       value    BLOB NOT NULL,
-       expires  INTEGER
-   );
-   CREATE INDEX IF NOT EXISTS exp_idx ON cache(expires);
-
-* The `expires` column is a UNIX timestamp (seconds). If `expires IS NULL`, the item never expires.
-
 Bulk Fetch (`multiFetch`)
 -------------------------
 
 Instead of N separate `SELECT` calls, `getItems()` does:
 
-1. `SELECT key, value, expires FROM cache WHERE key IN (?, ?, …)`
-2. Build an associative map of returned rows by `key`
-3. For each requested key:
-   - If found **and** not expired: `ValueSerializer::unserialize(value)` → return `SqliteCacheItem` (hit)
-   - If expired: `DELETE FROM cache WHERE key = ?` → return new `SqliteCacheItem` (miss)
-   - If not found: return new `SqliteCacheItem` (miss)
+- If found **and** not expired: `ValueSerializer::unserialize(value)` → return `SqliteCacheItem` (hit)
+- If expired: `DELETE FROM cache WHERE key = ?` → return new `SqliteCacheItem` (miss)
+- If not found: return new `SqliteCacheItem` (miss)
 
 Example:
 
