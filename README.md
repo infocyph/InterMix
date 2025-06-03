@@ -15,6 +15,7 @@
 ## 🚀 Key Features
 
 - **Dependency Injection (Container)** — PSR-11 compatible, extensible container.
+- **Caching** — PSR-6 & PSR-16 compatible, extensible cache library.
 - **Class Barrier (Fence)** — Protects class lifecycle via single-entry enforcement.
 - **Class Macros (MacroMix)** — Dynamically attach behavior to classes.
 - **Memoization** — Instance-based caching via `MemoizeTrait`.
