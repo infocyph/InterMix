@@ -60,7 +60,7 @@ if (!function_exists('memoize')) {
      * @return mixed The result of the memoized callable.
      * @throws Exception
      */
-    function memoize(callable $callable = null, array $params = []): mixed
+    function memoize(?callable $callable = null, array $params = []): mixed
     {
         $m = Memoizer::instance();
         if ($callable === null) {
@@ -82,7 +82,7 @@ if (!function_exists('remember')) {
      *
      * @throws Exception
      */
-    function remember(object $object = null, callable $callable = null, array $params = []): mixed
+    function remember(?object $object = null, ?callable $callable = null, array $params = []): mixed
     {
         $m = Memoizer::instance();
 
