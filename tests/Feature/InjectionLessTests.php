@@ -29,7 +29,9 @@ test('Method parameter', function () use ($get2) {
 });
 
 container(null, 'injection_less_with_prop')
+    ->options()
     ->setOptions(false)
+    ->registration()
     ->registerClass(InjectionLessClass::class, [123])
     ->registerMethod(InjectionLessClass::class, 'ilc', [456])
     ->registerProperty(InjectionLessClass::class, [

@@ -74,8 +74,8 @@ if (!function_exists('remember')) {
     /**
      * Object-scoped memoization: caches a callable once per instance.
      *
-     * @param object|null $object $object The object to scope the cache for.
-     * @param callable|null $callable $callable The function to memoize.
+     * @param object|null $object The object to scope the cache for.
+     * @param callable|null $callable The function to memoize.
      * @param array $params The parameters to pass the callable (optional).
      *
      * @return mixed The result of the memoized callable.
