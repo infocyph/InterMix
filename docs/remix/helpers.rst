@@ -17,9 +17,7 @@ and are automatically available (no extra ``use`` is required).
 pipe()
 ======
 
-.. code-block:: php
-
-   function pipe(mixed $value, callable $callback): mixed
+.. php:function:: function pipe(mixed $value, callable $callback): mixed
 
 **Goal**: Transform a value through a callback and return the result.
 This is equivalent to::
@@ -36,9 +34,7 @@ This is equivalent to::
 measure()
 =========
 
-.. code-block:: php
-
-   function measure(callable $fn, ?float &$ms = null): mixed
+.. php:function:: function measure(callable $fn, ?float &$ms = null): mixed
 
 **Goal**: Run a block of code, capture how many milliseconds it took, and
 return the block’s result.
@@ -58,15 +54,7 @@ return the block’s result.
 retry()
 =======
 
-.. code-block:: php
-
-   function retry(
-       int $attempts,
-       callable $callback,
-       ?callable $shouldRetry = null,
-       int $delayMs = 0,
-       float $backoff = 1.0
-   ): mixed
+.. php:function:: function retry(int $attempts, callable $callback, ?callable $shouldRetry = null, int $delayMs = 0, float $backoff = 1.0)
 
 **Goal**: Keep retrying a failing operation until it succeeds or the maximum number of attempts is reached.
 Ideal for flaky APIs, network calls, or transient database issues.
@@ -111,9 +99,7 @@ Parameters:
 once()
 ======
 
-.. code-block:: php
-
-   function once(callable $callback, ?Container $container = null): mixed
+.. php:function:: function once(callable $callback, ?Container $container = null): mixed
 
 **Goal**: Execute a zero-argument callback exactly once **per call site** (determined by `file:line`). On the first invocation at that source location, ``once()`` runs the callback and caches its result. All subsequent calls from that same location return the stored value, never re-evaluating the callback.
 

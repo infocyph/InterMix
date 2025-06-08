@@ -129,9 +129,9 @@ Optional:
     :titlesonly:
     :hidden:
 
+    adapters/serialization
     adapters/file
     adapters/apcu
     adapters/memcached
     adapters/redis
     adapters/sqlite
-    adapters/serialization

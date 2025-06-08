@@ -16,43 +16,10 @@ this actually creates a ``TapProxy($someObject)``. Then each chained method
 always returns the original target** (not the proxy itself). That means your
 chain never breaks, and you never have to assign the result manually.
 
-Class Definition
-================
-
-.. code-block:: php
-
-   namespace Infocyph\InterMix\Remix;
-
-   class TapProxy
-   {
-       public function __construct(public mixed $target) {}
-
-       public function __call(string $method, array $parameters)
-       {
-           // Forward the method call to the real object...
-           $this->target->{$method}(...$parameters);
-           // …then return the original object for further chaining
-           return $this->target;
-       }
-   }
-
 Global Helper Function ``tap()``
 ================================
 
-.. code-block:: php
-
-   if (!function_exists('tap')) {
-       function tap(mixed $value, ?callable $callback = null): mixed
-       {
-           if (is_null($callback)) {
-               // No callback? Return a TapProxy to let you chain methods.
-               return new TapProxy($value);
-           }
-           // With callback: invoke it and then return the original value.
-           $callback($value);
-           return $value;
-       }
-   }
+.. php:function:: function tap(mixed $value, ?callable $callback = null): mixed
 
 Usage Examples
 ==============

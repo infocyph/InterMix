@@ -5,7 +5,7 @@ Serialization Internals
 =====================
 
 All cache adapters rely on **`ValueSerializer`**
-to handle arbitrary PHP values—scalars, arrays, closures, and resources.
+to handle arbitrary PHP values—scalars, arrays, closures and resources.
 
 That component:
 

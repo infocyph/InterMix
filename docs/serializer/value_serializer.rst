@@ -30,7 +30,7 @@ and you get the original PHP value back with
 Public API
 ----------
 
-.. py:function:: string ValueSerializer::serialize(mixed $value)
+.. php:function:: string ValueSerializer::serialize(mixed $value)
 
    Recursively wraps any embedded resource via registered handlers, then
    serializes the entire structure using Opis Closure.
@@ -40,7 +40,7 @@ Public API
    - **$value**: any PHP value (scalar, array, object, closure, resource).
    - **Returns**: a ``string`` blob.
 
-.. py:function:: mixed ValueSerializer::unserialize(string $blob)
+.. php:function:: mixed ValueSerializer::unserialize(string $blob)
 
    Reverses ``serialize()``: uses Opis Closure’s ``unserialize()``, then recursively
    unwraps any previously wrapped resource via your handlers.
@@ -48,7 +48,7 @@ Public API
    - **$blob**: a string produced by ``ValueSerializer::serialize()``.
    - **Returns**: the original PHP value, with resources re‐instantiated.
 
-.. py:function:: mixed ValueSerializer::wrap(mixed $value)
+.. php:function:: mixed ValueSerializer::wrap(mixed $value)
 
    Convenience to “wrap only”—no actual string serialization takes place.
    Returns the same ``$value`` structure, but any resource is replaced by
@@ -64,13 +64,13 @@ Public API
 
    Useful if you want to inspect or store the intermediate form.
 
-.. py:function:: mixed ValueSerializer::unwrap(mixed $resource)
+.. php:function:: mixed ValueSerializer::unwrap(mixed $resource)
 
    Reverses ``wrap()`` only—no string deserialization.
    Finds any array nodes tagged with ``__wrapped_resource = true``, looks up the
    registered “restore” callback, and returns a real PHP resource.
 
-.. py:function:: void ValueSerializer::registerResourceHandler(string $type, callable $wrapFn, callable $restoreFn)
+.. php:function:: void ValueSerializer::registerResourceHandler(string $type, callable $wrapFn, callable $restoreFn)
 
    Register a new handler for a resource of type ``$type`` (as returned by
    ``get_resource_type()``).
@@ -84,7 +84,7 @@ Public API
    Throws ``InvalidArgumentException`` if you attempt to register a second
    handler for the same ``$type``.
 
-.. py:function:: void ValueSerializer::clearResourceHandlers()
+.. php:function:: void ValueSerializer::clearResourceHandlers()
 
    Remove all previously registered resource handlers.
    Useful for resetting state during tests.
