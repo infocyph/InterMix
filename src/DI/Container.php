@@ -92,6 +92,19 @@ class Container implements ContainerInterface
         return self::$instances[$instanceAlias] ??= new static($instanceAlias);
     }
 
+    /**
+     * Resets the internal registry of container instances.
+     *
+     * This method is useful for testing or other scenarios where you want to start
+     * with a clean slate. It removes all container instances from the registry,
+     * making them eligible for garbage collection.
+     *
+     * @return void
+     */
+    public static function flushInstances(): void
+    {
+        self::$instances = [];
+    }
 
     /**
      * Remove the container instance from the registry.
@@ -121,7 +134,7 @@ class Container implements ContainerInterface
     public function lock(): self
     {
         // Let the repository handle the lock
-        $this->repository->lock();
+        $this->repository->hardLock();
 
         return $this;
     }
@@ -416,7 +429,7 @@ class Container implements ContainerInterface
     {
         return match (true) {
             $exception instanceof NotFoundException => new NotFoundException("No entry found for '$id'"),
-            default => new ContainerException("Error retrieving entry '$id': " . $exception->getMessage()),
+            default => new ContainerException("Error retrieving entry '$id': " . $exception->getMessage(), 0, $exception),
         };
     }
 }

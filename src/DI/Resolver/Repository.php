@@ -4,37 +4,32 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Resolver;
 
+use Infocyph\InterMix\DI\Data\ClassResource;
+use Infocyph\InterMix\DI\Data\ResolvedClass;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\CacheItemPoolInterface;
 
-/**
- * Central storage for the container’s definitions, resolved instances, etc.
- * Also includes optional toggles for:
- *   - environment-based overrides
- *   - lazy loading
- *   - debug mode
- *   - unified cache key generation
- */
 class Repository
 {
-    private array $functionReference   = [];
-    private array $classResource       = [];
-    private array $closureResource     = [];
-    private array $resolved            = [];
-    private array $resolvedResource    = [];
-    private array $resolvedDefinition  = [];
+    private array $functionReference = [];
+
+    /** @var array<class-string,ClassResource> */
+    private array $classResource = [];
+    private array $closureResource = [];
+    private array $resolved = [];
+
+    /** @var array<class-string,ResolvedClass> */
+    private array $resolvedResource = [];
+    private array $resolvedDefinition = [];
     private array $conditionalBindings = [];
-
-
-    private ?string $defaultMethod           = null;
-    private bool $enablePropertyAttribute    = false;
-    private bool $enableMethodAttribute      = false;
-    private bool $isLocked                   = false;
-    private ?CacheItemPoolInterface $cacheAdapter    = null;
-    private string $alias                    = 'default';
-
+    private ?string $defaultMethod = null;
+    private bool $enablePropertyAttribute = false;
+    private bool $enableMethodAttribute = false;
+    private bool $hardLocked = false;
+    private bool $softLocked = false;
+    private ?CacheItemPoolInterface $cacheAdapter = null;
+    private string $alias = 'default';
     private ?string $environment = null;
-
     private bool $lazyLoading = true;
 
 
@@ -45,15 +40,10 @@ class Repository
      */
     private function checkIfLocked(): void
     {
-        if ($this->isLocked) {
+        if ($this->hardLocked) {
             throw new ContainerException('Container is locked! Unable to set/modify any value.');
         }
     }
-
-    /* ------------------------------------------------------------------------
-     |   Locking, environment, debug, lazy toggles
-     * ----------------------------------------------------------------------*/
-
 
     /**
      * Locks the container from future modifications.
@@ -64,11 +54,119 @@ class Repository
      *
      * @return void
      */
-    public function lock(): void
+    public function hardLock(): void
     {
-        $this->isLocked = true;
+        $this->softLocked = $this->hardLocked = true;
     }
 
+    /**
+     * Soft locks the container from being resolved.
+     *
+     * When the container is soft locked, it prevents resolution of definitions
+     * but does not restrict setting or modifying values. This is useful in
+     * scenarios where you want to ensure that the container's current state
+     * is maintained without throwing exceptions for modifications.
+     *
+     * @return void
+     */
+    public function softLock(): void
+    {
+        $this->softLocked = true;
+    }
+
+    /**
+     * Checks whether the container is hard locked.
+     *
+     * A hard lock will throw exceptions if you try to set or modify values,
+     * whereas a soft lock will only prevent the container from being resolved.
+     *
+     * @return bool
+     *   TRUE if hard locked, FALSE otherwise.
+     */
+    public function isHardLocked(): bool
+    {
+        return $this->hardLocked;
+    }
+
+    /**
+     * Returns whether the container is soft locked.
+     *
+     * A soft lock is less restrictive than a hard lock. When a container is
+     * soft locked, it will not throw an exception if you try to set or modify
+     * values, but it will prevent the container from being resolved.
+     *
+     * @return bool True if the container is soft locked, false otherwise.
+     */
+    public function isSoftLocked(): bool
+    {
+        return $this->softLocked;
+    }
+
+    /**
+     * Adds a class resource to the repository.
+     *
+     * This method stores a class resource, represented by its class name and
+     * associated metadata, in the class resources array. The metadata should
+     * contain information about the constructor and any methods that should
+     * be called when resolving the class resource. Before adding the class
+     * resource, it checks whether the container is locked to prevent
+     * modifications.
+     *
+     * @param string $class The class name of the resource to add.
+     * @param ClassResource $meta The metadata associated with the class resource.
+     *
+     * @throws ContainerException if the container is locked.
+     */
+    public function addClassResource(string $class, ClassResource $meta): void
+    {
+        $this->checkIfLocked();
+        $this->classResource[$class] = $meta;
+    }
+
+    /**
+     * Retrieves the array of class resources.
+     *
+     * This method returns the array of class resources, where each key is the
+     * class name and the value is an array containing constructor and method
+     * data.
+     *
+     * @param string $class The class name of the resource.
+     * @return ClassResource the array of class resources
+     */
+    public function getClassResourceOf(string $class): ClassResource
+    {
+        return $this->classResource[$class] ?? new ClassResource();
+    }
+
+    /**
+     * Stores a resolved resource for a class-based resource.
+     *
+     * This method takes the class name and an array of resolved values for
+     * that class, such as the instance, constructor, properties, and methods.
+     * The array is stored in the "resolvedResource" array with the class name
+     * as the key.
+     *
+     * @param string $class The class name of the resource.
+     * @param ResolvedClass $data The array of resolved values for the class.
+     */
+    public function setResolvedResource(string $class, ResolvedClass $data): void
+    {
+        $this->resolvedResource[$class] = $data;
+    }
+
+    /**
+     * Retrieves the resolved resource for a given class.
+     *
+     * This method returns the ResolvedClass instance associated with the specified
+     * class name. If no resolved resource exists for the class, it returns null.
+     *
+     * @param string $class The name of the class to get the resolved resource for.
+     * @return ResolvedClass|null The resolved resource for the class, or null if none exists.
+     */
+    public function getResolvedResourceOf(string $class): ?ResolvedClass
+    {
+        return $this->resolvedResource[$class] ?? null;
+    }
 
     /**
      * Set the environment for this repository.
@@ -165,7 +263,7 @@ class Repository
      */
     public function getEnvConcrete(?string $interface): ?string
     {
-        if (! $this->environment || ! $interface) {
+        if (!$this->environment || !$interface) {
             return null;
         }
         return $this->conditionalBindings[$this->environment][$interface] ?? null;
@@ -234,28 +332,6 @@ class Repository
     public function getClassResource(): array
     {
         return $this->classResource;
-    }
-
-
-    /**
-     * Stores a class resource, with a key that can be 'constructor', 'method', 'property'.
-     *
-     * The given data is stored in the class resources array as
-     * $classResource[$class][$key] = $data.
-     *
-     *
-     * This method ensures that the container is not locked before making modifications.
-     *
-     * @param string $class The class name.
-     * @param string $key The key for the class resource.
-     * @param array $data The data for the class resource.
-     *
-     * @throws ContainerException if the container is locked.
-     */
-    public function addClassResource(string $class, string $key, array $data): void
-    {
-        $this->checkIfLocked();
-        $this->classResource[$class][$key] = $data;
     }
 
     /**
@@ -336,24 +412,6 @@ class Repository
     public function getResolvedResource(): array
     {
         return $this->resolvedResource;
-    }
-
-
-
-    /**
-     * Stores a resolved resource for a class-based resource.
-     *
-     * This method takes the class name and an array of resolved values for
-     * that class, such as the instance, constructor, properties, and methods.
-     * The array is stored in the "resolvedResource" array with the class name
-     * as the key.
-     *
-     * @param string $className The class name of the resource.
-     * @param array $data The array of resolved values for the class.
-     */
-    public function setResolvedResource(string $className, array $data): void
-    {
-        $this->resolvedResource[$className] = $data;
     }
 
     /**
@@ -571,7 +629,7 @@ class Repository
      */
     public function fetchInstanceOrValue(mixed $value): mixed
     {
-        return match(true) {
+        return match (true) {
             is_array($value) && isset($value['instance']) => $value['instance'],
             default => $value
         };

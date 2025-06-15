@@ -6,6 +6,9 @@ namespace Infocyph\InterMix\DI\Managers;
 
 use Closure;
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Data\ClassResource;
+use Infocyph\InterMix\DI\Data\ConstructorMeta;
+use Infocyph\InterMix\DI\Data\MethodMeta;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\Exceptions\ContainerException;
 
@@ -18,11 +21,11 @@ class RegistrationManager
      * Initializes the registration manager with a repository and a container.
      *
      * @param Repository $repository The internal repository of definitions, resolved instances, etc.
-     * @param Container  $container  The container instance to which this manager is bound.
+     * @param Container $container The container instance to which this manager is bound.
      */
     public function __construct(
         protected Repository $repository,
-        protected Container  $container
+        protected Container $container,
     ) {
     }
 
@@ -40,7 +43,7 @@ class RegistrationManager
     public function registerClosure(
         string $closureAlias,
         callable|Closure $function,
-        array $parameters = []
+        array $parameters = [],
     ): self {
         $this->repository->addClosureResource($closureAlias, $function, $parameters);
         return $this;
@@ -48,74 +51,84 @@ class RegistrationManager
 
 
     /**
-     * Registers a class with associated constructor parameters.
+     * Registers a class with constructor parameters.
      *
-     * This method stores the constructor parameters for the specified class in the repository,
-     * allowing the container to resolve and instantiate the class with the provided parameters.
+     * This method merges the constructor parameters with existing properties
+     * associated with the given class in the repository. The user-supplied
+     * constructor parameters take precedence over existing ones.
      *
-     * @param string $class The name of the class to register.
-     * @param array $parameters An array of parameters to be passed to the class constructor.
+     * @param string $class The class name for which the constructor is being registered.
+     * @param array $parameters An associative array of parameters to register.
      *
-     * @return $this
+     * @return self Returns the current instance for method chaining.
      * @throws ContainerException
      */
     public function registerClass(string $class, array $parameters = []): self
     {
-        $this->repository->addClassResource($class, 'constructor', [
-            'on'     => '__constructor',
-            'params' => $parameters,
-        ]);
+        $existing = $this->repository->getClassResourceOf($class);
+
+        $updated = new ClassResource(
+            ctor: new ConstructorMeta(params: $parameters),
+            methodMeta: $existing->methodMeta,
+            properties: $existing->properties,
+        );
+
+        $this->repository->addClassResource($class, $updated);
         return $this;
     }
 
-
     /**
-     * Registers a method with associated parameters for a given class.
+     * Registers a method with its parameters for a specified class.
      *
-     * This method stores the method name and its parameters in the repository,
-     * allowing the container to resolve and invoke the method with the provided parameters
-     * when the class is instantiated.
+     * This method updates the class resource in the repository by adding
+     * the specified method and its parameters. The newly registered method
+     * information is merged with any existing class resources.
      *
-     * @param string $class The name of the class whose method is being registered.
-     * @param string $method The name of the method to register.
-     * @param array $parameters An array of parameters to be passed to the method.
+     * @param string $class The class name for which the method is being registered.
+     * @param string $method The method name to register.
+     * @param array $parameters An associative array of parameters for the method.
      *
-     * @return $this
+     * @return self Returns the current instance for method chaining.
      * @throws ContainerException
      */
-    public function registerMethod(
-        string $class,
-        string $method,
-        array $parameters = []
-    ): self {
-        $this->repository->addClassResource($class, 'method', [
-            'on'     => $method,
-            'params' => $parameters,
-        ]);
+    public function registerMethod(string $class, string $method, array $parameters = []): self
+    {
+        $existing = $this->repository->getClassResourceOf($class);
+
+        $updated = new ClassResource(
+            ctor: $existing->ctor,
+            methodMeta: new MethodMeta($method, $parameters),
+            properties: $existing->properties,
+        );
+
+        $this->repository->addClassResource($class, $updated);
         return $this;
     }
 
-
     /**
-     * Registers a property with associated parameters for a given class.
+     * Registers properties for a specified class.
      *
-     * This method stores the property name and its parameters in the repository,
-     * allowing the container to resolve and set the property with the provided parameters
-     * when the class is instantiated.
+     * This method merges the provided properties with existing properties
+     * associated with the given class in the repository. The user-supplied
+     * properties take precedence over existing ones.
      *
-     * @param string $class The name of the class whose property is being registered.
-     * @param array $property An array of property names as keys and their associated values as values.
+     * @param string $class The class name for which properties are being registered.
+     * @param array $property An associative array of properties to register.
      *
-     * @return $this
+     * @return self Returns the current instance for method chaining.
      * @throws ContainerException
      */
     public function registerProperty(string $class, array $property): self
     {
-        // Merge with existing
-        $existing = $this->repository->getClassResource()[$class]['property'] ?? [];
-        $merged   = array_merge($existing, $property);
+        $existing = $this->repository->getClassResourceOf($class);
 
-        $this->repository->addClassResource($class, 'property', $merged);
+        $updated = new ClassResource(
+            ctor: $existing->ctor,
+            methodMeta: $existing->methodMeta,
+            properties: $property + $existing->properties, // merge (user wins)
+        );
+
+        $this->repository->addClassResource($class, $updated);
         return $this;
     }
 

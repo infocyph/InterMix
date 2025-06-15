@@ -15,19 +15,19 @@ use ReflectionMethod;
 final class ReflectionResource
 {
     private static array $reflectionCache = [
-        'classes'   => [],
-        'enums'     => [],
+        'classes' => [],
+        'enums' => [],
         'functions' => [],
-        'methods'   => [],
+        'methods' => [],
     ];
 
     public static function clearCache(): void
     {
         self::$reflectionCache = [
-            'classes'   => [],
-            'enums'     => [],
+            'classes' => [],
+            'enums' => [],
             'functions' => [],
-            'methods'   => [],
+            'methods' => [],
         ];
     }
 
@@ -45,7 +45,7 @@ final class ReflectionResource
      * @return string The signature string.
      */
     public static function getSignature(
-        ReflectionClass|ReflectionEnum|ReflectionMethod|ReflectionFunction $reflection
+        ReflectionClass|ReflectionEnum|ReflectionMethod|ReflectionFunction $reflection,
     ): string {
         $fileName = $reflection->getFileName() ?: 'unknown';
         $startLine = $reflection instanceof ReflectionEnum ? 0 : ($reflection->getStartLine() ?: 0);
@@ -69,9 +69,11 @@ final class ReflectionResource
     public static function getClassReflection(string|object $class): ReflectionClass
     {
         $className = is_object($class) ? $class::class : $class;
-
+        $currentFiber = \Fiber::getCurrent();
         return self::$reflectionCache['classes'][$className]
-            ??= new ReflectionClass($class);
+            ??= $currentFiber && $currentFiber->isSuspended()
+            ? (self::$reflectionCache['classes'][$className] ?? new ReflectionClass($class))
+            : new ReflectionClass($class);
     }
 
     /**
@@ -129,8 +131,8 @@ final class ReflectionResource
      *
      * @throws InvalidArgumentException|ReflectionException If the callable does not exist.
      */
-    public static function getCallableReflection(callable|array|string|object $callable): ReflectionMethod|ReflectionFunction
-    {
+    public static function getCallableReflection(callable|array|string|object $callable,
+    ): ReflectionMethod|ReflectionFunction {
         if ($callable instanceof Closure) {
             return self::getFunctionReflection($callable);
         }
@@ -292,7 +294,7 @@ final class ReflectionResource
      * @throws InvalidArgumentException|ReflectionException If the given subject is invalid.
      */
     public static function getReflection(
-        string|object|array|callable $subject
+        string|object|array|callable $subject,
     ): ReflectionClass|ReflectionEnum|ReflectionFunction|ReflectionMethod {
         if ($subject instanceof Closure) {
             return self::getFunctionReflection($subject);

@@ -4,6 +4,7 @@ namespace Infocyph\InterMix\DI\Invoker;
 
 use Error;
 use Exception;
+use Infocyph\InterMix\DI\Data\ResolvedClass;
 use Infocyph\InterMix\DI\Resolver\Repository;
 
 final readonly class GenericCall
@@ -22,34 +23,31 @@ final readonly class GenericCall
      * Resolves a class instance (without any DI magic),
      * sets properties, and optionally invokes a method.
      *
-     * @param  string  $class  Fully-qualified class name to instantiate.
-     * @param  string|null  $method  Method to invoke, if any.
-     * @return array{
-     *     instance: object,
-     *     returned: mixed
-     * }
+     * @param string $class Fully-qualified class name to instantiate.
+     * @param string|null $method Method to invoke, if any.
+     * @return ResolvedClass
      */
-    public function classSettler(string $class, ?string $method = null): array
+    public function classSettler(string $class, ?string $method = null): ResolvedClass
     {
-        // Grab class info if present, else an empty array
-        $classResource = $this->repository->getClassResource()[$class] ?? [];
+        $meta      = $this->repository->getClassResourceOf($class);
+        $ctorArgs  = $meta->ctor->params;
+        $instance  = new $class(...$ctorArgs);
 
-        // Constructor parameters
-        $ctorParams = $classResource['constructor']['params'] ?? [];
-        $instance = new $class(...$ctorParams);
+        // properties
+        foreach ($meta->properties as $prop => $val) {
+            $instance->$prop = $val;
+        }
 
-        // Set class properties (if any)
-        $props = $classResource['property'] ?? [];
-        $this->setProperties($instance, $props);
+        // method
+        $method ??= $meta->methodMeta?->name ?? $this->repository->getDefaultMethod();
+        $returned = ($method && method_exists($instance, $method))
+            ? $instance->{$method}(...$meta->methodMeta?->params ?? [])
+            : null;
 
-        // Determine method to invoke (method param, or classResource's configured "method", or defaultMethod)
-        $method ??= $classResource['method']['on'] ?? $this->repository->getDefaultMethod();
-        $returned = $this->invokeMethod($instance, $method, $classResource);
+        $resolved = new ResolvedClass($instance, $returned, !empty($meta->properties));
+        $this->repository->setResolvedResource($class, $resolved);
 
-        return [
-            'instance' => $instance,
-            'returned' => $returned,
-        ];
+        return $resolved;
     }
 
 
