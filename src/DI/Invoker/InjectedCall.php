@@ -65,7 +65,7 @@ final readonly class InjectedCall
      * @param string $name The id of the definition to resolve.
      *
      * @return mixed The resolved value of the definition.
-     * @throws ContainerException|InvalidArgumentException
+     * @throws ContainerException|InvalidArgumentException|ReflectionException
      */
     public function resolveByDefinition(string $name): mixed
     {

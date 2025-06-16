@@ -233,7 +233,7 @@ class Container implements ContainerInterface
      *
      * @return object The class name of the resolver.
      */
-    public function getCurrentResolver(): Object
+    public function getCurrentResolver(): object
     {
         if ($this->resolver instanceof Closure) {
             $this->resolver = ($this->resolver)();
@@ -415,8 +415,8 @@ class Container implements ContainerInterface
     private function wrapException(Exception $exception, string $id): Exception
     {
         return match (true) {
-            $exception instanceof NotFoundException => new NotFoundException("No entry found for '$id'"),
-            default => new ContainerException("Error retrieving entry '$id': " . $exception->getMessage()),
+            $exception instanceof NotFoundException => new NotFoundException("No entry found for '$id'", 0, $exception),
+            default => new ContainerException("Error retrieving entry '$id': " . $exception->getMessage(), 0, $exception),
         };
     }
 }

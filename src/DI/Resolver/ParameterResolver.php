@@ -12,8 +12,10 @@ use Psr\Cache\InvalidArgumentException;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionFunctionAbstract;
+use ReflectionIntersectionType;
 use ReflectionNamedType;
 use ReflectionParameter;
+use ReflectionUnionType;
 
 /**
  * Responsible for resolving function/method parameters for DI,
@@ -32,7 +34,7 @@ class ParameterResolver
      */
     public function __construct(
         private readonly Repository $repository,
-        private readonly DefinitionResolver $definitionResolver
+        private readonly DefinitionResolver $definitionResolver,
     ) {
         // Fallback placeholder for unresolvable references
         $this->stdClass = new IMStdClass();
@@ -63,7 +65,7 @@ class ParameterResolver
     private function makeResolutionCacheKey(
         ReflectionFunctionAbstract $reflector,
         array $suppliedParameters,
-        string $type
+        string $type,
     ): string {
         $owner = $reflector->class ?? '';
         $argsHash = hash('xxh3', serialize($suppliedParameters));
@@ -83,7 +85,7 @@ class ParameterResolver
      */
     private function getInfuseAttributes(ReflectionFunctionAbstract $reflector): array
     {
-        $key = ($reflector->class ?? '').'::'.$reflector->getName();
+        $key = ($reflector->class ?? '') . '::' . $reflector->getName();
         return $this->infuseCache[$key] ??= $reflector->getAttributes(Infuse::class);
     }
 
@@ -108,24 +110,32 @@ class ParameterResolver
     {
         $parameterType = $parameter->getType();
 
-        // 1) Check if $name is in functionReference (like older logic)
         if ($this->repository->hasFunctionReference($name)) {
             return $this->definitionResolver->resolve($name);
         }
 
-        // 2) If type is not ReflectionNamedType => fallback to stdClass
-        if (! $parameterType instanceof ReflectionNamedType) {
-            return $this->stdClass;
+        $namedTypes = match (true) {
+            $parameterType instanceof ReflectionNamedType => [$parameterType],
+            $parameterType instanceof ReflectionUnionType, $parameterType instanceof ReflectionIntersectionType => $parameterType->getTypes(
+            ),
+            default => []
+        };
+
+        foreach ($namedTypes as $named) {
+            $typeName = $named->getName();
+
+            // a) definition map
+            if ($this->repository->hasFunctionReference($typeName)) {
+                return $this->definitionResolver->resolve($typeName);
+            }
+
+            // b) concrete class / interface
+            if (class_exists($typeName) || interface_exists($typeName)) {
+                $ref = ReflectionResource::getClassReflection($typeName);
+                return $this->classResolver->resolve($ref)['instance'];
+            }
         }
 
-        $typeName = $parameterType->getName();
-
-        // 3) If typeName is in functionReference => resolve that
-        if ($this->repository->hasFunctionReference($typeName)) {
-            return $this->definitionResolver->resolve($typeName);
-        }
-
-        // 4) Otherwise fallback to stdClass
         return $this->stdClass;
     }
 
@@ -155,7 +165,7 @@ class ParameterResolver
     public function resolve(
         ReflectionFunctionAbstract $reflector,
         array $suppliedParameters,
-        string $type
+        string $type,
     ): array {
         $cacheKey = $this->makeResolutionCacheKey($reflector, $suppliedParameters, $type);
         if (isset($this->resolvedCache[$cacheKey])) {
@@ -163,40 +173,40 @@ class ParameterResolver
         }
 
         $availableParams = $reflector->getParameters();
-        $applyAttribute  = $this->repository->isMethodAttributeEnabled()
+        $applyAttribute = $this->repository->isMethodAttributeEnabled()
             && ($type === 'constructor' xor ($reflector->class ?? null));
 
         // if method-level Infuse attributes exist
         $attributeData = [];
         if ($applyAttribute) {
             $attributeData = $this->resolveMethodAttributes(
-                $this->getInfuseAttributes($reflector)
+                $this->getInfuseAttributes($reflector),
             );
         }
 
         // 1) Resolve associative params
         [
             'availableParams' => $paramsLeft,
-            'processed'       => $processed,
+            'processed' => $processed,
             'availableSupply' => $availableSupply,
-            'sort'            => $sort
+            'sort' => $sort,
         ] = $this->resolveAssociativeParameters(
             $reflector,
             $availableParams,
             $type,
             $suppliedParameters,
-            $attributeData
+            $attributeData,
         );
 
         // 2) Resolve numeric/default/variadic
         [
             'processed' => $numProcessed,
-            'variadic'  => $variadic
+            'variadic' => $variadic,
         ] = $this->resolveNumericDefaultParameters(
             $reflector,
             $paramsLeft,
             $availableSupply,
-            $applyAttribute
+            $applyAttribute,
         );
 
         $processed += $numProcessed;
@@ -259,11 +269,11 @@ class ParameterResolver
         array $availableParams,
         string $type,
         array $suppliedParameters,
-        array $parameterAttribute
+        array $parameterAttribute,
     ): array {
-        $processed  = [];
+        $processed = [];
         $paramsLeft = [];
-        $sort       = [];
+        $sort = [];
 
         foreach ($availableParams as $key => $param) {
             $paramName = $param->getName();
@@ -280,7 +290,7 @@ class ParameterResolver
                 $type,
                 $suppliedParameters,
                 $parameterAttribute,
-                $processed
+                $processed,
             );
 
             if ($resolvedValue !== $this->stdClass) {
@@ -297,9 +307,9 @@ class ParameterResolver
 
         return [
             'availableParams' => $paramsLeft,
-            'processed'       => $processed,
+            'processed' => $processed,
             'availableSupply' => $useNumeric,
-            'sort'            => $sort
+            'sort' => $sort,
         ];
     }
 
@@ -320,7 +330,7 @@ class ParameterResolver
      * @param array $parameterAttribute An array of attributes set on the method.
      * @param array $processed An array of parameters that have already been processed.
      * @return mixed The resolved parameter value or a default value if resolution fails.
-     * @throws ContainerException|ReflectionException
+     * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
     private function tryResolveAssociative(
         ReflectionFunctionAbstract $reflector,
@@ -328,7 +338,7 @@ class ParameterResolver
         string $type,
         array $suppliedParameters,
         array $parameterAttribute,
-        array $processed
+        array $processed,
     ): mixed {
         $paramName = $param->getName();
 
@@ -348,7 +358,7 @@ class ParameterResolver
             return $this->resolveClassDependency(
                 $classReflection,
                 $type,
-                $suppliedParameters[$nameHint] ?? $suppliedParameters[$paramName] ?? null
+                $suppliedParameters[$nameHint] ?? $suppliedParameters[$paramName] ?? null,
             );
         }
 
@@ -393,10 +403,10 @@ class ParameterResolver
         ReflectionFunctionAbstract $reflector,
         array $availableParams,
         array $suppliedParameters,
-        bool $applyAttribute
+        bool $applyAttribute,
     ): array {
         $processed = [];
-        $variadic  = ['type' => null, 'value' => null];
+        $variadic = ['type' => null, 'value' => null];
         $sequential = array_values($suppliedParameters);
 
         foreach ($availableParams as $key => $param) {
@@ -404,7 +414,7 @@ class ParameterResolver
 
             if ($param->isVariadic()) {
                 $variadic = [
-                    'type'  => $param->getType() instanceof ReflectionNamedType
+                    'type' => $param->getType() instanceof ReflectionNamedType
                         ? $param->getType()
                         : null,
                     'value' => array_slice($suppliedParameters, $key),
@@ -430,16 +440,16 @@ class ParameterResolver
                 $param->isDefaultValueAvailable() => $param->getDefaultValue(),
                 $param->allowsNull() => null,
                 default => throw new ContainerException(
-                    "Resolution failed for '$paramName' in ".
-                    ($reflector->class ?? $reflector->getName()).
-                    "::{$reflector->getShortName()}()"
+                    "Resolution failed for '$paramName' in " .
+                    ($reflector->class ?? $reflector->getName()) .
+                    "::{$reflector->getShortName()}()",
                 )
             };
         }
 
         return [
             'processed' => $processed,
-            'variadic'  => $variadic
+            'variadic' => $variadic,
         ];
     }
 
@@ -453,7 +463,7 @@ class ParameterResolver
      *
      * @return ?ReflectionClass The ReflectionClass instance if resolvable, null otherwise.
      *
-     * @throws ContainerException If:
+     * @throws ContainerException|ReflectionException If:
      *  - The parameter is not resolvable.
      *  - The parameter is of type 'parent' but no parent class exists.
      *  - A circular dependency is detected.
@@ -461,61 +471,147 @@ class ParameterResolver
      */
     private function getResolvableReflection(
         ReflectionFunctionAbstract $reflector,
-        ReflectionParameter $parameter,
-        string $type,
-        array $processed
+        ReflectionParameter        $parameter,
+        string                     $type,
+        array                      $processed
     ): ?ReflectionClass {
-        $paramType = $parameter->getType();
-        if (!$paramType instanceof ReflectionNamedType || $paramType->isBuiltin()) {
+        $candidates = $this->extractNamedTypeCandidates($parameter);
+        $className  = $this->pickResolvableType($candidates);
+
+        if (!$className) {
             return null;
         }
 
-        $className = $paramType->getName();
-        if ($declaringClass = $parameter->getDeclaringClass()) {
-            $className = match ($className) {
-                'self' => $declaringClass->getName(),
-                'parent' => $declaringClass->getParentClass()?->getName() ?? 'parent',
-                default => $className
-            };
-        }
-        if ($className === 'parent') {
-            throw new ContainerException(
-                "Parameter '{$parameter->getName()}' uses 'parent' keyword but no parent class."
-            );
-        }
-        // (optional) environment-based interface => concrete override
-        // e.g. if $className is an interface, check $this->repository->getEnvConcrete($className)
-        $envConcrete = null;
-        if (interface_exists($className)) {
-            $envConcrete = $this->repository->getEnvConcrete($className);
-        }
-        $finalClassName = $envConcrete ?: $className;
+        // Handle self/parent, environment override, reflection
+        $className  = $this->normalizeSelfParent($className, $parameter->getDeclaringClass());
+        $className  = $this->applyEnvOverride($className);
+        $reflection = ReflectionResource::getClassReflection($className);
 
-        try {
-            $reflection = ReflectionResource::getClassReflection($finalClassName);
-        } catch (ReflectionException $e) {
-            throw new ContainerException(
-                "Failed to reflect class '{$finalClassName}' for parameter '{$parameter->getName()}'.",
-                0,
-                $e
-            );
-        }
-
-        if ($type === 'constructor' &&
-            $parameter->getDeclaringClass()?->getName() === $reflection->getName()
-        ) {
+        /* ----- validation checks ---------------------------------------- */
+        if ($type === 'constructor'
+            && $parameter->getDeclaringClass()?->getName() === $reflection->getName()) {
             throw new ContainerException("Circular dependency on {$reflection->getName()}");
         }
 
         if ($this->alreadyExist($reflection->getName(), $processed)) {
-            $shortName = $reflector->getShortName();
-            $owner     = $reflector->class ?? $reflector->getName();
+            $owner = $reflector->class ?? $reflector->getName();
             throw new ContainerException(
-                "Multiple instances for {$reflection->getName()} in $owner::$shortName()"
+                "Multiple instances for {$reflection->getName()} in {$owner}::{$reflector->getShortName()}()"
             );
         }
 
         return $reflection;
+    }
+
+    /**
+     * Extracts the named type candidates from a ReflectionParameter.
+     *
+     * The method takes a ReflectionParameter object and returns an array of
+     * ReflectionNamedType objects. If the type is a union or intersection type,
+     * it returns an array of the types that make up the union or intersection.
+     * If the type is not a named type, it returns an empty array.
+     *
+     * @param ReflectionParameter $parameter The parameter to extract the types from.
+     * @return array An array of ReflectionNamedType objects.
+     */
+    private function extractNamedTypeCandidates(
+        ReflectionParameter $parameter
+    ): array {
+        $type = $parameter->getType();
+
+        return match (true) {
+            $type instanceof ReflectionNamedType        => [$type],
+            $type instanceof ReflectionUnionType, $type instanceof ReflectionIntersectionType => $type->getTypes(),
+            default                                     => []
+        };
+    }
+
+
+    /**
+     * Selects a resolvable type from a list of candidates.
+     *
+     * This method iterates over an array of ReflectionNamedType objects,
+     * ignoring any built-in types. It checks each type name against a
+     * definition map and verifies if it corresponds to an existing class
+     * or interface. The first match found is returned.
+     *
+     * @param array $candidates An array of ReflectionNamedType objects.
+     * @return string|null The name of the resolvable type, or null if none match.
+     */
+    private function pickResolvableType(array $candidates): ?string
+    {
+        foreach ($candidates as $namedType) {
+            if ($namedType->isBuiltin()) {
+                continue;
+            }
+            $name = $namedType->getName();
+
+            //  a) explicit definition map
+            if ($this->repository->hasFunctionReference($name)) {
+                return $name;
+            }
+
+            //  b) concrete class / interface exists
+            if (class_exists($name) || interface_exists($name)) {
+                return $name;
+            }
+        }
+
+        return null;   // none matched
+    }
+
+
+    /**
+     * Normalizes type declarations that use 'self' or 'parent'.
+     *
+     * When resolving a type declaration, this method is called to
+     * expand any uses of 'self' or 'parent' into the concrete class
+     * name. If the type declaration does not refer to either 'self'
+     * or 'parent', it is returned unchanged.
+     *
+     * @param string $className The type declaration to normalize.
+     * @param ReflectionClass|null $declaring The class that the type declaration
+     *     is declared on, or null if not applicable.
+     * @return string The normalized type declaration.
+     * @throws ContainerException If the type declaration refers to 'parent'
+     *     but the declaring class does not have a parent class.
+     */
+    private function normalizeSelfParent(
+        string $className,
+        ?ReflectionClass $declaring
+    ): string {
+        return match ($className) {
+            'self'   => $declaring?->getName() ?? $className,
+            'parent' => $declaring?->getParentClass()?->getName()
+                ?? throw new ContainerException(
+                    "Parameter uses 'parent' but no parent class found."
+                ),
+            default  => $className,
+        };
+    }
+
+
+    /**
+     * Applies an environment-based override for an interface.
+     *
+     * This method checks if the given fully qualified class name (FQCN)
+     * corresponds to an interface. If so, it attempts to retrieve a
+     * concrete implementation bound to the interface for the current
+     * environment. If a valid concrete class is found, it is returned.
+     * Otherwise, the original FQCN is returned unchanged.
+     *
+     * @param string $fqcn The fully qualified class name to check for an override.
+     * @return string The overridden FQCN if applicable, otherwise the original.
+     */
+    private function applyEnvOverride(string $fqcn): string
+    {
+        if (interface_exists($fqcn)) {
+            $concrete = $this->repository->getEnvConcrete($fqcn);
+            if ($concrete && class_exists($concrete)) {
+                return $concrete;
+            }
+        }
+        return $fqcn;
     }
 
     /**
@@ -552,15 +648,15 @@ class ParameterResolver
     private function resolveClassDependency(
         ReflectionClass $class,
         string $type,
-        mixed $supplied
+        mixed $supplied,
     ): object {
         if ($type === 'constructor' && $supplied !== null && $class->getConstructor()) {
             $existing = $this->repository->getClassResource()[$class->getName()]['constructor']['params'] ?? [];
-            $merged   = array_merge($existing, (array) $supplied);
+            $merged = array_merge($existing, (array)$supplied);
             $this->repository->addClassResource(
                 $class->getName(),
                 'constructor',
-                ['on' => '__constructor','params' => $merged]
+                ['on' => '__constructor', 'params' => $merged],
             );
         }
         return $this->classResolver->resolve($class)['instance'];
@@ -582,7 +678,7 @@ class ParameterResolver
      */
     private function resolveIndividualAttribute(
         ReflectionParameter $param,
-        string $attributeValue
+        string $attributeValue,
     ): mixed {
         // 1) If $attributeValue in functionReference
         $definition = $this->resolveByDefinitionType($attributeValue, $param);
@@ -621,7 +717,7 @@ class ParameterResolver
         $resolved = $this->classResolver->resolveInfuse($infuseInstance);
         return [
             'isResolved' => ($this->stdClass !== $resolved),
-            'resolved'   => $resolved
+            'resolved' => $resolved,
         ];
     }
 
@@ -648,9 +744,9 @@ class ParameterResolver
     private function processVariadic(
         array $processed,
         array $variadic,
-        array $sort
+        array $sort,
     ): array {
-        $variadicValue = (array) $variadic['value'];
+        $variadicValue = (array)$variadic['value'];
         if (isset($variadicValue[0])) {
             uksort($processed, static fn ($a, $b) => $sort[$a] <=> $sort[$b]);
             $processed = array_values($processed);

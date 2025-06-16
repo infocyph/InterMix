@@ -66,7 +66,7 @@ class FileCacheAdapter implements CacheItemPoolInterface, Countable
         $this->dir = "$base/cache_$ns/";
 
         if (file_exists($this->dir) && !is_dir($this->dir)) {
-            throw new RuntimeException("'{$this->dir}' exists and is not a directory");
+            throw new RuntimeException("'$this->dir' exists and is not a directory");
         }
         if (!is_dir($this->dir) && !@mkdir($this->dir, 0770, true)) {
             $err = error_get_last()['message'] ?? 'unknown error';

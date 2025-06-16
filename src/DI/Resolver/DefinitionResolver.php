@@ -105,7 +105,7 @@ class DefinitionResolver
      * @param string $name The name of the definition to resolve.
      * @return mixed The resolved value of the definition.
      * @throws ContainerException
-     * @throws ReflectionException
+     * @throws ReflectionException|InvalidArgumentException
      */
     private function resolveDefinition(string $name): mixed
     {
@@ -121,7 +121,6 @@ class DefinitionResolver
                 return $this->resolveArrayDefinition($definition);
 
             case is_string($definition) && class_exists($definition):
-                // environment-based interface => already in ClassResolver
                 $refClass = ReflectionResource::getClassReflection($definition);
                 $res = $this->classResolver->resolve($refClass);
                 return $res['instance'];

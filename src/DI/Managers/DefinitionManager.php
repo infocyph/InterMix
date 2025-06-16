@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Managers;
 
+use Infocyph\InterMix\Cache\Cache;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\Exceptions\ContainerException;
@@ -80,15 +81,13 @@ class DefinitionManager
      * definitions. It will throw a {@see ContainerException} if the container
      * is locked.
      *
-     * @param CacheItemPoolInterface $cache The cache adapter to use for caching.
-     *
+     * @param string|null $namespace The namespace to use for the cache.
      * @return $this
      * @throws ContainerException
      */
-    public function enableDefinitionCache(CacheItemPoolInterface $cache): self
+    public function enableDefinitionCache(?string $namespace = null): self
     {
-        $this->repository->setCacheAdapter($cache);
-
+        $this->repository->setCacheAdapter(Cache::file($namespace ?? $this->repository->getAlias(), 'intermix_dfn'));
         return $this;
     }
 
@@ -115,8 +114,7 @@ class DefinitionManager
             throw new ContainerException('No cache adapter set.');
         }
         if ($forceClearFirst) {
-            // Clear container-specific keys
-            $cacheAdapter->clear($this->repository->makeCacheKey(''));
+            $cacheAdapter->clear();
         }
 
         // Use the container’s set resolver to pre-resolve
