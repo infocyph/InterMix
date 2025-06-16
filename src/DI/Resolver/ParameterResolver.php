@@ -7,6 +7,7 @@ namespace Infocyph\InterMix\DI\Resolver;
 use Infocyph\InterMix\DI\Attribute\IMStdClass;
 use Infocyph\InterMix\DI\Attribute\Infuse;
 use Infocyph\InterMix\DI\Reflection\ReflectionResource;
+use Infocyph\InterMix\DI\Reflection\TraceLevel;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\InvalidArgumentException;
 use ReflectionClass;
@@ -50,7 +51,6 @@ class ParameterResolver
         $this->classResolver = $classResolver;
     }
 
-
     /**
      * Generates a unique cache key for a function/method resolution.
      *
@@ -71,7 +71,6 @@ class ParameterResolver
         $argsHash = hash('xxh3', serialize($suppliedParameters));
         return "$owner::{$reflector->getName()}|$type|$argsHash";
     }
-
 
     /**
      * Retrieves the Infuse attributes for the given function/method reflection.
@@ -172,6 +171,11 @@ class ParameterResolver
             return $this->resolvedCache[$cacheKey];
         }
 
+        $this->repository->tracer()->push(
+            "{$reflector->getShortName()}() params",
+            TraceLevel::Verbose
+        );
+
         $availableParams = $reflector->getParameters();
         $applyAttribute = $this->repository->isMethodAttributeEnabled()
             && ($type === 'constructor' xor ($reflector->class ?? null));
@@ -216,6 +220,7 @@ class ParameterResolver
             $processed = $this->processVariadic($processed, $variadic, $sort);
         }
 
+        $this->repository->tracer()->pop();
         return $this->resolvedCache[$cacheKey] = $processed;
     }
 

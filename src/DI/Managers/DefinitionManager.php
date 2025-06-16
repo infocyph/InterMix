@@ -6,6 +6,7 @@ namespace Infocyph\InterMix\DI\Managers;
 
 use Infocyph\InterMix\Cache\Cache;
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Reflection\Lifetime;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\CacheItemPoolInterface;
@@ -49,27 +50,36 @@ class DefinitionManager
     }
 
 
+
     /**
-     * Registers a single definition with the container.
+     * Registers a definition with the container.
      *
-     * This method takes a definition name (id) and a definition value and
-     * stores it in the internal repository. It will throw a
-     * {@see ContainerException} if the id and definition are the same, as
-     * that would be ambiguous.
+     * Registers a definition with the container, which can then be retrieved
+     * using the {@see get()} method. The definition can be any type of value,
+     * including another definition.
      *
-     * @param string $id The id of the definition to register.
-     * @param mixed $definition The definition value to register.
+     * @param string $id The identifier of the definition.
+     * @param mixed $definition The definition itself.
+     * @param Lifetime $lifetime The lifetime of the definition.
+     * @param array $tags An array of tags to associate with the definition.
      *
      * @return $this
-     * @throws ContainerException
+     * @throws ContainerException if the container is locked or if the id is the same as the definition.
      */
-    public function bind(string $id, mixed $definition): self
-    {
+    public function bind(
+        string $id,
+        mixed $definition,
+        Lifetime $lifetime = Lifetime::Singleton,
+        array $tags = []
+    ): self {
         if ($id === $definition) {
             throw new ContainerException("Id and definition cannot be the same ($id)");
         }
         $this->repository->setFunctionReference($id, $definition);
-
+        $this->repository->setDefinitionMeta($id, [
+            'lifetime' => $lifetime,
+            'tags'     => $tags,
+        ]);
         return $this;
     }
 

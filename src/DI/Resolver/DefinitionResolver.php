@@ -59,10 +59,12 @@ class DefinitionResolver
             throw new ContainerException("Circular dependency for definition '$name'.");
         }
         $this->entriesResolving[$name] = true;
+        $this->repository->tracer()->push("def:$name");
         try {
             return $this->getFromCacheOrResolve($name);
         } finally {
             unset($this->entriesResolving[$name]);
+            $this->repository->tracer()->pop();
         }
     }
 

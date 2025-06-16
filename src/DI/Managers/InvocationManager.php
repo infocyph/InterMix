@@ -7,6 +7,8 @@ namespace Infocyph\InterMix\DI\Managers;
 use Closure;
 use Infocyph\InterMix\DI\Attribute\DeferredInitializer;
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Reflection\Lifetime;
+use Infocyph\InterMix\DI\Reflection\TraceLevel;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\InvalidArgumentException;
@@ -51,48 +53,62 @@ class InvocationManager
         return array_key_exists('returned', $resource) ? $resource['returned'] : $resolved;
     }
 
-
     /**
-     * Resolve a definition ID and return the resolved instance.
+     * Retrieves a value associated with a given ID from the container.
      *
-     * If the ID is already resolved, the cached instance is returned.
-     * If the ID is a function reference, the definition is resolved and the result is returned.
-     * Otherwise, the method attempts to call the ID as a class name and returns the result.
+     * The method first checks if the value is already resolved and cached based on
+     * its lifetime and scope. If cached, it returns the cached value immediately.
+     * Otherwise, it attempts to resolve the value using the definition map or by
+     * treating the ID as a class name or closure alias. The resolved value is then
+     * cached if it is cacheable.
      *
-     * If lazy loading is enabled and the resolved instance is an array with a 'lazyPlaceholder' key,
-     * the placeholder is resolved and the result is stored in the cache.
+     * @param string $id The ID of the value to retrieve.
      *
-     * @param string $id The ID of the definition to resolve and return.
-     *
-     * @return mixed The resolved instance, or the result of the resolved instance if it is a callable.
-     * @throws ContainerException
-     * @throws InvalidArgumentException
-     * @throws ReflectionException
+     * @return mixed The resolved value or the cached value if available.
+     * @throws ContainerException|InvalidArgumentException|ReflectionException If the value cannot be resolved.
      */
     public function get(string $id): mixed
     {
-        if (isset($this->repository->getResolved()[$id])) {
-            $resolved = $this->repository->getResolved()[$id];
+        $this->repository->tracer()->push("return:$id", TraceLevel::Verbose);
+        // Determine lifetime & scope-key
+        $meta      = $this->repository->getDefinitionMeta($id);
+        $lifetime  = $meta['lifetime'] ?? Lifetime::Singleton;
+        $scopeKey  = $lifetime === Lifetime::Scoped
+            ? $id.'@'.$this->repository->getScope()
+            : $id;
+        $cacheable = $lifetime !== Lifetime::Transient;
+
+        // Fast return from cache (singleton / scoped)
+        if ($cacheable && isset($this->repository->getResolved()[$scopeKey])) {
+            $resolved = $this->repository->getResolved()[$scopeKey];
+
             if ($resolved instanceof DeferredInitializer) {
                 $resolved = $resolved();
-                $this->repository->setResolved($id, $resolved);
+                $this->repository->setResolved($scopeKey, $resolved);
             }
+            $this->repository->tracer()->pop();
             return $this->repository->fetchInstanceOrValue($resolved);
         }
 
-        // If in functionReference => resolve definition
+        // Resolve: definition map → class/closure fallback
         if (array_key_exists($id, $this->repository->getFunctionReference())) {
             $resolved = $this->resolveDefinition($id);
-            if ($resolved instanceof DeferredInitializer) {
-                $resolved = $resolved();
+            $resolved = $resolved instanceof DeferredInitializer ? $resolved() : $resolved;
+
+            if ($cacheable) {
+                $this->repository->setResolved($scopeKey, $resolved);
             }
+            $this->repository->tracer()->pop();
             return $resolved;
         }
 
-        // Otherwise, attempt call with $id as a class name
+        // Fallback: treat $id as class name / closure alias
         $resolved = $this->call($id);
-        $this->repository->setResolved($id, $resolved);
 
+        if ($cacheable) {
+            $this->repository->setResolved($scopeKey, $resolved);
+        }
+        $this->repository->tracer()->pop();
         return $this->repository->fetchInstanceOrValue($resolved);
     }
 
@@ -206,6 +222,7 @@ class InvocationManager
      *
      * @return mixed The resolved instance, or a lazy placeholder if lazy loading is enabled.
      * @throws ContainerException|InvalidArgumentException
+     * @throws ReflectionException
      */
     protected function resolveDefinition(string $id): mixed
     {
@@ -213,7 +230,7 @@ class InvocationManager
         $definition = $this->repository->getFunctionReference()[$id];
 
         if ($this->repository->isLazyLoading() && ! ($definition instanceof Closure)) {
-            $lazy = new DeferredInitializer(fn () => $resolver->resolveByDefinition($id));
+            $lazy = new DeferredInitializer(fn () => $resolver->resolveByDefinition($id), $this->container);
             $this->repository->setResolved($id, $lazy);
             return $lazy;
         }

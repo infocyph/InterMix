@@ -7,6 +7,7 @@ namespace Infocyph\InterMix\DI\Resolver;
 use Infocyph\InterMix\DI\Attribute\IMStdClass;
 use Infocyph\InterMix\DI\Attribute\Infuse;
 use Infocyph\InterMix\DI\Reflection\ReflectionResource;
+use Infocyph\InterMix\DI\Reflection\TraceLevel;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\InvalidArgumentException;
 use ReflectionClass;
@@ -26,7 +27,8 @@ class PropertyResolver
      */
     public function __construct(
         private readonly Repository $repository,
-    ) {}
+    ) {
+    }
 
     /**
      * Called by Container to switch between InjectedCall & GenericCall, etc.
@@ -108,6 +110,10 @@ class PropertyResolver
             ) {
                 continue;
             }
+            $this->repository->tracer()->push(
+                "prop {$property->getName()} of $className",
+                TraceLevel::Verbose
+            );
             $values = $this->resolveValue($property, $registeredProps ?? [], $classInstance);
             if ($values) {
                 match (true) {
@@ -115,6 +121,7 @@ class PropertyResolver
                     default => $property->setValue($values[0], $values[1]),
                 };
             }
+            $this->repository->tracer()->pop();
         }
     }
 

@@ -12,43 +12,23 @@ use Infocyph\InterMix\DI\Managers\DefinitionManager;
 use Infocyph\InterMix\DI\Managers\InvocationManager;
 use Infocyph\InterMix\DI\Managers\OptionsManager;
 use Infocyph\InterMix\DI\Managers\RegistrationManager;
+use Infocyph\InterMix\DI\Reflection\DebugTracer;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Exceptions\NotFoundException;
 use InvalidArgumentException;
 use Psr\Container\ContainerInterface;
 use ReflectionException;
+use Throwable;
 
 class Container implements ContainerInterface
 {
-    /**
-     * Registry of named container instances
-     *
-     * @var array<string, static>
-     */
     protected static array $instances = [];
-
-    /**
-     * Shared repository
-     */
     protected Repository $repository;
-
-    /**
-     * Resolver class name (InjectedCall::class or GenericCall::class or custom).
-     *
-     * @var closure|GenericCall|InjectedCall
-     */
     protected closure|InjectedCall|GenericCall $resolver;
-
-    /**
-     * Sub-managers
-     */
     protected DefinitionManager $definitionManager;
-
     protected RegistrationManager $registrationManager;
-
     protected OptionsManager $optionsManager;
-
     protected InvocationManager $invocationManager;
 
     /**
@@ -347,6 +327,64 @@ class Container implements ContainerInterface
         return $this;
     }
 
+    /**
+     * Finds and retrieves all service definitions tagged with a specified tag.
+     *
+     * This method iterates over the repository's definition metadata,
+     * checking each definition's tags for a match against the provided tag.
+     * If a match is found, the service definition is resolved and added to
+     * the result array.
+     *
+     * @param string $tag The tag to search for among service definitions.
+     * @return array An array of resolved service definitions matching the provided tag.
+     * @throws \Psr\Cache\InvalidArgumentException
+     */
+    public function findByTag(string $tag): array
+    {
+        $matches = [];
+        foreach ($this->repository->getDefinitionMeta() as $id => $meta) {
+            if (in_array($tag, $meta['tags'], true)) {
+                $matches[$id] = $this->get($id);
+            }
+        }
+        return $matches;
+    }
+
+    /**
+     * Retrieves the debug tracer instance.
+     *
+     * This method returns the debug tracer associated with the container.
+     * The tracer is used to track and log the execution flow and
+     * interactions within the container, aiding in debugging and
+     * tracing the service resolution process.
+     *
+     * @return DebugTracer The debug tracer instance.
+     */
+    public function tracer(): DebugTracer
+    {
+        return $this->repository->tracer();
+    }
+
+    /**
+     * Debugs the service resolution process for a given ID.
+     *
+     * This method attempts to retrieve the service instance for the given ID,
+     * and returns the current debug trace. If any errors occur during the
+     * service resolution process, they are caught and ignored, as the goal
+     * here is to obtain a debug trace, not to actually use the service.
+     *
+     * @param string $id The ID of the service to debug.
+     * @return array The debug trace for the service resolution process.
+     */
+    public function debug(string $id): array
+    {
+        try {
+            $this->get($id);
+        } catch (Throwable) {
+            // swallow; we still want trace
+        }
+        return $this->repository->tracer()->flush();
+    }
 
     /**
      * Splits a given class and method representation into a callable array format.
@@ -364,7 +402,7 @@ class Container implements ContainerInterface
      * @throws InvalidArgumentException If the provided argument is empty.
      * @throws ContainerException If the format of the provided argument is unrecognized.
      */
-    public function split(string|array|Closure|callable $classAndMethod): array
+    public function parseCallable(string|array|Closure|callable $classAndMethod): array
     {
         if (empty($classAndMethod)) {
             throw new InvalidArgumentException('No argument provided!');

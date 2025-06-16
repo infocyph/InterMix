@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Resolver;
 
+use Infocyph\InterMix\DI\Reflection\DebugTracer;
+use Infocyph\InterMix\DI\Reflection\Lifetime;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\CacheItemPoolInterface;
 
@@ -17,26 +19,94 @@ use Psr\Cache\CacheItemPoolInterface;
  */
 class Repository
 {
-    private array $functionReference   = [];
-    private array $classResource       = [];
-    private array $closureResource     = [];
-    private array $resolved            = [];
-    private array $resolvedResource    = [];
-    private array $resolvedDefinition  = [];
+    private array $functionReference = [];
+    private array $classResource = [];
+    private array $closureResource = [];
+    private array $resolved = [];
+    private array $resolvedResource = [];
+    private array $resolvedDefinition = [];
     private array $conditionalBindings = [];
-
-
-    private ?string $defaultMethod           = null;
-    private bool $enablePropertyAttribute    = false;
-    private bool $enableMethodAttribute      = false;
-    private bool $isLocked                   = false;
-    private ?CacheItemPoolInterface $cacheAdapter    = null;
-    private string $alias                    = 'default';
-
+    private ?string $defaultMethod = null;
+    private bool $enablePropertyAttribute = false;
+    private bool $enableMethodAttribute = false;
+    private bool $isLocked = false;
+    private ?CacheItemPoolInterface $cacheAdapter = null;
+    private string $alias = 'default';
     private ?string $environment = null;
-
     private bool $lazyLoading = true;
+    private array $definitionMeta = [];
+    private string $currentScope = 'root';
+    private readonly DebugTracer $tracer;
 
+    public function __construct()
+    {
+        $this->tracer = new DebugTracer();
+    }
+
+    /**
+     * @return DebugTracer The debug tracer associated with this repository.
+     *
+     * The debug tracer is used to track and log the execution flow and
+     * interactions within the container, aiding in debugging and
+     * tracing the service resolution process.
+     */
+    public function tracer(): DebugTracer
+    {
+        return $this->tracer;
+    }
+
+    /**
+     * @param string $id The id of the definition to set the meta for.
+     * @param array $meta The meta data to set for the definition.
+     *   - lifetime: The lifetime of the definition. Defaults to Lifetime::Singleton.
+     *   - tags: An array of tags to associate with the definition. Defaults to an empty array.
+     * @throws ContainerException
+     */
+    public function setDefinitionMeta(string $id, array $meta): void
+    {
+        $this->checkIfLocked();
+        $this->definitionMeta[$id] = $meta + ['lifetime' => Lifetime::Singleton, 'tags' => []];
+    }
+
+    /**
+     * Returns the meta data for the given definition.
+     *
+     * @param string $id The id of the definition to retrieve meta data for.
+     * @return array The meta data associated with the definition.
+     *   - lifetime: The lifetime of the definition. Defaults to Lifetime::Singleton.
+     *   - tags: An array of tags to associate with the definition. Defaults to an empty array.
+     */
+    public function getDefinitionMeta(string $id): array
+    {
+        return $this->definitionMeta[$id] ?? ['lifetime' => Lifetime::Singleton, 'tags' => []];
+    }
+
+
+    /**
+     * Set the current scope for the container.
+     *
+     * The scope is used to determine the lifetime of definitions. For example, if the
+     * scope is set to 'request', definitions will be resolved once per request.
+     *
+     * @param string $scope The scope to set. Defaults to 'root'.
+     */
+    public function setScope(string $scope): void
+    {
+        $this->currentScope = $scope;
+    }
+
+    /**
+     * Gets the current scope of the container.
+     *
+     * The scope is used to determine the lifetime of definitions. For example, if the
+     * scope is set to 'request', definitions will be resolved once per request.
+     *
+     * @return string The current scope. Defaults to 'root'.
+     */
+    public function getScope(): string
+    {
+        return $this->currentScope;
+    }
 
     /**
      * Throw an exception if the container is locked and we try to set/modify values.
@@ -165,7 +235,7 @@ class Repository
      */
     public function getEnvConcrete(?string $interface): ?string
     {
-        if (! $this->environment || ! $interface) {
+        if (!$this->environment || !$interface) {
             return null;
         }
         return $this->conditionalBindings[$this->environment][$interface] ?? null;
@@ -337,7 +407,6 @@ class Repository
     {
         return $this->resolvedResource;
     }
-
 
 
     /**
@@ -571,7 +640,7 @@ class Repository
      */
     public function fetchInstanceOrValue(mixed $value): mixed
     {
-        return match(true) {
+        return match (true) {
             is_array($value) && isset($value['instance']) => $value['instance'],
             default => $value
         };

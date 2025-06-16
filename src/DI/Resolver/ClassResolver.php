@@ -12,10 +12,11 @@ use Psr\Cache\InvalidArgumentException;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionMethod;
+use WeakMap;
 
 class ClassResolver
 {
-    private array $entriesResolving = [];
+    private WeakMap $entriesResolving;
 
     /**
      * Constructs a ClassResolver instance.
@@ -31,6 +32,7 @@ class ClassResolver
         private readonly PropertyResolver $propertyResolver,
         private readonly DefinitionResolver $definitionResolver
     ) {
+        $this->entriesResolving = new WeakMap();
     }
 
 
@@ -121,10 +123,14 @@ class ClassResolver
         // Possibly environment-based interface => check if $class->isInterface(), then environment override
         $class = $this->getConcreteClassForInterface($class, $supplied);
         $className = $class->getName();
-
-        return $make
-            ? $this->resolveMake($class, $className, $callMethod)
-            : $this->resolveClassResources($class, $className, $callMethod);
+        $this->repository->tracer()->push("class:$className");
+        try {
+            return $make
+                ? $this->resolveMake($class, $className, $callMethod)
+                : $this->resolveClassResources($class, $className, $callMethod);
+        } finally {
+            $this->repository->tracer()->pop();
+        }
     }
 
     /**
@@ -186,10 +192,10 @@ class ClassResolver
         string $className,
         string|bool|null $callMethod
     ): array {
-        if (isset($this->entriesResolving[$className])) {
-            throw new ContainerException("Circular dependency on $className");
+        if ($this->entriesResolving->offsetExists($class)) {
+            throw new ContainerException("Circular dependency on {$className}");
         }
-        $this->entriesResolving[$className] = true;
+        $this->entriesResolving[$class] = true;
 
         try {
             $resolvedResource = $this->repository->getResolvedResource()[$className] ?? [];
@@ -204,7 +210,7 @@ class ClassResolver
 
             return $this->repository->getResolvedResource()[$className] ?? [];
         } finally {
-            unset($this->entriesResolving[$className]);
+            unset($this->entriesResolving[$class]);
         }
     }
 
@@ -231,7 +237,6 @@ class ClassResolver
             return $class;
         }
         $className = $class->getName();
-        // environment override
         $envConcrete = $this->repository->getEnvConcrete($className);
         if ($envConcrete) {
             $class = ReflectionResource::getClassReflection($envConcrete);
@@ -266,7 +271,7 @@ class ClassResolver
      * key `resolvedResource[$className]['instance']`.
      *
      * @param ReflectionClass $class The class to resolve the constructor for.
-     * @throws ContainerException|ReflectionException If the class is not instantiable or if the constructor parameters cannot be resolved.
+     * @throws ContainerException|ReflectionException|InvalidArgumentException If the class is not instantiable or if the constructor parameters cannot be resolved.
      */
     private function resolveConstructor(ReflectionClass $class): void
     {

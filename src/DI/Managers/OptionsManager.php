@@ -7,6 +7,7 @@ namespace Infocyph\InterMix\DI\Managers;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Invoker\GenericCall;
 use Infocyph\InterMix\DI\Invoker\InjectedCall;
+use Infocyph\InterMix\DI\Reflection\TraceLevel;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\Exceptions\ContainerException;
 
@@ -93,6 +94,26 @@ class OptionsManager
     public function enableLazyLoading(bool $lazy = true): self
     {
         $this->repository->enableLazyLoading($lazy);
+        return $this;
+    }
+
+    /**
+     * Enables or disables debug tracing for the container.
+     *
+     * If enabled, the container will generate a detailed trace of all
+     * resolutions, including the definitions and services that are being
+     * resolved. The trace level can be set to either `TraceLevel::Node` (default)
+     * to only log the top-most nodes, or `TraceLevel::Verbose` to log
+     * everything.
+     *
+     * @param bool $enable Whether to enable debug tracing. Defaults to true.
+     * @param TraceLevel $level The trace level to use. Defaults to `TraceLevel::Node`.
+     *
+     * @return $this
+     */
+    public function enableDebugTracing(bool $enable = true, TraceLevel $level = TraceLevel::Node): self
+    {
+        $this->repository->tracer()->setLevel($enable ? $level : TraceLevel::Node);
         return $this;
     }
 

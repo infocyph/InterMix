@@ -32,7 +32,7 @@ if (!function_exists('container')) {
 
         //    "class@method", "class::method", [class, method], or closure/callable.
         [$class, $method] = $instance
-            ->split($closureOrClass);
+            ->parseCallable($closureOrClass);
 
         if (!$method) {
             if ($class instanceof Closure || is_callable($class)) {
