@@ -30,7 +30,7 @@ class ClassResolver
         private readonly Repository $repository,
         private readonly ParameterResolver $parameterResolver,
         private readonly PropertyResolver $propertyResolver,
-        private readonly DefinitionResolver $definitionResolver
+        private readonly DefinitionResolver $definitionResolver,
     ) {
         $this->entriesResolving = new WeakMap();
     }
@@ -60,7 +60,7 @@ class ClassResolver
         $data = $typeData['data'] ?? [];  // extra data (array) if present
 
         // If no type, nothing to resolve
-        if (! $type) {
+        if (!$type) {
             return new IMStdClass();
         }
 
@@ -74,7 +74,7 @@ class ClassResolver
             // Reflect the function to figure out parameters
             $reflectionFn = new \ReflectionFunction($type);
             // Use parameterResolver to handle injection or data
-            $args = $this->parameterResolver->resolve($reflectionFn, (array) $data, 'constructor');
+            $args = $this->parameterResolver->resolve($reflectionFn, (array)$data, 'constructor');
 
             // Call the function with resolved arguments
             return $type(...$args);
@@ -91,7 +91,9 @@ class ClassResolver
             }
 
             // Reflect & resolve using ClassResolver
-            return $this->repository->fetchInstanceOrValue($this->resolve(ReflectionResource::getClassReflection($type)));
+            return $this->repository->fetchInstanceOrValue(
+                $this->resolve(ReflectionResource::getClassReflection($type)),
+            );
         }
 
         // 5) Otherwise, we have no way to resolve it
@@ -118,19 +120,16 @@ class ClassResolver
         ReflectionClass $class,
         mixed $supplied = null,
         string|bool|null $callMethod = null,
-        bool $make = false
+        bool $make = false,
     ): array {
         // Possibly environment-based interface => check if $class->isInterface(), then environment override
         $class = $this->getConcreteClassForInterface($class, $supplied);
         $className = $class->getName();
         $this->repository->tracer()->push("class:$className");
-        try {
-            return $make
-                ? $this->resolveMake($class, $className, $callMethod)
-                : $this->resolveClassResources($class, $className, $callMethod);
-        } finally {
-            $this->repository->tracer()->pop();
-        }
+
+        return $make
+            ? $this->resolveMake($class, $className, $callMethod)
+            : $this->resolveClassResources($class, $className, $callMethod);
     }
 
     /**
@@ -154,7 +153,7 @@ class ClassResolver
     private function resolveMake(
         ReflectionClass $class,
         string $className,
-        string|bool|null $callMethod
+        string|bool|null $callMethod,
     ): array {
         $existing = $this->repository->getResolvedResource()[$className] ?? [];
 
@@ -190,7 +189,7 @@ class ClassResolver
     private function resolveClassResources(
         ReflectionClass $class,
         string $className,
-        string|bool|null $callMethod
+        string|bool|null $callMethod,
     ): array {
         if ($this->entriesResolving->offsetExists($class)) {
             throw new ContainerException("Circular dependency on {$className}");
@@ -200,10 +199,10 @@ class ClassResolver
         try {
             $resolvedResource = $this->repository->getResolvedResource()[$className] ?? [];
 
-            if (! isset($resolvedResource['instance'])) {
+            if (!isset($resolvedResource['instance'])) {
                 $this->resolveConstructor($class);
             }
-            if (! isset($resolvedResource['property'])) {
+            if (!isset($resolvedResource['property'])) {
                 $this->propertyResolver->resolve($class);
             }
             $this->resolveMethod($class, $callMethod);
@@ -231,27 +230,27 @@ class ClassResolver
      */
     private function getConcreteClassForInterface(
         ReflectionClass $class,
-        mixed $supplied
+        mixed $supplied,
     ): ReflectionClass {
-        if (! $class->isInterface()) {
+        if (!$class->isInterface()) {
             return $class;
         }
         $className = $class->getName();
         $envConcrete = $this->repository->getEnvConcrete($className);
         if ($envConcrete) {
             $class = ReflectionResource::getClassReflection($envConcrete);
-            if (! $class->implementsInterface($className)) {
+            if (!$class->implementsInterface($className)) {
                 throw new ContainerException("$envConcrete doesn't implement $className");
             }
 
             return $class;
         }
         // fallback to $supplied
-        if (! $supplied || ! class_exists($supplied)) {
+        if (!$supplied || !class_exists($supplied)) {
             throw new ContainerException("Resolution failed ($supplied) for interface $className");
         }
         $reflect = ReflectionResource::getClassReflection($supplied);
-        if (! $reflect->implementsInterface($className)) {
+        if (!$reflect->implementsInterface($className)) {
             throw new ContainerException("$supplied doesn't implement $className");
         }
 
@@ -276,7 +275,7 @@ class ClassResolver
     private function resolveConstructor(ReflectionClass $class): void
     {
         $className = $class->getName();
-        if (! $class->isInstantiable()) {
+        if (!$class->isInstantiable()) {
             throw new ContainerException("$className is not instantiable!");
         }
         $constructor = $class->getConstructor();
@@ -314,7 +313,7 @@ class ClassResolver
      */
     private function resolveMethod(
         ReflectionClass $class,
-        string|bool|null $callMethod
+        string|bool|null $callMethod,
     ): void {
         $className = $class->getName();
         $resolvedResource = $this->repository->getResolvedResource()[$className] ?? [];
@@ -330,10 +329,10 @@ class ClassResolver
             ?: ($this->repository->getClassResource()[$className]['method']['on'] ?? null)
                 ?: ($class->getConstant('callOn') ?: $this->repository->getDefaultMethod());
 
-        if (! $method && $class->hasMethod('__invoke')) {
+        if (!$method && $class->hasMethod('__invoke')) {
             $method = '__invoke';
         }
-        if (! $method || ! $class->hasMethod($method)) {
+        if (!$method || !$class->hasMethod($method)) {
             $this->repository->setResolvedResource($className, $resolvedResource);
 
             return;

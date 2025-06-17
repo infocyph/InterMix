@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Managers;
 
+use ArrayAccess;
 use Closure;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Support\ServiceProviderInterface;
@@ -13,8 +14,10 @@ use Infocyph\InterMix\Exceptions\ContainerException;
 /**
  * Handles registering closures, classes, methods, and properties.
  */
-class RegistrationManager
+class RegistrationManager implements ArrayAccess
 {
+    use ManagerProxy;
+
     /**
      * Initializes the registration manager with a repository and a container.
      *
@@ -184,18 +187,5 @@ class RegistrationManager
     public function invocation(): InvocationManager
     {
         return $this->container->invocation();
-    }
-
-    /**
-     * Retrieves the container instance.
-     *
-     * This method provides access to the Container instance,
-     * allowing for the retrieval of registered resources and their associated definitions.
-     *
-     * @return Container The container instance.
-     */
-    public function end(): Container
-    {
-        return $this->container;
     }
 }

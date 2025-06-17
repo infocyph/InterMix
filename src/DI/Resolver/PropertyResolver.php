@@ -122,7 +122,6 @@ class PropertyResolver
                     default => $property->setValue($values[0], $values[1]),
                 };
             }
-            $this->repository->tracer()->pop();
         }
     }
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Managers;
 
+use ArrayAccess;
 use Closure;
 use Infocyph\InterMix\DI\Attribute\DeferredInitializer;
 use Infocyph\InterMix\DI\Container;
@@ -17,8 +18,10 @@ use ReflectionException;
 /**
  * Handles get(), has(), getReturn(), call(), make() with optional lazy loading.
  */
-class InvocationManager
+class InvocationManager implements ArrayAccess
 {
+    use ManagerProxy;
+
     /**
      * Constructs an InvocationManager.
      *
@@ -86,7 +89,6 @@ class InvocationManager
                 $resolved = $resolved();
                 $this->repository->setResolved($scopeKey, $resolved);
             }
-            $this->repository->tracer()->pop();
             return $this->repository->fetchInstanceOrValue($resolved);
         }
 
@@ -98,7 +100,6 @@ class InvocationManager
             if ($cacheable) {
                 $this->repository->setResolved($scopeKey, $resolved);
             }
-            $this->repository->tracer()->pop();
             return $resolved;
         }
 
@@ -108,7 +109,6 @@ class InvocationManager
         if ($cacheable) {
             $this->repository->setResolved($scopeKey, $resolved);
         }
-        $this->repository->tracer()->pop();
         return $this->repository->fetchInstanceOrValue($resolved);
     }
 
@@ -204,7 +204,7 @@ class InvocationManager
     {
         $resolver = $this->container->getCurrentResolver();
 
-        $fresh = $resolver->classSettler($class, $method, true);
+        $fresh = $resolver->classSettler($class, $method ?: null, true);
 
         return $method ? $fresh['returned'] : $fresh['instance'];
     }
@@ -269,18 +269,5 @@ class InvocationManager
     public function options(): OptionsManager
     {
         return $this->container->options();
-    }
-
-    /**
-     * Ends the invocation manager and returns the container instance.
-     *
-     * This method is typically used when you want to exit the invocation manager
-     * and return to the container instance.
-     *
-     * @return Container The container instance.
-     */
-    public function end(): Container
-    {
-        return $this->container;
     }
 }

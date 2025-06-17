@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Managers;
 
+use ArrayAccess;
 use Infocyph\InterMix\Cache\Cache;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Support\Lifetime;
@@ -11,9 +12,12 @@ use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Cache\InvalidArgumentException;
+use ReflectionException;
 
-class DefinitionManager
+class DefinitionManager implements ArrayAccess
 {
+    use ManagerProxy;
+
     /**
      * Initialize the definition manager.
      *
@@ -50,7 +54,6 @@ class DefinitionManager
     }
 
 
-
     /**
      * Registers a definition with the container.
      *
@@ -70,7 +73,7 @@ class DefinitionManager
         string $id,
         mixed $definition,
         Lifetime $lifetime = Lifetime::Singleton,
-        array $tags = []
+        array $tags = [],
     ): self {
         if ($id === $definition) {
             throw new ContainerException("Id and definition cannot be the same ($id)");
@@ -78,7 +81,7 @@ class DefinitionManager
         $this->repository->setFunctionReference($id, $definition);
         $this->repository->setDefinitionMeta($id, [
             'lifetime' => $lifetime,
-            'tags'     => $tags,
+            'tags' => $tags,
         ]);
         return $this;
     }
@@ -113,6 +116,7 @@ class DefinitionManager
      *
      * @return $this
      * @throws ContainerException|InvalidArgumentException
+     * @throws ReflectionException
      */
     public function cacheAllDefinitions(bool $forceClearFirst = false): self
     {
@@ -168,19 +172,5 @@ class DefinitionManager
     public function invocation(): InvocationManager
     {
         return $this->container->invocation();
-    }
-
-    /**
-     * Ends the current scope and returns the Container instance.
-     *
-     * When called, this method will return the Container instance and
-     * remove the current scope from the stack, effectively ending the
-     * current scope.
-     *
-     * @return Container The Container instance.
-     */
-    public function end(): Container
-    {
-        return $this->container;
     }
 }

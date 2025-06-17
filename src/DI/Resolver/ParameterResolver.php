@@ -220,7 +220,6 @@ class ParameterResolver
             $processed = $this->processVariadic($processed, $variadic, $sort);
         }
 
-        $this->repository->tracer()->pop();
         return $this->resolvedCache[$cacheKey] = $processed;
     }
 

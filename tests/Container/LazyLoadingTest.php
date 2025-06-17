@@ -11,6 +11,6 @@ it('defers initialisation when lazy-loading is enabled', function () {
     });
 
     expect($flag)->toBeFalse();          // nothing executed yet
-    $val = $c->get('heavy');
+    $val = $c->end()->get('heavy');
     expect($flag)->toBeTrue()->and($val)->toBe(123);
 });

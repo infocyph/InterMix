@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI;
 
+use ArrayAccess;
 use Closure;
 use Exception;
 use Infocyph\InterMix\DI\Invoker\GenericCall;
@@ -12,6 +13,7 @@ use Infocyph\InterMix\DI\Managers\DefinitionManager;
 use Infocyph\InterMix\DI\Managers\InvocationManager;
 use Infocyph\InterMix\DI\Managers\OptionsManager;
 use Infocyph\InterMix\DI\Managers\RegistrationManager;
+use Infocyph\InterMix\DI\Support\ContainerProxy;
 use Infocyph\InterMix\DI\Support\DebugTracer;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\Exceptions\ContainerException;
@@ -21,8 +23,10 @@ use Psr\Container\ContainerInterface;
 use ReflectionException;
 use Throwable;
 
-class Container implements ContainerInterface
+class Container implements ContainerInterface, ArrayAccess
 {
+    use ContainerProxy;
+
     protected static array $instances = [];
     protected Repository $repository;
     protected closure|InjectedCall|GenericCall $resolver;
@@ -463,7 +467,11 @@ class Container implements ContainerInterface
     {
         return match (true) {
             $exception instanceof NotFoundException => new NotFoundException("No entry found for '$id'", 0, $exception),
-            default => new ContainerException("Error retrieving entry '$id': " . $exception->getMessage(), 0, $exception),
+            default => new ContainerException(
+                "Error retrieving entry '$id': " . $exception->getMessage(),
+                0,
+                $exception,
+            ),
         };
     }
 }

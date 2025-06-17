@@ -15,8 +15,6 @@ readonly class DeferredInitializer
     public function __invoke(): mixed
     {
         $this->container->tracer()->push('lazy-init', TraceLevel::Verbose);
-        $val = ($this->factory)();
-        $this->container->tracer()->pop();
-        return $val;
+        return ($this->factory)();
     }
 }

@@ -2,28 +2,57 @@
 
 namespace Infocyph\InterMix\DI\Support;
 
-/**
- * Lightweight LIFO tracer used by all resolvers.
- * push() / pop() do nothing unless $level allows.
- */
 final class DebugTracer
 {
     private array $stack = [];
 
+    /**
+     * Create a new DebugTracer instance with the given trace level.
+     *
+     * The trace level determines which messages are allowed to be pushed
+     * onto the stack. If the level is {@see TraceLevel::Node}, only "node"
+     * messages are allowed. If the level is {@see TraceLevel::Verbose},
+     * all messages are allowed.
+     *
+     * @param TraceLevel $level The trace level for the DebugTracer.
+     *                          Defaults to {@see TraceLevel::Node}.
+     */
     public function __construct(private TraceLevel $level = TraceLevel::Node)
     {
     }
 
+    /**
+     * Retrieves the current trace level.
+     *
+     * @return TraceLevel The trace level which determines which messages are allowed.
+     */
     public function level(): TraceLevel
     {
         return $this->level;
     }
 
+    /**
+     * Update the trace level of the DebugTracer.
+     *
+     * Calling this method will set the trace level for all subsequent
+     * {@see push()} calls. Note that this does not affect previously
+     * pushed messages.
+     *
+     * @param TraceLevel $level The trace level to set.
+     */
     public function setLevel(TraceLevel $level): void
     {
         $this->level = $level;
     }
 
+    /**
+     * Add a message to the top of the trace stack if the current
+     * {@see TraceLevel} allows messages of the given level.
+     *
+     * @param string $msg The trace message to add.
+     * @param TraceLevel $lvl [optional] The level of the trace message.
+     *                        Defaults to {@see TraceLevel::Node}.
+     */
     public function push(string $msg, TraceLevel $lvl = TraceLevel::Node): void
     {
         if ($lvl <= $this->level) {
@@ -31,14 +60,12 @@ final class DebugTracer
         }
     }
 
-    public function pop(): void
-    {
-        if ($this->stack) {
-            array_pop($this->stack);
-        }
-    }
-
-    /** Returns the collected trace and resets the stack. */
+    /**
+     * Discard all previously recorded trace messages and return them as an array.
+     * This is useful for testing and debugging.
+     *
+     * @return array The collected trace messages (stack is cleared after this call).
+     */
     public function flush(): array
     {
         $trace = $this->stack;

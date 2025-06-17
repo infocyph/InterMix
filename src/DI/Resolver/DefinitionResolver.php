@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Resolver;
 
 use Closure;
+use Infocyph\InterMix\DI\Support\Lifetime;
 use Infocyph\InterMix\DI\Support\ReflectionResource;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\InvalidArgumentException;
@@ -17,7 +18,7 @@ class DefinitionResolver
     private ParameterResolver $parameterResolver;
 
     public function __construct(
-        private readonly Repository $repository
+        private readonly Repository $repository,
     ) {
     }
 
@@ -28,14 +29,14 @@ class DefinitionResolver
      * that are class names or functions, and to resolve function parameters that
      * are not provided by the user.
      *
-     * @param ClassResolver    $classResolver    The ClassResolver instance.
+     * @param ClassResolver $classResolver The ClassResolver instance.
      * @param ParameterResolver $parameterResolver The ParameterResolver instance.
      */
     public function setResolverInstance(
         ClassResolver $classResolver,
-        ParameterResolver $parameterResolver
+        ParameterResolver $parameterResolver,
     ): void {
-        $this->classResolver    = $classResolver;
+        $this->classResolver = $classResolver;
         $this->parameterResolver = $parameterResolver;
     }
 
@@ -64,7 +65,6 @@ class DefinitionResolver
             return $this->getFromCacheOrResolve($name);
         } finally {
             unset($this->entriesResolving[$name]);
-            $this->repository->tracer()->pop();
         }
     }
 
@@ -80,6 +80,13 @@ class DefinitionResolver
      */
     private function getFromCacheOrResolve(string $name): mixed
     {
+        $lifetime = $this->repository->getDefinitionMeta($name)['lifetime'] ?? Lifetime::Singleton;
+
+        // transient / scoped → never cache at this layer
+        if ($lifetime !== Lifetime::Singleton) {
+            return $this->resolveDefinition($name);
+        }
+
         $resolvedDefs = $this->repository->getResolvedDefinition();
         if (!isset($resolvedDefs[$name])) {
             $resolverCallback = fn () => $this->resolveDefinition($name);

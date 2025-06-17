@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Managers;
 
+use ArrayAccess;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Invoker\GenericCall;
 use Infocyph\InterMix\DI\Invoker\InjectedCall;
@@ -16,8 +17,10 @@ use Infocyph\InterMix\Exceptions\ContainerException;
  * Handles toggling injection, method attributes, property attributes, etc.
  * Optionally environment / debug toggles if you want them all in one place.
  */
-class OptionsManager
+class OptionsManager implements ArrayAccess
 {
+    use ManagerProxy;
+
     /**
      * Constructs an OptionsManager.
      *
@@ -192,18 +195,5 @@ class OptionsManager
     public function invocation(): InvocationManager
     {
         return $this->container->invocation();
-    }
-
-    /**
-     * Ends the chain of method calls and returns the main container instance.
-     *
-     * This method is typically used to finalize configurations or registrations
-     * and retrieve the container instance for further operations.
-     *
-     * @return Container The main container instance.
-     */
-    public function end(): Container
-    {
-        return $this->container;
     }
 }
