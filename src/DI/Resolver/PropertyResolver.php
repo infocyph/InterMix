@@ -248,6 +248,14 @@ class PropertyResolver
         }
         $refClass = ReflectionResource::getClassReflection($className);
 
+        if (interface_exists($parameterType->getName())
+            && ! $refClass->implementsInterface($parameterType->getName())
+        ) {
+            throw new ContainerException(
+                "$className does not implement {$parameterType->getName()} (environment override mismatch)"
+            );
+        }
+
         return $this->classResolver->resolve($refClass)['instance'];
     }
 }

@@ -259,7 +259,6 @@ class Repository
         return array_key_exists($id, $this->functionReference);
     }
 
-
     /**
      * Returns the array of function references.
      *
@@ -361,6 +360,25 @@ class Repository
     {
         $this->checkIfLocked();
         $this->closureResource[$alias] = ['on' => $function, 'params' => $params];
+    }
+
+    /**
+     * Resets the current scope, removing all resolved resources that were
+     * created under the current scope.
+     *
+     * This method is useful when you want to reset the state of the container
+     * after a scope has been used (for example, after a request has been
+     * processed).
+     */
+    public function resetScope(): void
+    {
+        $suffix = '@' . $this->currentScope;
+        foreach ($this->resolved as $key => $_) {
+            if (str_ends_with($key, $suffix)) {
+                unset($this->resolved[$key]);
+            }
+        }
+        $this->currentScope = 'root';
     }
 
     /**

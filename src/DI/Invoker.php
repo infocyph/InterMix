@@ -174,30 +174,31 @@ final readonly class Invoker
      */
     private function routeCallable(mixed $callable, array $args): mixed
     {
-        // parseCallable guarantees: Closure | function-string | class-string
+        // 0)  Packed Opis payload? – short-circuit before other string tests
+        if (is_string($callable) && ValueSerializer::isSerializedClosure($callable)) {
+            /** @var \Closure $closure */
+            $closure = ValueSerializer::unserialize($callable);
+            return $this->viaClosure($closure, $args);
+        }
+
+        // 1)  Native Closure
         if ($callable instanceof Closure) {
             return $this->viaClosure($callable, $args);
         }
 
-        // Callable function string
+        // 2)  plain callable function-string
         if (is_string($callable) && is_callable($callable, false, $fnName)) {
             return $this->viaClosure($callable(...), $args);
         }
 
-        // Invokable object
+        // 3)  invokable object
         if (is_object($callable) && is_callable($callable)) {
             return $this->viaClosure($callable(...), $args);
         }
 
-        // Fallback: treat as class name with optional __invoke
+        // 4)  treat as class-name w/ optional __invoke
         if (is_string($callable) && class_exists($callable)) {
             return $this->container->make($callable);
-        }
-
-        // Serialized closure payload?
-        if (is_string($callable) && ValueSerializer::isSerializedClosure($callable)) {
-            $closure = ValueSerializer::unserialize($callable);
-            return $this->viaClosure($closure, $args);
         }
 
         throw new InvalidArgumentException('Unsupported callable formation.');

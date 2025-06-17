@@ -22,7 +22,7 @@ if (!function_exists('container')) {
      */
     function container(
         string|Closure|callable|array|null $closureOrClass = null,
-        string $alias = 'default',
+        string $alias = 'intermix',
     ): mixed {
         $instance = Container::instance($alias);
 

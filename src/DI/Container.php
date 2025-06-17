@@ -67,7 +67,7 @@ class Container implements ContainerInterface
      * @return static The container instance.
      * @throws ContainerException
      */
-    public static function instance(string $instanceAlias = 'default'): static
+    public static function instance(string $instanceAlias = 'intermix'): static
     {
         return self::$instances[$instanceAlias] ??= new static($instanceAlias);
     }

@@ -55,9 +55,8 @@ final class ValueSerializer
         if (!str_contains($str, 'Opis\\Closure')) {
             return false;
         }
-
         return (bool) preg_match(
-            '/^(?:C:\d+:"Opis\\\\Closure\\\\SerializableClosure"|O:\d+:"Opis\\\\Closure\\\\Box")/',
+            '/^(?:C:\d+:"Opis\\\\Closure\\\\SerializableClosure|O:\d+:"Opis\\\\Closure\\\\Box"|O:\d+:"Opis\\\\Closure\\\\Serializable")/',
             $str
         );
     }
