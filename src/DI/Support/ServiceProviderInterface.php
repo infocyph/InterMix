@@ -1,6 +1,6 @@
 <?php
 
-namespace Infocyph\InterMix\DI\Reflection;
+namespace Infocyph\InterMix\DI\Support;
 
 use Infocyph\InterMix\DI\Container;
 

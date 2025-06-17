@@ -12,7 +12,7 @@ use Infocyph\InterMix\DI\Managers\DefinitionManager;
 use Infocyph\InterMix\DI\Managers\InvocationManager;
 use Infocyph\InterMix\DI\Managers\OptionsManager;
 use Infocyph\InterMix\DI\Managers\RegistrationManager;
-use Infocyph\InterMix\DI\Reflection\DebugTracer;
+use Infocyph\InterMix\DI\Support\DebugTracer;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Exceptions\NotFoundException;

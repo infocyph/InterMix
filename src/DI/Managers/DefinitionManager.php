@@ -6,7 +6,7 @@ namespace Infocyph\InterMix\DI\Managers;
 
 use Infocyph\InterMix\Cache\Cache;
 use Infocyph\InterMix\DI\Container;
-use Infocyph\InterMix\DI\Reflection\Lifetime;
+use Infocyph\InterMix\DI\Support\Lifetime;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\CacheItemPoolInterface;

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Invoker;
 
 use Closure;
-use Infocyph\InterMix\DI\Reflection\ReflectionResource;
+use Infocyph\InterMix\DI\Support\ReflectionResource;
 use Infocyph\InterMix\DI\Resolver\ClassResolver;
 use Infocyph\InterMix\DI\Resolver\DefinitionResolver;
 use Infocyph\InterMix\DI\Resolver\ParameterResolver;

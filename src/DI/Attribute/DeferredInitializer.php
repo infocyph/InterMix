@@ -4,7 +4,7 @@ namespace Infocyph\InterMix\DI\Attribute;
 
 use Closure;
 use Infocyph\InterMix\DI\Container;
-use Infocyph\InterMix\DI\Reflection\TraceLevel;
+use Infocyph\InterMix\DI\Support\TraceLevel;
 
 readonly class DeferredInitializer
 {

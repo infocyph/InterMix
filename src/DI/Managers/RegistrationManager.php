@@ -6,7 +6,7 @@ namespace Infocyph\InterMix\DI\Managers;
 
 use Closure;
 use Infocyph\InterMix\DI\Container;
-use Infocyph\InterMix\DI\Reflection\ServiceProviderInterface;
+use Infocyph\InterMix\DI\Support\ServiceProviderInterface;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\Exceptions\ContainerException;
 

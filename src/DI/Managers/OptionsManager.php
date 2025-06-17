@@ -7,8 +7,8 @@ namespace Infocyph\InterMix\DI\Managers;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Invoker\GenericCall;
 use Infocyph\InterMix\DI\Invoker\InjectedCall;
-use Infocyph\InterMix\DI\Reflection\PreloadGenerator;
-use Infocyph\InterMix\DI\Reflection\TraceLevel;
+use Infocyph\InterMix\DI\Support\PreloadGenerator;
+use Infocyph\InterMix\DI\Support\TraceLevel;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\Exceptions\ContainerException;
 

@@ -6,8 +6,8 @@ namespace Infocyph\InterMix\DI\Resolver;
 
 use Infocyph\InterMix\DI\Attribute\IMStdClass;
 use Infocyph\InterMix\DI\Attribute\Infuse;
-use Infocyph\InterMix\DI\Reflection\ReflectionResource;
-use Infocyph\InterMix\DI\Reflection\TraceLevel;
+use Infocyph\InterMix\DI\Support\ReflectionResource;
+use Infocyph\InterMix\DI\Support\TraceLevel;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\InvalidArgumentException;
 use ReflectionClass;

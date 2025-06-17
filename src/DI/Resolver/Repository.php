@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Resolver;
 
-use Infocyph\InterMix\DI\Reflection\DebugTracer;
-use Infocyph\InterMix\DI\Reflection\Lifetime;
+use Infocyph\InterMix\DI\Support\DebugTracer;
+use Infocyph\InterMix\DI\Support\Lifetime;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\CacheItemPoolInterface;
 
