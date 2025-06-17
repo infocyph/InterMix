@@ -6,6 +6,7 @@ namespace Infocyph\InterMix\DI\Managers;
 
 use Closure;
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Reflection\ServiceProviderInterface;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\Exceptions\ContainerException;
 
@@ -26,6 +27,33 @@ class RegistrationManager
     ) {
     }
 
+    /**
+     * Imports a service provider into the container.
+     *
+     * The provider may be passed as a class name (string) or an instance of
+     * ServiceProviderInterface. The provider is then registered with the
+     * container, and its definitions are added to the container.
+     *
+     * @param string|ServiceProviderInterface $provider The service provider to import.
+     *
+     * @return static The registration manager instance.
+     * @throws ContainerException
+     */
+    public function import(string|ServiceProviderInterface $provider): self
+    {
+        if (is_string($provider)) {
+            $provider = new $provider();
+        }
+
+        if (!$provider instanceof ServiceProviderInterface) {
+            throw new ContainerException(
+                'Service-provider must implement ServiceProviderInterface.'
+            );
+        }
+
+        $provider->register($this->container);
+        return $this;
+    }
 
     /**
      * Registers a closure with associated parameters.

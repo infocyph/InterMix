@@ -51,6 +51,7 @@ class PropertyResolver
      *
      * @param ReflectionClass $class The class to resolve properties for.
      * @throws ContainerException|ReflectionException
+     * @throws InvalidArgumentException
      */
     public function resolve(ReflectionClass $class): void
     {

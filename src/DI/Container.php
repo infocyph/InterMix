@@ -106,6 +106,15 @@ class Container implements ContainerInterface
         return $this;
     }
 
+    /**
+     * INTERNAL – tooling helper, *not* a public API promise.
+     *
+     * @internal
+     */
+    public function getRepository(): Repository
+    {
+        return $this->repository;
+    }
 
     /**
      * Retrieves a value from the container.
