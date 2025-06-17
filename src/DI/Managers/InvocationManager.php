@@ -204,7 +204,7 @@ class InvocationManager
     {
         $resolver = $this->container->getCurrentResolver();
 
-        $fresh = $resolver->classSettler($class, $method, make: true);
+        $fresh = $resolver->classSettler($class, $method, true);
 
         return $method ? $fresh['returned'] : $fresh['instance'];
     }

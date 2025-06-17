@@ -351,7 +351,7 @@ class Container implements ContainerInterface
     public function findByTag(string $tag): array
     {
         $matches = [];
-        foreach ($this->repository->getDefinitionMeta() as $id => $meta) {
+        foreach ($this->repository->getAllDefinitionMeta() as $id => $meta) {
             if (in_array($tag, $meta['tags'], true)) {
                 $matches[$id] = $this->get($id);
             }

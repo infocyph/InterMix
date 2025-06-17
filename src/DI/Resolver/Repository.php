@@ -81,6 +81,22 @@ class Repository
         return $this->definitionMeta[$id] ?? ['lifetime' => Lifetime::Singleton, 'tags' => []];
     }
 
+    /**
+     * Returns an array of all the definition meta data.
+     *
+     * The returned array has the definition IDs as the keys and the
+     * corresponding meta data as the values. The meta data array
+     * contains the following information:
+     *
+     * - lifetime: The lifetime of the definition. Defaults to Lifetime::Singleton.
+     * - tags: An array of tags to associate with the definition. Defaults to an empty array.
+     *
+     * @return array An array of all the definition meta data.
+     */
+    public function getAllDefinitionMeta(): array
+    {
+        return $this->definitionMeta;
+    }
 
     /**
      * Set the current scope for the container.
