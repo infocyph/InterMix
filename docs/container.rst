@@ -121,7 +121,7 @@ Common quick patterns (copy-paste as you learn the rest)
    // scoped services now unique to this request
 
 -----------
-Next steps
+Dive in Details
 -----------
 
 Dive into the detailed sub-chapters. Happy mixing!  Questions?  Open an issue or drop by the discussion board.
