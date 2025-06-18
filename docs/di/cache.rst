@@ -1,10 +1,10 @@
-.. _di.caching:
+.. _di.cache:
 
 ========================
 Definition-level Caching
 ========================
 
-InterMix can **memoise resolved definitions** in a Symfony-style cache so that
+InterMix can **memoise resolved definitions** in a styled cache so that
 the next request (or CLI run) skips *all* reflection, attribute parsing and
 factory execution.
 
@@ -20,13 +20,13 @@ Quick Example 🚀
 
 .. code-block:: php
 
-   use Symfony\Component\Cache\Adapter\FilesystemAdapter;
+   use Infocyph\InterMix\Cache\Cache;
    use function Infocyph\InterMix\container;
 
    $c = container();
 
    // ① choose any PSR-6 adapter
-   $cache = new FilesystemAdapter(namespace: 'intermix', directory: '/tmp/intermix');
+   $cache = Cache::file(namespace: 'intermix', directory: '/tmp/intermix');
 
    // ② plug it into the DefinitionManager
    $c->definitions()->enableDefinitionCache($cache);
@@ -50,7 +50,7 @@ Eager warm-up (a.k.a. *compile* the container):
 `cacheAllDefinitions()` iterates every current definition **once**,
 resolves it and stores the result in:
 
-1. **The Symfony cache** you supplied, *and*
+1. **The cache** you supplied, *and*
 2. The container’s in-process “resolved” map (so it is also fast in memory).
 
 You can now deploy the warmed cache files or keep them in Redis, Memcached,

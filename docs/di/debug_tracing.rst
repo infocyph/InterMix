@@ -87,22 +87,6 @@ Use Cases & Tips 💡
 ✔ Shows when fallback to autowiring or defaults occurs
 ✔ Reveals **why** something resolved or **why not**
 
-----------------------
-Disable or Reset 🧹
-----------------------
-
-To turn off tracing again:
-
-.. code-block:: php
-
-   $c->options()->enableDebugTracing(false);
-
-To clear trace logs manually:
-
-.. code-block:: php
-
-   $c->resetDebug();
-
 
 Next stop » :doc:`psr_support`
 

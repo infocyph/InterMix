@@ -92,5 +92,4 @@ Take-away
 
 *DI gives you **loosely coupled** code;* the **container** automates the wiring so
 you focus on behaviour, not plumbing.
-Ready to see it in action? Jump to :ref:`di.quickstart` or straight to
-:ref:`di.usage` for practical recipes.
+Ready to see it in action? Jump to :ref:`di.quickstart` for practical recipes.

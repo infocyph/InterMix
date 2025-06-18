@@ -24,29 +24,6 @@ Dependency Injection (Container)
    | :php:`propertyAttributes:true` (honour ``#[Infuse]`` on properties)
    | :php:`enableLazyLoading(false)` (eager-load every service)
 
-.. toctree::
-    :titlesonly:
-    :hidden:
-
-    di/overview
-    di/quickstart
-    di/understanding
-    di/definitions
-    di/registration
-    di/options
-    di/invocation
-    di/attribute
-    di/lifetimes
-    di/scopes
-    di/lazy_loading
-    di/tagging
-    di/environment
-    di/cache
-    di/preload
-    di/debug_tracing
-    di/cheat_sheet
-    di/best_practices
-
 -----------------------------------
 Why bother with a DI-Container?
 -----------------------------------
@@ -148,3 +125,26 @@ Next steps
 -----------
 
 Dive into the detailed sub-chapters. Happy mixing!  Questions?  Open an issue or drop by the discussion board.
+
+.. toctree::
+    :titlesonly:
+    :hidden:
+
+    di/overview
+    di/quickstart
+    di/understanding
+    di/definitions
+    di/registration
+    di/options
+    di/invocation
+    di/attribute
+    di/lifetimes
+    di/scopes
+    di/lazy_loading
+    di/tagging
+    di/environment
+    di/cache
+    di/preload
+    di/debug_tracing
+    di/cheat_sheet
+    di/best_practices
