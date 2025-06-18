@@ -6,7 +6,7 @@ Definition Manager API
 
 ``$c->definitions()`` returns an **instance-fluent** manager that stores **recipes**
 (**definitions**) by *ID*.
-Everything that can be resolved by :php:meth:`Infocyph\InterMix\DI\Container.get`
+Everything that can be resolved by :php:method::`Infocyph\InterMix\DI\Container->get`
 ultimately lives in this registry.
 
 ---------------------------------------------------

@@ -23,7 +23,7 @@ use Psr\Container\ContainerInterface;
 use ReflectionException;
 use Throwable;
 
-class Container implements ContainerInterface, ArrayAccess
+final class Container implements ContainerInterface, ArrayAccess
 {
     use ContainerProxy;
 

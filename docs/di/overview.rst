@@ -6,7 +6,7 @@ Overview
 
 InterMix is a **“zero-config-until-you-want-it”** dependency-injection container.
 Start with *one* line, stay productive when your project grows – lifetimes,
-scopes, debug tracing, Symfony cache, preload generation … all optional.
+scopes, debug tracing, cache, preload generation … all optional.
 
 Why another container?
 ----------------------
@@ -122,7 +122,7 @@ needed.
    :php:class:`GenericCall` path instantiates without reflection magic.
 
 #. **Cache layer**
-   With definition caching enabled, Symfony cache is consulted. Resolution
+   With definition caching enabled, cache is consulted. Resolution
    results are stored back for next time.
 
 User closure vs. lazy
@@ -157,18 +157,6 @@ Typical lifecycle
 3. **Tune options** – autowire on/off, attributes, environment, cache …
 4. **Resolve** with ``get() / call() / make() / getReturn()``
 5. *(optional)* **Lock** the container to freeze configuration
-
-Feature menu
-------------
-
-+ **:doc:`quickstart`** – hands-on tour
-+ **:doc:`definitions`** / **:doc:`registration`** – service wiring
-+ **:doc:`options`** – switches & environment overrides
-+ **:doc:`attributes`** – `#[Infuse]` / `#[Autowire]` / `#[Inject]`
-+ **:doc:`lifetimes`** – singleton / transient / scoped
-+ **:doc:`scopes`** – request / fibre isolation
-+ **:doc:`lazy_loading`**, **:doc:`caching`**, **:doc:`debug_tracing`**
-+ **:doc:`cheat_sheet`** – one-page reference
 
 Next steps
 ----------

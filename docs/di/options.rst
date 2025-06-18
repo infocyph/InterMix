@@ -67,7 +67,7 @@ Flag                    Default    What it does
 | ``enableDebugTracing(true, TraceLevel::Verbose)`` | Capture **resolution traces** for debugging. See       |
 |                                             | :ref:`di.debug_tracing`.                                     |
 +---------------------------------------------+--------------------------------------------------------------+
-| ``enableDefinitionCache(CacheInterface $symfonyCache)`` | Cache resolved definitions via Symfony Cache.       |
+| ``enableDefinitionCache(CacheInterface $cache)`` | Cache resolved definitions via Cache.       |
 +---------------------------------------------+--------------------------------------------------------------+
 
 ----------------------------------------------------
@@ -93,7 +93,7 @@ Flag                    Default    What it does
 
 .. code-block:: php
 
-   use Symfony\Component\Cache\Adapter\FilesystemAdapter;
+   use Infocyph\InterMix\Cache\Cache;
 
    container()
        ->options()
@@ -103,7 +103,7 @@ Flag                    Default    What it does
            propertyAttributes: false,
        )
        ->enableLazyLoading(true)           // default – save memory
-       ->enableDefinitionCache(new FilesystemAdapter())
+       ->enableDefinitionCache(Cache::file())
        ->setEnvironment('prod');
 
 ----------------------------------------------------

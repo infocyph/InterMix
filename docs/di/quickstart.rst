@@ -152,12 +152,4 @@ accidental modifications:
    $c1->lock();
 
 
-What’s next?
-------------
-
-* **Cheat-Sheet** – one-page reference of every call.
-* **Definitions / Registration / Options** – deep dives into each manager.
-* **Attributes** – everything about ``#[Infuse]``.
-* **Debug Tracing** – X-ray a resolution path when things go sideways.
-
 Happy mixing — your clay is ready!
