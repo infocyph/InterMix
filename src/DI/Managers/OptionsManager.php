@@ -131,6 +131,7 @@ class OptionsManager implements ArrayAccess
      * @param string $path The path to the preload file.
      *
      * @return $this
+     * @throws \ReflectionException
      */
     public function generatePreload(string $path): self
     {

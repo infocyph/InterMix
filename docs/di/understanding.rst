@@ -4,72 +4,93 @@
 Understanding Dependency Injection & Container
 ==============================================
 
-**Dependency Injection** means each class *receives* its dependencies externally
-rather than creating them inside. A **container** automates that injection,
-especially for large or complex setups.
+*(Conceptual chapter – the “why”.  Hands-on code lives in the other pages.)*
 
------------------
-A Quick Analogy
------------------
+-------------------------------------------------
+What *is* Dependency Injection (DI), really?
+-------------------------------------------------
 
-Without DI, your code is **tightly coupled**:
+**DI** means a class *receives* (is **injected**) the things it needs to do its job
+instead of **creating** them internally.
+Less _new_ keywords → less coupling → easier change.
+
+Without DI – brittle coupling
+-----------------------------
 
 .. code-block:: php
 
    class StoreService
    {
-       public function getStoreCoordinates($store)
+       public function getStoreCoordinates(Store $store): array
        {
-           $geo = new GoogleMaps(); // Hard-coded
-           return $geo->getCoordinatesFromAddress($store->getAddress());
+           $geo = new GoogleMaps();          // 🔴 hard-wired
+           return $geo->getCoordinatesFromAddress($store->address());
        }
    }
 
-Switching to `OpenStreetMap` would require changing `StoreService`.
+A future switch to *OpenStreetMap* touches **every line** that new’s `GoogleMaps`.
 
-**With DI**:
+With DI – pluggable design
+--------------------------
 
 .. code-block:: php
 
-   interface GeolocationService { ... }
+   interface GeolocationService { public function locate(string $addr): array; }
 
-   class GoogleMaps implements GeolocationService { ... }
-   class OpenStreetMap implements GeolocationService { ... }
+   class GoogleMaps implements GeolocationService { /* … */ }
+   class OpenStreetMap implements GeolocationService { /* … */ }
 
    class StoreService
    {
-       private GeolocationService $geo;
-       public function __construct(GeolocationService $geo)
+       public function __construct(private GeolocationService $geo) {}
+
+       public function getStoreCoordinates(Store $store): array
        {
-           $this->geo = $geo;
+           return $this->geo->locate($store->address());
        }
-       // ...
    }
 
-You decide which implementation to give `StoreService`. No code change in the
-`StoreService` itself. That’s the fundamental “inversion of control.”
+Business code knows only *the contract* (`GeolocationService`).
+Swap concrete classes at runtime, in tests, or by environment – no edits in `StoreService`.
 
------------------------------
-Using a Container for DI
------------------------------
+-------------------------------------------------------------
+Why use a container instead of manual wiring?
+-------------------------------------------------------------
 
-A **container** like InterMix helps:
+* **Replaceability** – bind interface → class once, change it centrally.
+* **Testability** – hand the container a fake/mock service in tests.
+* **Single Source of Truth** – definitions live in one place; fewer bootstraps scattered around.
+* **Optional power-ups** – autowiring, attributes, lazy loading, caching, scopes… when you need them.
 
-1. You **register** definitions or classes (e.g. `GoogleMaps`, `OpenStreetMap`).
-2. You **ask** the container: ``$container->get(StoreService::class)``
-3. The container sees that `StoreService` needs a `GeolocationService`, picks the right one,
-   and returns a fully constructed `StoreService`.
+InterMix in the picture
+-----------------------
 
-With environment-based overrides, you can do:
+#. **Register** recipes (definitions, class bindings, factory closures).
+#. **Resolve**: ``$c->get(StoreService::class)``.
+#. InterMix analyses the constructor, asks itself *“What fulfills GeolocationService right now?”*,
+   constructs the dependency (recursively if needed) **once**, and hands back a ready-to-use
+   `StoreService`.
+
+Environment-based overrides
+---------------------------
+
+One-liner switches for prod vs. local (or staging, CI, …):
 
 .. code-block:: php
 
-   $container->setEnvironment('production')
-       ->options()
-       ->bindInterfaceForEnv('production', GeolocationService::class, GoogleMaps::class)
-       ->bindInterfaceForEnv('local', GeolocationService::class, OpenStreetMap::class);
+   $c->options()
+      ->bindInterfaceForEnv('prod',  GeolocationService::class, GoogleMaps::class)
+      ->bindInterfaceForEnv('local', GeolocationService::class, OpenStreetMap::class)
+      ->setEnvironment($_ENV['APP_ENV'] ?? 'local');
 
-So in “production,” it chooses `GoogleMaps`. In “local,” it chooses `OpenStreetMap`.
+Running in production will now build `GoogleMaps`; developers get `OpenStreetMap`
+automatically.
 
-**Result**: Maximum flexibility, minimal duplication. See :ref:`di.usage` for
-practical usage examples.
+-------------------------------------------------
+Take-away
+-------------------------------------------------
+
+*DI gives you **loosely coupled** code;* the **container** automates the wiring so
+you focus on behaviour, not plumbing.
+Ready to see it in action? Jump to :ref:`di.quickstart` or straight to
+:ref:`di.usage` for practical recipes.

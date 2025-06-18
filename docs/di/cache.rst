@@ -1,72 +1,113 @@
-.. _di.cache:
+.. _di.caching:
 
-==================
-Definition Caching
-==================
+========================
+Definition-level Caching
+========================
 
-InterMix can **cache** definitions so repeated calls don't re-reflect or re-resolve them,
-**improving performance** across repeated usage.
+InterMix can **memoise resolved definitions** in a Symfony-style cache so that
+the next request (or CLI run) skips *all* reflection, attribute parsing and
+factory execution.
 
-It uses `Symfony Cache <https://symfony.com/doc/current/components/cache.html>`__
-(``CacheInterface``). You can pass any Symfony cache adapter (e.g., FilesystemAdapter, RedisAdapter).
+Why care?
 
----------------------------------------
-enableDefinitionCache(CacheInterface $cache)
----------------------------------------
+* **Speed** – complex graphs become a quick cache lookup.
+* **Memory** – expensive reflection metadata lives in PSR-6 / PSR-16 storage.
+* **Predictability** – warm the cache once, ship to production.
 
-Enables definition caching:
+---------------
+Quick Example 🚀
+---------------
 
 .. code-block:: php
 
    use Symfony\Component\Cache\Adapter\FilesystemAdapter;
+   use function Infocyph\InterMix\container;
 
-   $cache = new FilesystemAdapter();
-   $container->definitions()
-       ->enableDefinitionCache($cache);
+   $c = container();
 
-**After this**, any definitions the container resolves are stored in that cache.
-If you remove or change a definition, or want to re-build them, see below.
+   // ① choose any PSR-6 adapter
+   $cache = new FilesystemAdapter(namespace: 'intermix', directory: '/tmp/intermix');
 
--------------------------------------------
-cacheAllDefinitions(bool $forceClearFirst)
--------------------------------------------
+   // ② plug it into the DefinitionManager
+   $c->definitions()->enableDefinitionCache($cache);
 
-Preemptively resolve **all** container definitions, storing them in cache:
+   // ③ bind / register as usual …
+   $c->definitions()->bind('answer', 42);
 
-.. code-block:: php
+   // ④ first call populates the cache
+   $val = $c->get('answer');          // ← resolves & stores
 
-   $container->definitions()
-       ->cacheAllDefinitions($forceClearFirst = false);
+   // ⑤ subsequent calls – *even in a new PHP process* – are instant
+   echo $c->get('answer');            // ← pulled straight from cache
 
-- ``$forceClearFirst = true``: Clears the container’s keys from the cache first, ensuring
-  a fresh build.
 
-**Flow**:
-
-1. For each definition (in ``functionReference``), the container calls ``resolveByDefinition($id)``.
-2. The resulting object/value is cached in Symfony cache **and** in local
-   :php:meth:`resolvedDefinition`.
-
-Hence next time you call:
+Eager warm-up (a.k.a. *compile* the container):
 
 .. code-block:: php
 
-   $container->get('someDefinition');
+   $c->definitions()->cacheAllDefinitions(forceClearFirst: true);
 
-the container loads it instantly from cache. This can **significantly** reduce overhead in
-production if you have complex definitions or reflection usage.
+`cacheAllDefinitions()` iterates every current definition **once**,
+resolves it and stores the result in:
 
-------------------
-Lazy vs. Immediate
-------------------
+1. **The Symfony cache** you supplied, *and*
+2. The container’s in-process “resolved” map (so it is also fast in memory).
 
-InterMix also supports **lazy loading** for definitions, which can be combined with caching.
-If lazy loading is on (``enableLazyLoading(true)``) but you also want a definition to skip lazy
-and be resolved eagerly, you can:
+You can now deploy the warmed cache files or keep them in Redis, Memcached,
+APCu, etc.
 
-- **Bind a user closure** directly. (User closures are always resolved **immediately** for
-  clarity—thus caching the result if caching is on.)
-- Or call ``cacheAllDefinitions()`` so everything is forced into cache right away.
+--------------------------------
+Lazy Loading × Caching ⚡️
+--------------------------------
 
-**Either way**, the container ensures you do not re-resolve the same definition repeatedly,
-thanks to caching.
+Lazy loading (``enableLazyLoading(true)``) and caching work **together**:
+
+* **Class / array bindings**
+  → stored as a lightweight ``DeferredInitializer``
+  → first ``get()`` constructs the object **and** writes it to cache.
+
+* **User-supplied closures**
+  → executed **immediately** (never deferred)
+  → whatever the closure returns is cached.
+
+That means you may keep lazy loading **on** and still enjoy the *speed* of a
+pre-warmed cache.
+
+----------------------
+Cache Invalidation 🔄
+----------------------
+
+* **forceClearFirst** in `cacheAllDefinitions()` nukes InterMix keys **before**
+  warming.
+* Delete the cache namespace directory (FilesystemAdapter) or flush the key
+  pattern (Redis/Memcached) whenever you update service wiring.
+
+--------------------------------
+FAQ ❓
+--------------------------------
+
+**Q: Do I need caching in development?**
+Not really – autowiring overhead is negligible for most apps.  Use it for
+benchmarks or when profiling reveals reflection hot-spots.
+
+**Q: Can I share the cache between multiple container aliases?**
+Yes, each alias prefixes its keys, so collisions are impossible.
+
+**Q: Does it store _all_ objects?**
+Only what you resolve **and** what is not marked *Transient*. Transient lifetimes
+are always rebuilt (by design), so caching would defeat their purpose.
+
+---------------------
+One-liner Cheat-Sheet
+---------------------
+
+===========  =================================================================
+Action        Code
+===========  =================================================================
+Enable cache  ``$c->definitions()->enableDefinitionCache($cache)``
+Warm all      ``$c->definitions()->cacheAllDefinitions()``
+Clear + warm  ``…->cacheAllDefinitions(forceClearFirst:true)``
+Disable       Omit the call or inject the `NullAdapter`
+===========  =================================================================
+
+Next stop » :doc:`debug_tracing`
