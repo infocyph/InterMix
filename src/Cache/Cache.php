@@ -424,7 +424,7 @@ class Cache implements
      *
      * @param string $key
      * @return bool
-     * @throws SimpleCacheInvalidArgument if the key is invalid
+     * @throws Psr6InvalidArgumentException if the key is invalid
      */
     public function has(string $key): bool
     {

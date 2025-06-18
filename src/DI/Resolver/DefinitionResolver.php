@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Resolver;
 
 use Closure;
-use Infocyph\InterMix\DI\Reflection\ReflectionResource;
+use Infocyph\InterMix\DI\Support\Lifetime;
+use Infocyph\InterMix\DI\Support\ReflectionResource;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\InvalidArgumentException;
 use ReflectionException;
@@ -16,8 +17,13 @@ class DefinitionResolver
     private ClassResolver $classResolver;
     private ParameterResolver $parameterResolver;
 
+    /**
+     * Constructs a DefinitionResolver instance.
+     *
+     * @param Repository $repository The Repository providing definitions, classes, functions, and parameters.
+     */
     public function __construct(
-        private readonly Repository $repository
+        private readonly Repository $repository,
     ) {
     }
 
@@ -28,14 +34,14 @@ class DefinitionResolver
      * that are class names or functions, and to resolve function parameters that
      * are not provided by the user.
      *
-     * @param ClassResolver    $classResolver    The ClassResolver instance.
+     * @param ClassResolver $classResolver The ClassResolver instance.
      * @param ParameterResolver $parameterResolver The ParameterResolver instance.
      */
     public function setResolverInstance(
         ClassResolver $classResolver,
-        ParameterResolver $parameterResolver
+        ParameterResolver $parameterResolver,
     ): void {
-        $this->classResolver    = $classResolver;
+        $this->classResolver = $classResolver;
         $this->parameterResolver = $parameterResolver;
     }
 
@@ -59,6 +65,7 @@ class DefinitionResolver
             throw new ContainerException("Circular dependency for definition '$name'.");
         }
         $this->entriesResolving[$name] = true;
+        $this->repository->tracer()->push("def:$name");
         try {
             return $this->getFromCacheOrResolve($name);
         } finally {
@@ -78,6 +85,13 @@ class DefinitionResolver
      */
     private function getFromCacheOrResolve(string $name): mixed
     {
+        $lifetime = $this->repository->getDefinitionMeta($name)['lifetime'] ?? Lifetime::Singleton;
+
+        // transient / scoped → never cache at this layer
+        if ($lifetime !== Lifetime::Singleton) {
+            return $this->resolveDefinition($name);
+        }
+
         $resolvedDefs = $this->repository->getResolvedDefinition();
         if (!isset($resolvedDefs[$name])) {
             $resolverCallback = fn () => $this->resolveDefinition($name);
@@ -105,7 +119,7 @@ class DefinitionResolver
      * @param string $name The name of the definition to resolve.
      * @return mixed The resolved value of the definition.
      * @throws ContainerException
-     * @throws ReflectionException
+     * @throws ReflectionException|InvalidArgumentException
      */
     private function resolveDefinition(string $name): mixed
     {
@@ -121,7 +135,6 @@ class DefinitionResolver
                 return $this->resolveArrayDefinition($definition);
 
             case is_string($definition) && class_exists($definition):
-                // environment-based interface => already in ClassResolver
                 $refClass = ReflectionResource::getClassReflection($definition);
                 $res = $this->classResolver->resolve($refClass);
                 return $res['instance'];

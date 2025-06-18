@@ -39,6 +39,27 @@ final class ValueSerializer
         ];
     }
 
+    /**
+     * Determines if a given string is a serialized Opis closure.
+     *
+     * This method checks if the provided string represents a serialized
+     * Opis closure by looking for specific patterns associated with
+     * Opis closures.
+     *
+     * @param string $str The string to check.
+     *
+     * @return bool True if the string is a serialized Opis closure, false otherwise.
+     */
+    public static function isSerializedClosure(string $str): bool
+    {
+        if (!str_contains($str, 'Opis\\Closure')) {
+            return false;
+        }
+        return (bool) preg_match(
+            '/^(?:C:\d+:"Opis\\\\Closure\\\\SerializableClosure|O:\d+:"Opis\\\\Closure\\\\Box"|O:\d+:"Opis\\\\Closure\\\\Serializable")/',
+            $str
+        );
+    }
 
     /**
      * Serializes a given value into a string.

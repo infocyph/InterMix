@@ -26,7 +26,7 @@ class SqliteCacheAdapter implements CacheItemPoolInterface, Countable
      */
     public function __construct(
         string $namespace = 'default',
-        string $dbPath = null,
+        ?string $dbPath = null,
     ) {
         $this->ns = preg_replace('/[^A-Za-z0-9_\-]/', '_', $namespace);
         $file = $dbPath ?: sys_get_temp_dir() . "/cache_{$this->ns}.sqlite";

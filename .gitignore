@@ -2,7 +2,7 @@ vendor
 example
 .idea
 example.php
-test.php
+index.php
 composer.lock
 git-story_media
 *~

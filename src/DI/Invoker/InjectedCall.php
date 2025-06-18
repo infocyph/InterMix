@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Invoker;
 
 use Closure;
-use Infocyph\InterMix\DI\Reflection\ReflectionResource;
+use Infocyph\InterMix\DI\Support\ReflectionResource;
 use Infocyph\InterMix\DI\Resolver\ClassResolver;
 use Infocyph\InterMix\DI\Resolver\DefinitionResolver;
 use Infocyph\InterMix\DI\Resolver\ParameterResolver;
@@ -21,9 +21,10 @@ final readonly class InjectedCall
     private ClassResolver $classResolver;
     private DefinitionResolver $definitionResolver;
 
-
     /**
-     * @param Repository $repository
+     * InjectedCall constructor.
+     *
+     * @param Repository $repository The DI repository which contains definitions, classes, functions, and parameters.
      */
     public function __construct(
         private Repository $repository
@@ -65,7 +66,7 @@ final readonly class InjectedCall
      * @param string $name The id of the definition to resolve.
      *
      * @return mixed The resolved value of the definition.
-     * @throws ContainerException|InvalidArgumentException
+     * @throws ContainerException|InvalidArgumentException|ReflectionException
      */
     public function resolveByDefinition(string $name): mixed
     {

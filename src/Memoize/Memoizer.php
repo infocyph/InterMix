@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\Memoize;
 
-use Infocyph\InterMix\DI\Reflection\ReflectionResource;
+use Infocyph\InterMix\DI\Support\ReflectionResource;
 use Infocyph\InterMix\Fence\Single;
 use ReflectionException;
 use WeakMap;

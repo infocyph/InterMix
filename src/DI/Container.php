@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI;
 
+use ArrayAccess;
 use Closure;
 use Exception;
 use Infocyph\InterMix\DI\Invoker\GenericCall;
@@ -12,43 +13,26 @@ use Infocyph\InterMix\DI\Managers\DefinitionManager;
 use Infocyph\InterMix\DI\Managers\InvocationManager;
 use Infocyph\InterMix\DI\Managers\OptionsManager;
 use Infocyph\InterMix\DI\Managers\RegistrationManager;
+use Infocyph\InterMix\DI\Support\ContainerProxy;
+use Infocyph\InterMix\DI\Support\DebugTracer;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Exceptions\NotFoundException;
 use InvalidArgumentException;
 use Psr\Container\ContainerInterface;
 use ReflectionException;
+use Throwable;
 
-class Container implements ContainerInterface
+class Container implements ContainerInterface, ArrayAccess
 {
-    /**
-     * Registry of named container instances
-     *
-     * @var array<string, static>
-     */
+    use ContainerProxy;
+
     protected static array $instances = [];
-
-    /**
-     * Shared repository
-     */
     protected Repository $repository;
-
-    /**
-     * Resolver class name (InjectedCall::class or GenericCall::class or custom).
-     *
-     * @var closure|GenericCall|InjectedCall
-     */
     protected closure|InjectedCall|GenericCall $resolver;
-
-    /**
-     * Sub-managers
-     */
     protected DefinitionManager $definitionManager;
-
     protected RegistrationManager $registrationManager;
-
     protected OptionsManager $optionsManager;
-
     protected InvocationManager $invocationManager;
 
     /**
@@ -87,7 +71,7 @@ class Container implements ContainerInterface
      * @return static The container instance.
      * @throws ContainerException
      */
-    public static function instance(string $instanceAlias = 'default'): static
+    public static function instance(string $instanceAlias = 'intermix'): static
     {
         return self::$instances[$instanceAlias] ??= new static($instanceAlias);
     }
@@ -126,6 +110,15 @@ class Container implements ContainerInterface
         return $this;
     }
 
+    /**
+     * INTERNAL – tooling helper, *not* a public API promise.
+     *
+     * @internal
+     */
+    public function getRepository(): Repository
+    {
+        return $this->repository;
+    }
 
     /**
      * Retrieves a value from the container.
@@ -233,7 +226,7 @@ class Container implements ContainerInterface
      *
      * @return object The class name of the resolver.
      */
-    public function getCurrentResolver(): Object
+    public function getCurrentResolver(): object
     {
         if ($this->resolver instanceof Closure) {
             $this->resolver = ($this->resolver)();
@@ -347,6 +340,64 @@ class Container implements ContainerInterface
         return $this;
     }
 
+    /**
+     * Finds and retrieves all service definitions tagged with a specified tag.
+     *
+     * This method iterates over the repository's definition metadata,
+     * checking each definition's tags for a match against the provided tag.
+     * If a match is found, the service definition is resolved and added to
+     * the result array.
+     *
+     * @param string $tag The tag to search for among service definitions.
+     * @return array An array of resolved service definitions matching the provided tag.
+     * @throws \Psr\Cache\InvalidArgumentException
+     */
+    public function findByTag(string $tag): array
+    {
+        $matches = [];
+        foreach ($this->repository->getAllDefinitionMeta() as $id => $meta) {
+            if (in_array($tag, $meta['tags'], true)) {
+                $matches[$id] = $this->get($id);
+            }
+        }
+        return $matches;
+    }
+
+    /**
+     * Retrieves the debug tracer instance.
+     *
+     * This method returns the debug tracer associated with the container.
+     * The tracer is used to track and log the execution flow and
+     * interactions within the container, aiding in debugging and
+     * tracing the service resolution process.
+     *
+     * @return DebugTracer The debug tracer instance.
+     */
+    public function tracer(): DebugTracer
+    {
+        return $this->repository->tracer();
+    }
+
+    /**
+     * Debugs the service resolution process for a given ID.
+     *
+     * This method attempts to retrieve the service instance for the given ID,
+     * and returns the current debug trace. If any errors occur during the
+     * service resolution process, they are caught and ignored, as the goal
+     * here is to obtain a debug trace, not to actually use the service.
+     *
+     * @param string $id The ID of the service to debug.
+     * @return array The debug trace for the service resolution process.
+     */
+    public function debug(string $id): array
+    {
+        try {
+            $this->get($id);
+        } catch (Throwable) {
+            // swallow; we still want trace
+        }
+        return $this->repository->tracer()->flush();
+    }
 
     /**
      * Splits a given class and method representation into a callable array format.
@@ -364,7 +415,7 @@ class Container implements ContainerInterface
      * @throws InvalidArgumentException If the provided argument is empty.
      * @throws ContainerException If the format of the provided argument is unrecognized.
      */
-    public function split(string|array|Closure|callable $classAndMethod): array
+    public function parseCallable(string|array|Closure|callable $classAndMethod): array
     {
         if (empty($classAndMethod)) {
             throw new InvalidArgumentException('No argument provided!');
@@ -415,8 +466,12 @@ class Container implements ContainerInterface
     private function wrapException(Exception $exception, string $id): Exception
     {
         return match (true) {
-            $exception instanceof NotFoundException => new NotFoundException("No entry found for '$id'"),
-            default => new ContainerException("Error retrieving entry '$id': " . $exception->getMessage()),
+            $exception instanceof NotFoundException => new NotFoundException("No entry found for '$id'", 0, $exception),
+            default => new ContainerException(
+                "Error retrieving entry '$id': " . $exception->getMessage(),
+                0,
+                $exception,
+            ),
         };
     }
 }

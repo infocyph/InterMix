@@ -6,7 +6,8 @@ namespace Infocyph\InterMix\DI\Resolver;
 
 use Infocyph\InterMix\DI\Attribute\IMStdClass;
 use Infocyph\InterMix\DI\Attribute\Infuse;
-use Infocyph\InterMix\DI\Reflection\ReflectionResource;
+use Infocyph\InterMix\DI\Support\ReflectionResource;
+use Infocyph\InterMix\DI\Support\TraceLevel;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\InvalidArgumentException;
 use ReflectionClass;
@@ -25,7 +26,7 @@ class PropertyResolver
      * @param Repository $repository The Repository providing definitions, classes, functions, and parameters.
      */
     public function __construct(
-        private readonly Repository $repository
+        private readonly Repository $repository,
     ) {
     }
 
@@ -50,12 +51,13 @@ class PropertyResolver
      *
      * @param ReflectionClass $class The class to resolve properties for.
      * @throws ContainerException|ReflectionException
+     * @throws InvalidArgumentException
      */
     public function resolve(ReflectionClass $class): void
     {
         $className = $class->getName();
         $allResolved = $this->repository->getResolvedResource()[$className] ?? [];
-        if (! isset($allResolved['instance'])) {
+        if (!isset($allResolved['instance'])) {
             return; // no instance => no property injection
         }
 
@@ -68,7 +70,7 @@ class PropertyResolver
             $this->processProperties(
                 $parentClass,
                 $parentClass->getProperties(ReflectionProperty::IS_PRIVATE),
-                $instance
+                $instance,
             );
         }
 
@@ -88,27 +90,34 @@ class PropertyResolver
     private function processProperties(
         ReflectionClass $class,
         array $properties,
-        object $classInstance
+        object $classInstance,
     ): void {
-        if (! $properties) {
+        if (!$properties) {
             return;
         }
         $className = $class->getName();
         $classResource = $this->repository->getClassResource();
         $registeredProps = $classResource[$className]['property'] ?? null;
 
-        if ($registeredProps === null && ! $this->repository->isPropertyAttributeEnabled()) {
+        if ($registeredProps === null && !$this->repository->isPropertyAttributeEnabled()) {
             return;
         }
 
         /** @var ReflectionProperty $property */
         foreach ($properties as $property) {
-            if ($property->isPromoted()) {
-                continue; // skip promoted
+            if ($property->isPromoted()
+                && !isset(($registeredProps ?? [])[$property->getName()])
+                && empty($property->getAttributes(Infuse::class))
+            ) {
+                continue;
             }
+            $this->repository->tracer()->push(
+                "prop {$property->getName()} of $className",
+                TraceLevel::Verbose
+            );
             $values = $this->resolveValue($property, $registeredProps ?? [], $classInstance);
             if ($values) {
-                match(true) {
+                match (true) {
                     $property->isStatic() => $class->setStaticPropertyValue($property->getName(), $values[0]),
                     default => $property->setValue($values[0], $values[1]),
                 };
@@ -132,7 +141,7 @@ class PropertyResolver
     private function resolveValue(
         ReflectionProperty $property,
         array $classPropertyValues,
-        object $classInstance
+        object $classInstance,
     ): ?array {
         $propName = $property->getName();
 
@@ -143,11 +152,11 @@ class PropertyResolver
         }
 
         // 2) attribute-based
-        if (! $this->repository->isPropertyAttributeEnabled()) {
+        if (!$this->repository->isPropertyAttributeEnabled()) {
             return [];
         }
         $attr = $property->getAttributes(Infuse::class);
-        if (! $attr) {
+        if (!$attr) {
             return [];
         }
 
@@ -165,7 +174,7 @@ class PropertyResolver
         $resolved = $this->classResolver->resolveInfuse($infuse);
         if ($resolved === new IMStdClass()) {
             throw new ContainerException(
-                "Unknown #[Infuse] property on {$property->getDeclaringClass()->getName()}::\$$propName"
+                "Unknown #[Infuse] property on {$property->getDeclaringClass()->getName()}::\$$propName",
             );
         }
 
@@ -188,7 +197,7 @@ class PropertyResolver
     private function setWithPredefined(
         ReflectionProperty $property,
         array $classPropertyValues,
-        object $classInstance
+        object $classInstance,
     ): ?array {
         $propName = $property->getName();
         if ($property->isStatic() && isset($classPropertyValues[$propName])) {
@@ -197,7 +206,7 @@ class PropertyResolver
         if (isset($classPropertyValues[$propName])) {
             return [$classInstance, $classPropertyValues[$propName]];
         }
-        if (! $this->repository->isPropertyAttributeEnabled()) {
+        if (!$this->repository->isPropertyAttributeEnabled()) {
             return [];
         }
 
@@ -222,12 +231,12 @@ class PropertyResolver
      */
     private function resolveWithoutArgument(
         ReflectionProperty $property,
-        ?ReflectionType $parameterType
+        ?ReflectionType $parameterType,
     ): object {
-        if (! $parameterType instanceof ReflectionNamedType || $parameterType->isBuiltin()) {
+        if (!$parameterType instanceof ReflectionNamedType || $parameterType->isBuiltin()) {
             throw new ContainerException(
-                'Malformed #[Infuse] or invalid property type on '.
-                "{$property->getDeclaringClass()->getName()}::\${$property->getName()}"
+                'Malformed #[Infuse] or invalid property type on ' .
+                "{$property->getDeclaringClass()->getName()}::\${$property->getName()}",
             );
         }
         // environment-based override if interface
@@ -237,6 +246,14 @@ class PropertyResolver
             $className = $envConcrete ?: $className;
         }
         $refClass = ReflectionResource::getClassReflection($className);
+
+        if (interface_exists($parameterType->getName())
+            && ! $refClass->implementsInterface($parameterType->getName())
+        ) {
+            throw new ContainerException(
+                "$className does not implement {$parameterType->getName()} (environment override mismatch)"
+            );
+        }
 
         return $this->classResolver->resolve($refClass)['instance'];
     }

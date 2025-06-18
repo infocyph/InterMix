@@ -4,14 +4,20 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Managers;
 
+use ArrayAccess;
+use Infocyph\InterMix\Cache\Cache;
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Support\Lifetime;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Cache\InvalidArgumentException;
+use ReflectionException;
 
-class DefinitionManager
+class DefinitionManager implements ArrayAccess
 {
+    use ManagerProxy;
+
     /**
      * Initialize the definition manager.
      *
@@ -23,7 +29,6 @@ class DefinitionManager
         protected Container $container,
     ) {
     }
-
 
     /**
      * Adds multiple definitions to the container.
@@ -47,31 +52,37 @@ class DefinitionManager
         return $this;
     }
 
-
     /**
-     * Registers a single definition with the container.
+     * Registers a definition with the container.
      *
-     * This method takes a definition name (id) and a definition value and
-     * stores it in the internal repository. It will throw a
-     * {@see ContainerException} if the id and definition are the same, as
-     * that would be ambiguous.
+     * Registers a definition with the container, which can then be retrieved
+     * using the {@see get()} method. The definition can be any type of value,
+     * including another definition.
      *
-     * @param string $id The id of the definition to register.
-     * @param mixed $definition The definition value to register.
+     * @param string $id The identifier of the definition.
+     * @param mixed $definition The definition itself.
+     * @param Lifetime $lifetime The lifetime of the definition.
+     * @param array $tags An array of tags to associate with the definition.
      *
      * @return $this
-     * @throws ContainerException
+     * @throws ContainerException if the container is locked or if the id is the same as the definition.
      */
-    public function bind(string $id, mixed $definition): self
-    {
+    public function bind(
+        string $id,
+        mixed $definition,
+        Lifetime $lifetime = Lifetime::Singleton,
+        array $tags = [],
+    ): self {
         if ($id === $definition) {
             throw new ContainerException("Id and definition cannot be the same ($id)");
         }
         $this->repository->setFunctionReference($id, $definition);
-
+        $this->repository->setDefinitionMeta($id, [
+            'lifetime' => $lifetime,
+            'tags' => $tags,
+        ]);
         return $this;
     }
-
 
     /**
      * Enable definition caching.
@@ -80,18 +91,15 @@ class DefinitionManager
      * definitions. It will throw a {@see ContainerException} if the container
      * is locked.
      *
-     * @param CacheItemPoolInterface $cache The cache adapter to use for caching.
-     *
+     * @param string|null $namespace The namespace to use for the cache.
      * @return $this
      * @throws ContainerException
      */
-    public function enableDefinitionCache(CacheItemPoolInterface $cache): self
+    public function enableDefinitionCache(?string $namespace = null): self
     {
-        $this->repository->setCacheAdapter($cache);
-
+        $this->repository->setCacheAdapter(Cache::file($namespace ?? $this->repository->getAlias(), 'intermix_dfn'));
         return $this;
     }
-
 
     /**
      * Pre-cache all definitions.
@@ -104,6 +112,7 @@ class DefinitionManager
      *
      * @return $this
      * @throws ContainerException|InvalidArgumentException
+     * @throws ReflectionException
      */
     public function cacheAllDefinitions(bool $forceClearFirst = false): self
     {
@@ -115,8 +124,7 @@ class DefinitionManager
             throw new ContainerException('No cache adapter set.');
         }
         if ($forceClearFirst) {
-            // Clear container-specific keys
-            $cacheAdapter->clear($this->repository->makeCacheKey(''));
+            $cacheAdapter->clear();
         }
 
         // Use the container’s set resolver to pre-resolve
@@ -130,7 +138,6 @@ class DefinitionManager
         return $this;
     }
 
-
     /**
      * Jump to RegistrationManager
      *
@@ -140,7 +147,6 @@ class DefinitionManager
     {
         return $this->container->registration();
     }
-
 
     /**
      * Jump to OptionsManager
@@ -160,19 +166,5 @@ class DefinitionManager
     public function invocation(): InvocationManager
     {
         return $this->container->invocation();
-    }
-
-    /**
-     * Ends the current scope and returns the Container instance.
-     *
-     * When called, this method will return the Container instance and
-     * remove the current scope from the stack, effectively ending the
-     * current scope.
-     *
-     * @return Container The Container instance.
-     */
-    public function end(): Container
-    {
-        return $this->container;
     }
 }

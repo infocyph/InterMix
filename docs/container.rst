@@ -4,114 +4,147 @@
 Dependency Injection (Container)
 ================================
 
-This section covers how to use the **InterMix** DI (Dependency Injection) container, why it helps you
-achieve simpler, decoupled architecture, and how to configure it for advanced needs
-(method/property attributes, environment-based overrides, caching, etc.).
+.. admonition:: TL;DR
+   :class: tip
+
+   *Create → Register → Resolve*
+
+   .. code-block:: php
+
+      use function Infocyph\InterMix\container;
+
+      $c = container();                       // ① create
+      $c->definitions()->bind('answer', 42);  // ② register
+      echo $c->get('answer');                 // ③ resolve  → 42
+
+   *Flags* – toggle behaviour quickly:
+
+   | :php:`injection:false` (disable autowiring)
+   | :php:`methodAttributes:true` (honour ``#[Infuse]`` on parameters)
+   | :php:`propertyAttributes:true` (honour ``#[Infuse]`` on properties)
+   | :php:`enableLazyLoading(false)` (eager-load every service)
 
 .. toctree::
     :titlesonly:
     :hidden:
 
+    di/overview
+    di/quickstart
     di/understanding
-    di/usage
+    di/definitions
+    di/registration
+    di/options
+    di/invocation
     di/attribute
+    di/lifetimes
+    di/scopes
+    di/lazy_loading
+    di/tagging
+    di/environment
     di/cache
-    di/flow
+    di/preload
+    di/debug_tracing
+    di/cheat_sheet
+    di/best_practices
 
--------------------------------
-Use Dependency Injection (Intro)
--------------------------------
+-----------------------------------
+Why bother with a DI-Container?
+-----------------------------------
 
-Below is a simple code snippet that **does** dependency injection *without* relying heavily on any
-external container. Notice that one class **accepts** its dependency via the constructor:
+*Manual wiring* is fine—until the tenth place you instantiate the same class,
+or the day you must **swap** an implementation in *production* only.
+InterMix automates construction, honours interfaces, supports
+environment-specific overrides and gives you sugar for 1-liners.
+
+------------------------------------------------
+15-second “Hello World” with constructor autowire
+------------------------------------------------
 
 .. code-block:: php
 
-   class MyInjectableClass
+   class Greeter
    {
-       public function somethingHere($doIt, $doThat)
+       public function __construct(private Clock $clock) {}
+
+       public function greet(string $name): string
        {
-           // do something
+           return sprintf(
+               'Hello %s — %s',
+               $name,
+               $this->clock->now()->format('c')
+           );
        }
    }
 
-   class MyAccessorClass
+   interface Clock { public function now(): DateTimeImmutable; }
+   class SystemClock implements Clock
    {
-       private $injectable;
-
-       public function __construct(MyInjectableClass $injectable)
-       {
-           $this->injectable = $injectable;
-       }
-
-       public function set($it, $that)
-       {
-           // Doing something
-           $this->injectable->somethingHere($it, $that);
-       }
+       public function now(): DateTimeImmutable { return new DateTimeImmutable(); }
    }
 
-`MyAccessorClass` depends on `MyInjectableClass`—this is **dependency injection**.
-However, you manually create these objects:
+.. code-block:: php
+
+   $c = container()
+       ->definitions()->bind(Clock::class, SystemClock::class)->end();
+
+   echo $c->get(Greeter::class)->greet('Alice');
+   // → “Hello Alice — 2025-06-18T12:34:56+00:00”
+
+--------------------------------
+Creating & naming containers
+--------------------------------
+
+Every call to :php:`container('alias')` (or
+:php:`Container::instance('alias')`) returns an **isolated** registry.
+Use distinct aliases for tests, CLI workers, micro-modules, etc.
+
+---------------------------------------------
+Modifying behaviour with ``options()->setOptions()``
+---------------------------------------------
+
++ **injection** – reflection autowiring engine
++ **methodAttributes / propertyAttributes** – enable **`#[Infuse]`**
++ **defaultMethod** – method to call when none supplied
++ **lazyLoading** – defer heavy construction until first use
 
 .. code-block:: php
 
-   $mic = new MyInjectableClass();
-   $mac = new MyAccessorClass($mic);
+   $c->options()->setOptions(
+       injection: true,
+       methodAttributes: true,
+       propertyAttributes: true,
+       defaultMethod: 'handle'
+   );
 
-**Enter** InterMix: The container can automate this creation/wiring.
+--------------------------------------------------------
+Common quick patterns (copy-paste as you learn the rest)
+--------------------------------------------------------
 
-------------------
-Creating the Container
-------------------
+*Register a class with predefined constructor args* ::
 
-You can create a **container** using:
+   $c->registration()->registerClass(Db::class, [
+       'dsn' => 'mysql://root@localhost/db',
+       'flags' => [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION],
+   ]);
 
-.. code-block:: php
+*Register a bootstrap method* ::
 
-   use function Infocyph\InterMix\container;
+   $c->registration()->registerMethod(App::class, 'boot');
 
-   $container = container(); // recommended short-hand
-   // or
-   $container = \Infocyph\InterMix\DI\Container::instance();
+*Tag & iterate* ::
 
-Then set up options or register classes:
+   $c->definitions()->bind('L1', fn()=>new ListenerA, tags:['event']);
+   foreach ($c->findByTag('event') as $id => $listener) {
+       $listener()->handle();
+   }
 
-.. code-block:: php
+*Scope isolation* ::
 
-   $container->options()
-       ->setOptions(
-           injection: true,
-           methodAttributes: true,
-           propertyAttributes: true
-       )
-       ->end();
+   $c->getRepository()->setScope('request-123');
+   // scoped services now unique to this request
 
-   $container->registration()
-       ->registerClass(MyInjectableClass::class)
-       ->end();
+-----------
+Next steps
+-----------
 
-   // locking if you want:
-   $container->lock();
-
-Afterwards, to get your classes:
-
-.. code-block:: php
-
-   $mac = $container->get(MyAccessorClass::class);
-
-This triggers “**autowiring**” (reflection-based). The container sees that
-`MyAccessorClass` needs `MyInjectableClass`, so it builds `MyInjectableClass` first,
-then passes it to `MyAccessorClass`.
-
-**Without** the container, you must manually create `MyInjectableClass` and pass it.
-With the container, everything is resolved automatically using reflection, caching,
-and environment-based overrides if configured.
-
--------------------
-Further Exploration
--------------------
-
-We recommend starting with :ref:`di.usage` to see how to register definitions, manage options,
-and retrieve your services (e.g. `get(MyAccessorClass::class)`).
-Then explore the other pages as needed for advanced features.
+Dive into the detailed sub-chapters. Happy mixing!  Questions?  Open an issue or drop by the discussion board.

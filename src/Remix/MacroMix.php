@@ -4,7 +4,7 @@ namespace Infocyph\InterMix\Remix;
 
 use Closure;
 use Exception;
-use Infocyph\InterMix\DI\Reflection\ReflectionResource;
+use Infocyph\InterMix\DI\Support\ReflectionResource;
 use ReflectionException;
 use ReflectionMethod;
 

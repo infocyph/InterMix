@@ -2,9 +2,10 @@
 
 namespace Infocyph\InterMix\DI\Invoker;
 
-use Error;
-use Exception;
 use Infocyph\InterMix\DI\Resolver\Repository;
+use Infocyph\InterMix\DI\Support\ReflectionResource;
+use InvalidArgumentException;
+use ReflectionException;
 
 final readonly class GenericCall
 {
@@ -22,12 +23,13 @@ final readonly class GenericCall
      * Resolves a class instance (without any DI magic),
      * sets properties, and optionally invokes a method.
      *
-     * @param  string  $class  Fully-qualified class name to instantiate.
-     * @param  string|null  $method  Method to invoke, if any.
+     * @param string $class Fully-qualified class name to instantiate.
+     * @param string|null $method Method to invoke, if any.
      * @return array{
      *     instance: object,
      *     returned: mixed
      * }
+     * @throws ReflectionException
      */
     public function classSettler(string $class, ?string $method = null): array
     {
@@ -72,15 +74,21 @@ final readonly class GenericCall
      * @param object $instance Object to set properties on
      * @param array $properties Properties to set
      * @return void
+     * @throws ReflectionException
      */
     private function setProperties(object $instance, array $properties): void
     {
-        foreach ($properties as $property => $value) {
-            try {
-                $instance->$property = $value;
-            } catch (Exception|Error) {
-                $className = $instance::class;
-                $className::$$property = $value;
+        $refClass = ReflectionResource::getClassReflection($instance);
+
+        foreach ($properties as $prop => $val) {
+            if ($refClass->hasProperty($prop)) {
+                $rProp = $refClass->getProperty($prop);
+
+                // static vs non-static
+                $target = $rProp->isStatic() ? null : $instance;
+                $rProp->setValue($target, $val);
+            } else {
+                throw new InvalidArgumentException('Property ' . $prop . ' does not exist on class ' . $instance::class);
             }
         }
     }
