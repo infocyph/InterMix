@@ -30,7 +30,6 @@ class DefinitionManager implements ArrayAccess
     ) {
     }
 
-
     /**
      * Adds multiple definitions to the container.
      *
@@ -52,7 +51,6 @@ class DefinitionManager implements ArrayAccess
 
         return $this;
     }
-
 
     /**
      * Registers a definition with the container.
@@ -86,7 +84,6 @@ class DefinitionManager implements ArrayAccess
         return $this;
     }
 
-
     /**
      * Enable definition caching.
      *
@@ -103,7 +100,6 @@ class DefinitionManager implements ArrayAccess
         $this->repository->setCacheAdapter(Cache::file($namespace ?? $this->repository->getAlias(), 'intermix_dfn'));
         return $this;
     }
-
 
     /**
      * Pre-cache all definitions.
@@ -142,7 +138,6 @@ class DefinitionManager implements ArrayAccess
         return $this;
     }
 
-
     /**
      * Jump to RegistrationManager
      *
@@ -152,7 +147,6 @@ class DefinitionManager implements ArrayAccess
     {
         return $this->container->registration();
     }
-
 
     /**
      * Jump to OptionsManager

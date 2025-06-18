@@ -38,6 +38,13 @@ class Repository
     private string $currentScope = 'root';
     private readonly DebugTracer $tracer;
 
+    /**
+     * Constructs a Repository instance.
+     *
+     * Initializes a new DebugTracer to track and log the execution flow
+     * and interactions within the container. This aids in debugging and
+     * tracing the service resolution process.
+     */
     public function __construct()
     {
         $this->tracer = new DebugTracer();
@@ -136,11 +143,6 @@ class Repository
         }
     }
 
-    /* ------------------------------------------------------------------------
-     |   Locking, environment, debug, lazy toggles
-     * ----------------------------------------------------------------------*/
-
-
     /**
      * Locks the container from future modifications.
      *
@@ -154,7 +156,6 @@ class Repository
     {
         $this->isLocked = true;
     }
-
 
     /**
      * Set the environment for this repository.
@@ -185,7 +186,6 @@ class Repository
         return $this->environment;
     }
 
-
     /**
      * Enables or disables lazy loading for the repository.
      *
@@ -214,11 +214,6 @@ class Repository
         return $this->lazyLoading;
     }
 
-    /* ------------------------------------------------------------------------
-     |   Environment-based / conditional binding
-     * ----------------------------------------------------------------------*/
-
-
     /**
      * Binds a concrete implementation to an interface for a specific environment.
      *
@@ -236,7 +231,6 @@ class Repository
         $this->checkIfLocked();
         $this->conditionalBindings[$env][$interface] = $concrete;
     }
-
 
     /**
      * Get the concrete implementation bound to an interface for the current environment.
@@ -256,10 +250,6 @@ class Repository
         }
         return $this->conditionalBindings[$this->environment][$interface] ?? null;
     }
-
-    /* ------------------------------------------------------------------------
-     |   Public getters/setters for main arrays
-     * ----------------------------------------------------------------------*/
 
     /**
      * Checks if a function reference exists for the given identifier.
@@ -321,7 +311,6 @@ class Repository
         return $this->classResource;
     }
 
-
     /**
      * Stores a class resource, with a key that can be 'constructor', 'method', 'property'.
      *
@@ -356,7 +345,6 @@ class Repository
     {
         return $this->closureResource;
     }
-
 
     /**
      * Adds a closure resource to the repository.
@@ -410,7 +398,6 @@ class Repository
         return $this->resolved;
     }
 
-
     /**
      * Stores a resolved resource with its ID in the "resolved" array.
      *
@@ -441,7 +428,6 @@ class Repository
     {
         return $this->resolvedResource;
     }
-
 
     /**
      * Stores a resolved resource for a class-based resource.
@@ -486,10 +472,6 @@ class Repository
     {
         $this->resolvedDefinition[$defName] = $value;
     }
-
-    /* ------------------------------------------------------------------------
-     |   Default method, property/method attribute toggles
-     * ----------------------------------------------------------------------*/
 
     /**
      * Retrieves the default method to be called when resolving a class.
@@ -583,10 +565,6 @@ class Repository
         $this->checkIfLocked();
         $this->enableMethodAttribute = $enable;
     }
-
-    /* ------------------------------------------------------------------------
-     |   Caching (Symfony Cache)
-     * ----------------------------------------------------------------------*/
 
     /**
      * Gets the cache adapter instance.

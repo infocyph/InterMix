@@ -114,7 +114,7 @@ class ClassResolver
      * @param string|bool|null $callMethod The name of the method to call after instantiation, or true/false to call the constructor.
      * @param bool $make Whether to use the "make" method or the "resolveClassResources" method.
      * @return array An array containing the resolved instance and any returned value.
-     * @throws ContainerException|ReflectionException
+     * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
     public function resolve(
         ReflectionClass $class,
@@ -148,7 +148,7 @@ class ClassResolver
      * @param string $className The name of the class.
      * @param string|bool|null $callMethod The name of the method to call after instantiation, or true/false to call the constructor.
      * @return array An array containing the resolved instance and any returned value.
-     * @throws ContainerException|ReflectionException
+     * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
     private function resolveMake(
         ReflectionClass $class,
@@ -184,7 +184,7 @@ class ClassResolver
      * @param string $className The name of the class.
      * @param string|bool|null $callMethod The name of the method to call after instantiation, or true/false to call the constructor.
      * @return array An array containing the resolved instance and any returned value.
-     * @throws ContainerException|ReflectionException
+     * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
     private function resolveClassResources(
         ReflectionClass $class,
@@ -309,7 +309,7 @@ class ClassResolver
      *
      * @param ReflectionClass $class The class to resolve the method for.
      * @param string|bool|null $callMethod The name of the method to call, or a boolean value to indicate whether to call the constructor or not.
-     * @throws ReflectionException|ContainerException
+     * @throws ReflectionException|ContainerException|InvalidArgumentException
      */
     private function resolveMethod(
         ReflectionClass $class,

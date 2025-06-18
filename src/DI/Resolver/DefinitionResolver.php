@@ -17,6 +17,11 @@ class DefinitionResolver
     private ClassResolver $classResolver;
     private ParameterResolver $parameterResolver;
 
+    /**
+     * Constructs a DefinitionResolver instance.
+     *
+     * @param Repository $repository The Repository providing definitions, classes, functions, and parameters.
+     */
     public function __construct(
         private readonly Repository $repository,
     ) {

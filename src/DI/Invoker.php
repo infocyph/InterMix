@@ -13,6 +13,11 @@ use ReflectionException;
 
 final readonly class Invoker
 {
+    /**
+     * Construct an instance of the invoker.
+     *
+     * @param Container $container The container to use for resolving callables.
+     */
     private function __construct(private Container $container)
     {
     }
@@ -153,8 +158,6 @@ final readonly class Invoker
     {
         return ValueSerializer::unserialize($b);
     }
-
-    /* ---------- internals -------------------------------------------------- */
 
     /**
      * Routes a callable to the appropriate execution path based on its type.

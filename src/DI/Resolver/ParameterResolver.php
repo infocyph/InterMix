@@ -266,7 +266,7 @@ class ParameterResolver
      * @param array $parameterAttribute An array of Infuse attributes set on the method.
      * @return array An array containing the resolved associative parameters.
      * @throws ContainerException
-     * @throws ReflectionException
+     * @throws ReflectionException|InvalidArgumentException
      */
     private function resolveAssociativeParameters(
         ReflectionFunctionAbstract $reflector,
@@ -678,7 +678,7 @@ class ParameterResolver
      * @param string $attributeValue The attribute value to resolve.
      * @return mixed The resolved value or a default value if resolution fails.
      * @throws ContainerException
-     * @throws ReflectionException
+     * @throws ReflectionException|InvalidArgumentException
      */
     private function resolveIndividualAttribute(
         ReflectionParameter $param,

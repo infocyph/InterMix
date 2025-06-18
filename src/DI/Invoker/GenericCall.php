@@ -23,12 +23,13 @@ final readonly class GenericCall
      * Resolves a class instance (without any DI magic),
      * sets properties, and optionally invokes a method.
      *
-     * @param  string  $class  Fully-qualified class name to instantiate.
-     * @param  string|null  $method  Method to invoke, if any.
+     * @param string $class Fully-qualified class name to instantiate.
+     * @param string|null $method Method to invoke, if any.
      * @return array{
      *     instance: object,
      *     returned: mixed
      * }
+     * @throws ReflectionException
      */
     public function classSettler(string $class, ?string $method = null): array
     {

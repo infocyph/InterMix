@@ -73,6 +73,7 @@ class InvocationManager implements ArrayAccess
     public function get(string $id): mixed
     {
         $this->repository->tracer()->push("return:$id", TraceLevel::Verbose);
+
         // Determine lifetime & scope-key
         $meta      = $this->repository->getDefinitionMeta($id);
         $lifetime  = $meta['lifetime'] ?? Lifetime::Singleton;

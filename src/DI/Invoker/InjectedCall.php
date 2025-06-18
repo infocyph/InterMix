@@ -21,9 +21,10 @@ final readonly class InjectedCall
     private ClassResolver $classResolver;
     private DefinitionResolver $definitionResolver;
 
-
     /**
-     * @param Repository $repository
+     * InjectedCall constructor.
+     *
+     * @param Repository $repository The DI repository which contains definitions, classes, functions, and parameters.
      */
     public function __construct(
         private Repository $repository
