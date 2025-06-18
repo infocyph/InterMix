@@ -8,18 +8,23 @@
 ![Packagist PHP Version](https://img.shields.io/packagist/dependency-v/infocyph/intermix/php)
 ![GitHub Code Size](https://img.shields.io/github/languages/code-size/infocyph/intermix)
 
-`InterMix` is a lightweight and versatile PHP toolkit focused on class-oriented programming. It provides frequently-needed utilities like dependency injection, memoization, class macro support and more — all optimized for speed, simplicity and scalability.
+`InterMix` is a modern, lightweight PHP toolkit for developers who love class-oriented design, clean architecture, and fast execution. From dependency injection to dynamic macros, every utility is designed to **just work** — with minimal config and maximum control.
 
 ---
 
 ## 🚀 Key Features
 
-- **Dependency Injection (Container)** — PSR-11 compatible, extensible container.
-- **Caching** — PSR-6 & PSR-16 compatible, extensible cache library.
-- **Class Barrier (Fence)** — Protects class lifecycle via single-entry enforcement.
-- **Class Macros (MacroMix)** — Dynamically attach behavior to classes.
-- **Memoization** — Instance-based caching via `MemoizeTrait`.
-- **Global Helpers** — Intuitive tools like `pipe()`, `retry()`, `measure()` and `once()` for clean and expressive code.
+- **Dependency Injection (DI)** — PSR-11 compliant container with:
+  - attribute-based injection
+  - scoped lifetimes
+  - lazy loading
+  - environment-specific overrides
+  - debug tracing & cache support
+- **Caching** — Dual PSR-6 & PSR-16 compatible cache engine
+- **Fence** — Enforce singleton-style class safety
+- **MacroMix** — Dynamically extend objects or classes with macros
+- **Memoizer** — `once()` and `memoize()` helpers for deterministic caching
+- **Global Utilities** — Like `pipe()`, `retry()`, `measure()`, `flatten()`, and more
 
 ---
 
@@ -38,52 +43,82 @@ Supported PHP versions:
 
 ---
 
-## 🧪 Quick Examples
+## ⚡ Quick Examples
 
-### Dependency Injection
+### 🧱 Dependency Injection
 
 ```php
-use Infocyph\InterMix\Container;
+use function Infocyph\InterMix\container;
 
-$container = new Container();
-$service = $container->get('my_service');
-// Use the service...
+$c = container();
+$c->definitions()->bind('now', fn () => new DateTimeImmutable());
+
+echo $c->get('now')->format('c');
 ```
 
-### Class Macros
+Enable autowiring with attributes:
 
 ```php
-MacroTestClass::mix(new class {
-    public function greet($name) {
-        return "Hello, $name!";
+$c->options()->setOptions(
+    injection: true,
+    methodAttributes: true,
+    propertyAttributes: true
+);
+```
+
+Tag-based resolution:
+
+```php
+$c->definitions()->bind('a', A::class, tags: ['service']);
+$c->definitions()->bind('b', B::class, tags: ['service']);
+
+foreach ($c->findByTag('service') as $svc) {
+    $svc()->handle();
+}
+```
+
+See full container guide at:
+📖 [https://intermix.readthedocs.io/en/latest/di/overview.html](https://intermix.readthedocs.io/en/latest/di/overview.html)
+
+---
+
+### 🧬 Dynamic Macros
+
+```php
+MacroTest::mix(new class {
+    public function hello($name) {
+        return "Hey, $name!";
     }
 });
 
-echo (new MacroTestClass)->greet('Alice'); // Hello, Alice!
+echo (new MacroTest)->hello('Ali'); // Hey, Ali!
 ```
 
-### Per-Call-Site Memoization with `once()`
+---
+
+### 🧠 `once()` Memoization
 
 ```php
 use function Infocyph\InterMix\Remix\once;
 
-$value1 = once(fn() => rand(1, 999)); // Runs and caches
-$value2 = once(fn() => rand(1, 999)); // Returns cached result from same file:line
+$value = once(fn() => rand(1000, 9999)); // Only runs once per file+line
 ```
 
 ---
 
 ## 📚 Documentation
 
-Full documentation is hosted on **[Read the Docs](https://intermix.readthedocs.io)**.
-You’ll find:
+Full documentation available on **ReadTheDocs**:
 
-* 🧩 Module overviews
-* 🧪 Code examples
-* 📖 API references
-* 📘 PDF/ePub downloads
+🔗 [https://intermix.readthedocs.io](https://intermix.readthedocs.io)
 
-View latest: [https://intermix.readthedocs.io](https://intermix.readthedocs.io)
+Includes:
+
+* ✅ Getting Started & Quickstart
+* 📦 DI Container Guide (bindings, scopes, attributes, lifetimes)
+* 🧩 Modules: Memoizer, Fence, MacroMix
+* 🧪 Testing & Caching Tips
+* 📘 PDF/ePub formats
 
 ---
 
@@ -98,11 +133,16 @@ composer test
 
 ## 🤝 Contributing
 
-Want to help? File issues, request features, or open pull requests here:
-👉 [github.com/infocyph/InterMix/issues](https://github.com/infocyph/InterMix/issues)
+Got ideas or improvements? Join us!
+
+📂 [Open issues](https://github.com/infocyph/InterMix/issues)
+📬 Submit a PR — we welcome quality contributions
 
 ---
 
 ## 🛡 License
 
-This project is open-source under the **[MIT License](https://opensource.org/licenses/MIT)**.
+MIT Licensed — use it freely, modify it openly.
+
+🔗 [opensource.org/licenses/MIT](https://opensource.org/licenses/MIT)
+
