@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Resolver;
 
+use Infocyph\InterMix\DI\Attribute\AttributeRegistry;
+use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Support\DebugTracer;
 use Infocyph\InterMix\DI\Support\Lifetime;
 use Infocyph\InterMix\Exceptions\ContainerException;
@@ -26,6 +28,7 @@ class Repository
     private array $resolvedResource = [];
     private array $resolvedDefinition = [];
     private array $conditionalBindings = [];
+    private readonly AttributeRegistry $attributeRegistry;
     private ?string $defaultMethod = null;
     private bool $enablePropertyAttribute = false;
     private bool $enableMethodAttribute = false;
@@ -45,9 +48,10 @@ class Repository
      * and interactions within the container. This aids in debugging and
      * tracing the service resolution process.
      */
-    public function __construct()
+    public function __construct(Container $container)
     {
         $this->tracer = new DebugTracer();
+        $this->attributeRegistry = new AttributeRegistry($container);
     }
 
     /**
@@ -60,6 +64,20 @@ class Repository
     public function tracer(): DebugTracer
     {
         return $this->tracer;
+    }
+
+    /**
+     * Retrieves the attribute registry instance.
+     *
+     * This method returns the attribute registry associated with the repository.
+     * The attribute registry is responsible for managing and resolving attribute
+     * definitions and their corresponding resolvers.
+     *
+     * @return AttributeRegistry The attribute registry instance.
+     */
+    public function attributeRegistry(): AttributeRegistry
+    {
+        return $this->attributeRegistry;
     }
 
     /**

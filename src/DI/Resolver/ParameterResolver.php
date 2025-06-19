@@ -173,7 +173,7 @@ class ParameterResolver
 
         $this->repository->tracer()->push(
             "{$reflector->getShortName()}() params",
-            TraceLevel::Verbose
+            TraceLevel::Verbose,
         );
 
         $availableParams = $reflector->getParameters();
@@ -475,20 +475,20 @@ class ParameterResolver
      */
     private function getResolvableReflection(
         ReflectionFunctionAbstract $reflector,
-        ReflectionParameter        $parameter,
-        string                     $type,
-        array                      $processed
+        ReflectionParameter $parameter,
+        string $type,
+        array $processed,
     ): ?ReflectionClass {
         $candidates = $this->extractNamedTypeCandidates($parameter);
-        $className  = $this->pickResolvableType($candidates);
+        $className = $this->pickResolvableType($candidates);
 
         if (!$className) {
             return null;
         }
 
         // Handle self/parent, environment override, reflection
-        $className  = $this->normalizeSelfParent($className, $parameter->getDeclaringClass());
-        $className  = $this->applyEnvOverride($className);
+        $className = $this->normalizeSelfParent($className, $parameter->getDeclaringClass());
+        $className = $this->applyEnvOverride($className);
         $reflection = ReflectionResource::getClassReflection($className);
 
         /* ----- validation checks ---------------------------------------- */
@@ -500,7 +500,7 @@ class ParameterResolver
         if ($this->alreadyExist($reflection->getName(), $processed)) {
             $owner = $reflector->class ?? $reflector->getName();
             throw new ContainerException(
-                "Multiple instances for {$reflection->getName()} in {$owner}::{$reflector->getShortName()}()"
+                "Multiple instances for {$reflection->getName()} in {$owner}::{$reflector->getShortName()}()",
             );
         }
 
@@ -519,14 +519,14 @@ class ParameterResolver
      * @return array An array of ReflectionNamedType objects.
      */
     private function extractNamedTypeCandidates(
-        ReflectionParameter $parameter
+        ReflectionParameter $parameter,
     ): array {
         $type = $parameter->getType();
 
         return match (true) {
-            $type instanceof ReflectionNamedType        => [$type],
+            $type instanceof ReflectionNamedType => [$type],
             $type instanceof ReflectionUnionType, $type instanceof ReflectionIntersectionType => $type->getTypes(),
-            default                                     => []
+            default => []
         };
     }
 
@@ -582,15 +582,15 @@ class ParameterResolver
      */
     private function normalizeSelfParent(
         string $className,
-        ?ReflectionClass $declaring
+        ?ReflectionClass $declaring,
     ): string {
         return match ($className) {
-            'self'   => $declaring?->getName() ?? $className,
+            'self' => $declaring?->getName() ?? $className,
             'parent' => $declaring?->getParentClass()?->getName()
                 ?? throw new ContainerException(
-                    "Parameter uses 'parent' but no parent class found."
+                    "Parameter uses 'parent' but no parent class found.",
                 ),
-            default  => $className,
+            default => $className,
         };
     }
 
@@ -647,7 +647,7 @@ class ParameterResolver
      * @param mixed $supplied The value to supply to the constructor, if applicable.
      *
      * @return object The resolved instance.
-     * @throws ContainerException|ReflectionException
+     * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
     private function resolveClassDependency(
         ReflectionClass $class,
@@ -709,20 +709,36 @@ class ParameterResolver
      * @return array An array containing a boolean indicating whether the value was resolved or not,
      *               and the resolved value itself.
      * @throws ContainerException
-     * @throws ReflectionException|\Psr\Cache\InvalidArgumentException
+     * @throws ReflectionException|InvalidArgumentException
      */
     private function resolveParameterAttribute(ReflectionParameter $param): array
     {
         $attribute = $param->getAttributes(Infuse::class);
-        if (!$attribute || empty($attribute[0]->getArguments())) {
-            return ['isResolved' => false];
+        if ($attribute && !empty($attribute[0]->getArguments())) {
+            /** @var Infuse $infuse */
+            $infuse = $attribute[0]->newInstance();
+            $resolved = $this->classResolver->resolveInfuse($infuse);
+
+            return [
+                'isResolved' => !$resolved instanceof IMStdClass,
+                'resolved' => $resolved,
+            ];
         }
-        $infuseInstance = $attribute[0]->newInstance();
-        $resolved = $this->classResolver->resolveInfuse($infuseInstance);
-        return [
-            'isResolved' => ($this->stdClass !== $resolved),
-            'resolved' => $resolved,
-        ];
+        foreach ($param->getAttributes() as $anyAttr) {
+            $attrObj = $anyAttr->newInstance();
+
+            if ($this->repository
+                ->attributeRegistry()
+                ->has($attrObj::class)) {
+                return [
+                    'isResolved' => true,
+                    'resolved' => $this->repository
+                        ->attributeRegistry()
+                        ->resolve($attrObj, $param),
+                ];
+            }
+        }
+        return ['isResolved' => false];
     }
 
     /**

@@ -113,7 +113,7 @@ class PropertyResolver
             }
             $this->repository->tracer()->push(
                 "prop {$property->getName()} of $className",
-                TraceLevel::Verbose
+                TraceLevel::Verbose,
             );
             $values = $this->resolveValue($property, $registeredProps ?? [], $classInstance);
             if ($values) {
@@ -143,43 +143,132 @@ class PropertyResolver
         array $classPropertyValues,
         object $classInstance,
     ): ?array {
-        $propName = $property->getName();
 
-        // 1) check if user-supplied
-        $predefined = $this->setWithPredefined($property, $classPropertyValues, $classInstance);
-        if ($predefined !== null) {
-            return $predefined; // could be [] or [obj, val]
+        if ($attempt = $this->attemptUserOverride($property, $classPropertyValues, $classInstance)) {
+            return $attempt;
         }
 
-        // 2) attribute-based
-        if (!$this->repository->isPropertyAttributeEnabled()) {
-            return [];
-        }
-        $attr = $property->getAttributes(Infuse::class);
-        if (!$attr) {
-            return [];
+        if ($attempt = $this->attemptBuiltInInfuse($property, $classInstance)) {
+            return $attempt;
         }
 
-        $parameterType = $property->getType();
-        $infuse = $attr[0]->newInstance();
-        if (empty($attr[0]->getArguments())) {
-            // no arguments => reflect property type
-            return [
-                $classInstance,
-                $this->resolveWithoutArgument($property, $parameterType),
-            ];
+        if ($attempt = $this->attemptCustomAttributes($property, $classInstance)) {
+            return $attempt;
         }
 
-        // otherwise pass to classResolver->resolveInfuse
-        $resolved = $this->classResolver->resolveInfuse($infuse);
-        if ($resolved === new IMStdClass()) {
-            throw new ContainerException(
-                "Unknown #[Infuse] property on {$property->getDeclaringClass()->getName()}::\$$propName",
-            );
-        }
-
-        return [$classInstance, $resolved];
+        return [];
     }
+
+    /**
+     * Attempt to resolve a single property value using the user-supplied values.
+     *
+     * Checks if the property is present in the user-supplied values and returns
+     * an array containing the instance and the resolved value. If the property
+     * is not present, returns null.
+     *
+     * @param ReflectionProperty $property The property to resolve a value for.
+     * @param array $classPropertyValues The user-supplied values for the class.
+     * @param object $classInstance The instance of the class to set the property on.
+     * @return ?array An array of two items: the instance and the resolved value. Or null if not possible to resolve.
+     */
+    private function attemptUserOverride(
+        ReflectionProperty $property,
+        array $classPropertyValues,
+        object $classInstance,
+    ): ?array {
+        $name = $property->getName();
+
+        if (!array_key_exists($name, $classPropertyValues)) {
+            return null;
+        }
+
+        return $property->isStatic()
+            ? [$classPropertyValues[$name]]
+            : [$classInstance, $classPropertyValues[$name]];
+    }
+
+    /**
+     * Attempt to resolve a single property value using the built-in #[Infuse] attribute.
+     *
+     * @param ReflectionProperty $property The property to resolve a value for.
+     * @param object $classInstance The instance of the class to set the property on.
+     * @return ?array An array of two items: the instance and the resolved value. Or null if not possible to resolve.
+     * @throws ContainerException|ReflectionException|InvalidArgumentException
+     */
+    private function attemptBuiltInInfuse(
+        ReflectionProperty $property,
+        object $classInstance,
+    ): ?array {
+        if (!$this->repository->isPropertyAttributeEnabled()) {
+            return null;
+        }
+
+        $attrs = $property->getAttributes(Infuse::class);
+        if (!$attrs) {
+            return null;
+        }
+
+        /** @var Infuse $infuse */
+        $infuse = $attrs[0]->newInstance();
+
+        // (a)  #[Infuse]   – no args  ➜  infer by type-hint
+        if (empty($attrs[0]->getArguments())) {
+            $val = $this->resolveWithoutArgument($property, $property->getType());
+            return [$classInstance, $val];
+        }
+
+        // (b)  #[Infuse(...)] – has args ➜ delegate to ClassResolver
+        $val = $this->classResolver->resolveInfuse($infuse);
+        if ($val instanceof IMStdClass) {
+            return null;
+        }
+
+        return $property->isStatic()
+            ? [$val]
+            : [$classInstance, $val];
+    }
+
+    /**
+     * Attempts to resolve custom attributes for a given property.
+     *
+     * This method iterates over the attributes of the provided property
+     * and checks if there is a registered resolver for each attribute.
+     * If a resolver exists, it resolves the attribute value using the
+     * AttributeRegistry. If a valid resolved value is obtained, it returns
+     * an array containing either the resolved value alone (for static properties)
+     * or the class instance and the resolved value (for non-static properties).
+     * If no valid resolved value is found, it returns null.
+     *
+     * @param ReflectionProperty $property The property to resolve attributes for.
+     * @param object $classInstance The instance of the class to set the property on.
+     * @return ?array An array of two items: the instance (if non-static) and the resolved value, or null if not resolved.
+     */
+    private function attemptCustomAttributes(
+        ReflectionProperty $property,
+        object $classInstance,
+    ): ?array {
+        foreach ($property->getAttributes() as $rawAttr) {
+            $attrObj = $rawAttr->newInstance();
+
+            if (!$this->repository->attributeRegistry()->has($attrObj::class)) {
+                continue;
+            }
+
+            $val = $this->repository
+                ->attributeRegistry()
+                ->resolve($attrObj, $property);
+
+            if ($val instanceof IMStdClass) {
+                continue;
+            }
+
+            return $property->isStatic()
+                ? [$val]
+                : [$classInstance, $val];
+        }
+        return null;
+    }
+
 
     /**
      * Try to set a value for a property based on predefined values.
@@ -248,10 +337,10 @@ class PropertyResolver
         $refClass = ReflectionResource::getClassReflection($className);
 
         if (interface_exists($parameterType->getName())
-            && ! $refClass->implementsInterface($parameterType->getName())
+            && !$refClass->implementsInterface($parameterType->getName())
         ) {
             throw new ContainerException(
-                "$className does not implement {$parameterType->getName()} (environment override mismatch)"
+                "$className does not implement {$parameterType->getName()} (environment override mismatch)",
             );
         }
 

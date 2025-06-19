@@ -7,7 +7,7 @@ namespace Infocyph\InterMix\DI\Attribute;
 use Attribute;
 
 #[Attribute(Attribute::TARGET_METHOD | Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
-final class Infuse
+class Infuse
 {
     private array $data = [];
     private string|int|null $firstKey = null;

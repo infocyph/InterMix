@@ -67,6 +67,28 @@ class OptionsManager implements ArrayAccess
     }
 
     /**
+     * Registers an attribute resolver class.
+     *
+     * The resolver class is associated with the given attribute class.
+     *
+     * @param string $attributeFqcn The fully qualified class name of the attribute.
+     * @param string $resolverFqcn The fully qualified class name of the resolver.
+     *
+     * @return $this
+     * @throws ContainerException
+     */
+    public function registerAttributeResolver(
+        string $attributeFqcn,
+        string $resolverFqcn
+    ): self {
+        $this->repository
+            ->attributeRegistry()
+            ->register($attributeFqcn, $resolverFqcn);
+
+        return $this;
+    }
+
+    /**
      * Sets the environment for the container.
      *
      * This method allows you to specify the environment name, which can be

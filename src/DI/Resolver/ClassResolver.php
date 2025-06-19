@@ -35,7 +35,6 @@ class ClassResolver
         $this->entriesResolving = new WeakMap();
     }
 
-
     /**
      * Resolve an Infuse attribute by first extracting the "type" (class name, function name, definition ID, etc.)
      * and then trying to resolve it in the following order:
@@ -99,7 +98,6 @@ class ClassResolver
         // 5) Otherwise, we have no way to resolve it
         return null;
     }
-
 
     /**
      * Resolve a class using the given ReflectionClass.
