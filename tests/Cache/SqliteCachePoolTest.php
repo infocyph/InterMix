@@ -67,8 +67,9 @@ test('get returns default when key missing (sqlite)', function () {
         $item->expiresAfter(1);
         return 'val';
     });
-    expect($val)->toBe('val');
-    expect($this->cache->get('compute'))->toBe('val');
+    expect($val)
+        ->toBe('val')
+        ->and($this->cache->get('compute'))->toBe('val');
 
     sleep(2);
     expect($this->cache->get('compute', 'again'))->toBe('again');

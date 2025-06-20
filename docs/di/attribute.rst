@@ -5,16 +5,26 @@ Attribute Injection
 ===================
 
 InterMix supports **PHP 8+ native attributes** for expressive, declarative injection.
-The main attribute is:
+The system now supports **both built-in and custom attributes**, resolved automatically.
 
-* ``#[Infuse]`` – canonical
+-------------
+Built-in Tags
+-------------
 
-and it has two exact **aliases** for convenience or preference:
+The core attribute is:
+
+* ``#[Infuse]`` – canonical attribute
+
+Two exact **aliases** are also available:
 
 * ``#[Autowire]`` – familiar to Spring/Java developers
-* ``#[Inject]`` – common in DI ecosystems
+* ``#[Inject]`` – common in many DI frameworks
 
-All three work **identically**. Use what suits your project style.
+All three behave **identically**, supporting:
+
+* Injection by **type hint**
+* Injection by **container key**
+* Injection via **global function**
 
 -------------
 Quick Syntax
@@ -25,9 +35,9 @@ Quick Syntax
    use Infocyph\InterMix\DI\Attribute\{Infuse, Autowire, Inject};
 
    class Service {
-       #[Infuse] private LoggerInterface $logger;               // inject by type
-       #[Autowire('cfg.debug')] private bool $debug;            // inject by definition key
-       #[Inject(strtotime: '+1 day')] private int $expires;     // inject via function
+       #[Infuse] private LoggerInterface $logger;               // by type
+       #[Autowire('cfg.debug')] private bool $debug;            // by container key
+       #[Inject(strtotime: '+1 day')] private int $expires;     // via global function
    }
 
    class App {
@@ -37,40 +47,43 @@ Quick Syntax
        ) {}
    }
 
----------------
-What It Supports
----------------
+--------------------
+Custom Attribute Support
+--------------------
 
-Attributes can inject values using:
-
-+ Definition **keys** (e.g., `'cfg.debug'`)
-+ Fully-qualified **class or interface names**
-+ Global **functions** (e.g., `strtotime`, `uuid_create`, etc.)
-
-This makes it flexible for injecting both services and scalar config.
-
-----------------
-How to Enable
-----------------
-
-By default, attribute parsing is **disabled** to avoid surprises.
-
-Enable it like so:
+You can now define **your own attribute classes** and plug in a custom resolver.
 
 .. code-block:: php
 
-   $c->options()->setOptions(
-       injection: true,            // enable auto-wiring engine
-       methodAttributes: true,     // enable parameter/method #[Infuse]
-       propertyAttributes: true    // enable property #[Infuse]
+   #[Attribute(Attribute::TARGET_PROPERTY)]
+   class UpperCase {
+       public function __construct(public string $text) {}
+   }
+
+Then register a resolver:
+
+.. code-block:: php
+
+   $c->attributeRegistry()->register(
+       UpperCase::class,
+       fn (UpperCase $attr) => strtoupper($attr->text)
    );
 
-.. note::
-   You may enable only one (e.g., `propertyAttributes: true`) to scope usage.
+Now use it in your class:
 
------------------------------------
-Method & Parameter Injection
------------------------------------
+.. code-block:: php
+
+   class Banner {
+       #[UpperCase('hello world')]
+       public string $title;
+   }
+
+   echo $c->get(Banner::class)->title;
+   // Outputs: "HELLO WORLD"
+
+-------------
+Method Injection
+-------------
 
 ### Inject individual parameters:
 
@@ -83,7 +96,7 @@ Method & Parameter Injection
        ) {}
    }
 
-### Inject via whole-method default:
+### Inject via full-method fallback:
 
 .. code-block:: php
 
@@ -92,47 +105,58 @@ Method & Parameter Injection
        public function execute(int $retries, int $delay) {}
    }
 
-**Note**: Parameters defined directly via call() or registration will override attribute values.
+.. note::
+   Parameters passed via `call()` or `registerMethod()` override attribute values.
 
 --------------------------
 Property Injection Support
 --------------------------
 
-When ``propertyAttributes`` is enabled, property injection works like:
+When ``propertyAttributes`` is enabled:
 
 .. code-block:: php
 
    class Controller {
-       #[Infuse] private Request $request;                // by type
-       #[Autowire('cfg.csrf_token')] private string $csrf; // by definition key
+       #[Infuse] private Request $request;                    // by type
+       #[Autowire('cfg.csrf_token')] private string $csrf;   // by key
+       #[UpperCase('admin')] private string $role;           // custom
    }
 
-This occurs **after** constructor resolution.
+Injection happens **after** constructor resolution.
+If a value is already set via `registerProperty()`, it takes precedence.
 
-If the same property is configured via `registerProperty()`, the registered value takes precedence.
+--------------------------
+How to Enable Attribute Support
+--------------------------
+
+Attribute support is disabled by default. Enable it selectively:
+
+.. code-block:: php
+
+   $c->options()->setOptions(
+       injection: true,            // enable container auto-wiring
+       methodAttributes: true,     // allow method & parameter #[Infuse]
+       propertyAttributes: true    // allow property #[Infuse]
+   );
+
+.. note::
+   You can enable only one (e.g., `propertyAttributes`) for scoped usage.
 
 -------------------------------
 Resolution Priority (high → low)
 -------------------------------
 
-1. ``registerClass()`` / ``registerMethod()`` / ``registerProperty()``
-2. Supplied arguments (e.g., `call()`, `make()`)
-3. Container ``definitions()``
-4. ``#[Infuse]`` / ``#[Autowire]`` / ``#[Inject]``
+1. `registerClass()` / `registerMethod()` / `registerProperty()`
+2. Supplied arguments (e.g., via `call()`, `make()`)
+3. Container `definitions()`
+4. `#[Infuse]`, `#[Autowire]`, `#[Inject]`
+5. Custom attribute via registered `AttributeResolver`
 
-------------------------
+-----------------------
 Advanced Usage Examples
-------------------------
+-----------------------
 
-### Inject using callable
-
-.. code-block:: php
-
-   class TokenProvider {
-       #[Infuse('uuid_create')] private string $token;
-   }
-
-### Injecting configuration values
+### Injecting scalar config:
 
 .. code-block:: php
 
@@ -140,22 +164,44 @@ Advanced Usage Examples
        #[Inject('cfg.api_key')] private string $apiKey;
    }
 
------------------------
-Best Practices
------------------------
+### Inject via global callable:
 
-✔ Prefer attributes for **configurable defaults**.
-✔ Keep usage **declarative**, not imperative.
-✔ Avoid placing secrets directly in attributes — inject via definitions instead.
+.. code-block:: php
+
+   class Session {
+       #[Infuse('uuid_create')] private string $sessionId;
+   }
+
+### Inject using a registered custom attribute:
+
+.. code-block:: php
+
+   class Tagline {
+       #[UpperCase('power of code')] public string $text;
+   }
+
+----------------
+Testing Tip
+----------------
+
+InterMix provides full support for custom attribute resolution and traceable output.
+
+Enable debug tracing to inspect injection path:
+
+.. code-block:: php
+
+   $c->options()->enableDebugTracing(true);
+   $c->get(MyService::class);
+   print_r($c->debug(MyService::class));
 
 ----------------
 Summary
 ----------------
 
-+ Three equivalent tags: ``Infuse``, ``Autowire``, ``Inject``
-+ Supported on class properties, method parameters, and full method signatures
-+ Configurable using ``methodAttributes`` and ``propertyAttributes``
-+ Resolved from type hints, container keys, or global functions
-+ Declarative, testable, and easy to override
++ Three equivalent built-in tags: ``Infuse``, ``Autowire``, ``Inject``
++ Register your **own attributes** with `attributeRegistry()`
++ Attribute injection is supported on properties, parameters, and methods
++ Resolution supports type hints, container IDs, and global functions
++ Declarative, testable, traceable
 
 Next up → :ref:`di.lifetimes`
