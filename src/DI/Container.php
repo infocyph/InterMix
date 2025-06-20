@@ -7,6 +7,7 @@ namespace Infocyph\InterMix\DI;
 use ArrayAccess;
 use Closure;
 use Exception;
+use Infocyph\InterMix\DI\Attribute\AttributeRegistry;
 use Infocyph\InterMix\DI\Invoker\GenericCall;
 use Infocyph\InterMix\DI\Invoker\InjectedCall;
 use Infocyph\InterMix\DI\Managers\DefinitionManager;
@@ -45,7 +46,7 @@ final class Container implements ContainerInterface, ArrayAccess
     public function __construct(private readonly string $instanceAlias = 'intermix')
     {
         self::$instances[$this->instanceAlias] ??= $this;
-        $this->repository = new Repository();
+        $this->repository = new Repository($this);
         $this->repository->setAlias($this->instanceAlias);
         $this->repository->setFunctionReference(
             ContainerInterface::class,
@@ -204,6 +205,20 @@ final class Container implements ContainerInterface, ArrayAccess
     public function options(): OptionsManager
     {
         return $this->optionsManager;
+    }
+
+    /**
+     * Retrieve the attribute registry.
+     *
+     * The attribute registry is responsible for managing and resolving attribute
+     * definitions and their corresponding resolvers. This method provides access
+     * to the attribute registry associated with the repository.
+     *
+     * @return AttributeRegistry The attribute registry instance.
+     */
+    public function attributeRegistry(): AttributeRegistry
+    {
+        return $this->repository->attributeRegistry();
     }
 
 

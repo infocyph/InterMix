@@ -70,5 +70,3 @@ Summary 📚
 + **Transient** – fresh each time
 + **Scoped** – one per logical scope
 + Managed via `Lifetime::*` constants on any `bind()`
-
-See also: :ref:`di.repository` for scope APIs.

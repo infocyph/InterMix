@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\Cache;
 
-use ArrayAccess;
 use BadMethodCallException;
 use Countable;
 use DateInterval;
@@ -13,17 +12,10 @@ use Infocyph\InterMix\Exceptions\CacheInvalidArgumentException;
 use Psr\Cache\CacheItemInterface;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Cache\InvalidArgumentException as Psr6InvalidArgumentException;
-use Psr\SimpleCache\CacheInterface as SimpleCacheInterface;
 use Psr\SimpleCache\InvalidArgumentException as SimpleCacheInvalidArgument;
 
-/**
- * @implements CacheItemPoolInterface<string, mixed>
- * @implements SimpleCacheInterface<string, mixed>
- */
-class Cache implements
-    CacheItemPoolInterface,
-    SimpleCacheInterface,
-    ArrayAccess,
+readonly class Cache implements
+    CacheInterface,
     Countable
 {
     /**
@@ -31,7 +23,7 @@ class Cache implements
      *
      * @param CacheItemPoolInterface $adapter Any PSR-6 cache pool.
      */
-    public function __construct(private readonly CacheItemPoolInterface $adapter)
+    public function __construct(private CacheItemPoolInterface $adapter)
     {
     }
 

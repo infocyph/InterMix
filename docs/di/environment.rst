@@ -91,4 +91,4 @@ Best Practices 💡
 Want to override a tag or lifetime **per environment**? See upcoming roadmap in
 the GitHub issues.
 
-Next stop » :doc:`caching`
+Next stop » :doc:`cache`
