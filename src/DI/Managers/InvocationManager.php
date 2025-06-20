@@ -53,7 +53,7 @@ class InvocationManager implements ArrayAccess
         $resolved = $this->get($id);
         $resource = $this->repository->getResolved()[$id] ?? [];
 
-        return array_key_exists('returned', $resource) ? $resource['returned'] : $resolved;
+        return is_array($resource) && array_key_exists('returned', $resource) ? $resource['returned'] : $resolved;
     }
 
     /**

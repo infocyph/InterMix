@@ -107,8 +107,6 @@ readonly class Cache implements
      */
     private function validateKey(string $key): void
     {
-        // PSR-16 stipulates that keys must be strings that do not contain
-        // {}()/\: @ or control characters; we restrict further to A-Z, a-z, 0-9, _ . and -.
         if ($key === '' || !preg_match('/^[A-Za-z0-9_.\-]+$/', $key)) {
             throw new CacheInvalidArgumentException(
                 'Invalid cache key; allowed characters: A-Z, a-z, 0-9, _, ., -'
@@ -140,16 +138,43 @@ readonly class Cache implements
         ));
     }
 
-    //
-    // ────────────────────────── PSR-6 METHODS ──────────────────────────
-    //
-
+    /**
+     * Retrieves a Cache Item representing the specified key.
+     *
+     * This method returns a CacheItemInterface object containing the cached value.
+     *
+     * @param string $key
+     *     The key of the item to retrieve.
+     *
+     * @throws CacheInvalidArgumentException
+     *     If the $key is invalid or if a CacheLoader is not available when
+     *     the value is not found.
+     *
+     * @return CacheItemInterface
+     *     The retrieved Cache Item.
+     */
     public function getItem(string $key): CacheItemInterface
     {
         $this->validateKey($key);
         return $this->adapter->getItem($key);
     }
 
+    /**
+     * Returns an iterable of {@see CacheItemInterface} objects for the given
+     * keys.
+     *
+     * If no keys are provided, an empty iterator is returned.
+     *
+     * If the adapter supports it, the method will use the adapter's
+     * `multiFetch` method. Otherwise, it iterates over the keys and calls
+     * `getItem` on each key.
+     *
+     * @param string[] $keys
+     *     An array of keys to fetch from the cache.
+     *
+     * @return iterable<CacheItemInterface>
+     *     An iterable of CacheItemInterface objects.
+     */
     public function getItems(array $keys = []): iterable
     {
         // If empty, return empty iterator
@@ -169,29 +194,81 @@ readonly class Cache implements
         return $out;
     }
 
-    /** Alias for iteration-based access */
+
+    /**
+     * Returns an iterable of {@see CacheItemInterface} objects for the given
+     * keys.
+     *
+     * If no keys are provided, an empty iterator is returned.
+     *
+     * This method is a wrapper for `getItems()`, and is intended for use with
+     * iterators.
+     *
+     * @param string[] $keys
+     *     An array of keys to fetch from the cache.
+     *
+     * @return iterable<CacheItemInterface>
+     *     An iterable of CacheItemInterface objects.
+     */
     public function getItemsIterator(array $keys = []): iterable
     {
         return $this->getItems($keys);
     }
 
+    /**
+     * Checks if an item is present in the cache.
+     *
+     * @param string $key
+     *     The key to check.
+     *
+     * @return bool
+     *     True if the item exists in the cache, false otherwise.
+     * @throws Psr6InvalidArgumentException
+     */
     public function hasItem(string $key): bool
     {
         $this->validateKey($key);
         return $this->adapter->hasItem($key);
     }
 
+    /**
+     * Removes all items from the cache.
+     *
+     * @return bool
+     *     True if the operation was successful, false otherwise.
+     */
     public function clear(): bool
     {
         return $this->adapter->clear();
     }
 
+    /**
+     * Deletes a single item from the cache.
+     *
+     * This method deletes the item from the cache if it exists. If the item does
+     * not exist, it is silently ignored.
+     *
+     * @param string $key
+     *     The key of the item to delete.
+     *
+     * @return bool
+     *     True if the item was successfully deleted, false otherwise.
+     * @throws Psr6InvalidArgumentException
+     */
     public function deleteItem(string $key): bool
     {
         $this->validateKey($key);
         return $this->adapter->deleteItem($key);
     }
 
+    /**
+     * Deletes multiple items from the cache.
+     *
+     * @param string[] $keys The array of keys to delete.
+     *
+     * @return bool True if all items were successfully deleted, false otherwise.
+     * @throws Psr6InvalidArgumentException
+     */
     public function deleteItems(array $keys): bool
     {
         foreach ($keys as $k) {
@@ -200,24 +277,53 @@ readonly class Cache implements
         return $this->adapter->deleteItems($keys);
     }
 
+    /**
+     * Persists a cache item immediately.
+     *
+     * This method will throw a Psr6InvalidArgumentException if the item does not
+     * implement CacheItemInterface.
+     *
+     * @param CacheItemInterface $item
+     *     The cache item to persist.
+     *
+     * @return bool
+     *     True if the cache item was successfully persisted, false otherwise.
+     * @throws Psr6InvalidArgumentException
+     *     If the item does not implement CacheItemInterface.
+     */
     public function save(CacheItemInterface $item): bool
     {
         return $this->adapter->save($item);
     }
 
+    /**
+     * Adds a cache item to the deferred queue for later persistence.
+     *
+     * This method queues the given cache item, to be saved when the
+     * `commit()` method is invoked. It does not persist the item immediately.
+     *
+     * @param CacheItemInterface $item The cache item to defer.
+     * @return bool True if the item was successfully deferred, false if the item type is invalid.
+     */
     public function saveDeferred(CacheItemInterface $item): bool
     {
         return $this->adapter->saveDeferred($item);
     }
 
+    /**
+     * Commits any deferred cache items.
+     *
+     * If the underlying adapter supports deferred cache items, this
+     * method will persist all items that have been added to the deferred
+     * queue. If the adapter does not support deferred cache items, this
+     * method is a no-op.
+     *
+     * @return bool True if all deferred items were successfully saved, false otherwise.
+     */
     public function commit(): bool
     {
         return $this->adapter->commit();
     }
-
-    //
-    // ────────────────────────── PSR-16 METHODS ──────────────────────────
-    //
 
     /**
      * Fetches a value from the cache. If the key does not exist, returns $default.
@@ -423,54 +529,134 @@ readonly class Cache implements
         return $this->hasItem($key);
     }
 
-    //
-    // ────────────────────────── ArrayAccess / Magic ──────────────────────────
-    //
-
+    /**
+     * Required by interface ArrayAccess.
+     *
+     * {@inheritdoc}
+     *
+     * @see has()
+     */
     public function offsetExists(mixed $offset): bool
     {
         return $this->has((string)$offset);
     }
 
+    /**
+     * Retrieves the value for the specified offset from the cache.
+     *
+     * This method allows the use of array-like syntax to retrieve a value
+     * from the cache. The offset is converted to a string before retrieval.
+     *
+     * @param mixed $offset The key at which to retrieve the value.
+     *
+     * @return mixed The value at the specified offset.
+     * @throws SimpleCacheInvalidArgument if the key is invalid
+     */
     public function offsetGet(mixed $offset): mixed
     {
         return $this->get((string)$offset);
     }
 
+    /**
+     * Sets a value in the cache at the specified offset.
+     *
+     * This method allows the use of array-like syntax to store a value
+     * in the cache. The offset is converted to a string before storing.
+     * The time-to-live (TTL) for the cache entry is set to null by default.
+     *
+     * @param mixed $offset The key at which to set the value.
+     * @param mixed $value The value to be stored at the specified offset.
+     *
+     * @return void
+     * @throws SimpleCacheInvalidArgument if the key is invalid
+     */
     public function offsetSet(mixed $offset, mixed $value): void
     {
-        // Default TTL to null
         $this->set((string)$offset, $value, null);
     }
 
+    /**
+     * Unsets a key from the cache.
+     *
+     * @param string $offset
+     * @return void
+     * @throws Psr6InvalidArgumentException|SimpleCacheInvalidArgument if the key is invalid
+     */
     public function offsetUnset(mixed $offset): void
     {
         $this->delete((string)$offset);
     }
 
+    /**
+     * Retrieves a value from the cache using magic property access.
+     *
+     * This method allows accessing cached values using property syntax.
+     * It is equivalent to calling the `get()` method with the property name.
+     *
+     * @param string $name The key for which to retrieve the value.
+     * @return mixed The value associated with the given key.
+     * @throws SimpleCacheInvalidArgument if the key is invalid.
+     */
     public function __get(string $name): mixed
     {
         return $this->get($name);
     }
 
+    /**
+     * Sets a value in the cache.
+     *
+     * Magic property setter, equivalent to calling `set($name, $value, null)`.
+     *
+     * @param string $name
+     * @param mixed $value
+     * @return void
+     *
+     * @throws SimpleCacheInvalidArgument if the key is invalid
+     */
     public function __set(string $name, mixed $value): void
     {
         $this->set($name, $value, null);
     }
 
+    /**
+     * Whether the given key is set in the cache.
+     *
+     * @param string $name
+     * @return bool
+     * @throws Psr6InvalidArgumentException
+     */
     public function __isset(string $name): bool
     {
         return $this->has($name);
     }
 
+    /**
+     * Magic method to unset an item in the cache.
+     *
+     * This method deletes the cache entry associated with the given name.
+     *
+     * @param string $name The name of the cache item to unset.
+     *
+     * @return void
+     * @throws SimpleCacheInvalidArgument
+     */
     public function __unset(string $name): void
     {
         $this->delete($name);
     }
 
+    /**
+     * Returns the number of items in the cache.
+     *
+     * If the adapter implements the {@see Countable} interface, it will be
+     * used to retrieve the count. Otherwise, this method will use the
+     * {@see iterable} interface to count the items.
+     *
+     * @return int
+     * @throws Psr6InvalidArgumentException
+     */
     public function count(): int
     {
-        // Delegate to adapter if it implements Countable
         return $this->adapter instanceof Countable
             ? count($this->adapter)
             : iterator_count($this->adapter->getItems([]));
