@@ -1,7 +1,7 @@
 .. _di.invocation:
 
 ========================
-Invocation & Short-cuts
+Invocation & Shortcuts
 ========================
 
 InterMix ships with a **mini-helper API** that goes beyond PSR-11

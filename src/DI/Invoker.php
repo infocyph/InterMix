@@ -68,6 +68,10 @@ final readonly class Invoker
      */
     public function invoke(array|string|object $target, array $args = []): mixed
     {
+        if (is_string($target) && ValueSerializer::isSerializedClosure($target)) {
+            return $this->routeCallable($target, $args);
+        }
+
         [$callableOrClass, $method] = $this->container->parseCallable($target);
 
         /* (a) Closure or plain callable string / object -------------------- */

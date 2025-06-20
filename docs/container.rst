@@ -137,6 +137,7 @@ Dive into the detailed sub-chapters. Happy mixing!  Questions?  Open an issue or
     di/registration
     di/options
     di/invocation
+    di/invoker
     di/attribute
     di/lifetimes
     di/scopes
