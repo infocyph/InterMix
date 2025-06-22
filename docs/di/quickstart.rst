@@ -8,16 +8,8 @@ InterMix works **out-of-the-box** – a single dependency via Composer and you�
 and running.  This page merges the former *Getting Started* notes so you have one
 concise reference.
 
-Install
--------
-
-.. code-block:: bash
-
-   composer require infocyph/intermix
-
-
-1 → Create (or retrieve) a container
-------------------------------------
+Create (or retrieve) a container
+--------------------------------
 
 A container is identified by an **alias**.
 Each alias is an *isolated* registry of services.
@@ -34,8 +26,8 @@ Each alias is an *isolated* registry of services.
 
 Keep aliases short and memorable – tests often use a random alias to isolate state.
 
-2 → Configure behaviour (optional)
-----------------------------------
+Configure behaviour (optional)
+------------------------------
 
 .. code-block:: php
 
@@ -54,8 +46,8 @@ Keep aliases short and memorable – tests often use a random alias to isolate s
 + *lazyLoading* = true
 
 
-3 → Register something
-----------------------
+Register something
+------------------
 
 ### Bind an ID to a value / factory
 
@@ -82,8 +74,8 @@ Keep aliases short and memorable – tests often use a random alias to isolate s
    $c1->registration()->import(App\Providers\BusProvider::class);
 
 
-4 → Resolve
------------
+Resolve
+-------
 
 .. code-block:: php
 
@@ -104,8 +96,8 @@ Autowire a class (constructor injection)::
    echo $c1->get(Greeter::class)->hello('Bob');
 
 
-5 → A taste of attributes
--------------------------
+A taste of attributes
+---------------------
 
 .. code-block:: php
 
@@ -124,8 +116,8 @@ Autowire a class (constructor injection)::
    $mailer = $c1->get(Mailer::class);   // property + parameter injected
 
 
-6 → Environment swap (prod vs. local)
--------------------------------------
+Environment swap (prod vs. local)
+---------------------------------
 
 .. code-block:: php
 
@@ -141,8 +133,8 @@ Autowire a class (constructor injection)::
    $gw = $c1->get(PaymentGateway::class);   // StripeGateway in prod
 
 
-7 → Lock & ship
----------------
+Lock & ship
+-----------
 
 After bootstrap you may **lock** the container to block any further
 accidental modifications:
