@@ -143,7 +143,6 @@ class PropertyResolver
         array $classPropertyValues,
         object $classInstance,
     ): ?array {
-
         if ($attempt = $this->attemptUserOverride($property, $classPropertyValues, $classInstance)) {
             return $attempt;
         }
@@ -247,26 +246,35 @@ class PropertyResolver
         ReflectionProperty $property,
         object $classInstance,
     ): ?array {
-        foreach ($property->getAttributes() as $rawAttr) {
-            $attrObj = $rawAttr->newInstance();
+        $injectVal = null;
+        $handled = false;
+
+        foreach ($property->getAttributes() as $raw) {
+            $attrObj = $raw->newInstance();
 
             if (!$this->repository->attributeRegistry()->has($attrObj::class)) {
                 continue;
             }
 
-            $val = $this->repository
-                ->attributeRegistry()
-                ->resolve($attrObj, $property);
+            $handled = true;
+            $val = $this->repository->attributeRegistry()->resolve($attrObj, $property);
 
-            if ($val instanceof IMStdClass) {
-                continue;
+            if ($injectVal === null && $val !== null && !$val instanceof IMStdClass) {
+                $injectVal = $val;
             }
-
-            return $property->isStatic()
-                ? [$val]
-                : [$classInstance, $val];
         }
-        return null;
+
+        if (!$handled) {
+            return null;
+        }
+
+        if ($injectVal === null) {
+            return [];
+        }
+
+        return $property->isStatic()
+            ? [$injectVal]
+            : [$classInstance, $injectVal];
     }
 
 

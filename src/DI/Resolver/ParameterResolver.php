@@ -434,7 +434,7 @@ class ParameterResolver
             if ($applyAttribute) {
                 $data = $this->resolveParameterAttribute($param);
                 if ($data['isResolved']) {
-                    $processed[$paramName] = $data['resolved'];
+                    $data['inject'] && $processed[$paramName] = $data['value'];
                     continue;
                 }
             }
@@ -713,32 +713,42 @@ class ParameterResolver
      */
     private function resolveParameterAttribute(ReflectionParameter $param): array
     {
-        $attribute = $param->getAttributes(Infuse::class);
-        if ($attribute && !empty($attribute[0]->getArguments())) {
+        $infuse = $param->getAttributes(Infuse::class);
+        if ($infuse && !empty($infuse[0]->getArguments())) {
             /** @var Infuse $infuse */
-            $infuse = $attribute[0]->newInstance();
-            $resolved = $this->classResolver->resolveInfuse($infuse);
+            $resolved = $this->classResolver->resolveInfuse($infuse[0]->newInstance());
 
             return [
-                'isResolved' => !$resolved instanceof IMStdClass,
-                'resolved' => $resolved,
+                'isResolved' => true,
+                'inject' => !$resolved instanceof IMStdClass,
+                'value' => $resolved,
             ];
         }
-        foreach ($param->getAttributes() as $anyAttr) {
-            $attrObj = $anyAttr->newInstance();
 
-            if ($this->repository
-                ->attributeRegistry()
-                ->has($attrObj::class)) {
-                return [
-                    'isResolved' => true,
-                    'resolved' => $this->repository
-                        ->attributeRegistry()
-                        ->resolve($attrObj, $param),
-                ];
+        $registry = $this->repository->attributeRegistry();
+        $injectVal = null;
+        $handled = false;
+
+        foreach ($param->getAttributes() as $raw) {
+            $attrObj = $raw->newInstance();
+
+            if (!$registry->has($attrObj::class)) {
+                continue;
+            }
+
+            $handled = true;
+            $val = $registry->resolve($attrObj, $param);
+
+            if ($injectVal === null && $val !== null && !$val instanceof IMStdClass) {
+                $injectVal = $val;
             }
         }
-        return ['isResolved' => false];
+
+        return [
+            'isResolved' => $handled,
+            'inject' => $injectVal !== null,
+            'value' => $injectVal,
+        ];
     }
 
     /**

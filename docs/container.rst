@@ -17,13 +17,6 @@ Dependency Injection (Container)
       $c->definitions()->bind('answer', 42);  // ② register
       echo $c->get('answer');                 // ③ resolve  → 42
 
-   *Flags* – toggle behaviour quickly:
-
-   | :php:`injection:false` (disable autowiring)
-   | :php:`methodAttributes:true` (honour ``#[Infuse]`` on parameters)
-   | :php:`propertyAttributes:true` (honour ``#[Infuse]`` on properties)
-   | :php:`enableLazyLoading(false)` (eager-load every service)
-
 -----------------------------------
 Why bother with a DI-Container?
 -----------------------------------
