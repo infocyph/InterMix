@@ -5,7 +5,7 @@ Attribute Injection
 ===================
 
 InterMix supports **PHP 8+ native attributes** for expressive, declarative injection.
-The system now supports **both built-in and custom attributes**, resolved automatically.
+The system now supports both **built-in** and **custom attribute resolvers**, fully integrated with the container lifecycle.
 
 -------------
 Built-in Tags
@@ -41,17 +41,17 @@ Quick Syntax
    }
 
    class App {
-       #[Infuse(user: 'admin')]  // method‑level fallback
+       #[Infuse(user: 'admin')]  // method-level fallback
        public function boot(
            #[Inject('cfg.env')] string $env   // parameter-level override
        ) {}
    }
 
---------------------
+--------------------------
 Custom Attribute Support
---------------------
+--------------------------
 
-You can now define **your own attribute classes** and plug in a custom resolver.
+InterMix allows **custom attribute classes** to be registered at runtime, enabling reusable, declarative logic or injection.
 
 .. code-block:: php
 
@@ -64,12 +64,24 @@ Then register a resolver:
 
 .. code-block:: php
 
+   use Infocyph\InterMix\DI\Attribute\AttributeResolverInterface;
+
+   class UpperCaseResolver implements AttributeResolverInterface {
+       public function resolve(
+           object $attributeInstance,
+           Reflector $target,
+           Container $container
+       ): mixed {
+           return strtoupper($attributeInstance->text);
+       }
+   }
+
    $c->attributeRegistry()->register(
        UpperCase::class,
-       fn (UpperCase $attr) => strtoupper($attr->text)
+       UpperCaseResolver::class
    );
 
-Now use it in your class:
+Now use it:
 
 .. code-block:: php
 
@@ -80,6 +92,10 @@ Now use it in your class:
 
    echo $c->get(Banner::class)->title;
    // Outputs: "HELLO WORLD"
+
+.. hint::
+    Multiple attributes can be used together — all resolvers will run.
+    Only the **first non-null** result is used for injection; others may perform logic.
 
 -------------
 Method Injection
@@ -123,7 +139,26 @@ When ``propertyAttributes`` is enabled:
    }
 
 Injection happens **after** constructor resolution.
+
 If a value is already set via `registerProperty()`, it takes precedence.
+
+-------------------------------
+Resolution Workflow
+-------------------------------
+
+For **parameter** and **property** attributes:
+
+1. If the attribute is one of: `Infuse`, `Autowire`, or `Inject`:
+   * Only the **first** applicable one is resolved and injected.
+2. All other custom attributes:
+   * Every registered attribute is **executed in order**.
+   * If the resolver returns a **non-null, non-IMStdClass** value, it will be injected (first match only).
+   * If no resolver injects anything, but any resolver **handled** the attribute, default resolution is skipped.
+
+This supports:
+✅ Flexible decoration
+✅ Early injection override
+✅ Side-effect-only attributes
 
 --------------------------
 How to Enable Attribute Support
@@ -137,7 +172,7 @@ Attribute support is disabled by default. Enable it selectively:
        injection: true,            // enable container auto-wiring
        methodAttributes: true,     // allow method & parameter #[Infuse]
        propertyAttributes: true    // allow property #[Infuse]
-   );
+   )
 
 .. note::
    You can enable only one (e.g., `propertyAttributes`) for scoped usage.
@@ -152,9 +187,9 @@ Resolution Priority (high → low)
 4. `#[Infuse]`, `#[Autowire]`, `#[Inject]`
 5. Custom attribute via registered `AttributeResolver`
 
------------------------
+--------------------------
 Advanced Usage Examples
------------------------
+--------------------------
 
 ### Injecting scalar config:
 
@@ -172,21 +207,37 @@ Advanced Usage Examples
        #[Infuse('uuid_create')] private string $sessionId;
    }
 
-### Inject using a registered custom attribute:
+### Custom resolver that only runs logic (no injection):
 
 .. code-block:: php
 
-   class Tagline {
-       #[UpperCase('power of code')] public string $text;
+   #[Attribute(Attribute::TARGET_METHOD)]
+   class LogCall {
+       public function __construct(public string $level = 'info') {}
+   }
+
+   class LogCallResolver implements AttributeResolverInterface {
+       public function resolve(object $attr, Reflector $target, Container $c): mixed {
+           $c->logger()->log($attr->level, "[DI] $target handled.");
+           return null; // skip injection, but marks as handled
+       }
+   }
+
+   // Register & use:
+   $c->attributeRegistry()->register(LogCall::class, LogCallResolver::class);
+
+   class Action {
+       #[LogCall('debug')]
+       public function fire() {}
    }
 
 ----------------
 Testing Tip
 ----------------
 
-InterMix provides full support for custom attribute resolution and traceable output.
+InterMix provides full support for attribute-based resolution with traceable output.
 
-Enable debug tracing to inspect injection path:
+Enable debug tracing to inspect resolution paths:
 
 .. code-block:: php
 
@@ -198,10 +249,12 @@ Enable debug tracing to inspect injection path:
 Summary
 ----------------
 
-+ Three equivalent built-in tags: ``Infuse``, ``Autowire``, ``Inject``
-+ Register your **own attributes** with `attributeRegistry()`
-+ Attribute injection is supported on properties, parameters, and methods
-+ Resolution supports type hints, container IDs, and global functions
-+ Declarative, testable, traceable
++ Built-in attribute tags: ``Infuse``, ``Autowire``, ``Inject``
++ Custom attributes can be registered via `attributeRegistry()`
++ Supported on properties, method parameters, and entire methods
++ Flexible injection from type-hint, container ID, or global functions
++ Multiple attribute resolvers can be run per target
++ Can be used for resolution **or logic only** (no injection)
++ Fully traceable and testable resolution lifecycle
 
 Next up → :ref:`di.lifetimes`

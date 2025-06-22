@@ -70,18 +70,13 @@ class ClassResolver
 
         // 3) If $type is a global function name
         if (function_exists($type)) {
-            // Reflect the function to figure out parameters
             $reflectionFn = new \ReflectionFunction($type);
-            // Use parameterResolver to handle injection or data
             $args = $this->parameterResolver->resolve($reflectionFn, (array)$data, 'constructor');
-
-            // Call the function with resolved arguments
             return $type(...$args);
         }
 
         // 4) If $type is a class or interface => do a reflection-based resolution
         if (class_exists($type) || interface_exists($type)) {
-            // (Optional) environment-based override if it's an interface
             if (interface_exists($type)) {
                 $envConcrete = $this->repository->getEnvConcrete($type);
                 if ($envConcrete && class_exists($envConcrete)) {
@@ -89,7 +84,6 @@ class ClassResolver
                 }
             }
 
-            // Reflect & resolve using ClassResolver
             return $this->repository->fetchInstanceOrValue(
                 $this->resolve(ReflectionResource::getClassReflection($type)),
             );
