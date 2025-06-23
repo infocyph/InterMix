@@ -66,6 +66,3 @@ class Infuse
             : $this->data;
     }
 }
-
-class_alias(Infuse::class, 'Autowire');
-class_alias(Infuse::class, 'Inject');

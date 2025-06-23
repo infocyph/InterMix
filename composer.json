@@ -74,11 +74,10 @@
             "@test:lint",
             "@test:refactor"
         ],
-        "git:hook": "captainhook install --only-enabled -nf",
         "test": "pest",
         "refactor": "rector process",
         "lint": "pint",
-        "post-autoload-dump": "@git:hook"
+        "post-autoload-dump": "captainhook install --only-enabled -nf"
     },
     "require-dev": {
         "captainhook/captainhook": "^5.24",
