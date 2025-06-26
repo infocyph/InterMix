@@ -52,13 +52,55 @@ final class ValueSerializer
      */
     public static function isSerializedClosure(string $str): bool
     {
-        if (!str_contains($str, 'Opis\\Closure')) {
-            return false;
+        static $memo = [];
+        if (isset($memo[$str])) {
+            return $memo[$str];
         }
-        return (bool) preg_match(
+        if (!str_contains($str, 'Opis\\Closure')) {
+            return $memo[$str] = false;
+        }
+        return $memo[$str] = (bool)preg_match(
             '/^(?:C:\d+:"Opis\\\\Closure\\\\SerializableClosure|O:\d+:"Opis\\\\Closure\\\\Box"|O:\d+:"Opis\\\\Closure\\\\Serializable")/',
-            $str
+            $str,
         );
+    }
+
+    /**
+     * Encode any value into a transport-safe (optionally base64) string.
+     *
+     * ```php
+     * $token = ValueSerializer::encode($payload);        // base64 by default
+     * $same  = ValueSerializer::decode($token);
+     * ```
+     *
+     * @param mixed $value Any PHP value
+     * @param bool $base64 True ⇒ wrap with base64; false ⇒ raw
+     * @return string                  Encoded payload
+     * @throws InvalidArgumentException Forwarded from ::serialize()
+     */
+    public static function encode(mixed $value, bool $base64 = true): string
+    {
+        $blob = self::serialize($value);
+        return $base64 ? base64_encode($blob) : $blob;
+    }
+
+    /**
+     * Decode a payload produced by {@see encode()}.
+     *
+     * @param string $payload The encoded string
+     * @param bool $base64 True ⇒ expect base64; false ⇒ raw
+     * @return mixed                   Original value
+     * @throws InvalidArgumentException Forwarded from ::unserialize()
+     */
+    public static function decode(string $payload, bool $base64 = true): mixed
+    {
+        $blob = $base64 ? base64_decode($payload, true) : $payload;
+
+        if ($blob === false) {
+            throw new InvalidArgumentException('Invalid base64 payload supplied to ValueSerializer::decode().');
+        }
+
+        return self::unserialize($blob);
     }
 
     /**
