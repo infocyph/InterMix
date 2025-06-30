@@ -58,18 +58,44 @@ class ParameterResolver
      * of the supplied parameters to create a unique identifier.
      *
      * @param ReflectionFunctionAbstract $reflector The reflection object representing the function/method.
-     * @param array $suppliedParameters The parameters supplied for the function/method call.
+     * @param array $supplied The parameters supplied for the function/method call.
      * @param string $type A string indicating the type of operation or context.
      * @return string A unique cache key for the given function/method resolution.
      */
     private function makeResolutionCacheKey(
         ReflectionFunctionAbstract $reflector,
-        array $suppliedParameters,
+        array $supplied,
         string $type,
     ): string {
         $owner = $reflector->class ?? '';
-        $argsHash = hash('xxh3', serialize($suppliedParameters));
+        $norm = array_map([self::class, 'normalise'], $supplied);
+        $argsHash = hash('xxh3', json_encode($norm, JSON_UNESCAPED_SLASHES));
+
         return "$owner::{$reflector->getName()}|$type|$argsHash";
+    }
+
+    /**
+     * Normalizes a given value into a string or recursively normalizes arrays.
+     *
+     * This function converts different types of values into unique string representations:
+     * - Closures are represented by their object ID.
+     * - Objects are represented by their object ID.
+     * - Resources are represented by their type and ID.
+     * - Arrays are recursively normalized.
+     * - Other types returned as-is.
+     *
+     * @param mixed $value The value to be normalized.
+     * @return mixed The normalized value, either as a string or recursively normalized array.
+     */
+    private static function normalise(mixed $value): mixed
+    {
+        return match (true) {
+            $value instanceof \Closure => 'closure#' . spl_object_id($value),
+            is_object($value) => 'obj#' . spl_object_id($value),
+            is_resource($value) => 'res#' . get_resource_type($value) . '#' . (int)$value,
+            is_array($value) => array_map([self::class, 'normalise'], $value),
+            default => $value,
+        };
     }
 
     /**
