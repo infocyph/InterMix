@@ -53,27 +53,57 @@ class FileCacheAdapter implements CacheItemPoolInterface, Countable
      *
      * @param string $ns   The namespace to use for the directory name, sanitized to allow only
      *                     alphanumeric characters, underscores, and hyphens.
-     * @param string|null $base The base directory where the cache directory will be created.
+     * @param string|null $baseDir The base directory where the cache directory will be created.
      *                          Defaults to the system's temporary directory if null.
      *
      * @throws RuntimeException If the directory cannot be created or is not writable, or if a
      *                          file with the same name already exists.
      */
-    private function createDirectory(string $ns, ?string $base): void
+    private function createDirectory(string $ns, ?string $baseDir): void
     {
-        $base = rtrim($base ?? sys_get_temp_dir(), DIRECTORY_SEPARATOR);
-        $ns = preg_replace('/[^A-Za-z0-9_\-]/', '_', $ns);
-        $this->dir = "$base/cache_$ns/";
+        $baseDir = rtrim($baseDir ?? sys_get_temp_dir(), DIRECTORY_SEPARATOR);
+        $ns      = preg_replace('/[^A-Za-z0-9_\-]/', '_', $ns);
+        $this->dir = $baseDir . DIRECTORY_SEPARATOR . 'cache_' . $ns . DIRECTORY_SEPARATOR;
+
+        if (is_dir($this->dir)) {
+            if (!is_writable($this->dir)) {
+                throw new RuntimeException(
+                    "Cache directory '$this->dir' exists but is not writable"
+                );
+            }
+            return;
+        }
+
+        if (file_exists($baseDir) && !is_dir($baseDir)) {
+            throw new RuntimeException(
+                'Cache base path ' . realpath($baseDir) . ' exists and is *not* a directory'
+            );
+        }
+
+        if (!is_dir($baseDir) && !@mkdir($baseDir, 0770, true) && !is_dir($baseDir)) {
+            $err = error_get_last()['message'] ?? 'unknown error';
+            throw new RuntimeException(
+                'Failed to create base directory ' . $baseDir . ": $err"
+            );
+        }
 
         if (file_exists($this->dir) && !is_dir($this->dir)) {
-            throw new RuntimeException("'$this->dir' exists and is not a directory");
+            throw new RuntimeException(
+                realpath($this->dir) . ' exists and is not a directory'
+            );
         }
-        if (!is_dir($this->dir) && !@mkdir($this->dir, 0770, true)) {
+
+        if (!@mkdir($this->dir, 0770, true) && !is_dir($this->dir)) {
             $err = error_get_last()['message'] ?? 'unknown error';
-            throw new RuntimeException("Failed to create '{$this->dir}': {$err}");
+            throw new RuntimeException(
+                'Failed to create cache directory ' . $this->dir . ": $err"
+            );
         }
+
         if (!is_writable($this->dir)) {
-            throw new RuntimeException("Cache directory '{$this->dir}' is not writable");
+            throw new RuntimeException(
+                'Cache directory ' . $this->dir . ' is not writable'
+            );
         }
     }
 
