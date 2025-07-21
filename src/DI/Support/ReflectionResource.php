@@ -10,6 +10,7 @@ use ReflectionClass;
 use ReflectionEnum;
 use ReflectionException;
 use ReflectionFunction;
+use ReflectionFunctionAbstract;
 use ReflectionMethod;
 
 final class ReflectionResource
@@ -39,20 +40,19 @@ final class ReflectionResource
      * classes), it is replaced with "unknown". For ReflectionEnum, the start line
      * is always 0.
      *
-     * @param ReflectionClass|ReflectionEnum|ReflectionMethod|ReflectionFunction $reflection
+     * @param ReflectionClass|ReflectionEnum|ReflectionMethod|ReflectionFunction|ReflectionFunctionAbstract $reflection
      *     The reflection object to get the signature for.
      *
      * @return string The signature string.
      */
     public static function getSignature(
-        ReflectionClass|ReflectionEnum|ReflectionMethod|ReflectionFunction $reflection
+        ReflectionClass|ReflectionEnum|ReflectionMethod|ReflectionFunction|ReflectionFunctionAbstract $reflection
     ): string {
         $fileName = $reflection->getFileName() ?: 'unknown';
         $startLine = $reflection instanceof ReflectionEnum ? 0 : ($reflection->getStartLine() ?: 0);
 
         return base64_encode("$fileName:$startLine");
     }
-
 
     /**
      * Gets a ReflectionClass for the given class name or object.
