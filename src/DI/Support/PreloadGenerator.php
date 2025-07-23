@@ -47,6 +47,7 @@ final class PreloadGenerator
             <?php
             foreach ($list as \$file) {
                 require_once \$file;
+                opcache_compile_file(\$file);
             }
             PHP;
 

@@ -46,7 +46,7 @@ final readonly class Invoker
     public static function shared(): self
     {
         static $inst;
-        return $inst ??= new self(Container::instance('intermix'));
+        return $inst ??= new self(Container::instance('inv_imx'));
     }
 
     /**
@@ -131,6 +131,43 @@ final readonly class Invoker
         return $this->container->make($class, $method);
     }
 
+
+    /**
+     * Returns a callable for the given target, caching the result.
+     *
+     * This method takes a target, which can be a string representing a class name
+     * or an object instance. It ensures the target is invokable, either by creating
+     * an instance through dependency injection if a class name is provided, or by
+     * using the provided object directly. The resulting callable is cached to
+     * optimize subsequent calls.
+     *
+     * @param string|object $target The class name or object to convert to a callable.
+     *
+     * @return callable The callable representation of the target.
+     *
+     * @throws InvalidArgumentException If the target is not invokable.
+     */
+    public function callableFor(string|object $target): callable
+    {
+        static $cache = [];
+        $key = \is_string($target) ? $target : $target::class;
+        return $cache[$key] ??= (function () use ($target) {
+            // ① get an *instance* (DI still runs only once)
+            $instance = \is_string($target)
+                ? $this->make($target)     // ctor-injected object
+                : $target;                 // already an object
+
+            if (!\is_callable($instance)) {
+                throw new InvalidArgumentException(
+                    sprintf('%s is not invokable.', $key = $instance::class),
+                );
+            }
+
+            // ② turn “object with __invoke” into a bound Closure (PHP 8+)
+            return $instance(...);        // promoted callable
+        })();
+    }
+
     /**
      * Serializes a given value into a string.
      *
@@ -181,34 +218,43 @@ final readonly class Invoker
      */
     private function routeCallable(mixed $callable, array $args): mixed
     {
-        // 0)  Packed Opis payload? – short-circuit before other string tests
-        if (is_string($callable) && ValueSerializer::isSerializedClosure($callable)) {
-            /** @var \Closure $closure */
-            $closure = ValueSerializer::unserialize($callable);
-            return $this->viaClosure($closure, $args);
-        }
+        return match (true) {
+            /* 0) Packed Opis payload ----------------------------------------- */
+            \is_string($callable) && ValueSerializer::isSerializedClosure($callable)
+            => $this->viaClosure(
+                ValueSerializer::unserialize($callable),
+                $args
+            ),
 
-        // 1)  Native Closure
-        if ($callable instanceof Closure) {
-            return $this->viaClosure($callable, $args);
-        }
+            /* 1) Native Closure ---------------------------------------------- */
+            $callable instanceof \Closure
+            => $this->viaClosure($callable, $args),
 
-        // 2)  plain callable function-string
-        if (is_string($callable) && is_callable($callable, false, $fnName)) {
-            return $this->viaClosure($callable(...), $args);
-        }
+            /* 2) Invokable object -------------------------------------------- */
+            \is_object($callable) && \is_callable($callable)
+            => $this->viaClosure($callable(...), $args),
 
-        // 3)  invokable object
-        if (is_object($callable) && is_callable($callable)) {
-            return $this->viaClosure($callable(...), $args);
-        }
+            /* 3-5) all plain strings ----------------------------------------- */
+            \is_string($callable) => match (true) {
+                /* 3) Global function string            */
+                !\str_contains($callable, '::') && \function_exists($callable)
+                => $this->viaClosure($callable(...), $args),
 
-        // 4)  treat as class-name w/ optional __invoke
-        if (is_string($callable) && class_exists($callable)) {
-            return $this->container->make($callable);
-        }
+                /* 4) "ClassName::method" static call   */
+                \str_contains($callable, '::') && \is_callable($callable)
+                => $this->viaClosure($callable(...), $args),
 
-        throw new InvalidArgumentException('Unsupported callable formation.');
+                /* 5) Class-name => make()              */
+                \class_exists($callable)
+                => $this->container->make($callable),
+
+                /* otherwise fall through               */
+                default => throw new \InvalidArgumentException('Unsupported callable formation.'),
+            },
+
+            /* fallback for everything else ------------------------------------ */
+            default => throw new \InvalidArgumentException('Unsupported callable formation.'),
+        };
     }
 
     /**

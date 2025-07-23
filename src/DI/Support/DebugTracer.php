@@ -5,6 +5,7 @@ namespace Infocyph\InterMix\DI\Support;
 final class DebugTracer
 {
     private array $stack = [];
+    private bool $enabled = false;
 
     /**
      * Create a new DebugTracer instance with the given trace level.
@@ -17,7 +18,7 @@ final class DebugTracer
      * @param TraceLevel $level The trace level for the DebugTracer.
      *                          Defaults to {@see TraceLevel::Node}.
      */
-    public function __construct(private TraceLevel $level = TraceLevel::Node)
+    public function __construct(private TraceLevel $level = TraceLevel::Off)
     {
     }
 
@@ -42,6 +43,7 @@ final class DebugTracer
      */
     public function setLevel(TraceLevel $level): void
     {
+        $this->enabled = $level !== TraceLevel::Off;
         $this->level = $level;
     }
 
@@ -55,9 +57,10 @@ final class DebugTracer
      */
     public function push(string $msg, TraceLevel $lvl = TraceLevel::Node): void
     {
-        if ($lvl <= $this->level) {
-            $this->stack[] = $msg;
+        if (!$this->enabled || $lvl > $this->level) {
+            return;
         }
+        $this->stack[] = $msg;
     }
 
     /**

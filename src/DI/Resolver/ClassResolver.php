@@ -12,11 +12,10 @@ use Psr\Cache\InvalidArgumentException;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionMethod;
-use WeakMap;
 
 class ClassResolver
 {
-    private WeakMap $entriesResolving;
+    private array $entriesResolving = [];
 
     /**
      * Constructs a ClassResolver instance.
@@ -32,7 +31,6 @@ class ClassResolver
         private readonly PropertyResolver $propertyResolver,
         private readonly DefinitionResolver $definitionResolver,
     ) {
-        $this->entriesResolving = new WeakMap();
     }
 
     /**
@@ -183,10 +181,10 @@ class ClassResolver
         string $className,
         string|bool|null $callMethod,
     ): array {
-        if ($this->entriesResolving->offsetExists($class)) {
+        if (isset($this->entriesResolving[$className])) {
             throw new ContainerException("Circular dependency on {$className}");
         }
-        $this->entriesResolving[$class] = true;
+        $this->entriesResolving[$className] = true;
 
         try {
             $resolvedResource = $this->repository->getResolvedResource()[$className] ?? [];
@@ -201,7 +199,7 @@ class ClassResolver
 
             return $this->repository->getResolvedResource()[$className] ?? [];
         } finally {
-            unset($this->entriesResolving[$class]);
+            unset($this->entriesResolving[$className]);
         }
     }
 
