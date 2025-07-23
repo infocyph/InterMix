@@ -94,7 +94,7 @@ class InvocationManager implements ArrayAccess
         }
 
         // Resolve: definition map → class/closure fallback
-        if (array_key_exists($id, $this->repository->getFunctionReference())) {
+        if (isset($this->functionReference[$id])) {
             $resolved = $this->resolveDefinition($id);
             $resolved = $resolved instanceof DeferredInitializer ? $resolved() : $resolved;
 
@@ -125,7 +125,7 @@ class InvocationManager implements ArrayAccess
      */
     public function has(string $id): bool
     {
-        return array_key_exists($id, $this->repository->getFunctionReference()) ||
+        return isset($this->repository->getFunctionReference()[$id]) ||
             isset($this->repository->getResolved()[$id]);
     }
 
@@ -162,7 +162,7 @@ class InvocationManager implements ArrayAccess
 
         // 1) If string & in functionReference
         if (is_string($classOrClosure) &&
-            array_key_exists($classOrClosure, $this->repository->getFunctionReference())) {
+            isset($this->repository->getFunctionReference()[$classOrClosure])) {
             return $resolver->resolveByDefinition($classOrClosure);
         }
 

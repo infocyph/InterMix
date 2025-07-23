@@ -70,8 +70,11 @@ final class ReflectionResource
     {
         $className = is_object($class) ? $class::class : $class;
 
-        return self::$reflectionCache['classes'][$className]
-            ??= new ReflectionClass($class);
+        $cache = & self::$reflectionCache['classes'];
+        if (!isset($cache[$className])) {
+            $cache[$className] = new ReflectionClass($class);
+        }
+        return $cache[$className];
     }
 
     /**

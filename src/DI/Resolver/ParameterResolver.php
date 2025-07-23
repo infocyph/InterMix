@@ -69,8 +69,9 @@ class ParameterResolver
     ): string {
         $owner = $reflector->class ?? '';
         $norm = array_map([self::class, 'normalise'], $supplied);
-        $argsHash = hash('xxh3', json_encode($norm, JSON_UNESCAPED_SLASHES));
-
+        static $useIgbinary = null;
+        $useIgbinary ??= \function_exists('igbinary_serialize');
+        $argsHash  = hash('xxh3', $useIgbinary ? (string)igbinary_serialize($norm) : serialize($norm));
         return "$owner::{$reflector->getName()}|$type|$argsHash";
     }
 

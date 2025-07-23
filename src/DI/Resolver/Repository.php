@@ -280,7 +280,7 @@ class Repository
      */
     public function hasFunctionReference(string $id): bool
     {
-        return array_key_exists($id, $this->functionReference);
+        return isset($this->functionReference[$id]);
     }
 
     /**
