@@ -12,7 +12,7 @@ use Infocyph\InterMix\Serializer\ValueSerializer;
 use Psr\Cache\CacheItemInterface;
 use Infocyph\InterMix\Cache\Adapter\FileCacheAdapter;
 
-class FileCacheItem implements CacheItemInterface
+final class FileCacheItem implements CacheItemInterface
 {
     /**
      * FileCacheItem constructor.

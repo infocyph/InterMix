@@ -47,7 +47,7 @@ class MemCacheAdapter implements CacheItemPoolInterface, Countable
             throw new RuntimeException('Memcached extension not loaded');
         }
 
-        $this->ns = preg_replace('/[^A-Za-z0-9_\-]/', '_', $namespace);
+        $this->ns = sanitize_cache_ns($namespace);
         $this->mc = $client ?? new Memcached();
         if (!$client) {
             $this->mc->addServers($servers);
@@ -157,7 +157,8 @@ class MemCacheAdapter implements CacheItemPoolInterface, Countable
      */
     public function hasItem(string $key): bool
     {
-        return $this->getItem($key)->isHit();
+        $this->mc->get($this->map($key));
+        return $this->mc->getResultCode() === \Memcached::RES_SUCCESS;
     }
 
     /**

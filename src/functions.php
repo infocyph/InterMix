@@ -245,3 +245,19 @@ if (!function_exists('once')) {
         return $value;
     }
 }
+if (!function_exists('sanitize_cache_ns')) {
+    /**
+     * Sanitizes a cache namespace by replacing all non-alphanumeric characters
+     * (except for underscore and hyphen) with an underscore.
+     *
+     * The result is cached to avoid redundant computation.
+     *
+     * @param string $ns The namespace to sanitize.
+     * @return string The sanitized namespace.
+     */
+    function sanitize_cache_ns(string $ns): string
+    {
+        static $cache = [];
+        return $cache[$ns] ??= preg_replace('/[^A-Za-z0-9_\-]/', '_', $ns);
+    }
+}

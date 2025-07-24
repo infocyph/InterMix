@@ -62,7 +62,7 @@ class FileCacheAdapter implements CacheItemPoolInterface, Countable
     private function createDirectory(string $ns, ?string $baseDir): void
     {
         $baseDir = rtrim($baseDir ?? sys_get_temp_dir(), DIRECTORY_SEPARATOR);
-        $ns      = preg_replace('/[^A-Za-z0-9_\-]/', '_', $ns);
+        $ns = sanitize_cache_ns($ns);
         $this->dir = $baseDir . DIRECTORY_SEPARATOR . 'cache_' . $ns . DIRECTORY_SEPARATOR;
 
         if (is_dir($this->dir)) {
@@ -245,7 +245,8 @@ class FileCacheAdapter implements CacheItemPoolInterface, Countable
             throw new CacheInvalidArgumentException('Invalid item type for FileCacheAdapter');
         }
         $blob = ValueSerializer::serialize($item);
-        return (bool) file_put_contents($this->fileFor($item->getKey()), $blob, LOCK_EX);
+        $tmp = tempnam($this->dir, 'c_');
+        return file_put_contents($tmp, $blob) !== false && rename($tmp, $this->fileFor($item->getKey()));
     }
 
     /**
@@ -293,7 +294,7 @@ class FileCacheAdapter implements CacheItemPoolInterface, Countable
      */
     public function count(): int
     {
-        return count(glob("$this->dir*.cache"));
+        return iterator_count(new \FilesystemIterator($this->dir, \FilesystemIterator::SKIP_DOTS));
     }
 
 
