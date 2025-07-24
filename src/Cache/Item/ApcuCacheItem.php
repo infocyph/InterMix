@@ -12,7 +12,7 @@ use Psr\Cache\CacheItemInterface;
 use Infocyph\InterMix\Serializer\ValueSerializer;
 use Infocyph\InterMix\Cache\Adapter\ApcuCacheAdapter;
 
-class ApcuCacheItem implements CacheItemInterface
+final class ApcuCacheItem implements CacheItemInterface
 {
     /**
      * Constructs an ApcuCacheItem.

@@ -118,6 +118,9 @@ final class ValueSerializer
      */
     public static function serialize(mixed $value): string
     {
+        if (is_scalar($value) || $value === null) {
+            return serialize($value);
+        }
         return oc_serialize(self::wrapRecursive($value));
     }
 
@@ -136,6 +139,9 @@ final class ValueSerializer
      */
     public static function unserialize(string $blob): mixed
     {
+        if (!ValueSerializer::isSerializedClosure($blob) && str_starts_with($blob, 's:')) {
+            return unserialize($blob, ['allowed_classes' => true]);
+        }
         return self::unwrapRecursive(oc_unserialize($blob));
     }
 

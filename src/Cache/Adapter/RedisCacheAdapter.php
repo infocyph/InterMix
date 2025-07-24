@@ -43,7 +43,7 @@ class RedisCacheAdapter implements CacheItemPoolInterface, Countable
             throw new RuntimeException('phpredis extension not loaded');
         }
 
-        $this->ns = preg_replace('/[^A-Za-z0-9_\-]/', '_', $namespace);
+        $this->ns = sanitize_cache_ns($namespace);
         $this->redis = $client ?? $this->connect($dsn);
     }
 
@@ -182,8 +182,7 @@ class RedisCacheAdapter implements CacheItemPoolInterface, Countable
      */
     public function hasItem(string $key): bool
     {
-        return $this->redis->exists($this->map($key)) === 1
-            && $this->getItem($key)->isHit();
+        return $this->redis->exists($this->map($key)) === 1;
     }
 
     /**

@@ -12,7 +12,7 @@ use Psr\Cache\CacheItemInterface;
 use Infocyph\InterMix\Serializer\ValueSerializer;
 use Infocyph\InterMix\Cache\Adapter\MemCacheAdapter;
 
-class MemCacheItem implements CacheItemInterface
+final class MemCacheItem implements CacheItemInterface
 {
     /**
      * Constructor.

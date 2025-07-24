@@ -30,7 +30,7 @@ class InvocationManager implements ArrayAccess
      */
     public function __construct(
         protected Repository $repository,
-        protected Container $container
+        protected Container $container,
     ) {
     }
 
@@ -75,10 +75,10 @@ class InvocationManager implements ArrayAccess
         $this->repository->tracer()->push("return:$id", TraceLevel::Verbose);
 
         // Determine lifetime & scope-key
-        $meta      = $this->repository->getDefinitionMeta($id);
-        $lifetime  = $meta['lifetime'] ?? Lifetime::Singleton;
-        $scopeKey  = $lifetime === Lifetime::Scoped
-            ? $id.'@'.$this->repository->getScope()
+        $meta = $this->repository->getDefinitionMeta($id);
+        $lifetime = $meta['lifetime'] ?? Lifetime::Singleton;
+        $scopeKey = $lifetime === Lifetime::Scoped
+            ? $id . '@' . $this->repository->getScope()
             : $id;
         $cacheable = $lifetime !== Lifetime::Transient;
 
@@ -230,7 +230,7 @@ class InvocationManager implements ArrayAccess
         $resolver = $this->container->getCurrentResolver();
         $definition = $this->repository->getFunctionReference()[$id];
 
-        if ($this->repository->isLazyLoading() && ! ($definition instanceof Closure)) {
+        if ($this->repository->isLazyLoading() && !($definition instanceof Closure)) {
             $lazy = new DeferredInitializer(fn () => $resolver->resolveByDefinition($id), $this->container);
             $this->repository->setResolved($id, $lazy);
             return $lazy;

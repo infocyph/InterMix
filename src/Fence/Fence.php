@@ -17,9 +17,16 @@ trait Fence
     /** @var array<string,int>  dynamic overrides of limits per class */
     private static array $classLimits = [];
 
-    /** @var array{extensions?:string[],classes?:string[]} */
+    /** @var array{extensions?:string[],classes?:string[]}|null */
     private static ?array $cachedExtensions = null;
-    private static ?array $cachedClasses    = null;
+    private static ?array $cachedClasses = null;
+
+    /** @var array<string,bool>  keyed flag cache */
+    private static array $keyedCache = [];
+
+    /** @var array<string,int>   default limits (before setLimit()) */
+    private static array $limitCache = [];
+    private static int $instanceCount = 0;
 
     /**
      * Get or create an instance.
@@ -37,24 +44,26 @@ trait Fence
      */
     final public static function instance(
         ?string $key = 'default',
-        ?array  $constraints = null
+        ?array $constraints = null,
     ): static {
         self::checkRequirements($constraints);
 
-        $slot  = self::isKeyed(static::class)
+        $slot = self::isKeyed(static::class)
             ? ($key ?? 'default')
             : '__single';
 
-        $limit = self::getLimit(static::class);
+        // Fast path – instance already exists
+        if (isset(self::$instances[$slot])) {
+            return self::$instances[$slot];
+        }
 
-        if (! isset(self::$instances[$slot])
-            && count(self::$instances) >= $limit
-        ) {
+        if (self::$instanceCount >= self::getLimit(static::class)) {
             throw new LimitExceededException(
-                "Instance limit of {$limit} exceeded for " . static::class
+                'Instance limit of '.self::getLimit(static::class).' exceeded for '.static::class
             );
         }
 
+        self::$instanceCount++;
         return self::$instances[$slot]
             ??= new static();
     }
@@ -123,6 +132,7 @@ trait Fence
      */
     final public static function clearInstances(): void
     {
+        self::$instanceCount = 0;
         self::$instances = [];
     }
 
@@ -133,7 +143,7 @@ trait Fence
      */
     final public static function countInstances(): int
     {
-        return count(self::$instances);
+        return self::$instanceCount;
     }
 
     /**
@@ -144,25 +154,25 @@ trait Fence
      */
     private static function checkRequirements(?array $c): void
     {
-        if (! $c) {
+        if (!$c || ($c['extensions'] ?? []) === [] && ($c['classes'] ?? []) === []) {
             return;
         }
 
         self::$cachedExtensions ??= get_loaded_extensions();
-        self::$cachedClasses    ??= get_declared_classes();
+        self::$cachedClasses ??= get_declared_classes();
 
         $missingE = array_diff((array)($c['extensions'] ?? []), self::$cachedExtensions);
-        $missingC = array_diff((array)($c['classes']    ?? []), self::$cachedClasses);
+        $missingC = array_diff((array)($c['classes'] ?? []), self::$cachedClasses);
 
         if ($missingE || $missingC) {
             $parts = [];
             if ($missingE) {
-                $parts[] = 'Extensions not loaded: '.implode(', ', $missingE);
+                $parts[] = 'Extensions not loaded: ' . implode(', ', $missingE);
             }
             if ($missingC) {
-                $parts[] = 'Classes not found: '.implode(', ', $missingC);
+                $parts[] = 'Classes not found: ' . implode(', ', $missingC);
             }
-            throw new RequirementException('Requirements not met: '.implode('; ', $parts));
+            throw new RequirementException('Requirements not met: ' . implode('; ', $parts));
         }
     }
 
@@ -177,7 +187,8 @@ trait Fence
      */
     private static function isKeyed(string $cls): bool
     {
-        return !defined("$cls::FENCE_KEYED") || (bool)constant("$cls::FENCE_KEYED");
+        return self::$keyedCache[$cls]
+            ??= !defined("$cls::FENCE_KEYED") || (bool) constant("$cls::FENCE_KEYED");
     }
 
     /**
@@ -189,8 +200,9 @@ trait Fence
      */
     private static function getLimit(string $cls): int
     {
-        return self::$classLimits[$cls] ?? (defined("$cls::FENCE_LIMIT")
+        return self::$classLimits[$cls]
+            ??= defined("$cls::FENCE_LIMIT")
             ? (int) constant("$cls::FENCE_LIMIT")
-            : PHP_INT_MAX);
+            : PHP_INT_MAX;
     }
 }

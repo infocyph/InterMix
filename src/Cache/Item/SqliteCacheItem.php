@@ -12,7 +12,7 @@ use Psr\Cache\CacheItemInterface;
 use Infocyph\InterMix\Serializer\ValueSerializer;
 use Infocyph\InterMix\Cache\Adapter\SqliteCacheAdapter;
 
-class SqliteCacheItem implements CacheItemInterface
+final class SqliteCacheItem implements CacheItemInterface
 {
     /**
      * Constructs a SqliteCacheItem.

@@ -32,7 +32,7 @@ class ApcuCacheAdapter implements CacheItemPoolInterface, Countable
         if (!extension_loaded('apcu') || !apcu_enabled()) {
             throw new RuntimeException('APCu extension is not enabled');
         }
-        $this->ns = preg_replace('/[^A-Za-z0-9_\-]/', '_', $namespace);
+        $this->ns = sanitize_cache_ns($namespace);
     }
 
     /**
@@ -122,7 +122,7 @@ class ApcuCacheAdapter implements CacheItemPoolInterface, Countable
      */
     public function hasItem(string $key): bool
     {
-        return $this->getItem($key)->isHit();
+        return apcu_exists($this->map($key));
     }
 
     /**
@@ -228,15 +228,15 @@ class ApcuCacheAdapter implements CacheItemPoolInterface, Countable
      */
     private function listKeys(): array
     {
-        $info = apcu_cache_info();
-        $pref = $this->ns . ':';
-        $keys = [];
-        foreach ($info['cache_list'] ?? [] as $entry) {
-            if (isset($entry['info']) && str_starts_with((string)$entry['info'], $pref)) {
-                $keys[] = $entry['info'];
-            }
+        $iter = new \APCUIterator(
+            '/^'.preg_quote($this->ns.':', '/').'/',
+            APC_ITER_KEY
+        );
+        $out = [];
+        foreach ($iter as $k => $unused) {
+            $out[] = $k;
         }
-        return $keys;
+        return $out;
     }
 
     /**

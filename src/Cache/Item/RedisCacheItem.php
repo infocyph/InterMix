@@ -12,7 +12,7 @@ use Psr\Cache\CacheItemInterface;
 use Infocyph\InterMix\Serializer\ValueSerializer;
 use Infocyph\InterMix\Cache\Adapter\RedisCacheAdapter;
 
-class RedisCacheItem implements CacheItemInterface
+final class RedisCacheItem implements CacheItemInterface
 {
     /**
      * Constructs a RedisCacheItem.
