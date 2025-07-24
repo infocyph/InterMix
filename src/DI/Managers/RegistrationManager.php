@@ -144,7 +144,7 @@ class RegistrationManager implements ArrayAccess
     {
         // Merge with existing
         $existing = $this->repository->getClassResource()[$class]['property'] ?? [];
-        $merged   = array_merge($existing, $property);
+        $merged   = $property + $existing;
 
         $this->repository->addClassResource($class, 'property', $merged);
         return $this;

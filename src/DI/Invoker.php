@@ -219,40 +219,15 @@ final readonly class Invoker
     private function routeCallable(mixed $callable, array $args): mixed
     {
         return match (true) {
-            /* 0) Packed Opis payload ----------------------------------------- */
-            \is_string($callable) && ValueSerializer::isSerializedClosure($callable)
-            => $this->viaClosure(
-                ValueSerializer::unserialize($callable),
-                $args
-            ),
-
-            /* 1) Native Closure ---------------------------------------------- */
-            $callable instanceof \Closure
-            => $this->viaClosure($callable, $args),
-
-            /* 2) Invokable object -------------------------------------------- */
-            \is_object($callable) && \is_callable($callable)
-            => $this->viaClosure($callable(...), $args),
-
-            /* 3-5) all plain strings ----------------------------------------- */
             \is_string($callable) => match (true) {
-                /* 3) Global function string            */
-                !\str_contains($callable, '::') && \function_exists($callable)
-                => $this->viaClosure($callable(...), $args),
-
-                /* 4) "ClassName::method" static call   */
-                \str_contains($callable, '::') && \is_callable($callable)
-                => $this->viaClosure($callable(...), $args),
-
-                /* 5) Class-name => make()              */
-                \class_exists($callable)
-                => $this->container->make($callable),
-
-                /* otherwise fall through               */
+                ValueSerializer::isSerializedClosure($callable) => $this->viaClosure(ValueSerializer::unserialize($callable), $args, ),
+                !\str_contains($callable, '::') && \function_exists($callable) => $this->viaClosure($callable(...), $args),
+                \str_contains($callable, '::') && \is_callable($callable) => $this->viaClosure($callable(...), $args),
+                \class_exists($callable) => $this->container->make($callable),
                 default => throw new \InvalidArgumentException('Unsupported callable formation.'),
             },
-
-            /* fallback for everything else ------------------------------------ */
+            $callable instanceof \Closure => $this->viaClosure($callable, $args),
+            \is_object($callable) && \is_callable($callable) => $this->viaClosure($callable(...), $args),
             default => throw new \InvalidArgumentException('Unsupported callable formation.'),
         };
     }

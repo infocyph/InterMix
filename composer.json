@@ -53,6 +53,7 @@
     "config": {
         "sort-packages": true,
         "optimize-autoloader": true,
+        "classmap-authoritative": true,
         "allow-plugins": {
             "pestphp/pest-plugin": true
         }

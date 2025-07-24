@@ -69,9 +69,7 @@ class ParameterResolver
     ): string {
         $owner = $reflector->class ?? '';
         $norm = array_map([self::class, 'normalise'], $supplied);
-        static $useIgbinary = null;
-        $useIgbinary ??= \function_exists('igbinary_serialize');
-        $argsHash  = hash('xxh3', $useIgbinary ? (string)igbinary_serialize($norm) : serialize($norm));
+        $argsHash = hash('xxh3', json_encode($norm, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
         return "$owner::{$reflector->getName()}|$type|$argsHash";
     }
 
@@ -683,11 +681,10 @@ class ParameterResolver
     ): object {
         if ($type === 'constructor' && $supplied !== null && $class->getConstructor()) {
             $existing = $this->repository->getClassResource()[$class->getName()]['constructor']['params'] ?? [];
-            $merged = array_merge($existing, (array)$supplied);
             $this->repository->addClassResource(
                 $class->getName(),
                 'constructor',
-                ['on' => '__constructor', 'params' => $merged],
+                ['on' => '__constructor', 'params' => (array)$supplied + $existing],
             );
         }
         return $this->classResolver->resolve($class)['instance'];

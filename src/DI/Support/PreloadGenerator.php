@@ -35,6 +35,7 @@ final class PreloadGenerator
         /* -------- convert to file paths ------------------------------ */
         $paths = [];
         foreach (array_unique($classes) as $fqcn) {
+            class_exists($fqcn);
             $f = (ReflectionResource::getClassReflection($fqcn))->getFileName();
             if ($f) {
                 $paths[] = $f;
@@ -46,6 +47,7 @@ final class PreloadGenerator
         $code = <<<PHP
             <?php
             foreach ($list as \$file) {
+                function_exists('opcache_is_script_cached') && opcache_is_script_cached(\$file) && continue;
                 require_once \$file;
                 opcache_compile_file(\$file);
             }
