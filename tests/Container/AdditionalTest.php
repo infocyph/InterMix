@@ -19,7 +19,7 @@ it('collects a readable trace', function () {
     $trace = $c->end()->debug(FooService::class);
 
     expect($trace)->toBeArray()
-        ->and($trace)->toContain('def:' . FooService::class);
+        ->and($trace[1]['msg'])->toContain('def:' . FooService::class);
 });
 
 it('switches concrete by environment', function () {
