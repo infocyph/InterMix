@@ -17,6 +17,7 @@ use Infocyph\InterMix\DI\Managers\RegistrationManager;
 use Infocyph\InterMix\DI\Support\ContainerProxy;
 use Infocyph\InterMix\DI\Support\DebugTracer;
 use Infocyph\InterMix\DI\Resolver\Repository;
+use Infocyph\InterMix\DI\Support\TraceLevel;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Exceptions\NotFoundException;
 use InvalidArgumentException;
@@ -407,11 +408,14 @@ final class Container implements ContainerInterface, ArrayAccess
     public function debug(string $id): array
     {
         try {
+            $tracer = $this->repository->tracer();
+            $tracer->setCaptureLocation(true);
+            $tracer->setLevel(TraceLevel::Verbose);
             $this->get($id);
         } catch (Throwable) {
             // swallow; we still want trace
         }
-        return $this->repository->tracer()->flush();
+        return $this->repository->tracer()->toArray();
     }
 
     /**

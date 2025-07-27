@@ -1,8 +1,10 @@
 <?php
 
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Support\DebugTracer;
 use Infocyph\InterMix\DI\Support\Lifetime;
 use Infocyph\InterMix\DI\Support\PreloadGenerator;
+use Infocyph\InterMix\DI\Support\TraceLevel;
 use Infocyph\InterMix\Tests\Fixture\DemoProvider;
 use Infocyph\InterMix\Tests\Fixture\DummyLogger;
 use Infocyph\InterMix\Tests\Fixture\FooService;
@@ -19,7 +21,7 @@ it('collects a readable trace', function () {
     $trace = $c->end()->debug(FooService::class);
 
     expect($trace)->toBeArray()
-        ->and($trace)->toContain('def:' . FooService::class);
+        ->and($trace[1]['msg'])->toContain('def:' . FooService::class);
 });
 
 it('switches concrete by environment', function () {
@@ -185,4 +187,73 @@ it('lets me wire and use services in one-liners', function () {
     expect($msg)
         ->toStartWith('Hello @ ')
         ->and($c->logger->records)->toHaveCount(1);
+});
+
+function newTracer(
+    TraceLevel $level = TraceLevel::Node,
+    bool $captureLocation = false,
+): DebugTracer {
+    return new DebugTracer($level, $captureLocation);
+}
+
+it('does not record when level is Off', function () {
+    $t = newTracer(TraceLevel::Off);
+
+    $t->push('should be ignored');
+    expect($t->getEntries())->toHaveCount(0);
+});
+
+it('records a push() at Node level', function () {
+    $t = newTracer();
+
+    $t->push('hello world');
+    $entries = $t->getEntries();
+
+    expect($entries)->toHaveCount(1)
+        ->and($entries[0]->message)->toBe('hello world')
+        ->and($entries[0]->level)->toBe(TraceLevel::Node);
+});
+
+it('filters out Verbose below current threshold', function () {
+    $t = newTracer(TraceLevel::Node);   // default threshold
+
+    $t->push('verbose', TraceLevel::Verbose);
+    expect($t->getEntries())->toBeEmpty();
+});
+
+it('begins and ends a span with a returned closure', function () {
+    $t = newTracer(TraceLevel::Node);
+
+    $close = $t->beginSpan('compile-container');   // returns Closure
+    expect($close)
+        ->toBeInstanceOf(Closure::class)
+        ->and($t->getEntries())->toHaveCount(1)
+        ->and($t->getEntries()[0]->message)
+        ->toContain('start: compile-container');
+
+    // span should be in the active list now
+
+    // close the span
+    $close();
+
+    $entries = $t->getEntries();
+    expect($entries)->toHaveCount(2)
+        // second entry is the “end” record
+        ->and($entries[1]->message)->toContain('end: compile-container');
+});
+
+it('toArray() adds Δus between subsequent events', function () {
+    $t = newTracer(TraceLevel::Node);
+
+    $t->push('first');
+    usleep(500);          // 0.5 ms
+    $t->push('second');
+
+    $arr = $t->toArray();
+
+    expect($arr)
+        ->toHaveCount(2)
+        ->and($arr[0]['Δus'])->toBe(0)
+        ->and($arr[1]['Δus'])->toBeGreaterThan(0)
+        ->and($t->getEntries())->toBeEmpty();
 });
