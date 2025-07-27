@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Support;
 
+use Closure;
 use DateTimeImmutable;
 
 final class DebugTracer
@@ -61,9 +62,9 @@ final class DebugTracer
         string $message,
         TraceLevel $lvl = TraceLevel::Node,
         array $context = [],
-    ): self {
+    ): void {
         if (!$this->enabled || $lvl->value > $this->level->value) {
-            return $this;
+            return;
         }
 
         [$file, $line] = $this->captureLocation
@@ -81,7 +82,6 @@ final class DebugTracer
             $file,
             $line,
         );
-        return $this;
     }
 
     /* ----------  spans  -------------------------------------------------- */
@@ -90,7 +90,10 @@ final class DebugTracer
         string $name,
         TraceLevel $lvl = TraceLevel::Node,
         array $context = [],
-    ): string {
+    ): Closure {
+        if (!$this->enabled || $lvl->value > $this->level->value) {
+            return fn () => null;
+        }
         $id = dechex(++$this->seq);
         $depth = \count($this->activeSpans);
 
@@ -103,13 +106,18 @@ final class DebugTracer
             'depth' => $depth,
         ];
 
-        $this->push("▶ begin: {$name}", $lvl, ['span_id' => $id, 'depth' => $depth] + $context);
+        $this->push("▶ start: {$name}", $lvl, ['span_id' => $id, 'depth' => $depth] + $context);
 
-        return $id;
+        return function () use ($id, $context): void {
+            $this->endSpan($id, $context);
+        };
     }
 
-    public function endSpan(string $spanId, array $context = []): void
+    public function endSpan(?string $spanId, array $context = []): void
     {
+        if ($spanId === null) {
+            return;
+        }
         if (!isset($this->activeSpans[$spanId])) {
             $this->push(
                 "◀ end: span {$spanId}",
