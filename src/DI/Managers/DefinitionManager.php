@@ -97,7 +97,7 @@ class DefinitionManager implements ArrayAccess
      */
     public function enableDefinitionCache(?string $namespace = null): self
     {
-        $this->repository->setCacheAdapter(Cache::file($namespace ?? $this->repository->getAlias(), 'intermix_dfn'));
+        $this->repository->setCacheAdapter(Cache::file($namespace ?? $this->repository->getAlias()));
         return $this;
     }
 

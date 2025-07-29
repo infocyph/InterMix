@@ -73,9 +73,9 @@ final class Container implements ContainerInterface, ArrayAccess
      * @return static The container instance.
      * @throws ContainerException
      */
-    public static function instance(string $instanceAlias = 'intermix'): static
+    public static function instance(string $instanceAlias = 'intermix'): self
     {
-        return self::$instances[$instanceAlias] ??= new static($instanceAlias);
+        return self::$instances[$instanceAlias] ??= new self($instanceAlias);
     }
 
 

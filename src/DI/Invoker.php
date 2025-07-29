@@ -46,7 +46,17 @@ final readonly class Invoker
     public static function shared(): self
     {
         static $inst;
-        return $inst ??= new self(Container::instance('inv_imx'));
+        return $inst ??= new self(Container::instance(__DIR__));
+    }
+
+    /**
+     * Get the container instance used by the invoker.
+     *
+     * @return Container The container instance associated with the invoker.
+     */
+    public function getContainer(): Container
+    {
+        return $this->container;
     }
 
     /**
