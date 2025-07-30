@@ -44,7 +44,7 @@ final class Container implements ContainerInterface, ArrayAccess
      *                               Defaults to 'default'.
      * @throws ContainerException
      */
-    public function __construct(private readonly string $instanceAlias = 'intermix')
+    public function __construct(private readonly string $instanceAlias = __DIR__)
     {
         self::$instances[$this->instanceAlias] ??= $this;
         $this->repository = new Repository($this);
@@ -73,7 +73,7 @@ final class Container implements ContainerInterface, ArrayAccess
      * @return static The container instance.
      * @throws ContainerException
      */
-    public static function instance(string $instanceAlias = 'intermix'): self
+    public static function instance(string $instanceAlias = __DIR__): self
     {
         return self::$instances[$instanceAlias] ??= new self($instanceAlias);
     }
