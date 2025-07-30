@@ -29,7 +29,7 @@ class SqliteCacheAdapter implements CacheItemPoolInterface, Countable
         ?string $dbPath = null,
     ) {
         $this->ns = sanitize_cache_ns($namespace);
-        $file = $dbPath ?: sys_get_temp_dir() . "/cache_{$this->ns}.sqlite";
+        $file = $dbPath ?: sys_get_temp_dir() . "/cache_$this->ns.sqlite";
 
         $this->pdo = new PDO('sqlite:' . $file);
         $this->pdo->exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;');

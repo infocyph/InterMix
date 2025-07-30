@@ -14,9 +14,7 @@ use Psr\Cache\CacheItemPoolInterface;
 use Psr\Cache\InvalidArgumentException as Psr6InvalidArgumentException;
 use Psr\SimpleCache\InvalidArgumentException as SimpleCacheInvalidArgument;
 
-readonly class Cache implements
-    CacheInterface,
-    Countable
+readonly class Cache implements CacheInterface
 {
     /**
      * Cache constructor.
@@ -30,15 +28,14 @@ readonly class Cache implements
     /**
      * Static factory for file-based cache.
      *
-     * @param string      $namespace Cache prefix. Will be suffixed to each key.
-     * @param string|null $dir       Directory to store cache files (or null → sys temp dir).
+     * @param string $namespace Cache prefix. Will be suffixed to each key.
+     * @param string|null $dir Directory to store cache files (or null → sys temp dir).
      * @return static
      */
     public static function file(string $namespace = 'default', ?string $dir = null): self
     {
         return new self(new Adapter\FileCacheAdapter($namespace, $dir));
     }
-
 
     /**
      * Static factory for APCu-based cache.
@@ -51,6 +48,39 @@ readonly class Cache implements
         return new self(new Adapter\ApcuCacheAdapter($namespace));
     }
 
+    /**
+     * Static factory for SQLite-based cache.
+     *
+     * @param string $namespace Cache prefix. Will be suffixed to each key.
+     * @param string|null $file Path to SQLite file (or null → sys temp dir).
+     * @return static
+     */
+    public static function sqlite(string $namespace = 'default', ?string $file = null): self
+    {
+        return new self(new Adapter\SqliteCacheAdapter($namespace, $file));
+    }
+
+
+    /**
+     * Static factory for local cache selection.
+     *
+     * Determines the appropriate caching mechanism based on the availability of the APCu extension.
+     * If APCu is enabled, it returns an APCu-based cache; otherwise, it defaults to a file-based cache.
+     *
+     * @param string $namespace Cache prefix. Will be suffixed to each key.
+     * @param string|null $dir Directory to store cache files (or null → sys temp dir), used if APCu is not enabled.
+     * @return static An instance of the cache using the selected adapter.
+     */
+    public static function local(
+        string $namespace = 'default',
+        ?string $dir = null,
+    ): self {
+        if (extension_loaded('apcu') && apcu_enabled()) {
+            return self::apcu($namespace);
+        }
+
+        return self::file($namespace, $dir);
+    }
 
     /**
      * Static factory for Memcached-based cache.
@@ -64,38 +94,24 @@ readonly class Cache implements
     public static function memcache(
         string $namespace = 'default',
         array $servers = [['127.0.0.1', 11211, 0]],
-        ?\Memcached $client = null
+        ?\Memcached $client = null,
     ): self {
         return new self(new Adapter\MemCacheAdapter($namespace, $servers, $client));
     }
 
-
-    /**
-     * Static factory for SQLite-based cache.
-     *
-     * @param string      $namespace Cache prefix. Will be suffixed to each key.
-     * @param string|null $file       Path to SQLite file (or null → sys temp dir).
-     * @return static
-     */
-    public static function sqlite(string $namespace = 'default', ?string $file = null): self
-    {
-        return new self(new Adapter\SqliteCacheAdapter($namespace, $file));
-    }
-
-
     /**
      * Static factory for Redis cache.
      *
-     * @param string      $namespace Cache prefix.
-     * @param string      $dsn        DSN for Redis connection (e.g. 'redis://127.0.0.1:6379'),
+     * @param string $namespace Cache prefix.
+     * @param string $dsn DSN for Redis connection (e.g. 'redis://127.0.0.1:6379'),
      *                                or null to use the default ('redis://127.0.0.1:6379').
-     * @param \Redis|null $client     Optional preconfigured Redis instance.
+     * @param \Redis|null $client Optional preconfigured Redis instance.
      * @return static
      */
     public static function redis(
         string $namespace = 'default',
         string $dsn = 'redis://127.0.0.1:6379',
-        ?\Redis $client = null
+        ?\Redis $client = null,
     ): self {
         return new self(new Adapter\RedisCacheAdapter($namespace, $dsn, $client));
     }
@@ -109,7 +125,7 @@ readonly class Cache implements
     {
         if ($key === '' || !preg_match('/^[A-Za-z0-9_.\-]+$/', $key)) {
             throw new CacheInvalidArgumentException(
-                'Invalid cache key; allowed characters: A-Z, a-z, 0-9, _, ., -'
+                'Invalid cache key; allowed characters: A-Z, a-z, 0-9, _, ., -',
             );
         }
     }
@@ -132,10 +148,12 @@ readonly class Cache implements
             return max(0, $now->add($ttl)->getTimestamp() - (new DateTime())->getTimestamp());
         }
 
-        throw new CacheInvalidArgumentException(sprintf(
-            'Invalid TTL type; expected null, int, or DateInterval, got %s',
-            get_debug_type($ttl)
-        ));
+        throw new CacheInvalidArgumentException(
+            sprintf(
+                'Invalid TTL type; expected null, int, or DateInterval, got %s',
+                get_debug_type($ttl),
+            ),
+        );
     }
 
     /**
@@ -146,12 +164,12 @@ readonly class Cache implements
      * @param string $key
      *     The key of the item to retrieve.
      *
+     * @return CacheItemInterface
+     *     The retrieved Cache Item.
      * @throws CacheInvalidArgumentException
      *     If the $key is invalid or if a CacheLoader is not available when
      *     the value is not found.
      *
-     * @return CacheItemInterface
-     *     The retrieved Cache Item.
      */
     public function getItem(string $key): CacheItemInterface
     {
@@ -329,9 +347,9 @@ readonly class Cache implements
      * Fetches a value from the cache. If the key does not exist, returns $default.
      *
      * @param string $key
-     * @param mixed  $default
+     * @param mixed $default
      * @return mixed
-     * @throws SimpleCacheInvalidArgument if the key is invalid
+     * @throws SimpleCacheInvalidArgument|Psr6InvalidArgumentException if the key is invalid
      */
     public function get(string $key, mixed $default = null): mixed
     {
@@ -388,9 +406,9 @@ readonly class Cache implements
     /**
      * Persists a value in the cache, optionally with a TTL.
      *
-     * @param string                $key
-     * @param mixed                 $value
-     * @param int|DateInterval|null $ttl   Time-to-live in seconds or a DateInterval
+     * @param string $key
+     * @param mixed $value
+     * @param int|DateInterval|null $ttl Time-to-live in seconds or a DateInterval
      * @return bool
      * @throws SimpleCacheInvalidArgument if the key or TTL is invalid
      */
@@ -457,9 +475,9 @@ readonly class Cache implements
      * Obtains multiple values by their keys.
      *
      * @param iterable<int|string, string> $keys
-     * @param mixed                        $default
+     * @param mixed $default
      * @return iterable<string, mixed>
-     * @throws SimpleCacheInvalidArgument if any key is invalid
+     * @throws SimpleCacheInvalidArgument|Psr6InvalidArgumentException if any key is invalid
      */
     public function getMultiple(iterable $keys, mixed $default = null): iterable
     {
@@ -475,8 +493,8 @@ readonly class Cache implements
     /**
      * Persists multiple key ⇒ value pairs to the cache.
      *
-     * @param iterable<int|string, mixed> $values  key ⇒ value mapping
-     * @param int|DateInterval|null       $ttl     TTL for all items
+     * @param iterable<int|string, mixed> $values key ⇒ value mapping
+     * @param int|DateInterval|null $ttl TTL for all items
      * @return bool
      * @throws SimpleCacheInvalidArgument if any key is invalid
      */
@@ -489,7 +507,7 @@ readonly class Cache implements
             /** @var string $k */
             $this->validateKey($k);
             $ok = $this->set($k, $v, $ttlSeconds);
-            if (! $ok) {
+            if (!$ok) {
                 $allSucceeded = false;
             }
         }
@@ -510,7 +528,7 @@ readonly class Cache implements
         foreach ($keys as $k) {
             /** @var string $k */
             $this->validateKey($k);
-            if (! $this->delete($k)) {
+            if (!$this->delete($k)) {
                 $allSucceeded = false;
             }
         }
@@ -534,6 +552,7 @@ readonly class Cache implements
      *
      * {@inheritdoc}
      *
+     * @throws Psr6InvalidArgumentException
      * @see has()
      */
     public function offsetExists(mixed $offset): bool
@@ -550,7 +569,7 @@ readonly class Cache implements
      * @param mixed $offset The key at which to retrieve the value.
      *
      * @return mixed The value at the specified offset.
-     * @throws SimpleCacheInvalidArgument if the key is invalid
+     * @throws SimpleCacheInvalidArgument|Psr6InvalidArgumentException if the key is invalid
      */
     public function offsetGet(mixed $offset): mixed
     {
@@ -595,7 +614,7 @@ readonly class Cache implements
      *
      * @param string $name The key for which to retrieve the value.
      * @return mixed The value associated with the given key.
-     * @throws SimpleCacheInvalidArgument if the key is invalid.
+     * @throws SimpleCacheInvalidArgument|Psr6InvalidArgumentException if the key is invalid.
      */
     public function __get(string $name): mixed
     {
@@ -668,8 +687,8 @@ readonly class Cache implements
      * If the adapter implements {@see CacheItemPoolInterface::setNamespaceAndDirectory},
      * this call is forwarded to the adapter. Otherwise, a {@see \BadMethodCallException} is thrown.
      *
-     * @param string      $namespace The new namespace.
-     * @param string|null $dir        The new directory, or null to use the default.
+     * @param string $namespace The new namespace.
+     * @param string|null $dir The new directory, or null to use the default.
      *
      * @throws BadMethodCallException if the adapter does not support this method.
      */
