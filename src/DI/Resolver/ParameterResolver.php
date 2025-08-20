@@ -226,6 +226,9 @@ class ParameterResolver
             $suppliedParameters,
             $attributeData,
         );
+        if (!$paramsLeft) {
+            return $this->resolvedCache[$cacheKey] = $processed;
+        }
 
         // 2) Resolve numeric/default/variadic
         [
@@ -237,7 +240,6 @@ class ParameterResolver
             $availableSupply,
             $applyAttribute,
         );
-
         $processed += $numProcessed;
 
         // 3) If we have a variadic param
@@ -324,20 +326,16 @@ class ParameterResolver
 
             if ($resolvedValue !== $this->stdClass) {
                 $processed[$paramName] = $resolvedValue;
-            } else {
-                $paramsLeft[] = $param;
+                continue;
             }
-        }
 
-        $lastKey = array_key_last($paramsLeft);
-        $useNumeric = ($lastKey !== null && $paramsLeft[$lastKey]->isVariadic())
-            ? array_diff_key($suppliedParameters, $processed)
-            : array_filter($suppliedParameters, 'is_int', ARRAY_FILTER_USE_KEY);
+            $paramsLeft[] = $param;
+        }
 
         return [
             'availableParams' => $paramsLeft,
             'processed' => $processed,
-            'availableSupply' => $useNumeric,
+            'availableSupply' => array_diff_key($suppliedParameters, $processed),
             'sort' => $sort,
         ];
     }
