@@ -202,6 +202,9 @@ class ParameterResolver
         );
 
         $availableParams = $reflector->getParameters();
+        if (!$availableParams) {
+            return $this->resolvedCache[$cacheKey] = [];
+        }
         $applyAttribute = $this->repository->isMethodAttributeEnabled()
             && ($type === 'constructor' xor ($reflector->class ?? null));
 
