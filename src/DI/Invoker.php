@@ -253,7 +253,8 @@ final readonly class Invoker
      */
     private function viaClosure(Closure $fn, array $args): mixed
     {
-        $alias = 'λ' . bin2hex(random_bytes(4));
+        static $i = 0;
+        $alias = 'λ' . ($i++);
         return $this->container
             ->registration()->registerClosure($alias, $fn, $args)
             ->invocation()->getReturn($alias);
