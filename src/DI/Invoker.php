@@ -78,21 +78,30 @@ final readonly class Invoker
      */
     public function invoke(array|string|object $target, array $args = []): mixed
     {
+        // Serialized closure fast-path
         if (is_string($target) && ValueSerializer::isSerializedClosure($target)) {
             return $this->routeCallable($target, $args);
         }
 
-        [$callableOrClass, $method] = $this->container->parseCallable($target);
+        $desc = $this->container->parseCallable($target);
 
-        /* (a) Closure or plain callable string / object -------------------- */
-        if ($method === null) {
-            return $this->routeCallable($callableOrClass, $args);
-        }
+        return match ($desc['kind']) {
+            // Closure / invokable / callable array → just call
+            'closure' => $this->routeCallable($desc['closure'], $args),
 
-        /* (b)  [Class, method] resolved by parseCallable ------------------- */
-        return $this->container
-            ->registration()->registerMethod($callableOrClass, $method, $args)
-            ->invocation()->getReturn($callableOrClass);
+            // Global function name → just call
+            'function' => $this->routeCallable($desc['function'], $args),
+
+            // Class only → register ctor args then resolve
+            'class' => $this->container
+                ->registration()->registerClass($desc['class'], $args)
+                ->invocation()->getReturn($desc['class']),
+
+            // Class + method → register method args then resolve
+            'method' => $this->container
+                ->registration()->registerMethod($desc['class'], $desc['method'], $args)
+                ->invocation()->getReturn($desc['class']),
+        };
     }
 
     /**
