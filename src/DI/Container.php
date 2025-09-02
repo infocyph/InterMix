@@ -419,60 +419,127 @@ final class Container implements ContainerInterface, ArrayAccess
     }
 
     /**
-     * Splits a given class and method representation into a callable array format.
+     * Parse a callable string/array, returning an associative array with keys
+     * "kind" and one of "closure", "class", "method", or "function".
      *
-     * This method takes an input that can be a string, array, closure, or callable,
-     * and attempts to break it down into a recognizable callable format such as
-     * ['class', 'method'] or [closure, null]. It handles various formats including:
-     * - Closures or string representations of global functions or classes (returns [that, null])
-     * - Arrays with two elements representing [class, method]
-     * - Strings with "@" (e.g., "Class@method") or "::" (e.g., "Class::method")
+     * The following syntaxes are supported:
+     * - "class@method"
+     * - "class::method"
+     * - class name as a string
+     * - function name as a string
+     * - callable object (e.g. closure, invokable class)
+     * - array of class and method name
      *
-     * @param string|array|Closure|callable $classAndMethod The class and method representation to be split.
-     * @return array An array containing the class and method in a callable format.
-     *
-     * @throws InvalidArgumentException If the provided argument is empty.
-     * @throws ContainerException If the format of the provided argument is unrecognized.
+     * @param string|array|Closure|callable $spec The callable string/array to parse.
+     * @return array An associative array with keys "kind" and one of "closure", "class", "method", or "function".
+     * @throws ContainerException If the callable spec is invalid.
+     * @throws InvalidArgumentException If no argument is provided.
      */
-    public function parseCallable(string|array|Closure|callable $classAndMethod): array
+    public function parseCallable(string|array|Closure|callable $spec): array
     {
-        if (empty($classAndMethod)) {
+        if (empty($spec)) {
             throw new InvalidArgumentException('No argument provided!');
         }
 
-        // (1) If closure or a string that is a class_exists or function_exists,
-        //     or a general is_callable, we return [that, null].
-        //     This handles e.g. closures or "ClassName" with no method or a global function name.
-        if ($classAndMethod instanceof Closure ||
-            (is_string($classAndMethod) && (class_exists($classAndMethod) || function_exists($classAndMethod))) ||
-            is_callable($classAndMethod)
-        ) {
-            return [$classAndMethod, null];
-        }
+        return match (true) {
+            $spec instanceof Closure
+            => ['kind' => 'closure', 'closure' => $spec],
 
-        // (2) If it's an array with 2 elements => [class, method]
-        if (is_array($classAndMethod) && count($classAndMethod) === 2) {
-            return [$classAndMethod[0], $classAndMethod[1]];
-        }
+            is_array($spec) && count($spec) === 2 && is_string($spec[0]) && is_string($spec[1])
+            => ['kind' => 'method', 'class' => $spec[0], 'method' => $spec[1]],
 
-        // (3) If it's a string with "@" => "Class@method"
-        if (is_string($classAndMethod) && str_contains($classAndMethod, '@')) {
-            return explode('@', $classAndMethod, 2);
-        }
+            is_string($spec) => match (true) {
+                str_contains($spec, '@')
+                => (static function () use ($spec) {
+                    [$cls, $m] = explode('@', $spec, 2);
+                    return ['kind' => 'method', 'class' => $cls, 'method' => $m];
+                })(),
 
-        // (4) If it's a string with "::" => "Class::method"
-        if (is_string($classAndMethod) && str_contains($classAndMethod, '::')) {
-            return explode('::', $classAndMethod, 2);
-        }
+                str_contains($spec, '::')
+                => (static function () use ($spec) {
+                    [$cls, $m] = explode('::', $spec, 2);
+                    return ['kind' => 'method', 'class' => $cls, 'method' => $m];
+                })(),
 
-        throw new ContainerException(
-            sprintf(
-                "Unknown Class & Method format for '%s'. Expected closure/callable, 'class@method', 'class::method', or [class,method].",
-                is_string($classAndMethod) ? $classAndMethod : gettype($classAndMethod),
+                class_exists($spec)
+                => ['kind' => 'class', 'class' => $spec],
+
+                function_exists($spec)
+                => ['kind' => 'function', 'function' => $spec],
+
+                default
+                => throw new ContainerException(
+                    sprintf(
+                        "Unknown callable string '%s'. Expected 'class@method', 'class::method', class, or function.",
+                        $spec
+                    )
+                ),
+            },
+
+            // objects with __invoke, static callables, etc.
+            is_callable($spec)
+            => ['kind' => 'closure', 'closure' => $spec],
+
+            default
+            => throw new ContainerException(
+                sprintf(
+                    "Unknown callable spec for '%s'. Expected closure/callable, 'class@method', 'class::method', [class,method], class, or function.",
+                    is_string($spec) ? $spec : gettype($spec)
+                )
             ),
-        );
+        };
     }
 
+    /**
+     * Register the spec and immediately resolve/return the result.
+     *
+     * Mirrors RegistrationManager signatures exactly:
+     * - registerClosure(string $alias, callable $fn, array $params = [])
+     * - registerClass(string $class, array $params = [])
+     * - registerMethod(string $class, string $method, array $params = [])
+     *
+     * @param string|Closure|callable|array|null $spec
+     * @param array $parameters
+     * @return mixed
+     * @throws ContainerException|\ReflectionException|InvalidArgumentException
+     */
+    public function resolveNow(
+        string|Closure|callable|array|null $spec,
+        array $parameters = [],
+    ): mixed {
+        if ($spec === null) {
+            return $this;
+        }
+
+        $desc = $this->parseCallable($spec);
+
+        return match ($desc['kind']) {
+            'closure' => (function () use ($desc, $parameters) {
+                /** @var callable $cb */
+                $cb = $desc['closure'];
+                $id = random_bytes(5);
+                $this->registration()->registerClosure($id, $cb, $parameters);
+                return $this->getReturn($id);
+            })(),
+
+            'function' => (function () use ($desc, $parameters) {
+                /** @var non-empty-string $fn */
+                $fn = $desc['function'];
+                $this->registration()->registerClosure($fn, $fn, $parameters);
+                return $this->getReturn($fn);
+            })(),
+
+            'class' => (function () use ($desc, $parameters) {
+                $this->registration()->registerClass($desc['class'], $parameters);
+                return $this->getReturn($desc['class']);
+            })(),
+
+            'method' => (function () use ($desc, $parameters) {
+                $this->registration()->registerMethod($desc['class'], $desc['method'], $parameters);
+                return $this->getReturn($desc['class']);
+            })(),
+        };
+    }
 
     /**
      * Wraps an exception into a NotFoundException if it's a NotFoundException,

@@ -49,7 +49,10 @@ final class ReflectionResource
         ReflectionClass|ReflectionEnum|ReflectionMethod|ReflectionFunction|ReflectionFunctionAbstract $reflection
     ): string {
         $fileName = $reflection->getFileName() ?: 'unknown';
-        $startLine = $reflection instanceof ReflectionEnum ? 0 : ($reflection->getStartLine() ?: 0);
+        $startLine = 0;
+        if (!$reflection instanceof ReflectionEnum) {
+            $startLine = $reflection->getStartLine() ?: 0;
+        }
 
         return base64_encode("$fileName:$startLine");
     }

@@ -26,25 +26,57 @@ if (!function_exists('container')) {
     ): mixed {
         $instance = Container::instance($alias);
 
-        if ($closureOrClass === null) {
-            return $instance;
-        }
+        return $closureOrClass === null
+            ? $instance
+            : $instance->resolveNow($closureOrClass);
+    }
+}
 
-        //    "class@method", "class::method", [class, method], or closure/callable.
-        [$class, $method] = $instance
-            ->parseCallable($closureOrClass);
+if (!function_exists('resolve')) {
+    /**
+     * Resolve a callable/class immediately with DI enabled.
+     *
+     * @param string|Closure|callable|array|null $spec Closure|function|Class|[Class,method]|"Class@method"|"Class::method"
+     * @param array $parameters Parameters for constructor/method/closure
+     * @param string $alias Optional container instance alias (default: __DIR__)
+     * @return mixed Container instance (when $spec is null) or resolved return value
+     * @throws ContainerException|ReflectionException|InvalidArgumentException
+     */
+    function resolve(
+        string|Closure|callable|array|null $spec = null,
+        array $parameters = [],
+        string $alias = __DIR__ . 'DI',
+    ): mixed {
+        $instance = Container::instance($alias); // DI is on by default
+        return $spec === null
+            ? $instance
+            : $instance->resolveNow($spec, $parameters);
+    }
+}
 
-        if (!$method) {
-            if ($class instanceof Closure || is_callable($class)) {
-                return $instance->invocation()->call($class);
-            }
+if (!function_exists('direct')) {
+    /**
+     * Resolve a callable/class immediately with DI disabled (no injection).
+     *
+     * @param string|Closure|callable|array|null $spec Closure|function|Class|[Class,method]|"Class@method"|"Class::method"
+     * @param array $parameters Parameters for constructor/method/closure
+     * @param string $alias Optional container instance alias (default: __DIR__)
+     * @return mixed Container instance (when $spec is null) or resolved return value
+     * @throws ContainerException|ReflectionException|InvalidArgumentException
+     */
+    function direct(
+        string|Closure|callable|array|null $spec = null,
+        array $parameters = [],
+        string $alias = __DIR__ . 'DR',
+    ): mixed {
+        $instance = Container::instance($alias)
+            ->options()
+            ->setOptions(false)
+            ->end();
 
-            return $instance->get($class);
-        }
-
-        $instance->registration()->registerMethod($class, $method);
-
-        return $instance->getReturn($class);
+        return $spec === null
+            ? $instance
+            : $instance->resolveNow($spec, $parameters);
     }
 }
 
