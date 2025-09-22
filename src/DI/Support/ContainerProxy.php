@@ -17,16 +17,21 @@ use Psr\Cache\InvalidArgumentException;
 trait ContainerProxy
 {
     /**
-     * Allows for a quick shorthand: `$container('id')`
+     * Delegate calls to methods on the container.
      *
-     * @param string $id
+     * @param string $method The name of the method to call.
+     * @param array $args The arguments to pass to the method.
      *
-     * @return mixed
-     * @throws InvalidArgumentException
+     * @return mixed The result of the method call.
+     *
+     * @throws BadMethodCallException If the method does not exist.
      */
-    public function __invoke(string $id): mixed
+    public function __call(string $method, array $args): mixed
     {
-        return $this->get($id);
+        if (!\method_exists($this, $method)) {
+            throw new BadMethodCallException("Undefined method $method()");
+        }
+        return $this->$method(...$args);
     }
 
 
@@ -42,6 +47,30 @@ trait ContainerProxy
     {
         return $this->get($id);
     }
+    /**
+     * Allows for a quick shorthand: `$container('id')`
+     *
+     * @param string $id
+     *
+     * @return mixed
+     * @throws InvalidArgumentException
+     */
+    public function __invoke(string $id): mixed
+    {
+        return $this->get($id);
+    }
+
+    /**
+     * Magic isset() method.
+     *
+     * @param string $id
+     *
+     * @return bool
+     */
+    public function __isset(string $id): bool
+    {
+        return $this->has($id);
+    }
 
     /**
      * Magic setter method.
@@ -55,18 +84,6 @@ trait ContainerProxy
     public function __set(string $id, mixed $def): void
     {
         $this->definitions()->bind($id, $def);
-    }
-
-    /**
-     * Magic isset() method.
-     *
-     * @param string $id
-     *
-     * @return bool
-     */
-    public function __isset(string $id): bool
-    {
-        return $this->has($id);
     }
 
 
@@ -123,24 +140,5 @@ trait ContainerProxy
      */
     public function offsetUnset(mixed $offset): void
     { /* silently ignore */
-    }
-
-
-    /**
-     * Delegate calls to methods on the container.
-     *
-     * @param string $method The name of the method to call.
-     * @param array $args The arguments to pass to the method.
-     *
-     * @return mixed The result of the method call.
-     *
-     * @throws BadMethodCallException If the method does not exist.
-     */
-    public function __call(string $method, array $args): mixed
-    {
-        if (!\method_exists($this, $method)) {
-            throw new BadMethodCallException("Undefined method $method()");
-        }
-        return $this->$method(...$args);
     }
 }

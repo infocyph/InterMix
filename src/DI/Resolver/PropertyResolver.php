@@ -7,7 +7,7 @@ namespace Infocyph\InterMix\DI\Resolver;
 use Infocyph\InterMix\DI\Attribute\IMStdClass;
 use Infocyph\InterMix\DI\Attribute\Infuse;
 use Infocyph\InterMix\DI\Support\ReflectionResource;
-use Infocyph\InterMix\DI\Support\TraceLevel;
+use Infocyph\InterMix\DI\Support\TraceLevelEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\InvalidArgumentException;
 use ReflectionClass;
@@ -28,16 +28,6 @@ class PropertyResolver
     public function __construct(
         private readonly Repository $repository,
     ) {
-    }
-
-    /**
-     * Called by Container to switch between InjectedCall & GenericCall, etc.
-     *
-     * @param ClassResolver $classResolver The new ClassResolver instance.
-     */
-    public function setClassResolverInstance(ClassResolver $classResolver): void
-    {
-        $this->classResolver = $classResolver;
     }
 
 
@@ -79,111 +69,13 @@ class PropertyResolver
     }
 
     /**
-     * Resolves any properties for the given class and instance.
-     * Skips properties already set.
+     * Called by Container to switch between InjectedCall & GenericCall, etc.
      *
-     * @param ReflectionClass $class The class to resolve properties for.
-     * @param array $properties The properties to resolve.
-     * @param object $classInstance The instance of the class to set properties on.
-     * @throws ContainerException|ReflectionException|InvalidArgumentException
+     * @param ClassResolver $classResolver The new ClassResolver instance.
      */
-    private function processProperties(
-        ReflectionClass $class,
-        array $properties,
-        object $classInstance,
-    ): void {
-        if (!$properties) {
-            return;
-        }
-        $className = $class->getName();
-        $classResource = $this->repository->getClassResource();
-        $registeredProps = $classResource[$className]['property'] ?? null;
-
-        if ($registeredProps === null && !$this->repository->isPropertyAttributeEnabled()) {
-            return;
-        }
-
-        /** @var ReflectionProperty $property */
-        foreach ($properties as $property) {
-            if ($property->isPromoted()
-                && !isset(($registeredProps ?? [])[$property->getName()])
-                && empty($property->getAttributes(Infuse::class))
-            ) {
-                continue;
-            }
-            $this->repository->tracer()->push(
-                "prop {$property->getName()} of $className",
-                TraceLevel::Verbose,
-            );
-            $values = $this->resolveValue($property, $registeredProps ?? [], $classInstance);
-            if ($values) {
-                match (true) {
-                    $property->isStatic() => $class->setStaticPropertyValue($property->getName(), $values[0]),
-                    default => $property->setValue($values[0], $values[1]),
-                };
-            }
-        }
-    }
-
-    /**
-     * Resolve a single property value.
-     *
-     * 1) User-supplied values have priority.
-     * 2) If not user-supplied, then attributes are checked.
-     * 3) If no attribute, then return an empty array.
-     *
-     * @param ReflectionProperty $property The property to resolve a value for.
-     * @param array $classPropertyValues The user-supplied values for the class.
-     * @param object $classInstance The instance of the class to set the property on.
-     * @return ?array An array of two items: the instance and the resolved value. Or null if not possible to resolve.
-     * @throws ContainerException|ReflectionException|InvalidArgumentException
-     */
-    private function resolveValue(
-        ReflectionProperty $property,
-        array $classPropertyValues,
-        object $classInstance,
-    ): ?array {
-        if ($attempt = $this->attemptUserOverride($property, $classPropertyValues, $classInstance)) {
-            return $attempt;
-        }
-
-        if ($attempt = $this->attemptBuiltInInfuse($property, $classInstance)) {
-            return $attempt;
-        }
-
-        if ($attempt = $this->attemptCustomAttributes($property, $classInstance)) {
-            return $attempt;
-        }
-
-        return [];
-    }
-
-    /**
-     * Attempt to resolve a single property value using the user-supplied values.
-     *
-     * Checks if the property is present in the user-supplied values and returns
-     * an array containing the instance and the resolved value. If the property
-     * is not present, returns null.
-     *
-     * @param ReflectionProperty $property The property to resolve a value for.
-     * @param array $classPropertyValues The user-supplied values for the class.
-     * @param object $classInstance The instance of the class to set the property on.
-     * @return ?array An array of two items: the instance and the resolved value. Or null if not possible to resolve.
-     */
-    private function attemptUserOverride(
-        ReflectionProperty $property,
-        array $classPropertyValues,
-        object $classInstance,
-    ): ?array {
-        $name = $property->getName();
-
-        if (!array_key_exists($name, $classPropertyValues)) {
-            return null;
-        }
-
-        return $property->isStatic()
-            ? [$classPropertyValues[$name]]
-            : [$classInstance, $classPropertyValues[$name]];
+    public function setClassResolverInstance(ClassResolver $classResolver): void
+    {
+        $this->classResolver = $classResolver;
     }
 
     /**
@@ -277,37 +169,112 @@ class PropertyResolver
             : [$classInstance, $injectVal];
     }
 
-
     /**
-     * Try to set a value for a property based on predefined values.
+     * Attempt to resolve a single property value using the user-supplied values.
      *
-     * Checks if a value is set in the predefined $classPropertyValues array
-     * and if so, returns it. If not, and attribute-based property resolution is
-     * enabled, returns null so that the attribute-based approach can be used.
+     * Checks if the property is present in the user-supplied values and returns
+     * an array containing the instance and the resolved value. If the property
+     * is not present, returns null.
      *
-     * @param ReflectionProperty $property The property to set.
-     * @param array $classPropertyValues The predefined values for the class.
-     * @param object $classInstance The class instance.
-     *
-     * @return array|null An array containing the value to set, or null if not set.
+     * @param ReflectionProperty $property The property to resolve a value for.
+     * @param array $classPropertyValues The user-supplied values for the class.
+     * @param object $classInstance The instance of the class to set the property on.
+     * @return ?array An array of two items: the instance and the resolved value. Or null if not possible to resolve.
      */
-    private function setWithPredefined(
+    private function attemptUserOverride(
         ReflectionProperty $property,
         array $classPropertyValues,
         object $classInstance,
     ): ?array {
-        $propName = $property->getName();
-        if ($property->isStatic() && isset($classPropertyValues[$propName])) {
-            return [$classPropertyValues[$propName]];
-        }
-        if (isset($classPropertyValues[$propName])) {
-            return [$classInstance, $classPropertyValues[$propName]];
-        }
-        if (!$this->repository->isPropertyAttributeEnabled()) {
-            return [];
+        $name = $property->getName();
+
+        if (!array_key_exists($name, $classPropertyValues)) {
+            return null;
         }
 
-        return null;
+        return $property->isStatic()
+            ? [$classPropertyValues[$name]]
+            : [$classInstance, $classPropertyValues[$name]];
+    }
+
+    /**
+     * Resolves any properties for the given class and instance.
+     * Skips properties already set.
+     *
+     * @param ReflectionClass $class The class to resolve properties for.
+     * @param array $properties The properties to resolve.
+     * @param object $classInstance The instance of the class to set properties on.
+     * @throws ContainerException|ReflectionException|InvalidArgumentException
+     */
+    private function processProperties(
+        ReflectionClass $class,
+        array $properties,
+        object $classInstance,
+    ): void {
+        if (!$properties) {
+            return;
+        }
+        $className = $class->getName();
+        $classResource = $this->repository->getClassResource();
+        $registeredProps = $classResource[$className]['property'] ?? null;
+
+        if ($registeredProps === null && !$this->repository->isPropertyAttributeEnabled()) {
+            return;
+        }
+
+        /** @var ReflectionProperty $property */
+        foreach ($properties as $property) {
+            if ($property->isPromoted()
+                && !isset(($registeredProps ?? [])[$property->getName()])
+                && empty($property->getAttributes(Infuse::class))
+            ) {
+                continue;
+            }
+            $this->repository->tracer()->push(
+                "prop {$property->getName()} of $className",
+                TraceLevelEnum::Verbose,
+            );
+            $values = $this->resolveValue($property, $registeredProps ?? [], $classInstance);
+            if ($values) {
+                match (true) {
+                    $property->isStatic() => $class->setStaticPropertyValue($property->getName(), $values[0]),
+                    default => $property->setValue($values[0], $values[1]),
+                };
+            }
+        }
+    }
+
+    /**
+     * Resolve a single property value.
+     *
+     * 1) User-supplied values have priority.
+     * 2) If not user-supplied, then attributes are checked.
+     * 3) If no attribute, then return an empty array.
+     *
+     * @param ReflectionProperty $property The property to resolve a value for.
+     * @param array $classPropertyValues The user-supplied values for the class.
+     * @param object $classInstance The instance of the class to set the property on.
+     * @return ?array An array of two items: the instance and the resolved value. Or null if not possible to resolve.
+     * @throws ContainerException|ReflectionException|InvalidArgumentException
+     */
+    private function resolveValue(
+        ReflectionProperty $property,
+        array $classPropertyValues,
+        object $classInstance,
+    ): ?array {
+        if ($attempt = $this->attemptUserOverride($property, $classPropertyValues, $classInstance)) {
+            return $attempt;
+        }
+
+        if ($attempt = $this->attemptBuiltInInfuse($property, $classInstance)) {
+            return $attempt;
+        }
+
+        if ($attempt = $this->attemptCustomAttributes($property, $classInstance)) {
+            return $attempt;
+        }
+
+        return [];
     }
 
     /**
@@ -353,5 +320,38 @@ class PropertyResolver
         }
 
         return $this->classResolver->resolve($refClass)['instance'];
+    }
+
+
+    /**
+     * Try to set a value for a property based on predefined values.
+     *
+     * Checks if a value is set in the predefined $classPropertyValues array
+     * and if so, returns it. If not, and attribute-based property resolution is
+     * enabled, returns null so that the attribute-based approach can be used.
+     *
+     * @param ReflectionProperty $property The property to set.
+     * @param array $classPropertyValues The predefined values for the class.
+     * @param object $classInstance The class instance.
+     *
+     * @return array|null An array containing the value to set, or null if not set.
+     */
+    private function setWithPredefined(
+        ReflectionProperty $property,
+        array $classPropertyValues,
+        object $classInstance,
+    ): ?array {
+        $propName = $property->getName();
+        if ($property->isStatic() && isset($classPropertyValues[$propName])) {
+            return [$classPropertyValues[$propName]];
+        }
+        if (isset($classPropertyValues[$propName])) {
+            return [$classInstance, $classPropertyValues[$propName]];
+        }
+        if (!$this->repository->isPropertyAttributeEnabled()) {
+            return [];
+        }
+
+        return null;
     }
 }

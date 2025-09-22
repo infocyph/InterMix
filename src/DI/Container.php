@@ -14,10 +14,10 @@ use Infocyph\InterMix\DI\Managers\DefinitionManager;
 use Infocyph\InterMix\DI\Managers\InvocationManager;
 use Infocyph\InterMix\DI\Managers\OptionsManager;
 use Infocyph\InterMix\DI\Managers\RegistrationManager;
+use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\DI\Support\ContainerProxy;
 use Infocyph\InterMix\DI\Support\DebugTracer;
-use Infocyph\InterMix\DI\Resolver\Repository;
-use Infocyph\InterMix\DI\Support\TraceLevel;
+use Infocyph\InterMix\DI\Support\TraceLevelEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Exceptions\NotFoundException;
 use InvalidArgumentException;
@@ -30,12 +30,12 @@ final class Container implements ContainerInterface, ArrayAccess
     use ContainerProxy;
 
     protected static array $instances = [];
+    protected DefinitionManager $definitionManager;
+    protected InvocationManager $invocationManager;
+    protected OptionsManager $optionsManager;
+    protected RegistrationManager $registrationManager;
     protected Repository $repository;
     protected closure|InjectedCall|GenericCall $resolver;
-    protected DefinitionManager $definitionManager;
-    protected RegistrationManager $registrationManager;
-    protected OptionsManager $optionsManager;
-    protected InvocationManager $invocationManager;
 
     /**
      * Container constructor.
@@ -78,136 +78,6 @@ final class Container implements ContainerInterface, ArrayAccess
         return self::$instances[$instanceAlias] ??= new self($instanceAlias);
     }
 
-
-    /**
-     * Remove the container instance from the registry.
-     *
-     * This method removes the container instance from the internal registry
-     * and makes it eligible for garbage collection. This is useful if you
-     * want to ensure that the container instance is no longer referenced
-     * after it has been used.
-     *
-     * @return void
-     */
-    public function unset(): void
-    {
-        unset(self::$instances[$this->instanceAlias]);
-    }
-
-
-    /**
-     * Locks the container from future modifications.
-     *
-     * Once the container is locked, no more definitions, values, or options can be set.
-     * This method is useful for tests or other scenarios where you want to ensure that
-     * the container does not change after it has been configured.
-     *
-     * @return $this The container instance.
-     */
-    public function lock(): self
-    {
-        // Let the repository handle the lock
-        $this->repository->lock();
-
-        return $this;
-    }
-
-    /**
-     * INTERNAL – tooling helper, *not* a public API promise.
-     *
-     * @internal
-     */
-    public function getRepository(): Repository
-    {
-        return $this->repository;
-    }
-
-    /**
-     * Retrieves a value from the container.
-     *
-     * The container will first try to find a definition matching the given ID.
-     * If a matching definition is found, the container will attempt to resolve
-     * the definition and return the result. If no matching definition is found,
-     * the container may attempt to auto-resolve the ID if it is a class or
-     * closure.
-     *
-     * @param string $id The ID of the value to retrieve.
-     *
-     * @return mixed The retrieved value.
-     * @throws Exception|\Psr\Cache\InvalidArgumentException If the container is unable to retrieve the value.
-     */
-    public function get(string $id): mixed
-    {
-        try {
-            return $this->invocationManager->get($id);
-        } catch (Exception $exception) {
-            throw $this->wrapException($exception, $id);
-        }
-    }
-
-
-    /**
-     * Checks if a definition ID exists in the container.
-     *
-     * This method attempts to verify the existence of a given ID
-     * within the container by delegating the check to the
-     * InvocationManager. If an exception occurs during the check,
-     * the method will return false.
-     *
-     * @param string $id The ID of the definition to check.
-     * @return bool True if the definition ID exists, false otherwise.
-     */
-    public function has(string $id): bool
-    {
-        try {
-            return $this->invocationManager->has($id);
-        } catch (Exception) {
-            return false;
-        }
-    }
-
-
-    /**
-     * Retrieve the definition manager.
-     *
-     * The definition manager is responsible for storing and retrieving
-     * definitions from the container. It provides methods for adding,
-     * retrieving, and removing definitions.
-     */
-    public function definitions(): DefinitionManager
-    {
-        return $this->definitionManager;
-    }
-
-
-    /**
-     * Retrieve the registration manager.
-     *
-     * The registration manager is responsible for registering closures, classes, methods, and properties
-     * with the container. It provides methods for registering each of these types of definitions.
-     *
-     * @return RegistrationManager The registration manager.
-     */
-    public function registration(): RegistrationManager
-    {
-        return $this->registrationManager;
-    }
-
-
-    /**
-     * Retrieve the options manager.
-     *
-     * The options manager is responsible for setting toggles such as injection,
-     * method attributes, property attributes, environment, debug, and lazy
-     * loading.
-     *
-     * @return OptionsManager The options manager.
-     */
-    public function options(): OptionsManager
-    {
-        return $this->optionsManager;
-    }
-
     /**
      * Retrieve the attribute registry.
      *
@@ -220,50 +90,6 @@ final class Container implements ContainerInterface, ArrayAccess
     public function attributeRegistry(): AttributeRegistry
     {
         return $this->repository->attributeRegistry();
-    }
-
-
-    /**
-     * Retrieve the invocation manager.
-     *
-     * The invocation manager is responsible for resolving definitions into values,
-     * and for calling methods and functions with the resolved values as arguments.
-     *
-     * @return InvocationManager The invocation manager.
-     */
-    public function invocation(): InvocationManager
-    {
-        return $this->invocationManager;
-    }
-
-
-    /**
-     * Retrieves the class name of the current resolver being used by the repository.
-     *
-     * @return object The class name of the resolver.
-     */
-    public function getCurrentResolver(): object
-    {
-        if ($this->resolver instanceof Closure) {
-            $this->resolver = ($this->resolver)();
-        }
-        return $this->resolver;
-    }
-
-    /**
-     * Sets the class name of the resolver to be used by the repository.
-     *
-     * This method allows for dynamically changing the resolver class
-     * used in the container. The new resolver class should be a valid
-     * fully qualified class name that implements the required interface
-     * for resolvers.
-     *
-     * @param string $resolverClass The fully qualified class name of the new resolver.
-     * @return void
-     */
-    public function setResolverClass(string $resolverClass): void
-    {
-        $this->resolver = fn () => new $resolverClass($this->repository);
     }
 
     /**
@@ -283,58 +109,40 @@ final class Container implements ContainerInterface, ArrayAccess
     }
 
     /**
-     * Creates a new instance of the given class with dependency injection
-     * and optionally calls a method on the instance.
+     * Debugs the service resolution process for a given ID.
      *
-     * This method is a convenience wrapper for the InvocationManager's
-     * make() method, providing the ability to create objects with their
-     * dependencies injected and optionally execute a specified method.
+     * This method attempts to retrieve the service instance for the given ID,
+     * and returns the current debug trace. If any errors occur during the
+     * service resolution process, they are caught and ignored, as the goal
+     * here is to obtain a debug trace, not to actually use the service.
      *
-     * @param string $class The class name to create a new instance of.
-     * @param string|bool $method The method to call on the instance, or false to not call a method.
-     * @return mixed The newly created instance, or the result of the called method.
-     * @throws ContainerException
-     * @throws ReflectionException
+     * @param string $id The ID of the service to debug.
+     * @return array The debug trace for the service resolution process.
      */
-    public function make(string $class, string|bool $method = false): mixed
+    public function debug(string $id): array
     {
-        return $this->invocationManager->make($class, $method);
+        try {
+            $tracer = $this->repository->tracer();
+            $tracer->setCaptureLocation(true);
+            $tracer->setLevel(TraceLevelEnum::Verbose);
+            $this->get($id);
+        } catch (Throwable) {
+            // swallow; we still want trace
+        }
+        return $this->repository->tracer()->toArray();
     }
 
-    /**
-     * Resolves a definition ID and returns the result of the resolved instance.
-     *
-     * If the resolved instance is a closure, it is called with no arguments and
-     * the result is returned. Otherwise, the resolved instance itself is returned.
-     *
-     * @param string $id The ID of the definition to resolve and return.
-     *
-     * @return mixed The result of the resolved instance, or the resolved instance itself.
-     * @throws ContainerException
-     * @throws ReflectionException
-     * @throws \Psr\Cache\InvalidArgumentException
-     */
-    public function getReturn(string $id): mixed
-    {
-        return $this->invocationManager->getReturn($id);
-    }
 
     /**
-     * Sets the environment for the container.
+     * Retrieve the definition manager.
      *
-     * This method allows setting the environment, which can be used
-     * to resolve environment-based interface mappings. It delegates
-     * the environment setting to the repository.
-     *
-     * @param string $env The environment name.
-     * @return self The container instance for method chaining.
-     * @throws ContainerException
+     * The definition manager is responsible for storing and retrieving
+     * definitions from the container. It provides methods for adding,
+     * retrieving, and removing definitions.
      */
-    public function setEnvironment(string $env): self
+    public function definitions(): DefinitionManager
     {
-        $this->repository->setEnvironment($env);
-
-        return $this;
+        return $this->definitionManager;
     }
 
     /**
@@ -380,42 +188,155 @@ final class Container implements ContainerInterface, ArrayAccess
     }
 
     /**
-     * Retrieves the debug tracer instance.
+     * Retrieves a value from the container.
      *
-     * This method returns the debug tracer associated with the container.
-     * The tracer is used to track and log the execution flow and
-     * interactions within the container, aiding in debugging and
-     * tracing the service resolution process.
+     * The container will first try to find a definition matching the given ID.
+     * If a matching definition is found, the container will attempt to resolve
+     * the definition and return the result. If no matching definition is found,
+     * the container may attempt to auto-resolve the ID if it is a class or
+     * closure.
      *
-     * @return DebugTracer The debug tracer instance.
+     * @param string $id The ID of the value to retrieve.
+     *
+     * @return mixed The retrieved value.
+     * @throws Exception|\Psr\Cache\InvalidArgumentException If the container is unable to retrieve the value.
      */
-    public function tracer(): DebugTracer
+    public function get(string $id): mixed
     {
-        return $this->repository->tracer();
+        try {
+            return $this->invocationManager->get($id);
+        } catch (Exception $exception) {
+            throw $this->wrapException($exception, $id);
+        }
+    }
+
+
+    /**
+     * Retrieves the class name of the current resolver being used by the repository.
+     *
+     * @return object The class name of the resolver.
+     */
+    public function getCurrentResolver(): object
+    {
+        if ($this->resolver instanceof Closure) {
+            $this->resolver = ($this->resolver)();
+        }
+        return $this->resolver;
     }
 
     /**
-     * Debugs the service resolution process for a given ID.
+     * INTERNAL – tooling helper, *not* a public API promise.
      *
-     * This method attempts to retrieve the service instance for the given ID,
-     * and returns the current debug trace. If any errors occur during the
-     * service resolution process, they are caught and ignored, as the goal
-     * here is to obtain a debug trace, not to actually use the service.
-     *
-     * @param string $id The ID of the service to debug.
-     * @return array The debug trace for the service resolution process.
+     * @internal
      */
-    public function debug(string $id): array
+    public function getRepository(): Repository
+    {
+        return $this->repository;
+    }
+
+    /**
+     * Resolves a definition ID and returns the result of the resolved instance.
+     *
+     * If the resolved instance is a closure, it is called with no arguments and
+     * the result is returned. Otherwise, the resolved instance itself is returned.
+     *
+     * @param string $id The ID of the definition to resolve and return.
+     *
+     * @return mixed The result of the resolved instance, or the resolved instance itself.
+     * @throws ContainerException
+     * @throws ReflectionException
+     * @throws \Psr\Cache\InvalidArgumentException
+     */
+    public function getReturn(string $id): mixed
+    {
+        return $this->invocationManager->getReturn($id);
+    }
+
+
+    /**
+     * Checks if a definition ID exists in the container.
+     *
+     * This method attempts to verify the existence of a given ID
+     * within the container by delegating the check to the
+     * InvocationManager. If an exception occurs during the check,
+     * the method will return false.
+     *
+     * @param string $id The ID of the definition to check.
+     * @return bool True if the definition ID exists, false otherwise.
+     */
+    public function has(string $id): bool
     {
         try {
-            $tracer = $this->repository->tracer();
-            $tracer->setCaptureLocation(true);
-            $tracer->setLevel(TraceLevel::Verbose);
-            $this->get($id);
-        } catch (Throwable) {
-            // swallow; we still want trace
+            return $this->invocationManager->has($id);
+        } catch (Exception) {
+            return false;
         }
-        return $this->repository->tracer()->toArray();
+    }
+
+
+    /**
+     * Retrieve the invocation manager.
+     *
+     * The invocation manager is responsible for resolving definitions into values,
+     * and for calling methods and functions with the resolved values as arguments.
+     *
+     * @return InvocationManager The invocation manager.
+     */
+    public function invocation(): InvocationManager
+    {
+        return $this->invocationManager;
+    }
+
+
+    /**
+     * Locks the container from future modifications.
+     *
+     * Once the container is locked, no more definitions, values, or options can be set.
+     * This method is useful for tests or other scenarios where you want to ensure that
+     * the container does not change after it has been configured.
+     *
+     * @return $this The container instance.
+     */
+    public function lock(): self
+    {
+        // Let the repository handle the lock
+        $this->repository->lock();
+
+        return $this;
+    }
+
+    /**
+     * Creates a new instance of the given class with dependency injection
+     * and optionally calls a method on the instance.
+     *
+     * This method is a convenience wrapper for the InvocationManager's
+     * make() method, providing the ability to create objects with their
+     * dependencies injected and optionally execute a specified method.
+     *
+     * @param string $class The class name to create a new instance of.
+     * @param string|bool $method The method to call on the instance, or false to not call a method.
+     * @return mixed The newly created instance, or the result of the called method.
+     * @throws ContainerException
+     * @throws ReflectionException
+     */
+    public function make(string $class, string|bool $method = false): mixed
+    {
+        return $this->invocationManager->make($class, $method);
+    }
+
+
+    /**
+     * Retrieve the options manager.
+     *
+     * The options manager is responsible for setting toggles such as injection,
+     * method attributes, property attributes, environment, debug, and lazy
+     * loading.
+     *
+     * @return OptionsManager The options manager.
+     */
+    public function options(): OptionsManager
+    {
+        return $this->optionsManager;
     }
 
     /**
@@ -490,6 +411,20 @@ final class Container implements ContainerInterface, ArrayAccess
         };
     }
 
+
+    /**
+     * Retrieve the registration manager.
+     *
+     * The registration manager is responsible for registering closures, classes, methods, and properties
+     * with the container. It provides methods for registering each of these types of definitions.
+     *
+     * @return RegistrationManager The registration manager.
+     */
+    public function registration(): RegistrationManager
+    {
+        return $this->registrationManager;
+    }
+
     /**
      * Register the spec and immediately resolve/return the result.
      *
@@ -539,6 +474,71 @@ final class Container implements ContainerInterface, ArrayAccess
                 return $this->getReturn($desc['class']);
             })(),
         };
+    }
+
+    /**
+     * Sets the environment for the container.
+     *
+     * This method allows setting the environment, which can be used
+     * to resolve environment-based interface mappings. It delegates
+     * the environment setting to the repository.
+     *
+     * @param string $env The environment name.
+     * @return self The container instance for method chaining.
+     * @throws ContainerException
+     */
+    public function setEnvironment(string $env): self
+    {
+        $this->repository->setEnvironment($env);
+
+        return $this;
+    }
+
+    /**
+     * Sets the class name of the resolver to be used by the repository.
+     *
+     * This method allows for dynamically changing the resolver class
+     * used in the container. The new resolver class should be a valid
+     * fully qualified class name that implements the required interface
+     * for resolvers.
+     *
+     * @param string $resolverClass The fully qualified class name of the new resolver.
+     * @return void
+     */
+    public function setResolverClass(string $resolverClass): void
+    {
+        $this->resolver = fn () => new $resolverClass($this->repository);
+    }
+
+    /**
+     * Retrieves the debug tracer instance.
+     *
+     * This method returns the debug tracer associated with the container.
+     * The tracer is used to track and log the execution flow and
+     * interactions within the container, aiding in debugging and
+     * tracing the service resolution process.
+     *
+     * @return DebugTracer The debug tracer instance.
+     */
+    public function tracer(): DebugTracer
+    {
+        return $this->repository->tracer();
+    }
+
+
+    /**
+     * Remove the container instance from the registry.
+     *
+     * This method removes the container instance from the internal registry
+     * and makes it eligible for garbage collection. This is useful if you
+     * want to ensure that the container instance is no longer referenced
+     * after it has been used.
+     *
+     * @return void
+     */
+    public function unset(): void
+    {
+        unset(self::$instances[$this->instanceAlias]);
     }
 
     /**

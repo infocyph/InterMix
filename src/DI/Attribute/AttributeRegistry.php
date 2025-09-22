@@ -18,6 +18,18 @@ final class AttributeRegistry
     }
 
     /**
+     * Returns whether an attribute resolver is registered for the given attribute class.
+     *
+     * @param string $attributeFqcn The fully qualified class name of the attribute.
+     *
+     * @return bool true if the attribute resolver is registered, false otherwise.
+     */
+    public function has(string $attributeFqcn): bool
+    {
+        return isset($this->map[$attributeFqcn]);
+    }
+
+    /**
      * Registers an attribute resolver class.
      *
      * The resolver class is associated with the given attribute class.
@@ -52,17 +64,5 @@ final class AttributeRegistry
         $resolver = $this->map[$attributeInstance::class] ?? null;
 
         return $resolver?->resolve($attributeInstance, $target, $this->container);
-    }
-
-    /**
-     * Returns whether an attribute resolver is registered for the given attribute class.
-     *
-     * @param string $attributeFqcn The fully qualified class name of the attribute.
-     *
-     * @return bool true if the attribute resolver is registered, false otherwise.
-     */
-    public function has(string $attributeFqcn): bool
-    {
-        return isset($this->map[$attributeFqcn]);
     }
 }

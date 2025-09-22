@@ -21,26 +21,6 @@ use Infocyph\InterMix\DI\Container;
  */
 trait ManagerProxy
 {
-    /**
-     * Ends the current scope and returns the Container instance.
-     *
-     * When called, this method will return the Container instance and
-     * remove the current scope from the stack, effectively ending the
-     * current scope.
-     *
-     * @return Container The Container instance.
-     */
-    public function end(): Container
-    {
-        return $this->container;
-    }
-
-    /* quick “()” shorthand */
-    public function __invoke(string $id): mixed
-    {
-        return $this->container->get($id);
-    }
-
     /* magic method forwarding – keeps fluent chain on manager */
     public function __call(string $method, array $args): mixed
     {
@@ -59,14 +39,33 @@ trait ManagerProxy
         return $this->container->get($id);
     }
 
-    public function __set(string $id, mixed $definition): void
+    /* quick “()” shorthand */
+    public function __invoke(string $id): mixed
     {
-        $this->container->definitions()->bind($id, $definition);
+        return $this->container->get($id);
     }
 
     public function __isset(string $id): bool
     {
         return $this->container->has($id);
+    }
+
+    public function __set(string $id, mixed $definition): void
+    {
+        $this->container->definitions()->bind($id, $definition);
+    }
+    /**
+     * Ends the current scope and returns the Container instance.
+     *
+     * When called, this method will return the Container instance and
+     * remove the current scope from the stack, effectively ending the
+     * current scope.
+     *
+     * @return Container The Container instance.
+     */
+    public function end(): Container
+    {
+        return $this->container;
     }
 
     /* optional ArrayAccess implementation */

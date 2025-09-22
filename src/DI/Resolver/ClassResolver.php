@@ -34,6 +34,37 @@ class ClassResolver
     }
 
     /**
+     * Resolve a class using the given ReflectionClass.
+     *
+     * First, possibly apply an environment-based override for interfaces.
+     * Then, check if the class has already been resolved and stored in the repository.
+     * If so, return the stored result.
+     * If not, call one of the two methods below to resolve the class.
+     *
+     * @param ReflectionClass $class The class to resolve.
+     * @param mixed $supplied The value to supply to the constructor, if applicable.
+     * @param string|bool|null $callMethod The name of the method to call after instantiation, or true/false to call the constructor.
+     * @param bool $make Whether to use the "make" method or the "resolveClassResources" method.
+     * @return array An array containing the resolved instance and any returned value.
+     * @throws ContainerException|ReflectionException|InvalidArgumentException
+     */
+    public function resolve(
+        ReflectionClass $class,
+        mixed $supplied = null,
+        string|bool|null $callMethod = null,
+        bool $make = false,
+    ): array {
+        // Possibly environment-based interface => check if $class->isInterface(), then environment override
+        $class = $this->getConcreteClassForInterface($class, $supplied);
+        $className = $class->getName();
+        $this->repository->tracer()->push("class:$className");
+
+        return $make
+            ? $this->resolveMake($class, $className, $callMethod)
+            : $this->resolveClassResources($class, $className, $callMethod);
+    }
+
+    /**
      * Resolve an Infuse attribute by first extracting the "type" (class name, function name, definition ID, etc.)
      * and then trying to resolve it in the following order:
      * 1. If $type is in functionReference => let definitionResolver handle it
@@ -92,71 +123,47 @@ class ClassResolver
     }
 
     /**
-     * Resolve a class using the given ReflectionClass.
+     * Resolves a concrete class for a given interface.
      *
-     * First, possibly apply an environment-based override for interfaces.
-     * Then, check if the class has already been resolved and stored in the repository.
-     * If so, return the stored result.
-     * If not, call one of the two methods below to resolve the class.
+     * This method checks if the provided class is an interface and attempts
+     * to find a concrete implementation. First, it checks for an environment-based
+     * override. If found, it verifies that the concrete class implements the interface.
+     * If no environment override is found, it falls back to a supplied class name,
+     * throwing an exception if the supplied class does not exist or does not implement
+     * the required interface.
      *
-     * @param ReflectionClass $class The class to resolve.
-     * @param mixed $supplied The value to supply to the constructor, if applicable.
-     * @param string|bool|null $callMethod The name of the method to call after instantiation, or true/false to call the constructor.
-     * @param bool $make Whether to use the "make" method or the "resolveClassResources" method.
-     * @return array An array containing the resolved instance and any returned value.
-     * @throws ContainerException|ReflectionException|InvalidArgumentException
+     * @param ReflectionClass $class The interface class to resolve.
+     * @param mixed $supplied The fallback class name to use if no environment override is found.
+     * @return ReflectionClass The concrete class implementing the interface.
+     * @throws ContainerException|ReflectionException If no valid concrete class is found or if it does not implement the interface.
      */
-    public function resolve(
+    private function getConcreteClassForInterface(
         ReflectionClass $class,
-        mixed $supplied = null,
-        string|bool|null $callMethod = null,
-        bool $make = false,
-    ): array {
-        // Possibly environment-based interface => check if $class->isInterface(), then environment override
-        $class = $this->getConcreteClassForInterface($class, $supplied);
+        mixed $supplied,
+    ): ReflectionClass {
+        if (!$class->isInterface()) {
+            return $class;
+        }
         $className = $class->getName();
-        $this->repository->tracer()->push("class:$className");
+        $envConcrete = $this->repository->getEnvConcrete($className);
+        if ($envConcrete) {
+            $class = ReflectionResource::getClassReflection($envConcrete);
+            if (!$class->implementsInterface($className)) {
+                throw new ContainerException("$envConcrete doesn't implement $className");
+            }
 
-        return $make
-            ? $this->resolveMake($class, $className, $callMethod)
-            : $this->resolveClassResources($class, $className, $callMethod);
-    }
+            return $class;
+        }
+        // fallback to $supplied
+        if (!$supplied || !class_exists($supplied)) {
+            throw new ContainerException("Resolution failed ($supplied) for interface $className");
+        }
+        $reflect = ReflectionResource::getClassReflection($supplied);
+        if (!$reflect->implementsInterface($className)) {
+            throw new ContainerException("$supplied doesn't implement $className");
+        }
 
-    /**
-     * Resolve a class using the given ReflectionClass.
-     *
-     * This method is used by the "make" method, which bypasses the repository and resolves the class
-     * from scratch.
-     *
-     * First, resolve the class's constructor.
-     * Then, resolve any properties.
-     * Finally, call the method on the class if applicable.
-     *
-     * The newly built result is returned, and the repository is reverted to its previous state.
-     *
-     * @param ReflectionClass $class The class to resolve.
-     * @param string $className The name of the class.
-     * @param string|bool|null $callMethod The name of the method to call after instantiation, or true/false to call the constructor.
-     * @return array An array containing the resolved instance and any returned value.
-     * @throws ContainerException|ReflectionException|InvalidArgumentException
-     */
-    private function resolveMake(
-        ReflectionClass $class,
-        string $className,
-        string|bool|null $callMethod,
-    ): array {
-        $existing = $this->repository->getResolvedResource()[$className] ?? [];
-
-        // build fresh
-        $this->resolveConstructor($class);
-        $this->propertyResolver->resolve($class);
-        $this->resolveMethod($class, $callMethod);
-
-        $newlyBuilt = $this->repository->getResolvedResource()[$className] ?? [];
-        // revert the old
-        $this->repository->setResolvedResource($className, $existing);
-
-        return $newlyBuilt;
+        return $reflect;
     }
 
     /**
@@ -204,50 +211,6 @@ class ClassResolver
     }
 
     /**
-     * Resolves a concrete class for a given interface.
-     *
-     * This method checks if the provided class is an interface and attempts
-     * to find a concrete implementation. First, it checks for an environment-based
-     * override. If found, it verifies that the concrete class implements the interface.
-     * If no environment override is found, it falls back to a supplied class name,
-     * throwing an exception if the supplied class does not exist or does not implement
-     * the required interface.
-     *
-     * @param ReflectionClass $class The interface class to resolve.
-     * @param mixed $supplied The fallback class name to use if no environment override is found.
-     * @return ReflectionClass The concrete class implementing the interface.
-     * @throws ContainerException|ReflectionException If no valid concrete class is found or if it does not implement the interface.
-     */
-    private function getConcreteClassForInterface(
-        ReflectionClass $class,
-        mixed $supplied,
-    ): ReflectionClass {
-        if (!$class->isInterface()) {
-            return $class;
-        }
-        $className = $class->getName();
-        $envConcrete = $this->repository->getEnvConcrete($className);
-        if ($envConcrete) {
-            $class = ReflectionResource::getClassReflection($envConcrete);
-            if (!$class->implementsInterface($className)) {
-                throw new ContainerException("$envConcrete doesn't implement $className");
-            }
-
-            return $class;
-        }
-        // fallback to $supplied
-        if (!$supplied || !class_exists($supplied)) {
-            throw new ContainerException("Resolution failed ($supplied) for interface $className");
-        }
-        $reflect = ReflectionResource::getClassReflection($supplied);
-        if (!$reflect->implementsInterface($className)) {
-            throw new ContainerException("$supplied doesn't implement $className");
-        }
-
-        return $reflect;
-    }
-
-    /**
      * Resolve the constructor of a class.
      *
      * If the class has no constructor, an instance is created with
@@ -280,6 +243,43 @@ class ClassResolver
             $resolvedResource['instance'] = $class->newInstanceArgs($args);
         }
         $this->repository->setResolvedResource($className, $resolvedResource);
+    }
+
+    /**
+     * Resolve a class using the given ReflectionClass.
+     *
+     * This method is used by the "make" method, which bypasses the repository and resolves the class
+     * from scratch.
+     *
+     * First, resolve the class's constructor.
+     * Then, resolve any properties.
+     * Finally, call the method on the class if applicable.
+     *
+     * The newly built result is returned, and the repository is reverted to its previous state.
+     *
+     * @param ReflectionClass $class The class to resolve.
+     * @param string $className The name of the class.
+     * @param string|bool|null $callMethod The name of the method to call after instantiation, or true/false to call the constructor.
+     * @return array An array containing the resolved instance and any returned value.
+     * @throws ContainerException|ReflectionException|InvalidArgumentException
+     */
+    private function resolveMake(
+        ReflectionClass $class,
+        string $className,
+        string|bool|null $callMethod,
+    ): array {
+        $existing = $this->repository->getResolvedResource()[$className] ?? [];
+
+        // build fresh
+        $this->resolveConstructor($class);
+        $this->propertyResolver->resolve($class);
+        $this->resolveMethod($class, $callMethod);
+
+        $newlyBuilt = $this->repository->getResolvedResource()[$className] ?? [];
+        // revert the old
+        $this->repository->setResolvedResource($className, $existing);
+
+        return $newlyBuilt;
     }
 
     /**

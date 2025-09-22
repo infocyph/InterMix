@@ -8,9 +8,9 @@ use DateInterval;
 use DateTime;
 use DateTimeInterface;
 use Exception;
-use Psr\Cache\CacheItemInterface;
-use Infocyph\InterMix\Serializer\ValueSerializer;
 use Infocyph\InterMix\Cache\Adapter\MemCacheAdapter;
+use Infocyph\InterMix\Serializer\ValueSerializer;
+use Psr\Cache\CacheItemInterface;
 
 final class MemCacheItem implements CacheItemInterface
 {
@@ -30,139 +30,6 @@ final class MemCacheItem implements CacheItemInterface
         private bool $hit = false,
         private ?DateTimeInterface $exp = null,
     ) {
-    }
-
-
-    /**
-     * Returns the key for the current cache item.
-     *
-     * The key is loaded by the implementing cache pool. If the key is
-     * not set, an empty string is returned instead.
-     *
-     * @return string
-     *   The key for the current cache item.
-     */
-    public function getKey(): string
-    {
-        return $this->key;
-    }
-
-    /**
-     * {@inheritdoc}
-     *
-     * @return mixed
-     */
-    public function get(): mixed
-    {
-        return $this->value;
-    }
-
-    /**
-     * Confirms if the cache item lookup resulted in a cache hit.
-     *
-     * Note: This method MUST be idempotent, meaning it is safe to call it
-     * multiple times without consequence.
-     *
-     * @return bool
-     *   TRUE if the request resulted in a cache hit, FALSE otherwise.
-     */
-    public function isHit(): bool
-    {
-        if (!$this->hit) {
-            return false;
-        }
-        return !$this->exp || (new DateTime()) < $this->exp;
-    }
-
-    /**
-     * Assigns a value to the item.
-     *
-     * @param mixed $value
-     *   The value to be associated with $key.
-     *
-     * @return static
-     *   The current object for fluent API.
-     */
-    public function set(mixed $value): static
-    {
-        $this->value = ValueSerializer::wrap($value);
-        $this->hit = true;
-        return $this;
-    }
-
-    /**
-     * Sets the expiration time for the cache item.
-     *
-     * @param DateTimeInterface|null $expiration The date and time the cache item should expire.
-     *
-     * @return static
-     */
-    public function expiresAt(?DateTimeInterface $expiration): static
-    {
-        $this->exp = $expiration;
-        return $this;
-    }
-
-    /**
-     * Sets the expiration time of the cache item relative to the current time.
-     *
-     * @param int|DateInterval|null $time
-     *      - int: number of seconds from now
-     *      - DateInterval: valid DateInterval object to be added to the current time
-     *      - null: no expiration
-     *
-     * @return static The current instance for method chaining.
-     */
-    public function expiresAfter(int|DateInterval|null $time): static
-    {
-        $this->exp = match (true) {
-            is_int($time) => (new DateTime())->add(new DateInterval("PT{$time}S")),
-            $time instanceof DateInterval => (new DateTime())->add($time),
-            default => null,
-        };
-        return $this;
-    }
-
-
-    /**
-     * Get the TTL (in seconds) from the current time.
-     *
-     * Returns the number of seconds until the cache item expires, or null if
-     * there is no expiration date.
-     *
-     * @return int|null number of seconds until expiration, or null if there is no expiration
-     */
-    public function ttlSeconds(): ?int
-    {
-        return $this->exp ? max(0, $this->exp->getTimestamp() - time()) : null;
-    }
-
-
-    /**
-     * Saves the cache item to the cache.
-     *
-     * @return static The current item.
-     */
-    public function save(): static
-    {
-        $this->pool->internalPersist($this);
-        return $this;
-    }
-
-    /**
-     * Queues the current cache item for deferred saving in the cache pool.
-     *
-     * This method adds the cache item to the internal deferred queue of
-     * the cache adapter. The item will not be persisted immediately,
-     * but will be saved later when the commit() method is called on the
-     * cache pool.
-     *
-     * @return static
-     */
-    public function saveDeferred(): static
-    {
-        $this->pool->internalQueue($this);
-        return $this;
     }
 
 
@@ -197,5 +64,138 @@ final class MemCacheItem implements CacheItemInterface
         $this->value = ValueSerializer::unwrap($data['value']);
         $this->hit = $data['hit'];
         $this->exp = isset($data['exp']) ? new DateTime($data['exp']) : null;
+    }
+
+    /**
+     * Sets the expiration time of the cache item relative to the current time.
+     *
+     * @param int|DateInterval|null $time
+     *      - int: number of seconds from now
+     *      - DateInterval: valid DateInterval object to be added to the current time
+     *      - null: no expiration
+     *
+     * @return static The current instance for method chaining.
+     */
+    public function expiresAfter(int|DateInterval|null $time): static
+    {
+        $this->exp = match (true) {
+            is_int($time) => (new DateTime())->add(new DateInterval("PT{$time}S")),
+            $time instanceof DateInterval => (new DateTime())->add($time),
+            default => null,
+        };
+        return $this;
+    }
+
+    /**
+     * Sets the expiration time for the cache item.
+     *
+     * @param DateTimeInterface|null $expiration The date and time the cache item should expire.
+     *
+     * @return static
+     */
+    public function expiresAt(?DateTimeInterface $expiration): static
+    {
+        $this->exp = $expiration;
+        return $this;
+    }
+
+    /**
+     * {@inheritdoc}
+     *
+     * @return mixed
+     */
+    public function get(): mixed
+    {
+        return $this->value;
+    }
+
+
+    /**
+     * Returns the key for the current cache item.
+     *
+     * The key is loaded by the implementing cache pool. If the key is
+     * not set, an empty string is returned instead.
+     *
+     * @return string
+     *   The key for the current cache item.
+     */
+    public function getKey(): string
+    {
+        return $this->key;
+    }
+
+    /**
+     * Confirms if the cache item lookup resulted in a cache hit.
+     *
+     * Note: This method MUST be idempotent, meaning it is safe to call it
+     * multiple times without consequence.
+     *
+     * @return bool
+     *   TRUE if the request resulted in a cache hit, FALSE otherwise.
+     */
+    public function isHit(): bool
+    {
+        if (!$this->hit) {
+            return false;
+        }
+        return !$this->exp || (new DateTime()) < $this->exp;
+    }
+
+
+    /**
+     * Saves the cache item to the cache.
+     *
+     * @return static The current item.
+     */
+    public function save(): static
+    {
+        $this->pool->internalPersist($this);
+        return $this;
+    }
+
+    /**
+     * Queues the current cache item for deferred saving in the cache pool.
+     *
+     * This method adds the cache item to the internal deferred queue of
+     * the cache adapter. The item will not be persisted immediately,
+     * but will be saved later when the commit() method is called on the
+     * cache pool.
+     *
+     * @return static
+     */
+    public function saveDeferred(): static
+    {
+        $this->pool->internalQueue($this);
+        return $this;
+    }
+
+    /**
+     * Assigns a value to the item.
+     *
+     * @param mixed $value
+     *   The value to be associated with $key.
+     *
+     * @return static
+     *   The current object for fluent API.
+     */
+    public function set(mixed $value): static
+    {
+        $this->value = ValueSerializer::wrap($value);
+        $this->hit = true;
+        return $this;
+    }
+
+
+    /**
+     * Get the TTL (in seconds) from the current time.
+     *
+     * Returns the number of seconds until the cache item expires, or null if
+     * there is no expiration date.
+     *
+     * @return int|null number of seconds until expiration, or null if there is no expiration
+     */
+    public function ttlSeconds(): ?int
+    {
+        return $this->exp ? max(0, $this->exp->getTimestamp() - time()) : null;
     }
 }

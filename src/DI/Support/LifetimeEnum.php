@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Support;
 
-enum Lifetime: string
+enum LifetimeEnum: string
 {
     case Singleton = 'singleton';   // one per container
     case Transient = 'transient';   // always build fresh

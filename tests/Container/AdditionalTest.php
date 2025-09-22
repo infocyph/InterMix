@@ -2,9 +2,9 @@
 
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Support\DebugTracer;
-use Infocyph\InterMix\DI\Support\Lifetime;
+use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\DI\Support\PreloadGenerator;
-use Infocyph\InterMix\DI\Support\TraceLevel;
+use Infocyph\InterMix\DI\Support\TraceLevelEnum;
 use Infocyph\InterMix\Tests\Fixture\DemoProvider;
 use Infocyph\InterMix\Tests\Fixture\DummyLogger;
 use Infocyph\InterMix\Tests\Fixture\FooService;
@@ -56,15 +56,15 @@ it('honours singleton vs transient vs scoped lifetimes', function () {
     $c = Container::instance('intermix');
 
     // singleton
-    $c->definitions()->bind('uniq', fn () => new stdClass(), Lifetime::Singleton);
+    $c->definitions()->bind('uniq', fn () => new stdClass(), LifetimeEnum::Singleton);
     expect($c->get('uniq'))->toBe($c->get('uniq'));
 
     // transient
-    $c->definitions()->bind('trans', fn () => new stdClass(), Lifetime::Transient);
+    $c->definitions()->bind('trans', fn () => new stdClass(), LifetimeEnum::Transient);
     expect($c->get('trans'))->not->toBe($c->get('trans'));
 
     // scoped
-    $c->definitions()->bind('scoped', fn () => new stdClass(), Lifetime::Scoped);
+    $c->definitions()->bind('scoped', fn () => new stdClass(), LifetimeEnum::Scoped);
     $first = $c->get('scoped');
 
     $c->getRepository()->setScope('next-request');
@@ -116,7 +116,7 @@ it('generates a preload list', function () {
 
 it('isolates resolved instances per scope', function () {
     $c = Container::instance('intermix');
-    $c->definitions()->bind('obj', fn () => new stdClass(), lifetime: Infocyph\InterMix\DI\Support\Lifetime::Scoped);
+    $c->definitions()->bind('obj', fn () => new stdClass(), lifetime: Infocyph\InterMix\DI\Support\LifetimeEnum::Scoped);
 
     $a = $c->get('obj');
     $c->getRepository()->setScope('child');
@@ -190,14 +190,14 @@ it('lets me wire and use services in one-liners', function () {
 });
 
 function newTracer(
-    TraceLevel $level = TraceLevel::Node,
+    TraceLevelEnum $level = TraceLevelEnum::Node,
     bool $captureLocation = false,
 ): DebugTracer {
     return new DebugTracer($level, $captureLocation);
 }
 
 it('does not record when level is Off', function () {
-    $t = newTracer(TraceLevel::Off);
+    $t = newTracer(TraceLevelEnum::Off);
 
     $t->push('should be ignored');
     expect($t->getEntries())->toHaveCount(0);
@@ -211,18 +211,18 @@ it('records a push() at Node level', function () {
 
     expect($entries)->toHaveCount(1)
         ->and($entries[0]->message)->toBe('hello world')
-        ->and($entries[0]->level)->toBe(TraceLevel::Node);
+        ->and($entries[0]->level)->toBe(TraceLevelEnum::Node);
 });
 
 it('filters out Verbose below current threshold', function () {
-    $t = newTracer(TraceLevel::Node);   // default threshold
+    $t = newTracer(TraceLevelEnum::Node);   // default threshold
 
-    $t->push('verbose', TraceLevel::Verbose);
+    $t->push('verbose', TraceLevelEnum::Verbose);
     expect($t->getEntries())->toBeEmpty();
 });
 
 it('begins and ends a span with a returned closure', function () {
-    $t = newTracer(TraceLevel::Node);
+    $t = newTracer(TraceLevelEnum::Node);
 
     $close = $t->beginSpan('compile-container');   // returns Closure
     expect($close)
@@ -243,7 +243,7 @@ it('begins and ends a span with a returned closure', function () {
 });
 
 it('toArray() adds Δus between subsequent events', function () {
-    $t = newTracer(TraceLevel::Node);
+    $t = newTracer(TraceLevelEnum::Node);
 
     $t->push('first');
     usleep(500);          // 0.5 ms

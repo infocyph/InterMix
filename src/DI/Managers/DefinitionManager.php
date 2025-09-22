@@ -7,8 +7,8 @@ namespace Infocyph\InterMix\DI\Managers;
 use ArrayAccess;
 use Infocyph\InterMix\Cache\Cache;
 use Infocyph\InterMix\DI\Container;
-use Infocyph\InterMix\DI\Support\Lifetime;
 use Infocyph\InterMix\DI\Resolver\Repository;
+use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Cache\InvalidArgumentException;
@@ -61,7 +61,7 @@ class DefinitionManager implements ArrayAccess
      *
      * @param string $id The identifier of the definition.
      * @param mixed $definition The definition itself.
-     * @param Lifetime $lifetime The lifetime of the definition.
+     * @param LifetimeEnum $lifetime The lifetime of the definition.
      * @param array $tags An array of tags to associate with the definition.
      *
      * @return $this
@@ -70,7 +70,7 @@ class DefinitionManager implements ArrayAccess
     public function bind(
         string $id,
         mixed $definition,
-        Lifetime $lifetime = Lifetime::Singleton,
+        LifetimeEnum $lifetime = LifetimeEnum::Singleton,
         array $tags = [],
     ): self {
         if ($id === $definition) {
@@ -81,23 +81,6 @@ class DefinitionManager implements ArrayAccess
             'lifetime' => $lifetime,
             'tags' => $tags,
         ]);
-        return $this;
-    }
-
-    /**
-     * Enable definition caching.
-     *
-     * This method takes a {@see CacheItemPoolInterface} and enables caching of
-     * definitions. It will throw a {@see ContainerException} if the container
-     * is locked.
-     *
-     * @param string|null $namespace The namespace to use for the cache.
-     * @return $this
-     * @throws ContainerException
-     */
-    public function enableDefinitionCache(?string $namespace = null): self
-    {
-        $this->repository->setCacheAdapter(Cache::file($namespace ?? $this->repository->getAlias()));
         return $this;
     }
 
@@ -139,13 +122,30 @@ class DefinitionManager implements ArrayAccess
     }
 
     /**
-     * Jump to RegistrationManager
+     * Enable definition caching.
      *
-     * @return RegistrationManager
+     * This method takes a {@see CacheItemPoolInterface} and enables caching of
+     * definitions. It will throw a {@see ContainerException} if the container
+     * is locked.
+     *
+     * @param string|null $namespace The namespace to use for the cache.
+     * @return $this
+     * @throws ContainerException
      */
-    public function registration(): RegistrationManager
+    public function enableDefinitionCache(?string $namespace = null): self
     {
-        return $this->container->registration();
+        $this->repository->setCacheAdapter(Cache::file($namespace ?? $this->repository->getAlias()));
+        return $this;
+    }
+
+    /**
+     * Jump to InvocationManager
+     *
+     * @return InvocationManager
+     */
+    public function invocation(): InvocationManager
+    {
+        return $this->container->invocation();
     }
 
     /**
@@ -159,12 +159,12 @@ class DefinitionManager implements ArrayAccess
     }
 
     /**
-     * Jump to InvocationManager
+     * Jump to RegistrationManager
      *
-     * @return InvocationManager
+     * @return RegistrationManager
      */
-    public function invocation(): InvocationManager
+    public function registration(): RegistrationManager
     {
-        return $this->container->invocation();
+        return $this->container->registration();
     }
 }

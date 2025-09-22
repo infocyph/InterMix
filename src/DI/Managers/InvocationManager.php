@@ -8,9 +8,9 @@ use ArrayAccess;
 use Closure;
 use Infocyph\InterMix\DI\Attribute\DeferredInitializer;
 use Infocyph\InterMix\DI\Container;
-use Infocyph\InterMix\DI\Support\Lifetime;
-use Infocyph\InterMix\DI\Support\TraceLevel;
 use Infocyph\InterMix\DI\Resolver\Repository;
+use Infocyph\InterMix\DI\Support\LifetimeEnum;
+use Infocyph\InterMix\DI\Support\TraceLevelEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\InvalidArgumentException;
 use ReflectionException;
@@ -32,101 +32,6 @@ class InvocationManager implements ArrayAccess
         protected Repository $repository,
         protected Container $container,
     ) {
-    }
-
-
-    /**
-     * Resolves a definition ID and returns the result of the resolved instance.
-     *
-     * If the resolved instance is a closure, it is called with no arguments and
-     * the result is returned. Otherwise, the resolved instance itself is returned.
-     *
-     * @param string $id The ID of the definition to resolve and return.
-     *
-     * @return mixed The result of the resolved instance, or the resolved instance itself.
-     * @throws ContainerException
-     * @throws InvalidArgumentException
-     * @throws ReflectionException
-     */
-    public function getReturn(string $id): mixed
-    {
-        $resolved = $this->get($id);
-        $resource = $this->repository->getResolved()[$id] ?? [];
-
-        return is_array($resource) && array_key_exists('returned', $resource) ? $resource['returned'] : $resolved;
-    }
-
-    /**
-     * Retrieves a value associated with a given ID from the container.
-     *
-     * The method first checks if the value is already resolved and cached based on
-     * its lifetime and scope. If cached, it returns the cached value immediately.
-     * Otherwise, it attempts to resolve the value using the definition map or by
-     * treating the ID as a class name or closure alias. The resolved value is then
-     * cached if it is cacheable.
-     *
-     * @param string $id The ID of the value to retrieve.
-     *
-     * @return mixed The resolved value or the cached value if available.
-     * @throws ContainerException|InvalidArgumentException|ReflectionException If the value cannot be resolved.
-     */
-    public function get(string $id): mixed
-    {
-        $this->repository->tracer()->push("return:$id", TraceLevel::Verbose);
-
-        // Determine lifetime & scope-key
-        $meta = $this->repository->getDefinitionMeta($id);
-        $lifetime = $meta['lifetime'] ?? Lifetime::Singleton;
-        $scopeKey = $lifetime === Lifetime::Scoped
-            ? $id . '@' . $this->repository->getScope()
-            : $id;
-        $cacheable = $lifetime !== Lifetime::Transient;
-
-        // Fast return from cache (singleton / scoped)
-        if ($cacheable && isset($this->repository->getResolved()[$scopeKey])) {
-            $resolved = $this->repository->getResolved()[$scopeKey];
-
-            if ($resolved instanceof DeferredInitializer) {
-                $resolved = $resolved();
-                $this->repository->setResolved($scopeKey, $resolved);
-            }
-            return $this->repository->fetchInstanceOrValue($resolved);
-        }
-
-        // Resolve: definition map → class/closure fallback
-        if (isset($this->functionReference[$id])) {
-            $resolved = $this->resolveDefinition($id);
-            $resolved = $resolved instanceof DeferredInitializer ? $resolved() : $resolved;
-
-            if ($cacheable) {
-                $this->repository->setResolved($scopeKey, $resolved);
-            }
-            return $resolved;
-        }
-
-        // Fallback: treat $id as class name / closure alias
-        $resolved = $this->call($id);
-
-        if ($cacheable) {
-            $this->repository->setResolved($scopeKey, $resolved);
-        }
-        return $this->repository->fetchInstanceOrValue($resolved);
-    }
-
-    /**
-     * Checks if a definition ID exists in the repository.
-     *
-     * This method determines whether a given definition ID is present
-     * either in the function references or among the resolved instances
-     * in the repository.
-     *
-     * @param string $id The ID of the definition to check.
-     * @return bool True if the definition ID exists, false otherwise.
-     */
-    public function has(string $id): bool
-    {
-        return isset($this->repository->getFunctionReference()[$id]) ||
-            isset($this->repository->getResolved()[$id]);
     }
 
 
@@ -184,6 +89,111 @@ class InvocationManager implements ArrayAccess
         return $resolver->classSettler($classOrClosure, $method);
     }
 
+    /**
+     * Returns the definition manager for the container.
+     *
+     * @return DefinitionManager The definition manager.
+     */
+    public function definitions(): DefinitionManager
+    {
+        return $this->container->definitions();
+    }
+
+    /**
+     * Retrieves a value associated with a given ID from the container.
+     *
+     * The method first checks if the value is already resolved and cached based on
+     * its lifetime and scope. If cached, it returns the cached value immediately.
+     * Otherwise, it attempts to resolve the value using the definition map or by
+     * treating the ID as a class name or closure alias. The resolved value is then
+     * cached if it is cacheable.
+     *
+     * @param string $id The ID of the value to retrieve.
+     *
+     * @return mixed The resolved value or the cached value if available.
+     * @throws ContainerException|InvalidArgumentException|ReflectionException If the value cannot be resolved.
+     */
+    public function get(string $id): mixed
+    {
+        $this->repository->tracer()->push("return:$id", TraceLevelEnum::Verbose);
+
+        // Determine lifetime & scope-key
+        $meta = $this->repository->getDefinitionMeta($id);
+        $lifetime = $meta['lifetime'] ?? LifetimeEnum::Singleton;
+        $scopeKey = $lifetime === LifetimeEnum::Scoped
+            ? $id . '@' . $this->repository->getScope()
+            : $id;
+        $cacheable = $lifetime !== LifetimeEnum::Transient;
+
+        // Fast return from cache (singleton / scoped)
+        if ($cacheable && isset($this->repository->getResolved()[$scopeKey])) {
+            $resolved = $this->repository->getResolved()[$scopeKey];
+
+            if ($resolved instanceof DeferredInitializer) {
+                $resolved = $resolved();
+                $this->repository->setResolved($scopeKey, $resolved);
+            }
+            return $this->repository->fetchInstanceOrValue($resolved);
+        }
+
+        // Resolve: definition map → class/closure fallback
+        if (isset($this->functionReference[$id])) {
+            $resolved = $this->resolveDefinition($id);
+            $resolved = $resolved instanceof DeferredInitializer ? $resolved() : $resolved;
+
+            if ($cacheable) {
+                $this->repository->setResolved($scopeKey, $resolved);
+            }
+            return $resolved;
+        }
+
+        // Fallback: treat $id as class name / closure alias
+        $resolved = $this->call($id);
+
+        if ($cacheable) {
+            $this->repository->setResolved($scopeKey, $resolved);
+        }
+        return $this->repository->fetchInstanceOrValue($resolved);
+    }
+
+
+    /**
+     * Resolves a definition ID and returns the result of the resolved instance.
+     *
+     * If the resolved instance is a closure, it is called with no arguments and
+     * the result is returned. Otherwise, the resolved instance itself is returned.
+     *
+     * @param string $id The ID of the definition to resolve and return.
+     *
+     * @return mixed The result of the resolved instance, or the resolved instance itself.
+     * @throws ContainerException
+     * @throws InvalidArgumentException
+     * @throws ReflectionException
+     */
+    public function getReturn(string $id): mixed
+    {
+        $resolved = $this->get($id);
+        $resource = $this->repository->getResolved()[$id] ?? [];
+
+        return is_array($resource) && array_key_exists('returned', $resource) ? $resource['returned'] : $resolved;
+    }
+
+    /**
+     * Checks if a definition ID exists in the repository.
+     *
+     * This method determines whether a given definition ID is present
+     * either in the function references or among the resolved instances
+     * in the repository.
+     *
+     * @param string $id The ID of the definition to check.
+     * @return bool True if the definition ID exists, false otherwise.
+     */
+    public function has(string $id): bool
+    {
+        return isset($this->repository->getFunctionReference()[$id]) ||
+            isset($this->repository->getResolved()[$id]);
+    }
+
 
     /**
      * Creates a new instance of the given class with dependency injection,
@@ -208,6 +218,26 @@ class InvocationManager implements ArrayAccess
         $fresh = $resolver->classSettler($class, $method ?: null, true);
 
         return $method ? $fresh['returned'] : $fresh['instance'];
+    }
+
+    /**
+     * Returns the options manager for the container.
+     *
+     * @return OptionsManager The options manager.
+     */
+    public function options(): OptionsManager
+    {
+        return $this->container->options();
+    }
+
+    /**
+     * Returns the registration manager for the container.
+     *
+     * @return RegistrationManager The registration manager.
+     */
+    public function registration(): RegistrationManager
+    {
+        return $this->container->registration();
     }
 
 
@@ -240,35 +270,5 @@ class InvocationManager implements ArrayAccess
         $this->repository->setResolved($id, $value);
 
         return $this->repository->fetchInstanceOrValue($value);
-    }
-
-    /**
-     * Returns the definition manager for the container.
-     *
-     * @return DefinitionManager The definition manager.
-     */
-    public function definitions(): DefinitionManager
-    {
-        return $this->container->definitions();
-    }
-
-    /**
-     * Returns the registration manager for the container.
-     *
-     * @return RegistrationManager The registration manager.
-     */
-    public function registration(): RegistrationManager
-    {
-        return $this->container->registration();
-    }
-
-    /**
-     * Returns the options manager for the container.
-     *
-     * @return OptionsManager The options manager.
-     */
-    public function options(): OptionsManager
-    {
-        return $this->container->options();
     }
 }

@@ -13,14 +13,14 @@ final class Memoizer
 {
     use Single;
 
-    /** @var array<string,mixed> */
-    private array $staticCache = [];
+    private int $hits   = 0;
+    private int $misses = 0;
 
     /** @var WeakMap<object,array<string,mixed>> */
     private WeakMap $objectCache;
 
-    private int $hits   = 0;
-    private int $misses = 0;
+    /** @var array<string,mixed> */
+    private array $staticCache = [];
 
 
     /**
@@ -31,6 +31,19 @@ final class Memoizer
     protected function __construct()
     {
         $this->objectCache = new WeakMap();
+    }
+
+    /**
+     * Clears all cached entries and resets statistics.
+     *
+     * This method empties both the static and object-specific caches,
+     * and resets the hit and miss counters to zero.
+     */
+    public function flush(): void
+    {
+        $this->staticCache = [];
+        $this->objectCache = new WeakMap();
+        $this->hits = $this->misses = 0;
     }
 
     /**
@@ -84,19 +97,6 @@ final class Memoizer
         $bucket[$sig] = $value;
         $this->objectCache[$object] = $bucket;
         return $value;
-    }
-
-    /**
-     * Clears all cached entries and resets statistics.
-     *
-     * This method empties both the static and object-specific caches,
-     * and resets the hit and miss counters to zero.
-     */
-    public function flush(): void
-    {
-        $this->staticCache = [];
-        $this->objectCache = new WeakMap();
-        $this->hits = $this->misses = 0;
     }
 
 

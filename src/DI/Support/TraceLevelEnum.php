@@ -17,7 +17,7 @@ namespace Infocyph\InterMix\DI\Support;
  *  Node    – DI node / definition boundaries (default)
  *  Verbose – parameters, lazy resolutions, etc.
  */
-enum TraceLevel: int
+enum TraceLevelEnum: int
 {
     case Off     = 0;
     case Error   = 1;

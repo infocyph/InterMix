@@ -7,28 +7,19 @@ use Closure;
 trait ConditionableTappable
 {
     /**
-     * Apply a callback if the given condition is truthy.
-     * If no condition and callbacks are provided, returns a proxy object to conditionally chain further calls.
+     * Invoke the given callback with this instance and return the instance.
+     * If no callback is provided, returns a proxy that allows method chaining on this instance
+     * while ensuring the original instance is returned.
      *
-     * @param  (Closure($this): mixed)|mixed|null  $value    Condition value (or closure that returns it).
-     * @param  callable|null  $callback  Callback to apply if condition is truthy.
-     * @param  callable|null  $default   Callback to apply if condition is falsy.
-     * @return static|mixed    Result of the callback when executed, or static (fluently, if condition is falsy or no callback).
+     * @param  callable|null  $callback  Callback to invoke with this instance.
+     * @return $this|TapProxy  The original instance ($this) or a tap proxy if no callback was given.
      */
-    public function when(mixed $value = null, ?callable $callback = null, ?callable $default = null)
+    public function tap(?callable $callback = null): TapProxy|static
     {
-        $value = $value instanceof Closure ? $value($this) : $value;
-        if (func_num_args() === 0) {
-            return new ConditionalProxy($this);
+        if (is_null($callback)) {
+            return new TapProxy($this);
         }
-        if (func_num_args() === 1) {
-            return (new ConditionalProxy($this))->condition($value);
-        }
-        if ($value) {
-            return $callback($this, $value) ?? $this;
-        } elseif ($default) {
-            return $default($this, $value) ?? $this;
-        }
+        $callback($this);
         return $this;
     }
 
@@ -57,21 +48,29 @@ trait ConditionableTappable
         }
         return $this;
     }
-
     /**
-     * Invoke the given callback with this instance and return the instance.
-     * If no callback is provided, returns a proxy that allows method chaining on this instance
-     * while ensuring the original instance is returned.
+     * Apply a callback if the given condition is truthy.
+     * If no condition and callbacks are provided, returns a proxy object to conditionally chain further calls.
      *
-     * @param  callable|null  $callback  Callback to invoke with this instance.
-     * @return $this|TapProxy  The original instance ($this) or a tap proxy if no callback was given.
+     * @param  (Closure($this): mixed)|mixed|null  $value    Condition value (or closure that returns it).
+     * @param  callable|null  $callback  Callback to apply if condition is truthy.
+     * @param  callable|null  $default   Callback to apply if condition is falsy.
+     * @return static|mixed    Result of the callback when executed, or static (fluently, if condition is falsy or no callback).
      */
-    public function tap(?callable $callback = null): TapProxy|static
+    public function when(mixed $value = null, ?callable $callback = null, ?callable $default = null)
     {
-        if (is_null($callback)) {
-            return new TapProxy($this);
+        $value = $value instanceof Closure ? $value($this) : $value;
+        if (func_num_args() === 0) {
+            return new ConditionalProxy($this);
         }
-        $callback($this);
+        if (func_num_args() === 1) {
+            return (new ConditionalProxy($this))->condition($value);
+        }
+        if ($value) {
+            return $callback($this, $value) ?? $this;
+        } elseif ($default) {
+            return $default($this, $value) ?? $this;
+        }
         return $this;
     }
 }
