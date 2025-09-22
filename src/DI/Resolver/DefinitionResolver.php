@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Resolver;
 
 use Closure;
-use Infocyph\InterMix\DI\Support\Lifetime;
+use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\DI\Support\ReflectionResource;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\InvalidArgumentException;
@@ -13,8 +13,8 @@ use ReflectionException;
 
 class DefinitionResolver
 {
-    private array $entriesResolving = [];
     private ClassResolver $classResolver;
+    private array $entriesResolving = [];
     private ParameterResolver $parameterResolver;
 
     /**
@@ -25,24 +25,6 @@ class DefinitionResolver
     public function __construct(
         private readonly Repository $repository,
     ) {
-    }
-
-    /**
-     * Sets the ClassResolver and ParameterResolver instances on this object.
-     *
-     * These resolvers are used by the resolve() method to resolve definitions
-     * that are class names or functions, and to resolve function parameters that
-     * are not provided by the user.
-     *
-     * @param ClassResolver $classResolver The ClassResolver instance.
-     * @param ParameterResolver $parameterResolver The ParameterResolver instance.
-     */
-    public function setResolverInstance(
-        ClassResolver $classResolver,
-        ParameterResolver $parameterResolver,
-    ): void {
-        $this->classResolver = $classResolver;
-        $this->parameterResolver = $parameterResolver;
     }
 
 
@@ -74,6 +56,24 @@ class DefinitionResolver
     }
 
     /**
+     * Sets the ClassResolver and ParameterResolver instances on this object.
+     *
+     * These resolvers are used by the resolve() method to resolve definitions
+     * that are class names or functions, and to resolve function parameters that
+     * are not provided by the user.
+     *
+     * @param ClassResolver $classResolver The ClassResolver instance.
+     * @param ParameterResolver $parameterResolver The ParameterResolver instance.
+     */
+    public function setResolverInstance(
+        ClassResolver $classResolver,
+        ParameterResolver $parameterResolver,
+    ): void {
+        $this->classResolver = $classResolver;
+        $this->parameterResolver = $parameterResolver;
+    }
+
+    /**
      * Tries to get a definition from the cache, otherwise resolves it using the
      * `resolveDefinition` method and caches the result.
      *
@@ -85,10 +85,10 @@ class DefinitionResolver
      */
     private function getFromCacheOrResolve(string $name): mixed
     {
-        $lifetime = $this->repository->getDefinitionMeta($name)['lifetime'] ?? Lifetime::Singleton;
+        $lifetime = $this->repository->getDefinitionMeta($name)['lifetime'] ?? LifetimeEnum::Singleton;
 
         // transient / scoped → never cache at this layer
-        if ($lifetime !== Lifetime::Singleton) {
+        if ($lifetime !== LifetimeEnum::Singleton) {
             return $this->resolveDefinition($name);
         }
 
@@ -105,6 +105,25 @@ class DefinitionResolver
             $this->repository->setResolvedDefinition($name, $value);
         }
         return $this->repository->getResolvedDefinition()[$name];
+    }
+
+    /**
+     * Resolves an array definition and returns the resolved value.
+     *
+     * This method accepts an array where the first element is a class name
+     * and the second element is a method name or a boolean. It uses the
+     * ClassResolver to resolve the class and either returns the result of
+     * the method call if the second element is provided, or the resolved
+     * instance if not.
+     *
+     * @param array $definition An array containing a class name and optionally a method name or boolean.
+     * @return mixed The resolved value or instance.
+     * @throws ContainerException|ReflectionException
+     */
+    private function resolveArrayDefinition(array $definition): mixed
+    {
+        $resolved = $this->classResolver->resolve(...$definition);
+        return !empty($definition[1]) ? $resolved['returned'] : $resolved['instance'];
     }
 
     /**
@@ -142,24 +161,5 @@ class DefinitionResolver
             default:
                 return $definition;
         }
-    }
-
-    /**
-     * Resolves an array definition and returns the resolved value.
-     *
-     * This method accepts an array where the first element is a class name
-     * and the second element is a method name or a boolean. It uses the
-     * ClassResolver to resolve the class and either returns the result of
-     * the method call if the second element is provided, or the resolved
-     * instance if not.
-     *
-     * @param array $definition An array containing a class name and optionally a method name or boolean.
-     * @return mixed The resolved value or instance.
-     * @throws ContainerException|ReflectionException
-     */
-    private function resolveArrayDefinition(array $definition): mixed
-    {
-        $resolved = $this->classResolver->resolve(...$definition);
-        return !empty($definition[1]) ? $resolved['returned'] : $resolved['instance'];
     }
 }

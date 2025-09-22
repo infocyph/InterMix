@@ -4,7 +4,7 @@ namespace Infocyph\InterMix\DI\Attribute;
 
 use Closure;
 use Infocyph\InterMix\DI\Container;
-use Infocyph\InterMix\DI\Support\TraceLevel;
+use Infocyph\InterMix\DI\Support\TraceLevelEnum;
 
 final class DeferredInitializer
 {
@@ -31,7 +31,7 @@ final class DeferredInitializer
         if ($this->done) {
             return $this->value;
         }
-        $this->container->tracer()->push('lazy-init', TraceLevel::Verbose);
+        $this->container->tracer()->push('lazy-init', TraceLevelEnum::Verbose);
         $this->value = ($this->factory)();
         $this->done  = true;
         return $this->value;

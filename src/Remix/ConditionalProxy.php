@@ -31,27 +31,22 @@ class ConditionalProxy
     }
 
     /**
-     * Set the condition on the proxy.
+     * Proxy a method call to the target.
      *
-     * @param bool $condition
-     * @return $this
-     */
-    public function condition(bool $condition): static
-    {
-        $this->condition = $condition;
-        $this->hasCondition = true;
-        return $this;
-    }
-
-    /**
-     * Invert the next condition captured from the target.
+     * If no condition has been set yet, calls the target method and captures its return value as the condition (optionally negated).
+     * If a condition is already set, calls the method only if the condition is truthy; otherwise returns the original target.
      *
-     * @return $this
+     * @param string $method
+     * @param array $parameters
+     * @return mixed
      */
-    public function negateConditionOnCapture(): static
+    public function __call(string $method, array $parameters)
     {
-        $this->negateConditionOnCapture = true;
-        return $this;
+        if (!$this->hasCondition) {
+            $condition = $this->target->{$method}(...$parameters);
+            return $this->condition($this->negateConditionOnCapture ? !$condition : (bool)$condition);
+        }
+        return $this->condition ? $this->target->{$method}(...$parameters) : $this->target;
     }
 
     /**
@@ -73,22 +68,14 @@ class ConditionalProxy
     }
 
     /**
-     * Proxy a method call to the target.
+     * Checks if a property exists on the target when a condition is set and true.
      *
-     * If no condition has been set yet, calls the target method and captures its return value as the condition (optionally negated).
-     * If a condition is already set, calls the method only if the condition is truthy; otherwise returns the original target.
-     *
-     * @param string $method
-     * @param array $parameters
-     * @return mixed
+     * @param string $key
+     * @return bool
      */
-    public function __call(string $method, array $parameters)
+    public function __isset(string $key): bool
     {
-        if (!$this->hasCondition) {
-            $condition = $this->target->{$method}(...$parameters);
-            return $this->condition($this->negateConditionOnCapture ? !$condition : (bool)$condition);
-        }
-        return $this->condition ? $this->target->{$method}(...$parameters) : $this->target;
+        return $this->hasCondition && $this->condition && isset($this->target->{$key});
     }
 
     /**
@@ -120,13 +107,26 @@ class ConditionalProxy
     }
 
     /**
-     * Checks if a property exists on the target when a condition is set and true.
+     * Set the condition on the proxy.
      *
-     * @param string $key
-     * @return bool
+     * @param bool $condition
+     * @return $this
      */
-    public function __isset(string $key): bool
+    public function condition(bool $condition): static
     {
-        return $this->hasCondition && $this->condition && isset($this->target->{$key});
+        $this->condition = $condition;
+        $this->hasCondition = true;
+        return $this;
+    }
+
+    /**
+     * Invert the next condition captured from the target.
+     *
+     * @return $this
+     */
+    public function negateConditionOnCapture(): static
+    {
+        $this->negateConditionOnCapture = true;
+        return $this;
     }
 }

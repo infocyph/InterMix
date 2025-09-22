@@ -7,8 +7,8 @@ namespace Infocyph\InterMix\DI\Managers;
 use ArrayAccess;
 use Closure;
 use Infocyph\InterMix\DI\Container;
-use Infocyph\InterMix\DI\Support\ServiceProviderInterface;
 use Infocyph\InterMix\DI\Resolver\Repository;
+use Infocyph\InterMix\DI\Support\ServiceProviderInterface;
 use Infocyph\InterMix\Exceptions\ContainerException;
 
 /**
@@ -28,6 +28,19 @@ class RegistrationManager implements ArrayAccess
         protected Repository $repository,
         protected Container  $container
     ) {
+    }
+
+    /**
+     * Retrieves the definition manager associated with the container.
+     *
+     * This method provides access to the DefinitionManager instance,
+     * allowing for the management and retrieval of definitions within the container.
+     *
+     * @return DefinitionManager The instance managing definitions.
+     */
+    public function definitions(): DefinitionManager
+    {
+        return $this->container->definitions();
     }
 
     /**
@@ -59,22 +72,29 @@ class RegistrationManager implements ArrayAccess
     }
 
     /**
-     * Registers a closure with associated parameters.
+     * Retrieves the invocation manager associated with the container.
      *
-     * @param string $closureAlias The alias under which the closure will be stored.
-     * @param callable|Closure $function The closure to be registered.
-     * @param array $parameters Any parameters to be passed to the closure.
+     * This method provides access to the InvocationManager instance,
+     * allowing for the management and retrieval of invocations within the container.
      *
-     * @return $this
-     * @throws ContainerException
+     * @return InvocationManager The instance managing invocations.
      */
-    public function registerClosure(
-        string $closureAlias,
-        callable|Closure $function,
-        array $parameters = []
-    ): self {
-        $this->repository->addClosureResource($closureAlias, $function, $parameters);
-        return $this;
+    public function invocation(): InvocationManager
+    {
+        return $this->container->invocation();
+    }
+
+    /**
+     * Retrieves the options manager associated with the container.
+     *
+     * This method provides access to the OptionsManager instance,
+     * allowing for the management and retrieval of options within the container.
+     *
+     * @return OptionsManager The instance managing options.
+     */
+    public function options(): OptionsManager
+    {
+        return $this->container->options();
     }
 
 
@@ -96,6 +116,25 @@ class RegistrationManager implements ArrayAccess
             'on'     => '__constructor',
             'params' => $parameters,
         ]);
+        return $this;
+    }
+
+    /**
+     * Registers a closure with associated parameters.
+     *
+     * @param string $closureAlias The alias under which the closure will be stored.
+     * @param callable|Closure $function The closure to be registered.
+     * @param array $parameters Any parameters to be passed to the closure.
+     *
+     * @return $this
+     * @throws ContainerException
+     */
+    public function registerClosure(
+        string $closureAlias,
+        callable|Closure $function,
+        array $parameters = []
+    ): self {
+        $this->repository->addClosureResource($closureAlias, $function, $parameters);
         return $this;
     }
 
@@ -148,44 +187,5 @@ class RegistrationManager implements ArrayAccess
 
         $this->repository->addClassResource($class, 'property', $merged);
         return $this;
-    }
-
-    /**
-     * Retrieves the definition manager associated with the container.
-     *
-     * This method provides access to the DefinitionManager instance,
-     * allowing for the management and retrieval of definitions within the container.
-     *
-     * @return DefinitionManager The instance managing definitions.
-     */
-    public function definitions(): DefinitionManager
-    {
-        return $this->container->definitions();
-    }
-
-    /**
-     * Retrieves the options manager associated with the container.
-     *
-     * This method provides access to the OptionsManager instance,
-     * allowing for the management and retrieval of options within the container.
-     *
-     * @return OptionsManager The instance managing options.
-     */
-    public function options(): OptionsManager
-    {
-        return $this->container->options();
-    }
-
-    /**
-     * Retrieves the invocation manager associated with the container.
-     *
-     * This method provides access to the InvocationManager instance,
-     * allowing for the management and retrieval of invocations within the container.
-     *
-     * @return InvocationManager The instance managing invocations.
-     */
-    public function invocation(): InvocationManager
-    {
-        return $this->container->invocation();
     }
 }

@@ -69,6 +69,28 @@ final readonly class GenericCall
 
 
     /**
+     * Invokes a method on an object, with optional parameters.
+     *
+     * If the method does not exist, this method will simply return null.
+     *
+     * @param  object  $instance  Object on which to invoke the method.
+     * @param  string|null  $method  Method to invoke (if null, no method is invoked).
+     * @param  array  $classResource  Class resource with method parameter data.
+     * @return mixed The result of the method invocation (or null if no method was invoked).
+     */
+    private function invokeMethod(object $instance, ?string $method, array $classResource): mixed
+    {
+        if (! $method || ! method_exists($instance, $method)) {
+            return null;
+        }
+
+        $params = $classResource['method']['params'] ?? [];
+
+        return $instance->$method(...$params);
+    }
+
+
+    /**
      * Sets properties on an instance.
      *
      * @param object $instance Object to set properties on
@@ -91,27 +113,5 @@ final readonly class GenericCall
                 throw new InvalidArgumentException('Property ' . $prop . ' does not exist on class ' . $instance::class);
             }
         }
-    }
-
-
-    /**
-     * Invokes a method on an object, with optional parameters.
-     *
-     * If the method does not exist, this method will simply return null.
-     *
-     * @param  object  $instance  Object on which to invoke the method.
-     * @param  string|null  $method  Method to invoke (if null, no method is invoked).
-     * @param  array  $classResource  Class resource with method parameter data.
-     * @return mixed The result of the method invocation (or null if no method was invoked).
-     */
-    private function invokeMethod(object $instance, ?string $method, array $classResource): mixed
-    {
-        if (! $method || ! method_exists($instance, $method)) {
-            return null;
-        }
-
-        $params = $classResource['method']['params'] ?? [];
-
-        return $instance->$method(...$params);
     }
 }

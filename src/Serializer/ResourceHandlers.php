@@ -7,6 +7,15 @@ namespace Infocyph\InterMix\Serializer;
 abstract class ResourceHandlers
 {
     /**
+     * Prevents instantiation of the ResourceHandlers class.
+     *
+     * This constructor is private to enforce static usage of the class methods,
+     * ensuring that no instances of this class can be created.
+     */
+    private function __construct()
+    {
+    }
+    /**
      * Registers all default resource handlers.
      *
      * This method iterates over all class methods prefixed with "register" and
@@ -22,15 +31,5 @@ abstract class ResourceHandlers
                 self::$methods();
             }
         }
-    }
-
-    /**
-     * Prevents instantiation of the ResourceHandlers class.
-     *
-     * This constructor is private to enforce static usage of the class methods,
-     * ensuring that no instances of this class can be created.
-     */
-    private function __construct()
-    {
     }
 }

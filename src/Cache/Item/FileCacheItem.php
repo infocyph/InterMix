@@ -8,9 +8,9 @@ use DateInterval;
 use DateTime;
 use DateTimeInterface;
 use Exception;
+use Infocyph\InterMix\Cache\Adapter\FileCacheAdapter;
 use Infocyph\InterMix\Serializer\ValueSerializer;
 use Psr\Cache\CacheItemInterface;
-use Infocyph\InterMix\Cache\Adapter\FileCacheAdapter;
 
 final class FileCacheItem implements CacheItemInterface
 {
@@ -32,68 +32,34 @@ final class FileCacheItem implements CacheItemInterface
     ) {
     }
 
-
     /**
-     * Retrieves the key associated with this cache item.
+     * Serializes the current state of the cache item.
      *
-     * @return string The key for this cache item.
+     * @return array An associative array containing the key, serialized value,
+     *               hit flag, and expiration date formatted as a string.
      */
-    public function getKey(): string
+    public function __serialize(): array
     {
-        return $this->key;
+        return [
+            'key' => $this->key,
+            'value' => $this->value,
+            'hit' => $this->hit,
+            'exp' => $this->exp?->format(DateTimeInterface::ATOM),
+        ];
     }
 
     /**
-     * @inheritDoc
-     * @return mixed
+     * Restores the object state from the given serialized data.
+     *
+     * @param array $data The serialized data containing the key, value, hit flag, and expiration.
+     * @throws Exception
      */
-    public function get(): mixed
+    public function __unserialize(array $data): void
     {
-        return $this->value;
-    }
-
-    /**
-     * Checks if the item exists in the cache and has not expired.
-     *
-     * This method is part of the PSR-6 cache interface.
-     *
-     * @return bool
-     *   TRUE if the item exists in the cache and has not expired, FALSE otherwise.
-     */
-    public function isHit(): bool
-    {
-        if (!$this->hit) {
-            return false;
-        }
-        return $this->exp === null || (new DateTime()) < $this->exp;
-    }
-
-    /**
-     * Assigns a value to the item.
-     *
-     * @param mixed $value
-     *
-     * @return static
-     *   The current object for fluent API
-     */
-    public function set(mixed $value): static
-    {
-        $this->value = ValueSerializer::wrap($value);
-        $this->hit = true;
-        return $this;
-    }
-
-    /**
-     * Set the expiration time for the cache item.
-     *
-     * @param DateTimeInterface|null $expiration The date and time the cache item should expire.
-     *
-     * @return static
-     */
-    public function expiresAt(?DateTimeInterface $expiration): static
-    {
-        $this->exp = $expiration;
-        return $this;
+        $this->key = $data['key'];
+        $this->value = ValueSerializer::unwrap($data['value']);
+        $this->hit = $data['hit'];
+        $this->exp = isset($data['exp']) ? new DateTime($data['exp']) : null;
     }
 
     /**
@@ -114,6 +80,55 @@ final class FileCacheItem implements CacheItemInterface
             default => null,
         };
         return $this;
+    }
+
+    /**
+     * Set the expiration time for the cache item.
+     *
+     * @param DateTimeInterface|null $expiration The date and time the cache item should expire.
+     *
+     * @return static
+     */
+    public function expiresAt(?DateTimeInterface $expiration): static
+    {
+        $this->exp = $expiration;
+        return $this;
+    }
+
+    /**
+     * @inheritDoc
+     * @return mixed
+     */
+    public function get(): mixed
+    {
+        return $this->value;
+    }
+
+
+    /**
+     * Retrieves the key associated with this cache item.
+     *
+     * @return string The key for this cache item.
+     */
+    public function getKey(): string
+    {
+        return $this->key;
+    }
+
+    /**
+     * Checks if the item exists in the cache and has not expired.
+     *
+     * This method is part of the PSR-6 cache interface.
+     *
+     * @return bool
+     *   TRUE if the item exists in the cache and has not expired, FALSE otherwise.
+     */
+    public function isHit(): bool
+    {
+        if (!$this->hit) {
+            return false;
+        }
+        return $this->exp === null || (new DateTime()) < $this->exp;
     }
 
     /**
@@ -147,32 +162,17 @@ final class FileCacheItem implements CacheItemInterface
     }
 
     /**
-     * Serializes the current state of the cache item.
+     * Assigns a value to the item.
      *
-     * @return array An associative array containing the key, serialized value,
-     *               hit flag, and expiration date formatted as a string.
-     */
-    public function __serialize(): array
-    {
-        return [
-            'key' => $this->key,
-            'value' => $this->value,
-            'hit' => $this->hit,
-            'exp' => $this->exp?->format(DateTimeInterface::ATOM),
-        ];
-    }
-
-    /**
-     * Restores the object state from the given serialized data.
+     * @param mixed $value
      *
-     * @param array $data The serialized data containing the key, value, hit flag, and expiration.
-     * @throws Exception
+     * @return static
+     *   The current object for fluent API
      */
-    public function __unserialize(array $data): void
+    public function set(mixed $value): static
     {
-        $this->key = $data['key'];
-        $this->value = ValueSerializer::unwrap($data['value']);
-        $this->hit = $data['hit'];
-        $this->exp = isset($data['exp']) ? new DateTime($data['exp']) : null;
+        $this->value = ValueSerializer::wrap($value);
+        $this->hit = true;
+        return $this;
     }
 }

@@ -14,29 +14,54 @@ final class ValueSerializer
     private static array $resourceHandlers = [];
 
     /**
-     * Registers a handler for a specific resource type.
+     * Clear all registered resource handlers.
      *
-     * The two callables provided are:
-     *  1. `wrapFn`: takes a resource of type `$type` and returns an array
-     *     (or other serializable value) that represents the resource.
-     *  2. `restoreFn`: takes the array (or other serializable value) returned
-     *     by `wrapFn` and returns a resource of type `$type`.
+     * Use this method to reset the state of ValueSerializer in test cases,
+     * or when you want to ensure that no resource handlers are registered.
      *
-     * @param string $type The type of resource this handler is for.
-     * @param callable $wrapFn The callable that wraps the resource.
-     * @param callable $restoreFn The callable that restores the resource.
-     *
-     * @throws InvalidArgumentException If a handler for `$type` already exists.
+     * @return void
      */
-    public static function registerResourceHandler(
-        string $type,
-        callable $wrapFn,
-        callable $restoreFn,
-    ): void {
-        self::$resourceHandlers[$type] = [
-            'wrap' => $wrapFn,
-            'restore' => $restoreFn,
-        ];
+    public static function clearResourceHandlers(): void
+    {
+        self::$resourceHandlers = [];
+    }
+
+    /**
+     * Decode a payload produced by {@see encode()}.
+     *
+     * @param string $payload The encoded string
+     * @param bool $base64 True ⇒ expect base64; false ⇒ raw
+     * @return mixed                   Original value
+     * @throws InvalidArgumentException Forwarded from ::unserialize()
+     */
+    public static function decode(string $payload, bool $base64 = true): mixed
+    {
+        $blob = $base64 ? base64_decode($payload, true) : $payload;
+
+        if ($blob === false) {
+            throw new InvalidArgumentException('Invalid base64 payload supplied to ValueSerializer::decode().');
+        }
+
+        return self::unserialize($blob);
+    }
+
+    /**
+     * Encode any value into a transport-safe (optionally base64) string.
+     *
+     * ```php
+     * $token = ValueSerializer::encode($payload);        // base64 by default
+     * $same  = ValueSerializer::decode($token);
+     * ```
+     *
+     * @param mixed $value Any PHP value
+     * @param bool $base64 True ⇒ wrap with base64; false ⇒ raw
+     * @return string                  Encoded payload
+     * @throws InvalidArgumentException Forwarded from ::serialize()
+     */
+    public static function encode(mixed $value, bool $base64 = true): string
+    {
+        $blob = self::serialize($value);
+        return $base64 ? base64_encode($blob) : $blob;
     }
 
     /**
@@ -66,41 +91,29 @@ final class ValueSerializer
     }
 
     /**
-     * Encode any value into a transport-safe (optionally base64) string.
+     * Registers a handler for a specific resource type.
      *
-     * ```php
-     * $token = ValueSerializer::encode($payload);        // base64 by default
-     * $same  = ValueSerializer::decode($token);
-     * ```
+     * The two callables provided are:
+     *  1. `wrapFn`: takes a resource of type `$type` and returns an array
+     *     (or other serializable value) that represents the resource.
+     *  2. `restoreFn`: takes the array (or other serializable value) returned
+     *     by `wrapFn` and returns a resource of type `$type`.
      *
-     * @param mixed $value Any PHP value
-     * @param bool $base64 True ⇒ wrap with base64; false ⇒ raw
-     * @return string                  Encoded payload
-     * @throws InvalidArgumentException Forwarded from ::serialize()
+     * @param string $type The type of resource this handler is for.
+     * @param callable $wrapFn The callable that wraps the resource.
+     * @param callable $restoreFn The callable that restores the resource.
+     *
+     * @throws InvalidArgumentException If a handler for `$type` already exists.
      */
-    public static function encode(mixed $value, bool $base64 = true): string
-    {
-        $blob = self::serialize($value);
-        return $base64 ? base64_encode($blob) : $blob;
-    }
-
-    /**
-     * Decode a payload produced by {@see encode()}.
-     *
-     * @param string $payload The encoded string
-     * @param bool $base64 True ⇒ expect base64; false ⇒ raw
-     * @return mixed                   Original value
-     * @throws InvalidArgumentException Forwarded from ::unserialize()
-     */
-    public static function decode(string $payload, bool $base64 = true): mixed
-    {
-        $blob = $base64 ? base64_decode($payload, true) : $payload;
-
-        if ($blob === false) {
-            throw new InvalidArgumentException('Invalid base64 payload supplied to ValueSerializer::decode().');
-        }
-
-        return self::unserialize($blob);
+    public static function registerResourceHandler(
+        string $type,
+        callable $wrapFn,
+        callable $restoreFn,
+    ): void {
+        self::$resourceHandlers[$type] = [
+            'wrap' => $wrapFn,
+            'restore' => $restoreFn,
+        ];
     }
 
     /**
@@ -147,6 +160,21 @@ final class ValueSerializer
 
 
     /**
+     * Reverse {@see wrap} by recursively unwrapping values that were wrapped by
+     * {@see wrap}. This method is similar to {@see unserialize}, but it does not
+     * involve serialisation.
+     *
+     * @param mixed $resource A value that may contain wrapped resources.
+     *
+     * @return mixed The same value with any wrapped resources restored.
+     */
+    public static function unwrap(mixed $resource): mixed
+    {
+        return self::unwrapRecursive($resource);
+    }
+
+
+    /**
      * Wraps resources within a given value.
      *
      * This method acts as a public interface to recursively wrap
@@ -162,32 +190,30 @@ final class ValueSerializer
         return self::wrapRecursive($value);
     }
 
-
     /**
-     * Reverse {@see wrap} by recursively unwrapping values that were wrapped by
-     * {@see wrap}. This method is similar to {@see unserialize}, but it does not
-     * involve serialisation.
+     * Reverse {@see wrapRecursive} by recursively unwrapping values
+     * that were wrapped by {@see wrapRecursive}.
      *
      * @param mixed $resource A value that may contain wrapped resources.
      *
      * @return mixed The same value with any wrapped resources restored.
      */
-    public static function unwrap(mixed $resource): mixed
+    private static function unwrapRecursive(mixed $resource): mixed
     {
-        return self::unwrapRecursive($resource);
-    }
+        if (
+            is_array($resource) &&
+            ($resource['__wrapped_resource'] ?? false) &&
+            isset(self::$resourceHandlers[$resource['type']])
+        ) {
+            return (self::$resourceHandlers[$resource['type']]['restore'])($resource['data']);
+        }
 
-    /**
-     * Clear all registered resource handlers.
-     *
-     * Use this method to reset the state of ValueSerializer in test cases,
-     * or when you want to ensure that no resource handlers are registered.
-     *
-     * @return void
-     */
-    public static function clearResourceHandlers(): void
-    {
-        self::$resourceHandlers = [];
+        if (is_array($resource)) {
+            foreach ($resource as $key => $item) {
+                $resource[$key] = self::unwrapRecursive($item);
+            }
+        }
+        return $resource;
     }
 
     /**
@@ -226,32 +252,6 @@ final class ValueSerializer
         if (is_array($resource)) {
             foreach ($resource as $key => $value) {
                 $resource[$key] = self::wrapRecursive($value);
-            }
-        }
-        return $resource;
-    }
-
-    /**
-     * Reverse {@see wrapRecursive} by recursively unwrapping values
-     * that were wrapped by {@see wrapRecursive}.
-     *
-     * @param mixed $resource A value that may contain wrapped resources.
-     *
-     * @return mixed The same value with any wrapped resources restored.
-     */
-    private static function unwrapRecursive(mixed $resource): mixed
-    {
-        if (
-            is_array($resource) &&
-            ($resource['__wrapped_resource'] ?? false) &&
-            isset(self::$resourceHandlers[$resource['type']])
-        ) {
-            return (self::$resourceHandlers[$resource['type']]['restore'])($resource['data']);
-        }
-
-        if (is_array($resource)) {
-            foreach ($resource as $key => $item) {
-                $resource[$key] = self::unwrapRecursive($item);
             }
         }
         return $resource;

@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\Cache\Adapter;
 
 use Countable;
-use RuntimeException;
+use Infocyph\InterMix\Cache\Item\ApcuCacheItem;
+use Infocyph\InterMix\Exceptions\CacheInvalidArgumentException;
+use Infocyph\InterMix\Serializer\ValueSerializer;
 use Psr\Cache\CacheItemInterface;
 use Psr\Cache\CacheItemPoolInterface;
-use Infocyph\InterMix\Cache\Item\ApcuCacheItem;
-use Infocyph\InterMix\Serializer\ValueSerializer;
-use Infocyph\InterMix\Exceptions\CacheInvalidArgumentException;
+use RuntimeException;
 
 class ApcuCacheAdapter implements CacheItemPoolInterface, Countable
 {
@@ -36,48 +36,84 @@ class ApcuCacheAdapter implements CacheItemPoolInterface, Countable
     }
 
     /**
-     * Internal mapping function for APCu keys.
+     * Removes all items from the cache.
      *
-     * @param string $key The key to map.
-     * @return string The mapped key.
-     * @internal
+     * @return bool TRUE if all items were successfully removed, FALSE otherwise.
      */
-    private function map(string $key): string
+    public function clear(): bool
     {
-        return $this->ns . ':' . $key;
+        foreach ($this->listKeys() as $apcuKey) {
+            apcu_delete($apcuKey);
+        }
+        $this->deferred = [];
+        return true;
     }
 
     /**
-     * Retrieves multiple cache items by their keys.
+     * Persists any deferred cache items.
      *
-     * This method fetches and returns an array of cache items for the specified keys.
-     * If a key does not exist in the cache, an empty cache item is created for that key.
-     *
-     * @param array<string> $keys The keys of the items to retrieve.
-     * @return array<string, ApcuCacheItem> An array of cache items indexed by their keys.
+     * @return bool TRUE if all deferred items were successfully persisted, FALSE otherwise.
      */
-    public function multiFetch(array $keys): array
+    public function commit(): bool
     {
-        if ($keys === []) {
-            return [];
+        $ok = true;
+        foreach ($this->deferred as $k => $it) {
+            $ok = $ok && $this->save($it);
+            unset($this->deferred[$k]);
         }
-        $prefixed = array_map(fn ($k) => $this->map($k), $keys);
-        $raw = apcu_fetch($prefixed);
+        return $ok;
+    }
 
-        $items = [];
+    /**
+     * Counts the number of cache items stored in APCu.
+     *
+     * @return int The total number of cache items currently stored.
+     */
+    public function count(): int
+    {
+        return count($this->listKeys());
+    }
+
+    /**
+     * Deletes an item from the cache.
+     *
+     * @param string $key The identifier of the item to delete.
+     * @return bool TRUE if the item was successfully deleted, FALSE otherwise.
+     */
+    public function deleteItem(string $key): bool
+    {
+        return apcu_delete($this->map($key));
+    }
+
+    /**
+     * Removes multiple items from the cache.
+     *
+     * @param string[] $keys The identifiers of the items to remove.
+     * @return bool TRUE if all items were successfully removed, FALSE otherwise.
+     */
+    public function deleteItems(array $keys): bool
+    {
+        $ok = true;
         foreach ($keys as $k) {
-            $p = $this->map($k);
-            if (array_key_exists($p, $raw)) {
-                $val = ValueSerializer::unserialize($raw[$p]);
-                if ($val instanceof CacheItemInterface) {
-                    $val = $val->get();
-                }
-                $items[$k] = new ApcuCacheItem($this, $k, $val, true);
-            } else {
-                $items[$k] = new ApcuCacheItem($this, $k);
-            }
+            $ok = $ok && $this->deleteItem($k);
         }
-        return $items;
+        return $ok;
+    }
+
+
+    /**
+     * Retrieves a value from the cache for the given key.
+     *
+     * If the item is found and is a cache hit, its value is returned.
+     * Otherwise, null is returned.
+     *
+     * @param string $key The key of the item to retrieve.
+     * @return mixed The cached value or null if the item is not found.
+     */
+    public function get(string $key): mixed
+    {
+        $item = $this->getItem($key);
+        return $item->isHit() ? $item->get() : null;
     }
 
     /**
@@ -125,44 +161,70 @@ class ApcuCacheAdapter implements CacheItemPoolInterface, Countable
         return apcu_exists($this->map($key));
     }
 
+
     /**
-     * Deletes an item from the cache.
+     * @param ApcuCacheItem $item The cache item to persist.
      *
-     * @param string $key The identifier of the item to delete.
-     * @return bool TRUE if the item was successfully deleted, FALSE otherwise.
+     * @return bool TRUE if the item was successfully persisted, FALSE otherwise.
+     * @internal
+     * Persists a cache item in the cache pool.
+     *
+     * This method is called by the cache item when it is persisted
+     * using the `save()` method. It is not intended to be called
+     * directly.
+     *
      */
-    public function deleteItem(string $key): bool
+    public function internalPersist(ApcuCacheItem $item): bool
     {
-        return apcu_delete($this->map($key));
+        return $this->save($item);
     }
 
     /**
-     * Removes multiple items from the cache.
+     * Adds the given cache item to the internal deferred queue.
      *
-     * @param string[] $keys The identifiers of the items to remove.
-     * @return bool TRUE if all items were successfully removed, FALSE otherwise.
+     * This method enqueues the cache item for later persistence in
+     * the cache pool. The item will not be saved immediately, but
+     * will be stored when the commit() method is called.
+     *
+     * @param ApcuCacheItem $item The cache item to be queued for deferred saving.
+     * @return bool True if the item was successfully queued, false otherwise.
      */
-    public function deleteItems(array $keys): bool
+    public function internalQueue(ApcuCacheItem $item): bool
     {
-        $ok = true;
+        return $this->saveDeferred($item);
+    }
+
+    /**
+     * Retrieves multiple cache items by their keys.
+     *
+     * This method fetches and returns an array of cache items for the specified keys.
+     * If a key does not exist in the cache, an empty cache item is created for that key.
+     *
+     * @param array<string> $keys The keys of the items to retrieve.
+     * @return array<string, ApcuCacheItem> An array of cache items indexed by their keys.
+     */
+    public function multiFetch(array $keys): array
+    {
+        if ($keys === []) {
+            return [];
+        }
+        $prefixed = array_map(fn ($k) => $this->map($k), $keys);
+        $raw = apcu_fetch($prefixed);
+
+        $items = [];
         foreach ($keys as $k) {
-            $ok = $ok && $this->deleteItem($k);
+            $p = $this->map($k);
+            if (array_key_exists($p, $raw)) {
+                $val = ValueSerializer::unserialize($raw[$p]);
+                if ($val instanceof CacheItemInterface) {
+                    $val = $val->get();
+                }
+                $items[$k] = new ApcuCacheItem($this, $k, $val, true);
+            } else {
+                $items[$k] = new ApcuCacheItem($this, $k);
+            }
         }
-        return $ok;
-    }
-
-    /**
-     * Removes all items from the cache.
-     *
-     * @return bool TRUE if all items were successfully removed, FALSE otherwise.
-     */
-    public function clear(): bool
-    {
-        foreach ($this->listKeys() as $apcuKey) {
-            apcu_delete($apcuKey);
-        }
-        $this->deferred = [];
-        return true;
+        return $items;
     }
 
     /**
@@ -203,19 +265,23 @@ class ApcuCacheAdapter implements CacheItemPoolInterface, Countable
         return true;
     }
 
+
     /**
-     * Persists any deferred cache items.
+     * PSR-16 “set($key, $value, $ttl)”: set a value in the cache.
      *
-     * @return bool TRUE if all deferred items were successfully persisted, FALSE otherwise.
+     * @param string $key   The key of the item to store.
+     * @param mixed  $value The value of the item to store.
+     * @param int|null $ttl  Optional. The TTL value of this item. If no value is sent and
+     *                       the driver supports TTL then the library may set a default value
+     *                       for it or let the driver take care of that.
+     *
+     * @return bool TRUE if the value was successfully stored, FALSE otherwise.
      */
-    public function commit(): bool
+    public function set(string $key, mixed $value, ?int $ttl = null): bool
     {
-        $ok = true;
-        foreach ($this->deferred as $k => $it) {
-            $ok = $ok && $this->save($it);
-            unset($this->deferred[$k]);
-        }
-        return $ok;
+        $item = $this->getItem($key);
+        $item->set($value)->expiresAfter($ttl);
+        return $this->save($item);
     }
 
     /**
@@ -240,80 +306,14 @@ class ApcuCacheAdapter implements CacheItemPoolInterface, Countable
     }
 
     /**
-     * Counts the number of cache items stored in APCu.
+     * Internal mapping function for APCu keys.
      *
-     * @return int The total number of cache items currently stored.
-     */
-    public function count(): int
-    {
-        return count($this->listKeys());
-    }
-
-
-    /**
-     * Retrieves a value from the cache for the given key.
-     *
-     * If the item is found and is a cache hit, its value is returned.
-     * Otherwise, null is returned.
-     *
-     * @param string $key The key of the item to retrieve.
-     * @return mixed The cached value or null if the item is not found.
-     */
-    public function get(string $key): mixed
-    {
-        $item = $this->getItem($key);
-        return $item->isHit() ? $item->get() : null;
-    }
-
-
-    /**
-     * PSR-16 “set($key, $value, $ttl)”: set a value in the cache.
-     *
-     * @param string $key   The key of the item to store.
-     * @param mixed  $value The value of the item to store.
-     * @param int|null $ttl  Optional. The TTL value of this item. If no value is sent and
-     *                       the driver supports TTL then the library may set a default value
-     *                       for it or let the driver take care of that.
-     *
-     * @return bool TRUE if the value was successfully stored, FALSE otherwise.
-     */
-    public function set(string $key, mixed $value, ?int $ttl = null): bool
-    {
-        $item = $this->getItem($key);
-        $item->set($value)->expiresAfter($ttl);
-        return $this->save($item);
-    }
-
-
-    /**
-     * @param ApcuCacheItem $item The cache item to persist.
-     *
-     * @return bool TRUE if the item was successfully persisted, FALSE otherwise.
+     * @param string $key The key to map.
+     * @return string The mapped key.
      * @internal
-     * Persists a cache item in the cache pool.
-     *
-     * This method is called by the cache item when it is persisted
-     * using the `save()` method. It is not intended to be called
-     * directly.
-     *
      */
-    public function internalPersist(ApcuCacheItem $item): bool
+    private function map(string $key): string
     {
-        return $this->save($item);
-    }
-
-    /**
-     * Adds the given cache item to the internal deferred queue.
-     *
-     * This method enqueues the cache item for later persistence in
-     * the cache pool. The item will not be saved immediately, but
-     * will be stored when the commit() method is called.
-     *
-     * @param ApcuCacheItem $item The cache item to be queued for deferred saving.
-     * @return bool True if the item was successfully queued, false otherwise.
-     */
-    public function internalQueue(ApcuCacheItem $item): bool
-    {
-        return $this->saveDeferred($item);
+        return $this->ns . ':' . $key;
     }
 }

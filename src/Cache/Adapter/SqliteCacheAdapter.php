@@ -5,17 +5,17 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\Cache\Adapter;
 
 use Countable;
+use Infocyph\InterMix\Cache\Item\SqliteCacheItem;
+use Infocyph\InterMix\Exceptions\CacheInvalidArgumentException;
+use Infocyph\InterMix\Serializer\ValueSerializer;
 use PDO;
 use Psr\Cache\CacheItemInterface;
 use Psr\Cache\CacheItemPoolInterface;
-use Infocyph\InterMix\Cache\Item\SqliteCacheItem;
-use Infocyph\InterMix\Serializer\ValueSerializer;
-use Infocyph\InterMix\Exceptions\CacheInvalidArgumentException;
 
 class SqliteCacheAdapter implements CacheItemPoolInterface, Countable
 {
-    private readonly PDO $pdo;
     private readonly string $ns;
+    private readonly PDO $pdo;
     private array $deferred = [];
 
     /**
@@ -46,60 +46,104 @@ class SqliteCacheAdapter implements CacheItemPoolInterface, Countable
     }
 
     /**
-     * Retrieves multiple cache items from the cache pool.
+     * Clears the cache pool and the deferred queue.
      *
-     * This method fetches cache items corresponding to the provided
-     * keys. If a cache item is found and is not expired, it returns
-     * the cache item with its value. If a cache item is expired, it
-     * deletes the cache entry and returns a cache item with a null
-     * value. If a key does not exist in the cache, it also returns
-     * a cache item with a null value.
+     * This method is supposed to be used when the entire cache pool
+     * needs to be purged of all cache items. It is not intended to
+     * be used very frequently.
      *
-     * @param array $keys An array of cache keys to retrieve.
-     * @return array An associative array of cache items, keyed by the
-     *               original cache keys.
+     * @return bool True if the cache was successfully cleared, false otherwise.
      */
-    public function multiFetch(array $keys): array
+    public function clear(): bool
     {
-        if ($keys === []) {
-            return [];
+        $this->pdo->exec('DELETE FROM cache');
+        $this->deferred = [];
+        return true;
+    }
+
+    /**
+     * Commits all deferred cache items to the database.
+     *
+     * This method attempts to save all items in the deferred queue
+     * to the cache. Each item is processed and persisted. If all
+     * items are successfully saved, the deferred queue is cleared.
+     *
+     * @return bool True if all deferred items were successfully saved, false otherwise.
+     */
+    public function commit(): bool
+    {
+        $ok = true;
+        foreach ($this->deferred as $k => $it) {
+            $ok = $ok && $this->save($it);
+            unset($this->deferred[$k]);
         }
+        return $ok;
+    }
 
-        $marks = implode(',', array_fill(0, count($keys), '?'));
-        $stmt = $this->pdo->prepare(
-            "SELECT key, value, expires
-             FROM cache
-             WHERE key IN ($marks)"
-        );
-        $stmt->execute($keys);
+    /**
+     * Returns the number of cache items that are not expired.
+     *
+     * This method counts and returns the total number of items
+     * in the cache that have no expiration or have an expiration
+     * time in the future.
+     *
+     * @return int The number of valid cache items.
+     */
+    public function count(): int
+    {
+        return (int) $this->pdo->query(
+            'SELECT COUNT(*) FROM cache WHERE expires IS NULL OR expires > ' . time()
+        )->fetchColumn();
+    }
 
-        /** @var array<string,array{value:string,expires:int|null}> $rows */
-        $rows = [];
-        foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) as $r) {
-            $rows[$r['key']] = ['value' => $r['value'], 'expires' => $r['expires']];
-        }
+    /**
+     * Deletes a cache item.
+     *
+     * This method attempts to delete the cache item
+     * associated with the specified key.
+     *
+     * @param string $key The cache key to delete.
+     * @return bool True if the item was successfully deleted.
+     */
+    public function deleteItem(string $key): bool
+    {
+        $this->pdo->prepare('DELETE FROM cache WHERE key = :k')->execute([':k' => $key]);
+        return true;
+    }
 
-        $items = [];
-        $now = time();
-
+    /**
+     * Deletes multiple cache items by their keys.
+     *
+     * This method attempts to delete each cache item
+     * specified in the array of keys. It iterates through
+     * the keys and deletes the corresponding cache item.
+     *
+     * @param array $keys An array of cache keys to delete.
+     * @return bool True if all items were successfully deleted.
+     */
+    public function deleteItems(array $keys): bool
+    {
         foreach ($keys as $k) {
-            if (isset($rows[$k])) {
-                $row = $rows[$k];
-                if ($row['expires'] === null || $row['expires'] > $now) {
-                    $val = ValueSerializer::unserialize($row['value']);
-                    if ($val instanceof CacheItemInterface) {
-                        $val = $val->get();
-                    }
-                    $items[$k] = new SqliteCacheItem($this, $k, $val, true);
-                    continue;
-                }
-                // expired → delete then miss
-                $this->pdo->prepare("DELETE FROM cache WHERE key = ?")->execute([$k]);
-            }
-            $items[$k] = new SqliteCacheItem($this, $k);
+            $this->deleteItem($k);
         }
+        return true;
+    }
 
-        return $items;
+
+    /**
+     * Retrieves the value associated with the specified cache key.
+     *
+     * This method attempts to fetch the cache item for the given key
+     * and returns its value if the item is a cache hit. If the item
+     * does not exist or is expired, it returns null.
+     *
+     * @param string $key The cache key to retrieve.
+     * @return mixed The cached value or null if not found or expired.
+     */
+    public function get(string $key): mixed
+    {
+        $item = $this->getItem($key);
+        return $item->isHit() ? $item->get() : null;
     }
 
     /**
@@ -171,173 +215,6 @@ class SqliteCacheAdapter implements CacheItemPoolInterface, Countable
     }
 
     /**
-     * Saves a cache item to the database.
-     *
-     * This method is supposed to be used when the cache item needs
-     * to be persisted in the cache pool. It is not intended to be
-     * used very frequently.
-     *
-     * @param CacheItemInterface $item The cache item to save.
-     *
-     * @return bool TRUE if the item was successfully saved, FALSE otherwise.
-     * @throws CacheInvalidArgumentException if the given item is not an instance of SqliteCacheItem.
-     */
-    public function save(CacheItemInterface $item): bool
-    {
-        if (!$item instanceof SqliteCacheItem) {
-            throw new CacheInvalidArgumentException('Wrong item class');
-        }
-        $blob = ValueSerializer::serialize($item);
-        $exp = $item->ttlSeconds() ? time() + $item->ttlSeconds() : null;
-
-        $stmt = $this->pdo->prepare(
-            'REPLACE INTO cache(key, value, expires) VALUES(:k, :v, :e)'
-        );
-        return $stmt->execute([
-            ':k' => $item->getKey(),
-            ':v' => $blob,
-            ':e' => $exp,
-        ]);
-    }
-
-    /**
-     * Deletes a cache item.
-     *
-     * This method attempts to delete the cache item
-     * associated with the specified key.
-     *
-     * @param string $key The cache key to delete.
-     * @return bool True if the item was successfully deleted.
-     */
-    public function deleteItem(string $key): bool
-    {
-        $this->pdo->prepare('DELETE FROM cache WHERE key = :k')->execute([':k' => $key]);
-        return true;
-    }
-
-    /**
-     * Deletes multiple cache items by their keys.
-     *
-     * This method attempts to delete each cache item
-     * specified in the array of keys. It iterates through
-     * the keys and deletes the corresponding cache item.
-     *
-     * @param array $keys An array of cache keys to delete.
-     * @return bool True if all items were successfully deleted.
-     */
-    public function deleteItems(array $keys): bool
-    {
-        foreach ($keys as $k) {
-            $this->deleteItem($k);
-        }
-        return true;
-    }
-
-    /**
-     * Clears the cache pool and the deferred queue.
-     *
-     * This method is supposed to be used when the entire cache pool
-     * needs to be purged of all cache items. It is not intended to
-     * be used very frequently.
-     *
-     * @return bool True if the cache was successfully cleared, false otherwise.
-     */
-    public function clear(): bool
-    {
-        $this->pdo->exec('DELETE FROM cache');
-        $this->deferred = [];
-        return true;
-    }
-
-    /**
-     * Adds the given cache item to the internal deferred queue.
-     *
-     * This method enqueues the cache item for later persistence in
-     * the cache pool. The item will not be saved immediately, but
-     * will be stored when the commit() method is called.
-     *
-     * @param CacheItemInterface $item The cache item to be queued for deferred saving.
-     * @return bool True if the item was successfully queued, false otherwise.
-     * @internal
-     */
-    public function saveDeferred(CacheItemInterface $item): bool
-    {
-        if (!$item instanceof SqliteCacheItem) {
-            return false;
-        }
-        $this->deferred[$item->getKey()] = $item;
-        return true;
-    }
-
-    /**
-     * Commits all deferred cache items to the database.
-     *
-     * This method attempts to save all items in the deferred queue
-     * to the cache. Each item is processed and persisted. If all
-     * items are successfully saved, the deferred queue is cleared.
-     *
-     * @return bool True if all deferred items were successfully saved, false otherwise.
-     */
-    public function commit(): bool
-    {
-        $ok = true;
-        foreach ($this->deferred as $k => $it) {
-            $ok = $ok && $this->save($it);
-            unset($this->deferred[$k]);
-        }
-        return $ok;
-    }
-
-    /**
-     * Returns the number of cache items that are not expired.
-     *
-     * This method counts and returns the total number of items
-     * in the cache that have no expiration or have an expiration
-     * time in the future.
-     *
-     * @return int The number of valid cache items.
-     */
-    public function count(): int
-    {
-        return (int) $this->pdo->query(
-            'SELECT COUNT(*) FROM cache WHERE expires IS NULL OR expires > ' . time()
-        )->fetchColumn();
-    }
-
-
-    /**
-     * Retrieves the value associated with the specified cache key.
-     *
-     * This method attempts to fetch the cache item for the given key
-     * and returns its value if the item is a cache hit. If the item
-     * does not exist or is expired, it returns null.
-     *
-     * @param string $key The cache key to retrieve.
-     * @return mixed The cached value or null if not found or expired.
-     */
-    public function get(string $key): mixed
-    {
-        $item = $this->getItem($key);
-        return $item->isHit() ? $item->get() : null;
-    }
-
-
-    /**
-     * PSR-16: cache a raw value, with optional TTL.
-     *
-     * @param string $key
-     * @param mixed $value
-     * @param int|null $ttl
-     * @return bool
-     */
-    public function set(string $key, mixed $value, ?int $ttl = null): bool
-    {
-        $item = $this->getItem($key);
-        $item->set($value)->expiresAfter($ttl);
-        return $this->save($item);
-    }
-
-    /**
      * Persists a cache item in the cache pool.
      *
      * This method is called by the cache item when it is persisted
@@ -368,5 +245,128 @@ class SqliteCacheAdapter implements CacheItemPoolInterface, Countable
     public function internalQueue(SqliteCacheItem $i): bool
     {
         return $this->saveDeferred($i);
+    }
+
+    /**
+     * Retrieves multiple cache items from the cache pool.
+     *
+     * This method fetches cache items corresponding to the provided
+     * keys. If a cache item is found and is not expired, it returns
+     * the cache item with its value. If a cache item is expired, it
+     * deletes the cache entry and returns a cache item with a null
+     * value. If a key does not exist in the cache, it also returns
+     * a cache item with a null value.
+     *
+     * @param array $keys An array of cache keys to retrieve.
+     * @return array An associative array of cache items, keyed by the
+     *               original cache keys.
+     */
+    public function multiFetch(array $keys): array
+    {
+        if ($keys === []) {
+            return [];
+        }
+
+        $marks = implode(',', array_fill(0, count($keys), '?'));
+        $stmt = $this->pdo->prepare(
+            "SELECT key, value, expires
+             FROM cache
+             WHERE key IN ($marks)"
+        );
+        $stmt->execute($keys);
+
+        /** @var array<string,array{value:string,expires:int|null}> $rows */
+        $rows = [];
+        foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) as $r) {
+            $rows[$r['key']] = ['value' => $r['value'], 'expires' => $r['expires']];
+        }
+
+        $items = [];
+        $now = time();
+
+        foreach ($keys as $k) {
+            if (isset($rows[$k])) {
+                $row = $rows[$k];
+                if ($row['expires'] === null || $row['expires'] > $now) {
+                    $val = ValueSerializer::unserialize($row['value']);
+                    if ($val instanceof CacheItemInterface) {
+                        $val = $val->get();
+                    }
+                    $items[$k] = new SqliteCacheItem($this, $k, $val, true);
+                    continue;
+                }
+                // expired → delete then miss
+                $this->pdo->prepare("DELETE FROM cache WHERE key = ?")->execute([$k]);
+            }
+            $items[$k] = new SqliteCacheItem($this, $k);
+        }
+
+        return $items;
+    }
+
+    /**
+     * Saves a cache item to the database.
+     *
+     * This method is supposed to be used when the cache item needs
+     * to be persisted in the cache pool. It is not intended to be
+     * used very frequently.
+     *
+     * @param CacheItemInterface $item The cache item to save.
+     *
+     * @return bool TRUE if the item was successfully saved, FALSE otherwise.
+     * @throws CacheInvalidArgumentException if the given item is not an instance of SqliteCacheItem.
+     */
+    public function save(CacheItemInterface $item): bool
+    {
+        if (!$item instanceof SqliteCacheItem) {
+            throw new CacheInvalidArgumentException('Wrong item class');
+        }
+        $blob = ValueSerializer::serialize($item);
+        $exp = $item->ttlSeconds() ? time() + $item->ttlSeconds() : null;
+
+        $stmt = $this->pdo->prepare(
+            'REPLACE INTO cache(key, value, expires) VALUES(:k, :v, :e)'
+        );
+        return $stmt->execute([
+            ':k' => $item->getKey(),
+            ':v' => $blob,
+            ':e' => $exp,
+        ]);
+    }
+
+    /**
+     * Adds the given cache item to the internal deferred queue.
+     *
+     * This method enqueues the cache item for later persistence in
+     * the cache pool. The item will not be saved immediately, but
+     * will be stored when the commit() method is called.
+     *
+     * @param CacheItemInterface $item The cache item to be queued for deferred saving.
+     * @return bool True if the item was successfully queued, false otherwise.
+     * @internal
+     */
+    public function saveDeferred(CacheItemInterface $item): bool
+    {
+        if (!$item instanceof SqliteCacheItem) {
+            return false;
+        }
+        $this->deferred[$item->getKey()] = $item;
+        return true;
+    }
+
+
+    /**
+     * PSR-16: cache a raw value, with optional TTL.
+     *
+     * @param string $key
+     * @param mixed $value
+     * @param int|null $ttl
+     * @return bool
+     */
+    public function set(string $key, mixed $value, ?int $ttl = null): bool
+    {
+        $item = $this->getItem($key);
+        $item->set($value)->expiresAfter($ttl);
+        return $this->save($item);
     }
 }

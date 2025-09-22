@@ -23,18 +23,6 @@ final readonly class Invoker
     }
 
     /**
-     * Create an instance of the invoker with a specified container.
-     *
-     * @param Container $container The container to use for resolving callables.
-     *
-     * @return static An instance of the invoker.
-     */
-    public static function with(Container $container): self
-    {
-        return new self($container);
-    }
-
-    /**
      * Retrieve a shared instance of the invoker.
      *
      * This method returns a singleton instance of the invoker, using
@@ -47,6 +35,55 @@ final readonly class Invoker
     {
         static $inst;
         return $inst ??= new self(Container::instance(__DIR__));
+    }
+
+    /**
+     * Create an instance of the invoker with a specified container.
+     *
+     * @param Container $container The container to use for resolving callables.
+     *
+     * @return static An instance of the invoker.
+     */
+    public static function with(Container $container): self
+    {
+        return new self($container);
+    }
+
+
+    /**
+     * Returns a callable for the given target, caching the result.
+     *
+     * This method takes a target, which can be a string representing a class name
+     * or an object instance. It ensures the target is invokable, either by creating
+     * an instance through dependency injection if a class name is provided, or by
+     * using the provided object directly. The resulting callable is cached to
+     * optimize subsequent calls.
+     *
+     * @param string|object $target The class name or object to convert to a callable.
+     *
+     * @return callable The callable representation of the target.
+     *
+     * @throws InvalidArgumentException If the target is not invokable.
+     */
+    public function callableFor(string|object $target): callable
+    {
+        static $cache = [];
+        $key = \is_string($target) ? $target : $target::class;
+        return $cache[$key] ??= (function () use ($target) {
+            // ① get an *instance* (DI still runs only once)
+            $instance = \is_string($target)
+                ? $this->make($target)     // ctor-injected object
+                : $target;                 // already an object
+
+            if (!\is_callable($instance)) {
+                throw new InvalidArgumentException(
+                    sprintf('%s is not invokable.', $key = $instance::class),
+                );
+            }
+
+            // ② turn “object with __invoke” into a bound Closure (PHP 8+)
+            return $instance(...);        // promoted callable
+        })();
     }
 
     /**
@@ -105,20 +142,6 @@ final readonly class Invoker
     }
 
     /**
-     * Resolve a value associated with a given ID from the container.
-     *
-     * @param string $id The ID of the value to retrieve.
-     *
-     * @return mixed The resolved value or the cached value if available.
-     *
-     * @throws InvalidArgumentException If the value cannot be resolved.
-     */
-    public function resolve(string $id): mixed
-    {
-        return $this->container->get($id);
-    }
-
-    /**
      * Create a new instance of a class, optionally invoking a method.
      *
      * This is a convenience wrapper for the container's `make` method.
@@ -150,41 +173,18 @@ final readonly class Invoker
         return $this->container->make($class, $method);
     }
 
-
     /**
-     * Returns a callable for the given target, caching the result.
+     * Resolve a value associated with a given ID from the container.
      *
-     * This method takes a target, which can be a string representing a class name
-     * or an object instance. It ensures the target is invokable, either by creating
-     * an instance through dependency injection if a class name is provided, or by
-     * using the provided object directly. The resulting callable is cached to
-     * optimize subsequent calls.
+     * @param string $id The ID of the value to retrieve.
      *
-     * @param string|object $target The class name or object to convert to a callable.
+     * @return mixed The resolved value or the cached value if available.
      *
-     * @return callable The callable representation of the target.
-     *
-     * @throws InvalidArgumentException If the target is not invokable.
+     * @throws InvalidArgumentException If the value cannot be resolved.
      */
-    public function callableFor(string|object $target): callable
+    public function resolve(string $id): mixed
     {
-        static $cache = [];
-        $key = \is_string($target) ? $target : $target::class;
-        return $cache[$key] ??= (function () use ($target) {
-            // ① get an *instance* (DI still runs only once)
-            $instance = \is_string($target)
-                ? $this->make($target)     // ctor-injected object
-                : $target;                 // already an object
-
-            if (!\is_callable($instance)) {
-                throw new InvalidArgumentException(
-                    sprintf('%s is not invokable.', $key = $instance::class),
-                );
-            }
-
-            // ② turn “object with __invoke” into a bound Closure (PHP 8+)
-            return $instance(...);        // promoted callable
-        })();
+        return $this->container->get($id);
     }
 
     /**
