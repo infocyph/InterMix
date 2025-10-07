@@ -4,10 +4,10 @@
 Invocation & Shortcuts
 ========================
 
-InterMix ships with a **mini-helper API** that goes beyond PSR-11
+The **InvocationManager** (which utilizes the `ManagerProxy` trait) provides a **mini-helper API** that goes beyond PSR-11
 ``get()`` / ``has()``.
 These helpers *call* things immediately so you can treat functions,
-closures or whole classes as **actions**.
+closures or whole classes as **actions**. The manager supports both fluent method chaining and array access.
 
 -------------------------------------------------------
 1 · call( callable|string $target , ?string $method )
@@ -22,7 +22,11 @@ closures or whole classes as **actions**.
    $iso = $c->call(fn (DateTimeImmutable $now) => $now->format('c'));
 
    // (c) class & method (autowired) -------------------
-   $c->call(JobProcessor::class, 'handle');            // ctor + handle()
+   $c->call(JobProcessor::class, 'handle');
+
+   // Or using array access (via ManagerProxy)
+   $invoker = $c->invocation();
+   $result = $invoker(JobProcessor::class, 'handle');  // __invoke()
 
 **Rules**
 

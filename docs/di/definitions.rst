@@ -32,10 +32,17 @@ the container:
 
 .. code-block:: php
 
+   // Using method chaining (fluent interface)
    $c->definitions()
        ->bind('foo', 123)
-       ->bind('bar', 456)     // returns $c
-     ->lock();
+       ->bind('bar', 456)
+       ->lock();  // Returns to container
+
+   // Using array access (via ManagerProxy)
+   $def = $c->definitions();
+   $def['baz'] = fn() => new SomeService();  // Same as bind()
+   $service = $def['baz'];  // Same as get()
+   $hasBaz = isset($def['baz']);  // Same as has()
 
 -----------------------------------------------
 2.  Lifetimes (Singleton ⇢ Scoped ⇢ Transient)
@@ -90,7 +97,7 @@ Use tags for plug-in systems, domain events, command buses, etc.
    ]);
 
 **Property / array magic** (handy for tests & prototyping) – available on both the
-container *and* the manager thanks to *ManagerProxy*:
+container *and* all manager classes (DefinitionManager, OptionsManager, InvocationManager, RegistrationManager) thanks to the *ManagerProxy* trait:
 
 .. code-block:: php
 

@@ -4,10 +4,11 @@
 Options & Feature Toggles
 =========================
 
-The **OptionsManager** lets you fine-tune *how* InterMix behaves:
+The **OptionsManager** (which utilizes the `ManagerProxy` trait) lets you fine-tune *how* InterMix behaves. It provides both a fluent interface and array/property access:
 
 .. code-block:: php
 
+   // Using method chaining (fluent interface)
    $c->options()
        ->setOptions(               // ← the four primary flags
            injection:           true,
@@ -19,6 +20,11 @@ The **OptionsManager** lets you fine-tune *how* InterMix behaves:
        ->setEnvironment('prod')
        ->enableDebugTracing()      // collect a build trace
        ->end();                    // back to container
+
+   // Using array access (via ManagerProxy)
+   $options = $c->options();
+   $options['injection'] = false;  // Toggle injection
+   $injection = $options['injection'];  // Get current value
 
 ----------------------------------------------------
 1 · setOptions( injection , methodAttributes , … )
