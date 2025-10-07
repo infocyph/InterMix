@@ -1,4 +1,4 @@
-# docs/conf.py — InterMix (updated for Sphinx 8.x / Python 3.13)
+# docs/conf.py — InterMix (Sphinx 8.x / Python 3.13, Book Theme)
 from __future__ import annotations
 import os, datetime
 from subprocess import Popen, PIPE
@@ -25,12 +25,14 @@ release = version
 language = "en"
 root_doc = "index"  # Sphinx 8
 
+# --- PHP highlighting --------------------------------------------------------
 from pygments.lexers.web import PhpLexer
 from sphinx.highlighting import lexers
 highlight_language = "php"
 lexers["php"]             = PhpLexer(startinline=True)
 lexers["php-annotations"] = PhpLexer(startinline=True)
 
+# --- Extensions --------------------------------------------------------------
 extensions = [
     "myst_parser",
     "sphinx.ext.autodoc",
@@ -44,6 +46,7 @@ extensions = [
     "sphinx.ext.extlinks",
 ]
 
+# MyST (Markdown)
 myst_enable_extensions = [
     "colon_fence",
     "deflist",
@@ -55,30 +58,36 @@ myst_enable_extensions = [
 ]
 myst_heading_anchors = 3
 
+# Autodoc/Napoleon
 autodoc_default_options = {
     "members": True,
     "undoc-members": True,
     "show-inheritance": True,
 }
 napoleon_google_docstring = True
-napoleon_numpy_docstring  = False
+n apoleon_numpy_docstring  = False
 
+# Intersphinx (only inventories that exist)
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
 }
 
+# PHP manual shortcut: :php:`json_encode`
 extlinks = {
     "php": ("https://www.php.net/%s", "%s"),
 }
 
-html_theme = "sphinx_rtd_theme"
+# --- HTML output -------------------------------------------------------------
+html_theme = "sphinx_book_theme"
 html_theme_options = {
-    "collapse_navigation": False,
-    "sticky_navigation": True,
-    "navigation_depth": 3,
-    "logo_only": False,
-    "style_external_links": True,
-    "display_version": False,
+    "repository_url": "https://github.com/infocyph/InterMix",
+    "repository_branch": "main",
+    "path_to_docs": "docs",
+    "use_repository_button": True,
+    "use_issues_button": True,
+    "use_download_button": True,   # PDF/ePub from RTD
+    "home_page_in_toc": True,
+    "show_toc_level": 2,           # depth in right sidebar
 }
 templates_path   = ["_templates"]
 html_static_path = ["_static"]
@@ -88,6 +97,7 @@ html_show_sourcelink = True
 html_show_sphinx    = False
 html_last_updated_fmt = "%Y-%m-%d"
 
+# --- PDF (LaTeX) options (optional) -----------------------------------------
 latex_engine = "xelatex"
 latex_elements = {
     "papersize": "a4paper",
@@ -96,14 +106,16 @@ latex_elements = {
     "figure_align": "H",
 }
 
+# --- GitHub context ----------------------------------------------------------
 html_context = {
-    "display_github": False,
+    "display_github": False,   # book theme uses the repo buttons above
     "github_user": "infocyph",
     "github_repo": "InterMix",
     "github_version": version,
     "conf_py_path": "/docs/",
 }
 
+# Replaceable year token for RST
 rst_prolog = f"""
 .. |current_year| replace:: {year_now}
 """
