@@ -42,7 +42,7 @@ Why another container?
    }
 
    $c = container()
-       ->definitions()->bind(Clock::class, SystemClock::class)->end();
+       ->definitions()->bind(Clock::class, SystemClock::class);
 
    echo $c->get(Greeter::class)->greet('Alice');
    // → “Hello Alice — 2025-06-18T12:34:56+00:00”
@@ -60,13 +60,10 @@ still land back on the main container:
          ->options()
              ->setOptions(injection:true)
              ->enableLazyLoading()
-             ->end()
          ->registration()
              ->registerClass(App::class)
-             ->end()
          ->invocation()
              ->call(App::class, 'boot')
-             ->end()
        ->lock();
 
 Ascii peek

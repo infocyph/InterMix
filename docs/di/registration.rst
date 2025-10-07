@@ -31,8 +31,7 @@ Pass **positional** or **named** arguments – just like PHP itself.
            'root',                               // position #2
            'p@ssw0rd',                           // position #3
            'flags' => [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION], // named
-       ])
-       ->end();
+       ]);
 
 Hints
 ^^^^^
@@ -54,8 +53,7 @@ Schedules a **post-construction call**.
    $c->registration()
        ->registerMethod(EmailService::class, 'setConfig', [
            ['smtp' => 'localhost', 'port' => 25],   // first (and only) param
-       ])
-       ->end();
+       ]);
 
 When you later do:
 
@@ -86,8 +84,7 @@ gymnastics.
        ->registerProperty(Configurable::class, [
            'theme'        => 'dark',
            'staticValue'  => 'GLOBAL',
-       ])
-       ->end();
+       ]);
 
 Precedence (highest → lowest):
 
@@ -113,7 +110,7 @@ Service providers encapsulate a **bundle of definitions / registrations**.
    }
 
    // bootstrap
-   $c->registration()->import(FrameworkProvider::class)->end();
+   $c->registration()->import(FrameworkProvider::class);
 
 Providers are perfect for *modules*, *packages* or *feature toggles*.
 
@@ -126,7 +123,7 @@ Every class must then be fully described via *registration*:
 
 .. code-block:: php
 
-   $c->options()->setOptions(injection:false)->end();
+   $c->options()->setOptions(injection:false);
    $c->registration()
        ->registerClass(PlainOldClass::class, [123])
        ->registerMethod(PlainOldClass::class, 'init', [456])
