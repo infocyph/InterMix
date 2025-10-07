@@ -65,7 +65,7 @@ autodoc_default_options = {
     "show-inheritance": True,
 }
 napoleon_google_docstring = True
-n apoleon_numpy_docstring  = False
+napoleon_numpy_docstring  = False
 
 # Intersphinx (only inventories that exist)
 intersphinx_mapping = {
