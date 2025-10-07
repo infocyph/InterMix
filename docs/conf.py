@@ -1,109 +1,100 @@
-# Configuration file for the Sphinx documentation builder.
-#
-# This file only contains a selection of the most common options. For a full
-# list see the documentation:
-# https://www.sphinx-doc.org/en/master/usage/configuration.html
+# docs/conf.py — InterMix (updated for Sphinx 8.x / Python 3.13)
+from __future__ import annotations
+import os, datetime
+from subprocess import Popen, PIPE
 
-# -- Path setup --------------------------------------------------------------
+project   = "infocyph/InterMix"
+author    = "A. B. M. Mahmudul Hasan"
+year_now  = datetime.date.today().strftime("%Y")
+copyright = f"2021-{year_now}, infocyph"
 
-# If extensions (or modules to document with autodoc) are in another directory,
-# add these directories to sys.path here. If the directory is relative to the
-# documentation root, use os.path.abspath to make it absolute, like shown here.
+def get_version() -> str:
+    if os.environ.get("READTHEDOCS") == "True":
+        v = os.environ.get("READTHEDOCS_VERSION")
+        if v:
+            return v
+    try:
+        pipe = Popen("git rev-parse --abbrev-ref HEAD", stdout=PIPE, shell=True, universal_newlines=True)
+        v = (pipe.stdout.read() or "").strip()
+        return v or "latest"
+    except Exception:
+        return "latest"
 
-import os
-import sphinx_rtd_theme
-import sys
-import datetime
+version = get_version()
+release = version
+language = "en"
+root_doc = "index"  # Sphinx 8
 
 from pygments.lexers.web import PhpLexer
 from sphinx.highlighting import lexers
-from subprocess import Popen, PIPE
+highlight_language = "php"
+lexers["php"]             = PhpLexer(startinline=True)
+lexers["php-annotations"] = PhpLexer(startinline=True)
 
-def get_version():
-    if os.environ.get('READTHEDOCS') == 'True':
-        return os.environ.get('READTHEDOCS_VERSION')
-
-    pipe = Popen('git branch | grep \*', stdout=PIPE, shell=True, universal_newlines=True)
-    version = pipe.stdout.read()
-
-    if version:
-        return version[2:]
-    else:
-        return 'unknown'
-
-
-# -- Project information -----------------------------------------------------
-
-project = 'infocyph/InterMix'
-copyright = '2021-{year}, infocyph'.format(year = datetime.date.today().strftime('%Y'))
-author = 'A. B. M. Mahmudul Hasan'
-
-version = get_version().strip()
-release = version
-
-today = datetime.date.today().strftime('%Y-%m-%d')
-
-
-# -- General configuration ---------------------------------------------------
-
-master_doc = 'index'
-highlight_language = 'php'
-
-# enable highlighting for PHP code not between ``<?php ... ?>`` by default
-lexers['php'] = PhpLexer(startinline=True)
-lexers['php-annotations'] = PhpLexer(startinline=True)
-
-# Add any Sphinx extension module names here, as strings. They can be
-# extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
-# ones.
 extensions = [
-    'sphinx.ext.autodoc',
-    'sphinx.ext.todo',
-    'sphinxcontrib.phpdomain',
-    'myst_parser'
+    "myst_parser",
+    "sphinx.ext.autodoc",
+    "sphinx.ext.todo",
+    "sphinx.ext.napoleon",
+    "sphinx.ext.autosectionlabel",
+    "sphinx.ext.intersphinx",
+    "sphinx_copybutton",
+    "sphinx_design",
+    "sphinxcontrib.phpdomain",
+    "sphinx.ext.extlinks",
 ]
 
-# Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
+myst_enable_extensions = [
+    "colon_fence",
+    "deflist",
+    "attrs_block",
+    "attrs_inline",
+    "tasklist",
+    "fieldlist",
+    "linkify",
+]
+myst_heading_anchors = 3
 
-# List of patterns, relative to source directory, that match files and
-# directories to ignore when looking for source files.
-# This pattern also affects html_static_path and html_extra_path.
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+autodoc_default_options = {
+    "members": True,
+    "undoc-members": True,
+    "show-inheritance": True,
+}
+napoleon_google_docstring = True
+napoleon_numpy_docstring  = False
 
-pygments_style = 'sphinx'
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3", None),
+}
 
+extlinks = {
+    "php": ("https://www.php.net/%s", "%s"),
+}
 
-# -- Options for HTML output -------------------------------------------------
-
-# The theme to use for HTML and HTML Help pages.  See the documentation for
-# a list of builtin themes.
-#
 html_theme = "sphinx_rtd_theme"
 html_theme_options = {
-    'collapse_navigation': False,
-    'display_version': False
+    "collapse_navigation": False,
+    "sticky_navigation": True,
+    "navigation_depth": 3,
+    "logo_only": False,
+    "style_external_links": True,
+    "display_version": False,
 }
+templates_path   = ["_templates"]
+html_static_path = ["_static"]
+html_css_files   = ["theme.css"]
+html_title       = f"infocyph/InterMix {version} Manual"
 html_show_sourcelink = True
-html_last_updated_fmt = '%Y-%m-%d'
+html_show_sphinx    = False
+html_last_updated_fmt = "%Y-%m-%d"
 
-# Enable PDF metadata (optional, not critical)
-latex_engine = 'xelatex'
+latex_engine = "xelatex"
 latex_elements = {
-    'papersize': 'a4paper',
-    'pointsize': '11pt',
-    'preamble': '',
-    'figure_align': 'H',
+    "papersize": "a4paper",
+    "pointsize": "11pt",
+    "preamble": "",
+    "figure_align": "H",
 }
-# Add any paths that contain custom static files (such as style sheets) here,
-# relative to this directory. They are copied after the builtin static files,
-# so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ['_static']
-
-html_title = "infocyph/InterMix %s Manual" % get_version()
-html_show_sphinx = False
-
-htmlhelp_basename = 'infocyph-intermix-doc'
 
 html_context = {
     "display_github": False,
@@ -113,7 +104,6 @@ html_context = {
     "conf_py_path": "/docs/",
 }
 
-current_year = datetime.date.today().strftime('%Y')
-rst_prolog = """
-.. |current_year| replace:: {0}
-""".format(current_year)
+rst_prolog = f"""
+.. |current_year| replace:: {year_now}
+"""
