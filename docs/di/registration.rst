@@ -15,7 +15,7 @@ Why register?
 * **Override private / static properties** in legacy classes.
 * **Disable autowiring** entirely ( `injection:false` ) and describe everything up-front.
 
-The manager is **fluent**; finish with ``->end()`` to jump back to the container.
+The **RegistrationManager** (which utilizes the `ManagerProxy` trait) provides a **fluent** interface for class registration. You can also use array access for a more concise syntax. Finish with ``->end()`` to return to the container.
 
 ------------------------------------------------------------------
 1 · registerClass( FQCN , array $args = [] )
@@ -25,13 +25,23 @@ Pass **positional** or **named** arguments – just like PHP itself.
 
 .. code-block:: php
 
-   $c->registration()
+   // Using method chaining (fluent interface)
+   $reg = $c->registration()
        ->registerClass(Db::class, [
            'mysql:host=127.0.0.1;dbname=app',   // position #1
            'root',                               // position #2
            'p@ssw0rd',                           // position #3
            'flags' => [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION], // named
-       ]);
+       ]);  // Returns to container
+
+   // Using array access (via ManagerProxy)
+   $reg[Db::class] = [  // Same as registerClass()
+       'mysql:host=127.0.0.1;dbname=app',
+       'root',
+       'p@ssw0rd',
+       'flags' => [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+   ];
+   $db = $c->get(Db::class);
 
 Hints
 ^^^^^

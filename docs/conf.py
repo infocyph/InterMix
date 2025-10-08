@@ -4,9 +4,9 @@ import os, datetime
 from subprocess import Popen, PIPE
 
 project   = "infocyph/InterMix"
-author    = "A. B. M. Mahmudul Hasan"
+author    = "Infocyph"
 year_now  = datetime.date.today().strftime("%Y")
-copyright = f"2021-{year_now}, infocyph"
+copyright = f"2021-{year_now}"
 
 def get_version() -> str:
     if os.environ.get("READTHEDOCS") == "True":
