@@ -35,7 +35,7 @@
         }
     },
     "require": {
-        "php": ">=8.2",
+        "php": ">=8.3",
         "opis/closure": "^4.4",
         "psr/cache": "^3.0",
         "psr/container": "^2.0",
