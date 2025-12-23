@@ -208,7 +208,7 @@ class ApcuCacheAdapter implements CacheItemPoolInterface, Countable
         if ($keys === []) {
             return [];
         }
-        $prefixed = array_map(fn ($k) => $this->map($k), $keys);
+        $prefixed = array_map($this->map(...), $keys);
         $raw = apcu_fetch($prefixed);
 
         $items = [];
