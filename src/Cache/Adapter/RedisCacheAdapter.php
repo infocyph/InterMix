@@ -128,7 +128,7 @@ class RedisCacheAdapter implements CacheItemPoolInterface, Countable
      */
     public function deleteItems(array $keys): bool
     {
-        $full = array_map(fn ($k) => $this->map($k), $keys);
+        $full = array_map($this->map(...), $keys);
         return $this->redis->del($full) === count($keys);
     }
 
@@ -254,7 +254,7 @@ class RedisCacheAdapter implements CacheItemPoolInterface, Countable
             return [];
         }
 
-        $prefixed = array_map(fn ($k) => $this->map($k), $keys);
+        $prefixed = array_map($this->map(...), $keys);
         $rawVals = $this->redis->mget($prefixed);
 
         $items = [];

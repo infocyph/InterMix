@@ -259,7 +259,7 @@ class MemCacheAdapter implements CacheItemPoolInterface, Countable
      */
     public function multiFetch(array $keys): array
     {
-        $prefixed = array_map(fn ($k) => $this->map($k), $keys);
+        $prefixed = array_map($this->map(...), $keys);
         $raw = $this->mc->getMulti($prefixed, Memcached::GET_PRESERVE_ORDER) ?: [];
 
         $items = [];
