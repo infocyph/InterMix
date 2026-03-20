@@ -104,46 +104,12 @@ class SqliteCacheAdapter extends AbstractCacheAdapter
             return [];
         }
 
-        $marks = implode(',', array_fill(0, count($keys), '?'));
-        $stmt = $this->pdo->prepare(
-            "SELECT key, value, expires
-             FROM cache
-             WHERE key IN ($marks)"
-        );
-        $stmt->execute($keys);
-
-        /** @var array<string,array{value:string,expires:int|null}> $rows */
-        $rows = [];
-        foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) as $r) {
-            $rows[$r['key']] = ['value' => $r['value'], 'expires' => $r['expires']];
-        }
-
+        $rows = $this->fetchRowsByKeys($keys);
         $items = [];
         $now = time();
 
         foreach ($keys as $k) {
-            if (isset($rows[$k])) {
-                $row = $rows[$k];
-                if ($row['expires'] === null || $row['expires'] > $now) {
-                    $record = CachePayloadCodec::decode($row['value']);
-                    $expiresAt = $row['expires'];
-                    if ($record !== null) {
-                        $expiresAt = $record['expires'] ?? $expiresAt;
-                        if (!CachePayloadCodec::isExpired($expiresAt, $now)) {
-                            $items[$k] = new SqliteCacheItem(
-                                $this,
-                                $k,
-                                $record['value'],
-                                true,
-                                CachePayloadCodec::toDateTime($expiresAt),
-                            );
-                            continue;
-                        }
-                    }
-                }
-                $this->pdo->prepare('DELETE FROM cache WHERE key = ?')->execute([$k]);
-            }
-            $items[$k] = new SqliteCacheItem($this, $k);
+            $items[$k] = $this->buildFetchedItem($k, $rows, $now);
         }
 
         return $items;
@@ -176,5 +142,74 @@ class SqliteCacheAdapter extends AbstractCacheAdapter
     protected function supportsItem(CacheItemInterface $item): bool
     {
         return $item instanceof SqliteCacheItem;
+    }
+
+    private function buildFetchedItem(
+        string $key,
+        array $rows,
+        int $now,
+    ): SqliteCacheItem {
+        if (isset($rows[$key])) {
+            $item = $this->hydrateFetchedItem($key, $rows[$key], $now);
+            if ($item !== null) {
+                return $item;
+            }
+
+            $this->pdo->prepare('DELETE FROM cache WHERE key = ?')->execute([$key]);
+        }
+
+        return new SqliteCacheItem($this, $key);
+    }
+
+    /**
+     * @return array<string,array{value:string,expires:int|null}>
+     */
+    private function fetchRowsByKeys(array $keys): array
+    {
+        $marks = implode(',', array_fill(0, count($keys), '?'));
+        $stmt = $this->pdo->prepare(
+            "SELECT key, value, expires
+         FROM cache
+         WHERE key IN ($marks)"
+        );
+        $stmt->execute($keys);
+
+        /** @var array<string,array{value:string,expires:int|null}> $rows */
+        $rows = [];
+        foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) as $r) {
+            $rows[$r['key']] = ['value' => $r['value'], 'expires' => $r['expires']];
+        }
+
+        return $rows;
+    }
+
+    private function hydrateFetchedItem(
+        string $key,
+        array $row,
+        int $now,
+    ): ?SqliteCacheItem {
+        if ($row['expires'] !== null && $row['expires'] <= $now) {
+            return null;
+        }
+
+        $record = CachePayloadCodec::decode($row['value']);
+        $expiresAt = $row['expires'];
+
+        if ($record === null) {
+            return null;
+        }
+
+        $expiresAt = $record['expires'] ?? $expiresAt;
+        if (CachePayloadCodec::isExpired($expiresAt, $now)) {
+            return null;
+        }
+
+        return new SqliteCacheItem(
+            $this,
+            $key,
+            $record['value'],
+            true,
+            CachePayloadCodec::toDateTime($expiresAt),
+        );
     }
 }

@@ -17,20 +17,19 @@ namespace Infocyph\InterMix\DI\Support;
 enum LifetimeEnum: string
 {
     /**
+     * One instance per logical scope (fiber/request).
+     * Instances are shared within the same scope but isolated between different scopes.
+     */
+    case Scoped = 'scoped';
+    /**
      * One instance per container for the entire lifetime.
      * The same instance is returned on all subsequent requests.
      */
     case Singleton = 'singleton';
-    
+
     /**
      * Always creates a fresh instance on each request.
      * No caching or reuse of instances occurs.
      */
     case Transient = 'transient';
-    
-    /**
-     * One instance per logical scope (fiber/request).
-     * Instances are shared within the same scope but isolated between different scopes.
-     */
-    case Scoped = 'scoped';
 }

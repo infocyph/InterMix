@@ -145,6 +145,55 @@ class MemCacheAdapter extends AbstractCacheAdapter
         return $item instanceof MemCacheItem;
     }
 
+    /**
+     * @param array<string, bool> $seen
+     * @param list<string> $out
+     */
+    private function collectDumpedKeys(
+        string $server,
+        int $slabId,
+        string $pref,
+        array &$seen,
+        array &$out,
+    ): void {
+        $dump = $this->mc->getStats("cachedump $slabId 0");
+
+        if (!isset($dump[$server]) || !is_array($dump[$server])) {
+            return;
+        }
+
+        $keys = $this->stripNamespace(array_keys($dump[$server]), $pref);
+
+        foreach ($keys as $key) {
+            if (isset($seen[$key])) {
+                continue;
+            }
+
+            $seen[$key] = true;
+            $out[] = $key;
+        }
+    }
+
+    /**
+     * @param array<mixed> $items
+     *
+     * @return list<int>
+     */
+    private function extractSlabIds(array $items): array
+    {
+        $ids = [];
+
+        foreach ($items as $name => $value) {
+            if (!preg_match('/items:(\d+):number/', (string)$name, $m)) {
+                continue;
+            }
+
+            $ids[] = (int)$m[1];
+        }
+
+        return array_values(array_unique($ids));
+    }
+
     private function fastKnownKeys(): array
     {
         return $this->knownKeys ? array_keys($this->knownKeys) : [];
@@ -176,33 +225,29 @@ class MemCacheAdapter extends AbstractCacheAdapter
     {
         $out = [];
         $seen = [];
-        $stats = $this->mc->getStats('items');
-        foreach ($stats as $server => $items) {
-            foreach ($items as $name => $value) {
-                if (!preg_match('/items:(\d+):number/', (string)$name, $m)) {
-                    continue;
-                }
-                $slabId = (int)$m[1];
-                $dump = $this->mc->getStats("cachedump $slabId 0");
-                if (!isset($dump[$server])) {
-                    continue;
-                }
 
-                foreach ($this->stripNamespace(array_keys($dump[$server]), $pref) as $key) {
-                    if (isset($seen[$key])) {
-                        continue;
-                    }
-                    $seen[$key] = true;
-                    $out[] = $key;
-                }
+        foreach ($this->slabIdsByServer() as $server => $slabIds) {
+            foreach ($slabIds as $slabId) {
+                $this->collectDumpedKeys($server, $slabId, $pref, $seen, $out);
             }
         }
+
         return $out;
     }
 
     private function map(string $key): string
     {
         return $this->ns . ':' . $key;
+    }
+
+    /**
+     * @return array<string, list<int>>
+     */
+    private function slabIdsByServer(): array
+    {
+        $stats = $this->mc->getStats('items');
+
+        return array_map($this->extractSlabIds(...), $stats);
     }
 
     private function stripNamespace(array $fullKeys, string $pref): array
