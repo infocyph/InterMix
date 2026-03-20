@@ -8,11 +8,27 @@ use Countable;
 use Psr\Cache\CacheItemInterface;
 use Psr\Cache\CacheItemPoolInterface;
 
+/**
+ * Abstract base class for cache adapter implementations.
+ *
+ * This class provides a foundation for building PSR-6 and PSR-16 compliant
+ * cache adapters. It implements common functionality like deferred item management
+ * and provides default implementations for several cache pool interface methods.
+ *
+ * Adapters extending this class must implement the abstract methods required
+ * for their specific storage mechanism while inheriting common cache operations.
+ */
 abstract class AbstractCacheAdapter implements CacheItemPoolInterface, Countable, InternalCachePoolInterface
 {
     /** @var array<string, CacheItemInterface> */
     protected array $deferred = [];
 
+    /**
+     * Determines if this adapter supports the given cache item.
+     *
+     * @param CacheItemInterface $item The cache item to check.
+     * @return bool True if the adapter supports this item type.
+     */
     abstract protected function supportsItem(CacheItemInterface $item): bool;
 
     public function commit(): bool

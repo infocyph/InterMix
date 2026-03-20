@@ -9,10 +9,25 @@ use Infocyph\InterMix\Exceptions\CacheInvalidArgumentException;
 use Psr\Cache\CacheItemInterface;
 use RuntimeException;
 
+/**
+ * APCu-based cache adapter implementation.
+ *
+ * This adapter uses the APCu PHP extension to provide high-performance
+ * in-memory caching. It's suitable for production environments where
+ * shared memory caching is available and provides fast access to cached data.
+ *
+ * Note: This adapter requires the APCu extension to be installed and enabled.
+ */
 class ApcuCacheAdapter extends AbstractCacheAdapter
 {
     private readonly string $ns;
 
+    /**
+     * Creates a new APCu cache adapter.
+     *
+     * @param string $namespace A namespace prefix to avoid key collisions.
+     * @throws RuntimeException If the APCu extension is not enabled.
+     */
     public function __construct(string $namespace = 'default')
     {
         if (!extension_loaded('apcu') || !apcu_enabled()) {

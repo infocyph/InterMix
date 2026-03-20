@@ -13,10 +13,25 @@ use ReflectionClass;
 use ReflectionException;
 use ReflectionMethod;
 
+/**
+ * Handles class resolution with dependency injection and attribute processing.
+ *
+ * This resolver is responsible for creating class instances with full dependency
+ * injection support. It handles constructor injection, property injection,
+ * method injection, and attribute-based configuration.
+ *
+ * Features:
+ * - Recursive dependency resolution with circular reference detection
+ * - Environment-based interface binding
+ * - Attribute processing for injection configuration
+ * - Support for singleton, transient, and scoped lifetimes
+ */
 class ClassResolver
 {
-    /** @var array<int, string> */
+    /** @var array<int, string> Stack for tracking class resolution depth to prevent infinite recursion */
     private array $classStack = [];
+
+    /** @var array<string, bool> Tracks which entries are currently being resolved */
     private array $entriesResolving = [];
 
     /**

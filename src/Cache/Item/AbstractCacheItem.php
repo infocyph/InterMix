@@ -12,8 +12,27 @@ use Infocyph\InterMix\Cache\Adapter\InternalCachePoolInterface;
 use Infocyph\InterMix\Serializer\ValueSerializer;
 use Psr\Cache\CacheItemInterface;
 
+/**
+ * Abstract base class for cache item implementations.
+ *
+ * This class provides a foundation for building PSR-6 compliant cache items.
+ * It handles common functionality like key management, value storage,
+ * hit/miss tracking, and expiration handling.
+ *
+ * Cache items represent individual entries in a cache pool and provide
+ * methods for accessing and manipulating their state.
+ */
 abstract class AbstractCacheItem implements CacheItemInterface
 {
+    /**
+     * Creates a new cache item.
+     *
+     * @param InternalCachePoolInterface|null $pool The cache pool this item belongs to.
+     * @param string $key The cache key for this item.
+     * @param mixed $value The cached value.
+     * @param bool $hit Whether this item was a cache hit.
+     * @param DateTimeInterface|null $exp The expiration time for this item.
+     */
     public function __construct(
         private ?InternalCachePoolInterface $pool,
         private string $key,

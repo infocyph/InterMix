@@ -475,6 +475,17 @@ readonly class Cache implements CacheInterface
         return $this->adapter->hasItem($key);
     }
 
+    /**
+     * Invalidates all cache entries associated with a specific tag.
+     *
+     * This method removes all cache items that have been tagged with the given tag.
+     * It uses an internal tag index to efficiently locate and invalidate tagged entries.
+     *
+     * @param string $tag The tag to invalidate. All cache entries with this tag will be removed.
+     * @return bool True if the operation was successful, false otherwise.
+     * @throws CacheInvalidArgumentException If the tag is invalid.
+     * @throws Psr6InvalidArgumentException If there's an issue with cache operations.
+     */
     public function invalidateTag(string $tag): bool
     {
         $tagKey = $this->tagIndexKey($tag);
@@ -493,7 +504,16 @@ readonly class Cache implements CacheInterface
     }
 
     /**
-     * @param array<int, string> $tags
+     * Invalidates all cache entries associated with multiple tags.
+     *
+     * This method iterates through each tag and invalidates all cache entries
+     * associated with that tag. The operation is successful only if all tags
+     * are successfully invalidated.
+     *
+     * @param array<int, string> $tags An array of tags to invalidate.
+     * @return bool True if all tags were successfully invalidated, false if any failed.
+     * @throws CacheInvalidArgumentException If any tag is invalid.
+     * @throws Psr6InvalidArgumentException If there's an issue with cache operations.
      */
     public function invalidateTags(array $tags): bool
     {
@@ -730,10 +750,17 @@ readonly class Cache implements CacheInterface
     /**
      * Stores a value and associates it with one or more tags.
      *
-     * @param string $key
-     * @param mixed $value
-     * @param array<int, string> $tags
-     * @param int|DateInterval|null $ttl
+     * This method allows you to tag cache entries for later bulk invalidation.
+     * Tags provide a way to group related cache items and invalidate them
+     * together when the underlying data changes.
+     *
+     * @param string $key The cache key under which to store the value.
+     * @param mixed $value The value to store in the cache.
+     * @param array<int, string> $tags An array of tags to associate with this cache entry.
+     * @param int|DateInterval|null $ttl Optional time-to-live for the cache entry.
+     * @return bool True if the operation was successful, false otherwise.
+     * @throws CacheInvalidArgumentException If the key or tags are invalid.
+     * @throws SimpleCacheInvalidArgument If the key or TTL is invalid.
      */
     public function setTagged(string $key, mixed $value, array $tags, mixed $ttl = null): bool
     {

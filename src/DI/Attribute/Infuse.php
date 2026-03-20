@@ -6,6 +6,21 @@ namespace Infocyph\InterMix\DI\Attribute;
 
 use Attribute;
 
+/**
+ * Attribute for dependency injection of methods, properties, and parameters.
+ *
+ * This attribute enables automatic dependency injection when applied to:
+ * - Methods: Injects dependencies as method arguments
+ * - Properties: Injects dependencies directly into class properties
+ * - Parameters: Injects specific dependencies for method parameters
+ *
+ * The attribute accepts flexible parameters to specify injection targets
+ * and additional configuration data.
+ *
+ * Examples:
+ * #[Infuse('SomeService')]
+ * #[Infuse('logger', 'level' => 'debug')]
+ */
 #[Attribute(Attribute::TARGET_METHOD | Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class Infuse
 {

@@ -10,11 +10,28 @@ use Psr\Cache\CacheItemInterface;
 use Redis;
 use RuntimeException;
 
+/**
+ * Redis-based cache adapter implementation.
+ *
+ * This adapter uses Redis to provide high-performance distributed caching.
+ * It supports both standalone Redis instances and Redis clusters,
+ * making it suitable for production environments with multiple web servers.
+ *
+ * Note: This adapter requires the phpredis extension to be installed.
+ */
 class RedisCacheAdapter extends AbstractCacheAdapter
 {
     private readonly string $ns;
     private readonly Redis $redis;
 
+    /**
+     * Creates a new Redis cache adapter.
+     *
+     * @param string $namespace A namespace prefix to avoid key collisions.
+     * @param string $dsn The Redis connection DSN (e.g., 'redis://127.0.0.1:6379').
+     * @param Redis|null $client Optional pre-configured Redis client instance.
+     * @throws RuntimeException If the phpredis extension is not loaded.
+     */
     public function __construct(
         string $namespace = 'default',
         string $dsn = 'redis://127.0.0.1:6379',

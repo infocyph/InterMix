@@ -21,6 +21,20 @@ use ReflectionNamedType;
 use ReflectionParameter;
 use ReflectionUnionType;
 
+/**
+ * Handles parameter resolution for dependency injection.
+ *
+ * This resolver is responsible for resolving method and function parameters
+ * with full support for dependency injection, type hinting, and attributes.
+ * It processes parameter attributes, handles variadic parameters, and supports
+ * both named and positional parameter passing.
+ *
+ * Features:
+ * - Attribute-based parameter configuration
+ * - Type-aware resolution with union/intersection types
+ * - Caching for performance optimization
+ * - Support for associative, numeric, and variadic parameters
+ */
 class ParameterResolver
 {
     use ResolvesAssociativeParameters;
@@ -33,10 +47,10 @@ class ParameterResolver
     private readonly IMStdClass $stdClass;
     private ClassResolver $classResolver;
 
-    /** @var array<string, array> */
+    /** @var array<string, array> Cache for attribute-based injection configurations */
     private array $infuseCache = [];
 
-    /** @var array<string, array> */
+    /** @var array<string, array> Cache for resolved parameter values to improve performance */
     private array $resolvedCache = [];
 
     public function __construct(

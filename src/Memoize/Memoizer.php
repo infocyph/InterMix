@@ -9,6 +9,19 @@ use Infocyph\InterMix\Fence\Single;
 use ReflectionException;
 use WeakMap;
 
+/**
+ * Memoization utility for caching function call results.
+ *
+ * This class provides both static and object-scoped memoization capabilities.
+ * It caches the results of function calls based on their signature, avoiding
+ * repeated expensive computations for the same inputs.
+ *
+ * Features:
+ * - Static memoization for global function results
+ * - Object-scoped memoization using WeakMap for automatic cleanup
+ * - Hit/miss statistics for performance monitoring
+ * - Thread-safe operations using Single trait
+ */
 final class Memoizer
 {
     use Single;
@@ -16,17 +29,17 @@ final class Memoizer
     private int $hits   = 0;
     private int $misses = 0;
 
-    /** @var WeakMap<object,array<string,mixed>> */
+    /** @var WeakMap<object,array<string,mixed>> Object-scoped cache using WeakMap for automatic garbage collection */
     private WeakMap $objectCache;
 
-    /** @var array<string,mixed> */
+    /** @var array<string,mixed> Static cache for function-level memoization */
     private array $staticCache = [];
-
 
     /**
      * Creates a new Memoizer instance.
      *
-     * This constructor initializes an empty WeakMap for object-scoped memoization.
+     * This constructor initializes an empty WeakMap for object-scoped memoization
+     * and prepares hit/miss counters for statistics tracking.
      */
     protected function __construct()
     {

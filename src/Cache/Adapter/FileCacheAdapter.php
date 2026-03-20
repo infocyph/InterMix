@@ -9,10 +9,25 @@ use Infocyph\InterMix\Exceptions\CacheInvalidArgumentException;
 use Psr\Cache\CacheItemInterface;
 use RuntimeException;
 
+/**
+ * File-based cache adapter implementation.
+ *
+ * This adapter stores cache data as individual files in a specified directory.
+ * Each cache entry is serialized and stored with a .cache extension.
+ * It provides a simple filesystem-based caching solution suitable for
+ * development environments or applications without access to dedicated cache systems.
+ */
 class FileCacheAdapter extends AbstractCacheAdapter
 {
     private string $dir;
 
+    /**
+     * Creates a new file-based cache adapter.
+     *
+     * @param string $namespace A namespace prefix for cache files to avoid collisions.
+     * @param string|null $baseDir The base directory for cache files. If null, uses system temp directory.
+     * @throws RuntimeException If the cache directory cannot be created or is not writable.
+     */
     public function __construct(string $namespace = 'default', ?string $baseDir = null)
     {
         $this->createDirectory($namespace, $baseDir);
