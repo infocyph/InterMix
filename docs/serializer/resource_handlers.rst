@@ -28,7 +28,7 @@ This approach keeps your resource‐wrapper logic organized and self-documenting
 Class API
 ---------
 
-.. py:function:: void ResourceHandlers::registerDefaults()
+.. php:function:: void ResourceHandlers::registerDefaults()
 
    Iterates over all public static methods on ``self::class`` whose names start
    with ``"register"``, except ``registerDefaults`` itself, and invokes each one.
@@ -61,7 +61,7 @@ Suppose you want to support PHP streams:
            ValueSerializer::registerResourceHandler(
                'stream',
                // ---------- wrapFn -----------------------------------
-               function (resource $res): array {
+               function ($res): array {
                    $meta = stream_get_meta_data($res);
                    rewind($res);
                    return [
@@ -70,7 +70,7 @@ Suppose you want to support PHP streams:
                    ];
                },
                // -------- restoreFn ---------------------------------
-               function (array $data): resource {
+               function (array $data) {
                    $s = fopen('php://memory', $data['mode']);
                    fwrite($s, $data['content']);
                    rewind($s);
@@ -120,8 +120,8 @@ To support additional resources:
 
       ValueSerializer::registerResourceHandler(
           '<type>',    // e.g. 'curl'
-          fn(resource $res): array => /* wrap logic */,
-          fn(array $data): resource => /* restore logic */
+          fn($res): array => /* wrap logic */,
+          fn(array $data) => /* restore logic */
       );
 
 4. If you want all handlers applied at once, simply call:
@@ -154,7 +154,7 @@ Example: cURL Handler
                     return ['url' => curl_getinfo($ch, CURLINFO_EFFECTIVE_URL)];
                 },
                 // restoreFn: open a new cURL handle with the same URL
-                function (array $data): resource {
+                function (array $data) {
                     return curl_init($data['url'] ?? '');
                 }
             );

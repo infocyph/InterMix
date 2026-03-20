@@ -9,15 +9,18 @@ InterMix supports three configurable **lifetimes** via
 
 This allows fine-grained control over how instances are reused or regenerated.
 
-+--------------+------------------------------------------+
-| Lifetime     | Description                              |
-+==============+==========================================+
-| Singleton    | One shared instance per container alias  |
-+--------------+------------------------------------------+
-| Transient    | A new instance **every time**            |
-+--------------+------------------------------------------+
-| Scoped       | One instance **per scope ID**            |
-+--------------+------------------------------------------+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 75
+
+   * - Lifetime
+     - Description
+   * - Singleton
+     - One shared instance per container alias
+   * - Transient
+     - A new instance every time
+   * - Scoped
+     - One instance per scope ID
 
 ---------------
 Basic Example

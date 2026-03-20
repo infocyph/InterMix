@@ -19,7 +19,7 @@ chain never breaks, and you never have to assign the result manually.
 Global Helper Function ``tap()``
 ================================
 
-.. php:function:: function tap(mixed $value, ?callable $callback = null): mixed
+.. php:function:: tap(mixed $value, ?callable $callback = null): mixed
 
 Usage Examples
 ==============

@@ -55,15 +55,18 @@ Trace Levels 📊
 
 Trace levels are available via the ``TraceLevelEnum`` enum:
 
-+----------------+-----------------------------------------------------------+
-| Level          | Description                                               |
-+================+===========================================================+
-| ``Off``        | No trace at all                                           |
-+----------------+-----------------------------------------------------------+
-| ``Node``       | DI node / definition boundaries (default threshold)       |
-+----------------+-----------------------------------------------------------+
-| ``Verbose``    | Includes param names, fallback notices, env switches, etc |
-+----------------+-----------------------------------------------------------+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 80
+
+   * - Level
+     - Description
+   * - ``Off``
+     - No trace at all
+   * - ``Node``
+     - DI node / definition boundaries (default threshold)
+   * - ``Verbose``
+     - Includes param names, fallback notices, env switches, etc
 
 Additional levels are available for custom filtering: ``Error``, ``Warn``, and ``Info``.
 

@@ -145,17 +145,20 @@ Every class must then be fully described via *registration*:
 Cheat-Sheet
 ------------------------------------------------------------------
 
-+----------------------------+----------------------------------------+
-| **Call**                   | **Purpose**                            |
-+============================+========================================+
-| ``registerClass()``        | Constructor wiring                     |
-+----------------------------+----------------------------------------+
-| ``registerMethod()``       | Post-construction bootstrap            |
-+----------------------------+----------------------------------------+
-| ``registerProperty()``     | Field overrides (private/static OK)    |
-+----------------------------+----------------------------------------+
-| ``import()``               | Bulk registration via provider class   |
-+----------------------------+----------------------------------------+
+.. list-table::
+   :header-rows: 1
+   :widths: 35 65
+
+   * - Call
+     - Purpose
+   * - ``registerClass()``
+     - Constructor wiring
+   * - ``registerMethod()``
+     - Post-construction bootstrap
+   * - ``registerProperty()``
+     - Field overrides (private/static OK)
+   * - ``import()``
+     - Bulk registration via provider class
 
 See also : :ref:`di.definitions` for **service IDs** and :ref:`di.options`
 to fine-tune autowiring, attributes, lazy loading, scopes, etc.
