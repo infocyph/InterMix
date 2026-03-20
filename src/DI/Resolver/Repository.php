@@ -41,6 +41,7 @@ class Repository
     private array $resolved = [];
     private array $resolvedDefinition = [];
     private array $resolvedResource = [];
+    private array $scopeStack = [];
 
     /**
      * Constructs a Repository instance.
@@ -189,7 +190,8 @@ class Repository
      */
     public function enterScope(string $scope): void
     {
-        $this->setScope($scope);
+        $this->scopeStack[] = $this->currentScope;
+        $this->currentScope = $scope;
     }
 
     /**
@@ -468,7 +470,8 @@ class Repository
 
     public function leaveScope(): void
     {
-        $this->resetScope();
+        $this->clearScopeResolvedEntries($this->currentScope);
+        $this->currentScope = array_pop($this->scopeStack) ?? 'root';
     }
 
     /**
@@ -511,12 +514,8 @@ class Repository
      */
     public function resetScope(): void
     {
-        $suffix = '@' . $this->currentScope;
-        foreach ($this->resolved as $key => $_) {
-            if (str_ends_with((string)$key, $suffix)) {
-                unset($this->resolved[$key]);
-            }
-        }
+        $this->clearScopeResolvedEntries($this->currentScope);
+        $this->scopeStack = [];
         $this->currentScope = 'root';
     }
 
@@ -627,7 +626,16 @@ class Repository
     public function setEnvironment(string $env): void
     {
         $this->checkIfLocked();
+        if ($this->environment === $env) {
+            return;
+        }
+
         $this->environment = $env;
+        $this->resolved = [];
+        $this->resolvedDefinition = [];
+        $this->resolvedResource = [];
+        $this->scopeStack = [];
+        $this->currentScope = 'root';
     }
 
     /**
@@ -730,6 +738,16 @@ class Repository
     {
         if ($this->isLocked) {
             throw new ContainerException('Container is locked! Unable to set/modify any value.');
+        }
+    }
+
+    private function clearScopeResolvedEntries(string $scope): void
+    {
+        $suffix = '@' . $scope;
+        foreach ($this->resolved as $key => $_) {
+            if (str_ends_with((string)$key, $suffix)) {
+                unset($this->resolved[$key]);
+            }
         }
     }
 }

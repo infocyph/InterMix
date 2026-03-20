@@ -220,6 +220,47 @@ it('supports first-class scope lifecycle API', function () {
         ->and($first)->not->toBe($second);
 });
 
+it('restores parent scope after nested withinScope', function () {
+    $c = Container::instance(uniqid('nested_scope_'));
+    $c->definitions()->bind('scoped_obj', fn () => new stdClass(), LifetimeEnum::Scoped);
+
+    $outerFirst = $c->enterScope('outer')->get('scoped_obj');
+    $inner = $c->withinScope('inner', fn (Container $scoped) => $scoped->get('scoped_obj'));
+    $outerAgain = $c->get('scoped_obj');
+
+    expect($inner)->not->toBe($outerFirst)
+        ->and($outerAgain)->toBe($outerFirst);
+});
+
+it('isolates singleton definition resolution cache per environment', function () {
+    $c = Container::instance(uniqid('env_isolation_'));
+
+    $c->options()
+        ->bindInterfaceForEnv('prod', PaymentGateway::class, StripeGateway::class)
+        ->bindInterfaceForEnv('test', PaymentGateway::class, PaypalGateway::class)
+        ->setEnvironment('prod')
+        ->end();
+    $c->definitions()->bind('gateway', fn () => $c->make(PaymentGateway::class), LifetimeEnum::Singleton);
+
+    $prodA = $c->get('gateway');
+    $prodB = $c->get('gateway');
+
+    $c->setEnvironment('test');
+    $testA = $c->get('gateway');
+    $testB = $c->get('gateway');
+
+    $c->setEnvironment('prod');
+    $prodC = $c->get('gateway');
+
+    expect($prodA)->toBeInstanceOf(StripeGateway::class)
+        ->and($prodA)->toBe($prodB)
+        ->and($testA)->toBeInstanceOf(PaypalGateway::class)
+        ->and($testA)->toBe($testB)
+        ->and($testA)->not->toBe($prodA)
+        ->and($prodC)->toBeInstanceOf(StripeGateway::class)
+        ->and($prodC)->not->toBe($prodA);
+});
+
 it('exports a dependency graph from tracer instrumentation', function () {
     $c = Container::instance(uniqid('graph_'));
     $c->options()->enableDebugTracing(true, TraceLevelEnum::Verbose)->end();
@@ -240,6 +281,33 @@ it('exports a dependency graph from tracer instrumentation', function () {
 
     expect($graph['nodes'])->toContain('root', 'dep')
         ->and($hasEdge)->toBeTrue();
+});
+
+it('accumulates dependency edge counts and clears graph state', function () {
+    $c = Container::instance(uniqid('graph_counts_'));
+    $c->options()->enableDebugTracing(true, TraceLevelEnum::Verbose)->end();
+
+    $c->definitions()->bind('dep', fn () => new stdClass(), LifetimeEnum::Transient);
+    $c->definitions()->bind('root', fn () => $c->get('dep'), LifetimeEnum::Transient);
+
+    $c->get('root');
+    $c->get('root');
+
+    $graph = $c->exportGraph();
+    $edgeCount = null;
+    foreach ($graph['edges'] as $edge) {
+        if ($edge['from'] === 'root' && $edge['to'] === 'dep') {
+            $edgeCount = $edge['count'];
+            break;
+        }
+    }
+
+    $c->exportGraph(clear: true);
+    $empty = $c->exportGraph();
+
+    expect($edgeCount)->toBe(2)
+        ->and($empty['nodes'])->toBe([])
+        ->and($empty['edges'])->toBe([]);
 });
 
 function newTracer(

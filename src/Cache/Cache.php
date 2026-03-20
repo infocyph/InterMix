@@ -497,7 +497,16 @@ readonly class Cache implements CacheInterface
         $keys = array_values(array_unique(array_filter((array)$item->get(), is_string(...))));
         $ok = true;
         if ($keys !== []) {
-            $ok = $this->deleteItems($keys);
+            $existingKeys = [];
+            foreach ($keys as $key) {
+                if ($this->hasItem($key)) {
+                    $existingKeys[] = $key;
+                }
+            }
+
+            if ($existingKeys !== []) {
+                $ok = $this->deleteItems($existingKeys);
+            }
         }
 
         return $this->deleteItem($tagKey) && $ok;
@@ -518,8 +527,16 @@ readonly class Cache implements CacheInterface
     public function invalidateTags(array $tags): bool
     {
         $ok = true;
+        $seen = [];
+
         foreach ($tags as $tag) {
-            $ok = $this->invalidateTag((string)$tag) && $ok;
+            $normalized = $this->normalizeTag((string)$tag);
+            if (isset($seen[$normalized])) {
+                continue;
+            }
+
+            $seen[$normalized] = true;
+            $ok = $this->invalidateTag($normalized) && $ok;
         }
 
         return $ok;
