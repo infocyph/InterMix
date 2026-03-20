@@ -68,6 +68,18 @@ Every call to :php:`container('alias')` (or
 :php:`Container::instance('alias')`) returns an **isolated** registry.
 Use distinct aliases for tests, CLI workers, micro-modules, etc.
 
+--------------------------------
+Container Features
+--------------------------------
+
+* **Scoped services** – ``enterScope()``, ``leaveScope()``, ``withinScope()` for request/fiber isolation
+* **Dependency graph export** – ``exportGraph()`` for debugging and analysis
+* **Environment-specific bindings** – ``setEnvironment()`` for different deployment configs
+* **Debug tracing** – ``debug()`` and ``tracer()`` for development insight
+* **Service location** – ``findByTag()`` for tagged service discovery
+* **Container locking** – ``lock()`` to prevent runtime modifications
+* **Multiple container instances** – ``Container::instance($alias)`` for isolated contexts
+
 ---------------------------------------------
 Modifying behaviour with ``options()->setOptions()``
 ---------------------------------------------
@@ -110,8 +122,9 @@ Common quick patterns (copy-paste as you learn the rest)
 
 *Scope isolation* ::
 
-   $c->getRepository()->setScope('request-123');
+   $c->enterScope('request-123');
    // scoped services now unique to this request
+   $c->leaveScope();
 
 -----------
 Dive in Details

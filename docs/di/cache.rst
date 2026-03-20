@@ -20,24 +20,20 @@ Quick Example 🚀
 
 .. code-block:: php
 
-   use Infocyph\InterMix\Cache\Cache;
    use function Infocyph\InterMix\container;
 
-   $c = container();
+   $c = container('intermix');
 
-   // ① choose any PSR-6 adapter
-   $cache = Cache::file(namespace: 'intermix', directory: '/tmp/intermix');
+   // ① enable definition cache (file-backed, namespaced)
+   $c->definitions()->enableDefinitionCache('intermix');
 
-   // ② plug it into the DefinitionManager
-   $c->definitions()->enableDefinitionCache($cache);
-
-   // ③ bind / register as usual …
+   // ② bind / register as usual …
    $c->definitions()->bind('answer', 42);
 
-   // ④ first call populates the cache
+   // ③ first call populates the cache
    $val = $c->get('answer');          // ← resolves & stores
 
-   // ⑤ subsequent calls – *even in a new PHP process* – are instant
+   // ④ subsequent calls – *even in a new PHP process* – are instant
    echo $c->get('answer');            // ← pulled straight from cache
 
 
@@ -50,11 +46,10 @@ Eager warm-up (a.k.a. *compile* the container):
 `cacheAllDefinitions()` iterates every current definition **once**,
 resolves it and stores the result in:
 
-1. **The cache** you supplied, *and*
+1. **The configured file cache namespace**, and
 2. The container’s in-process “resolved” map (so it is also fast in memory).
 
-You can now deploy the warmed cache files or keep them in Redis, Memcached,
-APCu, etc.
+You can now deploy the warmed cache files between runs.
 
 --------------------------------
 Lazy Loading × Caching ⚡️
@@ -67,8 +62,8 @@ Lazy loading (``enableLazyLoading(true)``) and caching work **together**:
   → first ``get()`` constructs the object **and** writes it to cache.
 
 * **User-supplied closures**
-  → executed **immediately** (never deferred)
-  → whatever the closure returns is cached.
+  → not wrapped in ``DeferredInitializer``
+  → their resolved value is cached according to lifetime.
 
 That means you may keep lazy loading **on** and still enjoy the *speed* of a
 pre-warmed cache.
@@ -77,10 +72,10 @@ pre-warmed cache.
 Cache Invalidation 🔄
 ----------------------
 
-* **forceClearFirst** in `cacheAllDefinitions()` nukes InterMix keys **before**
+* **forceClearFirst** in `cacheAllDefinitions()` clears InterMix keys **before**
   warming.
-* Delete the cache namespace directory (FilesystemAdapter) or flush the key
-  pattern (Redis/Memcached) whenever you update service wiring.
+* Clear the namespace directory whenever you update service wiring and do not
+  use force-clear warmup.
 
 --------------------------------
 FAQ ❓
@@ -95,7 +90,7 @@ Yes, each alias prefixes its keys, so collisions are impossible.
 
 **Q: Does it store _all_ objects?**
 Only what you resolve **and** what is not marked *Transient*. Transient lifetimes
-are always rebuilt (by design), so caching would defeat their purpose.
+are always rebuilt (by design), so definition-result caching does not apply.
 
 ---------------------
 One-liner Cheat-Sheet
@@ -104,10 +99,10 @@ One-liner Cheat-Sheet
 ===========  =================================================================
 Action        Code
 ===========  =================================================================
-Enable cache  ``$c->definitions()->enableDefinitionCache($cache)``
+Enable cache  ``$c->definitions()->enableDefinitionCache('intermix')``
 Warm all      ``$c->definitions()->cacheAllDefinitions()``
 Clear + warm  ``…->cacheAllDefinitions(forceClearFirst:true)``
-Disable       Omit the call or inject the `NullAdapter`
+Disable       Omit ``enableDefinitionCache()``
 ===========  =================================================================
 
 Next stop » :doc:`debug_tracing`

@@ -26,6 +26,40 @@ wrapper traits sets two class‐constants, and the core logic runs on every
 
 **Singleton (Single)**
 
+Classes define ``FENCE_KEYED = true``. Only one instance can exist.
+Key is optional; defaults to ``'__single'``.
+
+**Multiton (Multi)**
+
+Classes define ``FENCE_KEYED = false``. Multiple instances allowed, keyed by first argument.
+Key is required; defaults to ``'default'``.
+
+**Limited Multiton (Limit)**
+
+Extends Multi with configurable instance limits.
+Classes define ``FENCE_LIMIT = <int>``.
+``setLimit(int)`` changes the limit at runtime.
+
+**Constants Available**
+
+- ``FENCE_KEYED`` – Whether class uses keyed instances (bool)
+- ``FENCE_LIMIT`` – Maximum instances allowed (int)
+
+**Requirement Checking**
+
+``::instance()`` accepts optional constraints array with ``extensions`` and/or
+``classes``. If any extension or class is missing, a ``RequirementException`` is thrown
+before any instance is created.
+
+**New Features Added**
+
+- **Instance inspection** – ``hasInstance()``, ``countInstances()``, ``getInstances()``, ``getKeys()``
+- **Cache management** – ``clearInstances()`` for testing
+- **Runtime limit override** – ``setLimit()`` for dynamic configuration
+- **Enhanced error handling** – Better exception messages and validations new object
+
+**Singleton (Single)**
+
 ::
 
     namespace App;

@@ -5,7 +5,7 @@ Service Lifetimes
 ===================
 
 InterMix supports three configurable **lifetimes** via
-:php:class:`Infocyph\InterMix\DI\Support\Lifetime`.
+:php:class:`Infocyph\InterMix\DI\Support\LifetimeEnum`.
 
 This allows fine-grained control over how instances are reused or regenerated.
 
@@ -25,11 +25,11 @@ Basic Example
 
 .. code-block:: php
 
-   use Infocyph\InterMix\DI\Support\Lifetime;
+   use Infocyph\InterMix\DI\Support\LifetimeEnum;
 
-   $def->bind('uniq', fn () => new stdClass, Lifetime::Singleton);
-   $def->bind('tmp',  fn () => new stdClass, Lifetime::Transient);
-   $def->bind('req',  fn () => new stdClass, Lifetime::Scoped);
+   $def->bind('uniq', fn () => new stdClass, LifetimeEnum::Singleton);
+   $def->bind('tmp',  fn () => new stdClass, LifetimeEnum::Transient);
+   $def->bind('req',  fn () => new stdClass, LifetimeEnum::Scoped);
 
 ---------------
 Scope Switching
@@ -39,7 +39,9 @@ Scoped services are tied to an identifier. You can switch scopes like this:
 
 .. code-block:: php
 
-   $c->getRepository()->setScope('request-42');
+   $c->enterScope('request-42');
+   // resolve scoped services
+   $c->leaveScope();
 
 This creates a fresh "bucket" for services marked as `Scoped`, so each
 scope can have independent instances without affecting others.
@@ -69,4 +71,4 @@ Summary 📚
 + **Singleton** – one per container instance
 + **Transient** – fresh each time
 + **Scoped** – one per logical scope
-+ Managed via `Lifetime::*` constants on any `bind()`
++ Managed via `LifetimeEnum::*` constants on any `bind()`

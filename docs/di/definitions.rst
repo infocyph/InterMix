@@ -6,7 +6,7 @@ Definition Manager API
 
 ``$c->definitions()`` returns an **instance-fluent** manager that stores **recipes**
 (**definitions**) by *ID*.
-Everything that can be resolved by :php:method::`Infocyph\InterMix\DI\Container->get`
+Everything that can be resolved by :php:meth:`Infocyph\InterMix\DI\Container::get`
 ultimately lives in this registry.
 
 ---------------------------------------------------
@@ -36,7 +36,8 @@ the container:
    $c->definitions()
        ->bind('foo', 123)
        ->bind('bar', 456)
-       ->lock();  // Returns to container
+       ->end()
+       ->lock();  // lock the container after definitions are registered
 
    // Using array access (via ManagerProxy)
    $def = $c->definitions();
@@ -50,20 +51,21 @@ the container:
 
 .. code-block:: php
 
-   use Infocyph\InterMix\DI\Support\Lifetime;
+   use Infocyph\InterMix\DI\Support\LifetimeEnum;
 
    // default = Singleton
    $def->bind('uniq', fn() => new stdClass());                 // same instance forever
 
    // Transient – fresh each time
-   $def->bind('once', fn() => new stdClass(), Lifetime::Transient);
+   $def->bind('once', fn() => new stdClass(), LifetimeEnum::Transient);
 
    // Scoped – unique per “scope” key
-   $def->bind('req', fn() => new stdClass(), Lifetime::Scoped);
+   $def->bind('req', fn() => new stdClass(), LifetimeEnum::Scoped);
 
    $obj1 = $c->get('req');
-   $c->getRepository()->setScope('next-request');
+   $c->enterScope('next-request');
    $obj2 = $c->get('req');          // ⚠️ not equal to $obj1
+   $c->leaveScope();
 
 Lifetimes apply **equally** to class-string bindings – InterMix transparently converts them
 into internal lazy initialisers.
@@ -120,9 +122,9 @@ Toggle globally:
 
    $c->options()->enableLazyLoading(false);   // eager – resolve immediately
 
-User-supplied **closures** are **never** lazy – the closure executes at bind-time so
-the value in the container is already the *result*.  This keeps the mental model
-intuitive: *“I gave you a closure, give me back its return.”*
+User-supplied **closures** are **not wrapped** in ``DeferredInitializer``. They
+execute when the ID is resolved (for example on first ``get()`` for singleton/scoped,
+or every ``get()`` for transient), not at bind-time.
 
 ----------------------------------------------------
 6.  Environment-aware bindings  (quick reminder)

@@ -15,9 +15,9 @@ Enable Tracing 🛠️
 
 .. code-block:: php
 
-   use Infocyph\InterMix\DI\Support\TraceLevel;
+   use Infocyph\InterMix\DI\Support\TraceLevelEnum;
 
-   $c->options()->enableDebugTracing(true, TraceLevel::Verbose);
+   $c->options()->enableDebugTracing(true, TraceLevelEnum::Verbose);
 
 Once tracing is enabled, every container action (like ``get()``, ``call()``, etc.)
 is tracked with a per-service log.
@@ -53,17 +53,19 @@ This shows the chain of decisions InterMix followed:
 Trace Levels 📊
 ----------------------
 
-Three levels are available via the ``TraceLevel`` enum:
+Trace levels are available via the ``TraceLevelEnum`` enum:
 
 +----------------+-----------------------------------------------------------+
 | Level          | Description                                               |
 +================+===========================================================+
-| ``Off``        | No trace at all (default)                                 |
+| ``Off``        | No trace at all                                           |
 +----------------+-----------------------------------------------------------+
-| ``Compact``    | One-line per resolution step                              |
+| ``Node``       | DI node / definition boundaries (default threshold)       |
 +----------------+-----------------------------------------------------------+
 | ``Verbose``    | Includes param names, fallback notices, env switches, etc |
 +----------------+-----------------------------------------------------------+
+
+Additional levels are available for custom filtering: ``Error``, ``Warn``, and ``Info``.
 
 -----------------------------
 Check If a Trace Exists 🧠
@@ -71,8 +73,9 @@ Check If a Trace Exists 🧠
 
 .. code-block:: php
 
-   if ($c->hasDebug(MyService::class)) {
-       $steps = $c->debug(MyService::class);
+   $entries = $c->tracer()->getEntries();
+   if ($entries !== []) {
+       $steps = $c->tracer()->toArray();
    }
 
 Traces are only available **after resolution**, and only if tracing was enabled
@@ -88,5 +91,4 @@ Use Cases & Tips 💡
 ✔ Reveals **why** something resolved or **why not**
 
 
-Next stop » :doc:`psr_support`
-
+Next stop » :doc:`cheat_sheet`

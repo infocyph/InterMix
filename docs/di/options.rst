@@ -4,7 +4,8 @@
 Options & Feature Toggles
 =========================
 
-The **OptionsManager** (which utilizes the `ManagerProxy` trait) lets you fine-tune *how* InterMix behaves. It provides both a fluent interface and array/property access:
+The **OptionsManager** (which utilizes the `ManagerProxy` trait) lets you fine-tune *how* InterMix behaves.
+Option toggles are configured via explicit methods:
 
 .. code-block:: php
 
@@ -20,11 +21,6 @@ The **OptionsManager** (which utilizes the `ManagerProxy` trait) lets you fine-t
        ->setEnvironment('prod')
        ->enableDebugTracing()      // collect a build trace
        ->end();                    // back to container
-
-   // Using array access (via ManagerProxy)
-   $options = $c->options();
-   $options['injection'] = false;  // Toggle injection
-   $injection = $options['injection'];  // Get current value
 
 ----------------------------------------------------
 1 · setOptions( injection , methodAttributes , … )
@@ -70,10 +66,8 @@ Flag                    Default    What it does
 | ``bindInterfaceForEnv($env, I::class, C::class)`` | Map an **interface → concrete** **only** when            |
 |                                             | ``$env`` matches the active environment.                     |
 +---------------------------------------------+--------------------------------------------------------------+
-| ``enableDebugTracing(true, TraceLevel::Verbose)`` | Capture **resolution traces** for debugging. See       |
+| ``enableDebugTracing(true, TraceLevelEnum::Verbose)`` | Capture **resolution traces** for debugging. See   |
 |                                             | :ref:`di.debug_tracing`.                                     |
-+---------------------------------------------+--------------------------------------------------------------+
-| ``enableDefinitionCache(CacheInterface $cache)`` | Cache resolved definitions via Cache.       |
 +---------------------------------------------+--------------------------------------------------------------+
 
 ----------------------------------------------------
@@ -99,9 +93,7 @@ Flag                    Default    What it does
 
 .. code-block:: php
 
-   use Infocyph\InterMix\Cache\Cache;
-
-   container()
+   $c = container()
        ->options()
        ->setOptions(
            injection: true,                // keep autowiring
@@ -109,17 +101,23 @@ Flag                    Default    What it does
            propertyAttributes: false,
        )
        ->enableLazyLoading(true)           // default – save memory
-       ->enableDefinitionCache(Cache::file())
-       ->setEnvironment('prod');
+       ->setEnvironment('prod')
+       ->end();
+
+   // definition cache is configured on DefinitionManager
+   $c->definitions()->enableDefinitionCache();
 
 ----------------------------------------------------
-4 · Inspect current settings
+4 · Inspecting state
 ----------------------------------------------------
 
 .. code-block:: php
 
-   $flags = $c->options()->getCurrent();   // → associative array of flags / helpers
-   dump($flags);
+   $repo = $c->getRepository();
+   dump([
+       'environment' => $repo->getEnvironment(),
+       'lazy'        => $repo->isLazyLoading(),
+   ]);
 
 ----------------------------------------------------
 Cheat-Sheet

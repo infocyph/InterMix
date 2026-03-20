@@ -19,11 +19,11 @@ How It Works ⚙️
 
    $c->definitions()->bind(
        'expensive',
-       fn () => new BigService()
+       BigService::class
    );
 
-With lazy loading **on**, the container does **not** immediately call the closure.
-Instead, it stores a proxy (``DeferredInitializer``) that waits until ``get()``.
+With lazy loading **on**, the container stores a proxy (``DeferredInitializer``)
+for class/array-style definitions and resolves it when ``get()`` is first called.
 
 -----------------------------------------
 When does InterMix create the instance?
@@ -42,26 +42,20 @@ Default Rules
 +===============================+==========================+
 | Class / string                | ✅ Yes                   |
 +-------------------------------+--------------------------+
-| Callable with no lifetime     | ✅ Yes                   |
+| Array definition              | ✅ Yes                   |
 +-------------------------------+--------------------------+
-| Callable + `Lifetime::Transient` | ✅ Yes               |
+| User closure + Singleton/Scoped | ⚠️ Resolved on first ``get()`` (no DeferredInitializer) |
 +-------------------------------+--------------------------+
-| User-supplied closure         | ❌ No – executes now     |
+| User closure + Transient      | ❌ No caching (runs each ``get()``) |
 +-------------------------------+--------------------------+
 
 ---------------
 Why not all?
 ---------------
 
-User closures are resolved immediately to preserve intent. When you pass a closure
-yourself, it’s assumed you want that logic executed *now*, not wrapped in another
-proxy.
-
-You can override this by wrapping your own closure in one:
-
-.. code-block:: php
-
-   $c->definitions()->bind('manual.lazy', fn () => fn () => new Heavy());
+User closures are not wrapped in ``DeferredInitializer``. They run when the
+service is resolved, and their reuse depends on lifetime (singleton/scoped cache
+the resolved value; transient does not).
 
 --------------------
 Enable or Disable 🔧
@@ -80,9 +74,9 @@ To see lazy resolutions in action:
 
 .. code-block:: php
 
-   use Infocyph\InterMix\DI\Support\TraceLevel;
+   use Infocyph\InterMix\DI\Support\TraceLevelEnum;
 
-   $c->options()->enableDebugTracing(true, TraceLevel::Verbose);
+   $c->options()->enableDebugTracing(true, TraceLevelEnum::Verbose);
 
 Then inspect resolution paths for markers like ``[lazy-init]`` or ``[deferred]``.
 
