@@ -25,6 +25,8 @@ final class DebugTracer
     private bool $enabled;
     /** @var TraceEntry[] */
     private array $entries = [];
+    /** @var array<string, array{from:string,to:string,type:string,count:int}> */
+    private array $graphEdges = [];
     private int $seq = 0;
 
     public function __construct(
@@ -73,7 +75,38 @@ final class DebugTracer
         }
         $this->entries = [];
         $this->activeSpans = [];
+        $this->graphEdges = [];
         return $this;
+    }
+
+    /**
+     * Export dependency graph.
+     *
+     * @return array{
+     *     nodes: array<int, string>,
+     *     edges: array<int, array{from:string,to:string,type:string,count:int}>
+     * }
+     */
+    public function dependencyGraph(bool $clear = false): array
+    {
+        $edges = array_values($this->graphEdges);
+        $nodes = [];
+
+        foreach ($edges as $edge) {
+            $nodes[$edge['from']] = true;
+            $nodes[$edge['to']] = true;
+        }
+
+        $graph = [
+            'nodes' => array_values(array_keys($nodes)),
+            'edges' => $edges,
+        ];
+
+        if ($clear) {
+            $this->graphEdges = [];
+        }
+
+        return $graph;
     }
 
     public function endSpan(?string $spanId, array $context = []): void
@@ -160,6 +193,28 @@ final class DebugTracer
             $file,
             $line,
         );
+    }
+
+    /**
+     * Record a dependency edge for later graph export.
+     */
+    public function recordDependency(string $from, string $to, string $type = 'service'): void
+    {
+        if (!$this->enabled || $from === '' || $to === '') {
+            return;
+        }
+
+        $edgeKey = $type . '|' . $from . '|' . $to;
+        if (!isset($this->graphEdges[$edgeKey])) {
+            $this->graphEdges[$edgeKey] = [
+                'from' => $from,
+                'to' => $to,
+                'type' => $type,
+                'count' => 0,
+            ];
+        }
+
+        $this->graphEdges[$edgeKey]['count']++;
     }
 
     public function setCaptureLocation(bool $enabled): self

@@ -88,7 +88,18 @@ Best Practices 💡
 * Avoid overusing for things easily toggled with config values.
 * Prefer strings like `"prod"`, `"test"`, `"local"` – but any name is allowed.
 
-Want to override a tag or lifetime **per environment**? See upcoming roadmap in
-the GitHub issues.
+You can also override definition metadata (lifetime/tags) per environment:
+
+.. code-block:: php
+
+   $c->definitions()
+     ->bind('mailer', fn () => new Mailer(), tags: ['core']);
+
+   $c->options()
+     ->setDefinitionMetaForEnv('test', 'mailer', LifetimeEnum::Transient, ['core', 'test-only'])
+     ->setEnvironment('test');
+
+Now `mailer` behaves as transient in `test`, while using default metadata in
+other environments.
 
 Next stop » :doc:`cache`

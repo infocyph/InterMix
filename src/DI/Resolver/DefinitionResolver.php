@@ -14,6 +14,8 @@ use ReflectionException;
 class DefinitionResolver
 {
     private ClassResolver $classResolver;
+    /** @var array<int, string> */
+    private array $definitionStack = [];
     private array $entriesResolving = [];
     private ParameterResolver $parameterResolver;
 
@@ -46,12 +48,20 @@ class DefinitionResolver
         if (isset($this->entriesResolving[$name])) {
             throw new ContainerException("Circular dependency for definition '$name'.");
         }
+
+        $parent = end($this->definitionStack);
+        if (is_string($parent) && $parent !== $name) {
+            $this->repository->tracer()->recordDependency($parent, $name, 'definition');
+        }
+
         $this->entriesResolving[$name] = true;
+        $this->definitionStack[] = $name;
         $this->repository->tracer()->push("def:$name");
         try {
             return $this->getFromCacheOrResolve($name);
         } finally {
             unset($this->entriesResolving[$name]);
+            array_pop($this->definitionStack);
         }
     }
 
@@ -86,6 +96,8 @@ class DefinitionResolver
     private function getFromCacheOrResolve(string $name): mixed
     {
         $lifetime = $this->repository->getDefinitionMeta($name)['lifetime'] ?? LifetimeEnum::Singleton;
+        $environment = $this->repository->getEnvironment() ?? 'default';
+        $resolvedKey = $name . '@env:' . $environment;
 
         // transient / scoped → never cache at this layer
         if ($lifetime !== LifetimeEnum::Singleton) {
@@ -93,11 +105,11 @@ class DefinitionResolver
         }
 
         $resolvedDefs = $this->repository->getResolvedDefinition();
-        if (!isset($resolvedDefs[$name])) {
+        if (!isset($resolvedDefs[$resolvedKey])) {
             $resolverCallback = fn () => $this->resolveDefinition($name);
             $cacheAdapter = $this->repository->getCacheAdapter();
             if ($cacheAdapter) {
-                $cacheKey = $this->repository->makeCacheKey('def' . base64_encode($name));
+                $cacheKey = $this->repository->makeCacheKey('def' . base64_encode($resolvedKey));
                 $item = $cacheAdapter->getItem($cacheKey);
                 if ($item->isHit()) {
                     $value = $item->get();
@@ -109,9 +121,9 @@ class DefinitionResolver
             } else {
                 $value = $resolverCallback();
             }
-            $this->repository->setResolvedDefinition($name, $value);
+            $this->repository->setResolvedDefinition($resolvedKey, $value);
         }
-        return $this->repository->getResolvedDefinition()[$name];
+        return $this->repository->getResolvedDefinition()[$resolvedKey];
     }
 
     /**
@@ -158,9 +170,11 @@ class DefinitionResolver
                 return $definition(...$args);
 
             case is_array($definition) && isset($definition[0]) && class_exists($definition[0]):
+                $this->repository->tracer()->recordDependency($name, (string)$definition[0], 'definition-class');
                 return $this->resolveArrayDefinition($definition);
 
             case is_string($definition) && class_exists($definition):
+                $this->repository->tracer()->recordDependency($name, $definition, 'definition-class');
                 $refClass = ReflectionResource::getClassReflection($definition);
                 $res = $this->classResolver->resolve($refClass);
                 return $res['instance'];

@@ -165,6 +165,31 @@ final class Container implements ContainerInterface, ArrayAccess
     }
 
     /**
+     * Enter a named scope for scoped-lifetime services.
+     */
+    public function enterScope(string $scope): self
+    {
+        $this->repository->enterScope($scope);
+        return $this;
+    }
+
+    /**
+     * Export dependency graph data collected by tracer instrumentation.
+     *
+     * If $warmFromId is provided, the container resolves that service first.
+     *
+     * @throws Exception|\Psr\Cache\InvalidArgumentException
+     */
+    public function exportGraph(?string $warmFromId = null, bool $clear = false): array
+    {
+        if ($warmFromId !== null) {
+            $this->get($warmFromId);
+        }
+
+        return $this->repository->tracer()->dependencyGraph($clear);
+    }
+
+    /**
      * Finds and retrieves all service definitions tagged with a specified tag.
      *
      * This method iterates over the repository's definition metadata,
@@ -179,7 +204,8 @@ final class Container implements ContainerInterface, ArrayAccess
     public function findByTag(string $tag): array
     {
         $matches = [];
-        foreach ($this->repository->getAllDefinitionMeta() as $id => $meta) {
+        foreach ($this->repository->getFunctionReference() as $id => $_definition) {
+            $meta = $this->repository->getDefinitionMeta($id);
             if (in_array($tag, $meta['tags'], true)) {
                 $matches[$id] = $this->get($id);
             }
@@ -285,6 +311,15 @@ final class Container implements ContainerInterface, ArrayAccess
     public function invocation(): InvocationManager
     {
         return $this->invocationManager;
+    }
+
+    /**
+     * Leave the current scope and reset scoped instances for it.
+     */
+    public function leaveScope(): self
+    {
+        $this->repository->leaveScope();
+        return $this;
     }
 
 
@@ -539,6 +574,19 @@ final class Container implements ContainerInterface, ArrayAccess
     public function unset(): void
     {
         unset(self::$instances[$this->instanceAlias]);
+    }
+
+    /**
+     * Execute a callback inside a named scope and always leave it afterward.
+     */
+    public function withinScope(string $scope, callable $callback): mixed
+    {
+        $this->enterScope($scope);
+        try {
+            return $callback($this);
+        } finally {
+            $this->leaveScope();
+        }
     }
 
     /**

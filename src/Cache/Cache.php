@@ -16,6 +16,9 @@ use Psr\SimpleCache\InvalidArgumentException as SimpleCacheInvalidArgument;
 
 readonly class Cache implements CacheInterface
 {
+    private const int STAMPEDE_JITTER_PERCENT = 10;
+    private const float STAMPEDE_LOCK_WAIT_SECONDS = 5.0;
+
     /**
      * Cache constructor.
      *
@@ -323,28 +326,7 @@ readonly class Cache implements CacheInterface
 
         // If $default is a callable, do a PSR-6 “compute & save” on cache miss.
         if (is_callable($default)) {
-            try {
-                // Fetch the PSR-6 item (may be a miss or a hit)
-                $item = $this->getItem($key);
-            } catch (Psr6InvalidArgumentException $e) {
-                throw new CacheInvalidArgumentException($e->getMessage(), 0, $e);
-            }
-
-            // If we already have it, just return
-            if ($item->isHit()) {
-                return $item->get();
-            }
-
-            // Otherwise, call the user’s callback, passing in the (empty) CacheItem
-            // They can set expiresAfter(...) inside the callback if desired.
-            /** @var CacheItemInterface $item */
-            $computed = $default($item);
-
-            // Store the returned value in the cache item, then persist it
-            $item->set($computed);
-            $this->save($item);
-
-            return $computed;
+            return $this->remember($key, $default);
         }
 
         // If $default is not callable, proceed as before…
@@ -493,6 +475,36 @@ readonly class Cache implements CacheInterface
         return $this->adapter->hasItem($key);
     }
 
+    public function invalidateTag(string $tag): bool
+    {
+        $tagKey = $this->tagIndexKey($tag);
+        $item = $this->getItem($tagKey);
+        if (!$item->isHit()) {
+            return true;
+        }
+
+        $keys = array_values(array_unique(array_filter((array)$item->get(), is_string(...))));
+        $ok = true;
+        if ($keys !== []) {
+            $ok = $this->deleteItems($keys);
+        }
+
+        return $this->deleteItem($tagKey) && $ok;
+    }
+
+    /**
+     * @param array<int, string> $tags
+     */
+    public function invalidateTags(array $tags): bool
+    {
+        $ok = true;
+        foreach ($tags as $tag) {
+            $ok = $this->invalidateTag((string)$tag) && $ok;
+        }
+
+        return $ok;
+    }
+
     /**
      * Required by interface ArrayAccess.
      *
@@ -550,6 +562,58 @@ readonly class Cache implements CacheInterface
     public function offsetUnset(mixed $offset): void
     {
         $this->delete((string)$offset);
+    }
+
+    /**
+     * Compute-once helper with cache stampede protection.
+     *
+     * On cache miss, this acquires a host-local lock, re-checks cache, computes,
+     * applies jittered TTL, persists, and returns the computed value.
+     */
+    public function remember(
+        string $key,
+        callable $resolver,
+        mixed $ttl = null,
+        array $tags = [],
+    ): mixed {
+        $this->validateKey($key);
+        $normalizedTtl = $this->normalizeTtl($ttl);
+
+        try {
+            $item = $this->getItem($key);
+        } catch (Psr6InvalidArgumentException $e) {
+            throw new CacheInvalidArgumentException($e->getMessage(), 0, $e);
+        }
+
+        if ($item->isHit()) {
+            return $item->get();
+        }
+
+        [$lockHandle, $lockId] = $this->acquireStampedeLock($key);
+        try {
+            // Re-check under lock to avoid duplicate recompute.
+            $lockedItem = $this->getItem($key);
+            if ($lockedItem->isHit()) {
+                return $lockedItem->get();
+            }
+
+            if ($normalizedTtl !== null) {
+                $lockedItem->expiresAfter($normalizedTtl);
+            }
+
+            $computed = $resolver($lockedItem);
+            $lockedItem->set($computed);
+            $this->applyJitteredTtl($lockedItem);
+            $this->save($lockedItem);
+
+            if ($tags !== []) {
+                $this->attachTagsToKey($key, $tags);
+            }
+
+            return $computed;
+        } finally {
+            $this->releaseStampedeLock($lockHandle, $lockId);
+        }
     }
 
     /**
@@ -664,6 +728,115 @@ readonly class Cache implements CacheInterface
     }
 
     /**
+     * Stores a value and associates it with one or more tags.
+     *
+     * @param string $key
+     * @param mixed $value
+     * @param array<int, string> $tags
+     * @param int|DateInterval|null $ttl
+     */
+    public function setTagged(string $key, mixed $value, array $tags, mixed $ttl = null): bool
+    {
+        $ok = $this->set($key, $value, $ttl);
+        if (!$ok) {
+            return false;
+        }
+
+        $this->attachTagsToKey($key, $tags);
+        return true;
+    }
+
+    /**
+     * @return array<string, bool>
+     */
+    private static function &activeStampedeLockRegistry(): array
+    {
+        static $locks = [];
+        return $locks;
+    }
+
+    /**
+     * @return array{0:resource|null,1:string|null}
+     */
+    private function acquireStampedeLock(string $key): array
+    {
+        $activeLocks = &self::activeStampedeLockRegistry();
+        $lockId = hash('xxh128', $key);
+        if (isset($activeLocks[$lockId])) {
+            return [null, null];
+        }
+
+        $dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'intermix_cache_locks';
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0770, true);
+        }
+
+        $path = $dir . DIRECTORY_SEPARATOR . $lockId . '.lock';
+        $handle = @fopen($path, 'c+');
+        if (!is_resource($handle)) {
+            return [null, null];
+        }
+
+        $deadline = microtime(true) + self::STAMPEDE_LOCK_WAIT_SECONDS;
+        while (!@flock($handle, LOCK_EX | LOCK_NB)) {
+            if (microtime(true) >= $deadline) {
+                fclose($handle);
+                return [null, null];
+            }
+            usleep(50_000);
+        }
+
+        $activeLocks[$lockId] = true;
+        return [$handle, $lockId];
+    }
+
+    private function applyJitteredTtl(CacheItemInterface $item): void
+    {
+        if (!method_exists($item, 'ttlSeconds')) {
+            return;
+        }
+
+        $ttl = $item->ttlSeconds();
+        if ($ttl === null || $ttl <= 1 || self::STAMPEDE_JITTER_PERCENT <= 0) {
+            return;
+        }
+
+        $maxJitter = max(1, (int)floor($ttl * (self::STAMPEDE_JITTER_PERCENT / 100)));
+        $jitter = random_int(0, $maxJitter);
+        $item->expiresAfter(max(1, $ttl - $jitter));
+    }
+
+    /**
+     * @param array<int, string> $tags
+     */
+    private function attachTagsToKey(string $key, array $tags): void
+    {
+        foreach (array_values(array_unique($tags)) as $tag) {
+            $tagKey = $this->tagIndexKey($tag);
+            $item = $this->getItem($tagKey);
+            $keys = $item->isHit()
+                ? array_values(array_unique(array_filter((array)$item->get(), is_string(...))))
+                : [];
+
+            if (!in_array($key, $keys, true)) {
+                $keys[] = $key;
+                $item->set($keys);
+                $this->save($item);
+            }
+        }
+    }
+
+    private function normalizeTag(string $tag): string
+    {
+        $tag = trim($tag);
+        if ($tag === '') {
+            throw new CacheInvalidArgumentException('Cache tag cannot be empty.');
+        }
+
+        return preg_replace('/[^A-Za-z0-9_.\-]/', '_', $tag);
+    }
+
+    /**
      * Converts a PSR-16 TTL (int|DateInterval|null) into an integer number of seconds.
      */
     private function normalizeTtl(mixed $ttl): ?int
@@ -687,6 +860,28 @@ readonly class Cache implements CacheInterface
                 get_debug_type($ttl),
             ),
         );
+    }
+
+    /**
+     * @param resource|null $handle
+     */
+    private function releaseStampedeLock(mixed $handle, ?string $lockId): void
+    {
+        $activeLocks = &self::activeStampedeLockRegistry();
+
+        if (is_resource($handle)) {
+            @flock($handle, LOCK_UN);
+            @fclose($handle);
+        }
+
+        if ($lockId !== null) {
+            unset($activeLocks[$lockId]);
+        }
+    }
+
+    private function tagIndexKey(string $tag): string
+    {
+        return '__im_tag_' . hash('xxh3', $this->normalizeTag($tag));
     }
 
     /**

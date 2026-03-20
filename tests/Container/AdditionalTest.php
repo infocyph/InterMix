@@ -189,6 +189,59 @@ it('lets me wire and use services in one-liners', function () {
         ->and($c->logger->records)->toHaveCount(1);
 });
 
+it('applies environment-scoped lifetime/tag overrides', function () {
+    $c = Container::instance(uniqid('env_meta_'));
+
+    $c->definitions()->bind('svc', fn () => new stdClass(), LifetimeEnum::Singleton, ['base']);
+    $c->options()
+        ->setDefinitionMetaForEnv('test', 'svc', LifetimeEnum::Transient, ['env-only'])
+        ->setEnvironment('test')
+        ->end();
+
+    $a = $c->get('svc');
+    $b = $c->get('svc');
+
+    expect($a)->not->toBe($b)
+        ->and($c->findByTag('env-only'))->toHaveKey('svc')
+        ->and($c->findByTag('base'))->not->toHaveKey('svc');
+});
+
+it('supports first-class scope lifecycle API', function () {
+    $c = Container::instance(uniqid('scope_api_'));
+    $c->definitions()->bind('scoped_obj', fn () => new stdClass(), LifetimeEnum::Scoped);
+
+    $first = $c->enterScope('req-1')->get('scoped_obj');
+    $same = $c->get('scoped_obj');
+
+    $c->leaveScope();
+    $second = $c->enterScope('req-2')->get('scoped_obj');
+
+    expect($first)->toBe($same)
+        ->and($first)->not->toBe($second);
+});
+
+it('exports a dependency graph from tracer instrumentation', function () {
+    $c = Container::instance(uniqid('graph_'));
+    $c->options()->enableDebugTracing(true, TraceLevelEnum::Verbose)->end();
+
+    $c->definitions()->bind('dep', fn () => new stdClass());
+    $c->definitions()->bind('root', fn () => $c->get('dep'));
+
+    $c->get('root');
+    $graph = $c->exportGraph(clear: true);
+
+    $hasEdge = false;
+    foreach ($graph['edges'] as $edge) {
+        if ($edge['from'] === 'root' && $edge['to'] === 'dep') {
+            $hasEdge = true;
+            break;
+        }
+    }
+
+    expect($graph['nodes'])->toContain('root', 'dep')
+        ->and($hasEdge)->toBeTrue();
+});
+
 function newTracer(
     TraceLevelEnum $level = TraceLevelEnum::Node,
     bool $captureLocation = false,

@@ -15,6 +15,8 @@ use ReflectionMethod;
 
 class ClassResolver
 {
+    /** @var array<int, string> */
+    private array $classStack = [];
     private array $entriesResolving = [];
 
     /**
@@ -57,11 +59,21 @@ class ClassResolver
         // Possibly environment-based interface => check if $class->isInterface(), then environment override
         $class = $this->getConcreteClassForInterface($class, $supplied);
         $className = $class->getName();
+        $parent = end($this->classStack);
+        if (is_string($parent) && $parent !== $className) {
+            $this->repository->tracer()->recordDependency($parent, $className, 'class');
+        }
+
+        $this->classStack[] = $className;
         $this->repository->tracer()->push("class:$className");
 
-        return $make
-            ? $this->resolveMake($class, $className, $callMethod)
-            : $this->resolveClassResources($class, $className, $callMethod);
+        try {
+            return $make
+                ? $this->resolveMake($class, $className, $callMethod)
+                : $this->resolveClassResources($class, $className, $callMethod);
+        } finally {
+            array_pop($this->classStack);
+        }
     }
 
     /**

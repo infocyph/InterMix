@@ -60,9 +60,9 @@
         }
     },
     "scripts": {
-        "test:code": "pest --parallel --processes=10",
-        "test:refactor": "rector process --dry-run",
-        "test:lint": "pint --test",
+        "test:code": "@php vendor/bin/pest --parallel --processes=10",
+        "test:refactor": "@php vendor/bin/rector process --dry-run",
+        "test:lint": "@php vendor/bin/pint --test",
         "test:hook": [
             "captainhook hook:post-checkout",
             "captainhook hook:pre-commit",
@@ -76,10 +76,10 @@
             "@test:lint",
             "@test:refactor"
         ],
-        "test": "pest",
-        "refactor": "rector process",
-        "lint": "pint",
-        "post-autoload-dump": "captainhook install --only-enabled -nf"
+        "test": "@php vendor/bin/pest",
+        "refactor": "@php vendor/bin/rector process",
+        "lint": "@php vendor/bin/pint",
+        "post-autoload-dump": "@php vendor/bin/captainhook install --only-enabled -nf"
     },
     "require-dev": {
         "captainhook/captainhook": "^5.28",
