@@ -117,43 +117,17 @@ class InvocationManager implements ArrayAccess
     {
         $this->repository->tracer()->push("return:$id", TraceLevelEnum::Verbose);
 
-        // Determine lifetime & scope-key
         $meta = $this->repository->getDefinitionMeta($id);
         $lifetime = $meta['lifetime'] ?? LifetimeEnum::Singleton;
-        $scopeKey = $lifetime === LifetimeEnum::Scoped
-            ? $id . '@' . $this->repository->getScope()
-            : $id;
+        $scopeKey = $this->scopeKeyFor($id, $lifetime);
         $cacheable = $lifetime !== LifetimeEnum::Transient;
 
-        // Fast return from cache (singleton / scoped)
-        if ($cacheable && isset($this->repository->getResolved()[$scopeKey])) {
-            $resolved = $this->repository->getResolved()[$scopeKey];
-
-            if ($resolved instanceof DeferredInitializer) {
-                $resolved = $resolved();
-                $this->repository->setResolved($scopeKey, $resolved);
-            }
-            return $this->repository->fetchInstanceOrValue($resolved);
+        [$hasCached, $cached] = $this->resolveCachedEntry($scopeKey, $cacheable);
+        if ($hasCached) {
+            return $cached;
         }
 
-        // Resolve: definition map → class/closure fallback
-        if (isset($this->repository->getFunctionReference()[$id])) {
-            $resolved = $this->resolveDefinition($id);
-            $resolved = $resolved instanceof DeferredInitializer ? $resolved() : $resolved;
-
-            if ($cacheable) {
-                $this->repository->setResolved($scopeKey, $resolved);
-            }
-            return $resolved;
-        }
-
-        // Fallback: treat $id as class name / closure alias
-        $resolved = $this->call($id);
-
-        if ($cacheable) {
-            $this->repository->setResolved($scopeKey, $resolved);
-        }
-        return $this->repository->fetchInstanceOrValue($resolved);
+        return $this->resolveAndCache($id, $scopeKey, $cacheable);
     }
 
 
@@ -270,5 +244,51 @@ class InvocationManager implements ArrayAccess
         $this->repository->setResolved($id, $value);
 
         return $this->repository->fetchInstanceOrValue($value);
+    }
+
+    private function resolveAndCache(string $id, string $scopeKey, bool $cacheable): mixed
+    {
+        if (isset($this->repository->getFunctionReference()[$id])) {
+            $resolved = $this->resolveDefinition($id);
+            $resolved = $resolved instanceof DeferredInitializer ? $resolved() : $resolved;
+
+            if ($cacheable) {
+                $this->repository->setResolved($scopeKey, $resolved);
+            }
+
+            return $resolved;
+        }
+
+        $resolved = $this->call($id);
+        if ($cacheable) {
+            $this->repository->setResolved($scopeKey, $resolved);
+        }
+
+        return $this->repository->fetchInstanceOrValue($resolved);
+    }
+
+    /**
+     * @return array{0:bool,1:mixed}
+     */
+    private function resolveCachedEntry(string $scopeKey, bool $cacheable): array
+    {
+        if (!$cacheable || !isset($this->repository->getResolved()[$scopeKey])) {
+            return [false, null];
+        }
+
+        $resolved = $this->repository->getResolved()[$scopeKey];
+        if ($resolved instanceof DeferredInitializer) {
+            $resolved = $resolved();
+            $this->repository->setResolved($scopeKey, $resolved);
+        }
+
+        return [true, $this->repository->fetchInstanceOrValue($resolved)];
+    }
+
+    private function scopeKeyFor(string $id, LifetimeEnum $lifetime): string
+    {
+        return $lifetime === LifetimeEnum::Scoped
+            ? $id . '@' . $this->repository->getScope()
+            : $id;
     }
 }

@@ -154,26 +154,45 @@ trait Fence
      */
     private static function checkRequirements(?array $c): void
     {
-        if (!$c || ($c['extensions'] ?? []) === [] && ($c['classes'] ?? []) === []) {
+        if (self::hasNoRequirements($c)) {
             return;
         }
 
-        self::$cachedExtensions ??= get_loaded_extensions();
-        self::$cachedClasses ??= get_declared_classes();
+        self::warmRequirementCaches();
 
-        $missingE = array_diff((array)($c['extensions'] ?? []), self::$cachedExtensions);
-        $missingC = array_diff((array)($c['classes'] ?? []), self::$cachedClasses);
+        $missingE = self::findMissingExtensions((array)($c['extensions'] ?? []));
+        $missingC = self::findMissingClasses((array)($c['classes'] ?? []));
 
-        if ($missingE || $missingC) {
-            $parts = [];
-            if ($missingE) {
-                $parts[] = 'Extensions not loaded: ' . implode(', ', $missingE);
-            }
-            if ($missingC) {
-                $parts[] = 'Classes not found: ' . implode(', ', $missingC);
-            }
-            throw new RequirementException('Requirements not met: ' . implode('; ', $parts));
+        if ($missingE === [] && $missingC === []) {
+            return;
         }
+
+        throw new RequirementException(
+            'Requirements not met: ' . self::formatMissingRequirements($missingE, $missingC),
+        );
+    }
+
+    private static function findMissingClasses(array $required): array
+    {
+        return array_diff($required, self::$cachedClasses ?? []);
+    }
+
+    private static function findMissingExtensions(array $required): array
+    {
+        return array_diff($required, self::$cachedExtensions ?? []);
+    }
+
+    private static function formatMissingRequirements(array $missingE, array $missingC): string
+    {
+        $parts = [];
+        if ($missingE !== []) {
+            $parts[] = 'Extensions not loaded: ' . implode(', ', $missingE);
+        }
+        if ($missingC !== []) {
+            $parts[] = 'Classes not found: ' . implode(', ', $missingC);
+        }
+
+        return implode('; ', $parts);
     }
 
     /**
@@ -191,6 +210,15 @@ trait Fence
             : PHP_INT_MAX;
     }
 
+    private static function hasNoRequirements(?array $c): bool
+    {
+        if (!$c) {
+            return true;
+        }
+
+        return ($c['extensions'] ?? []) === [] && ($c['classes'] ?? []) === [];
+    }
+
     /**
      * Check if the given class is keyed.
      *
@@ -204,5 +232,11 @@ trait Fence
     {
         return self::$keyedCache[$cls]
             ??= !defined("$cls::FENCE_KEYED") || (bool) constant("$cls::FENCE_KEYED");
+    }
+
+    private static function warmRequirementCaches(): void
+    {
+        self::$cachedExtensions ??= get_loaded_extensions();
+        self::$cachedClasses ??= get_declared_classes();
     }
 }

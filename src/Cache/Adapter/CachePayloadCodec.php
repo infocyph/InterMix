@@ -19,35 +19,17 @@ final class CachePayloadCodec
      */
     public static function decode(string $blob): ?array
     {
-        try {
-            $decoded = ValueSerializer::unserialize($blob);
-        } catch (Throwable) {
+        $decoded = self::tryUnserialize($blob);
+        if ($decoded === null) {
             return null;
         }
 
-        if ($decoded instanceof CacheItemInterface) {
-            return ['value' => $decoded->get(), 'expires' => null];
+        $fromItem = self::decodeCacheItem($decoded);
+        if ($fromItem !== null) {
+            return $fromItem;
         }
 
-        if (!is_array($decoded)) {
-            return null;
-        }
-
-        if (($decoded['__imx_cache'] ?? null) === self::FORMAT && array_key_exists('value', $decoded)) {
-            return [
-                'value' => $decoded['value'],
-                'expires' => self::normalizeExpires($decoded['expires'] ?? null),
-            ];
-        }
-
-        if (array_key_exists('value', $decoded) && array_key_exists('expires', $decoded)) {
-            return [
-                'value' => $decoded['value'],
-                'expires' => self::normalizeExpires($decoded['expires']),
-            ];
-        }
-
-        return null;
+        return self::decodeArrayPayload($decoded);
     }
 
     public static function encode(mixed $value, ?int $expiresAt): string
@@ -80,8 +62,69 @@ final class CachePayloadCodec
         return $expiresAt === null ? null : (new DateTimeImmutable())->setTimestamp($expiresAt);
     }
 
+    /**
+     * @return array{value:mixed,expires:int|null}|null
+     */
+    private static function decodeArrayPayload(mixed $decoded): ?array
+    {
+        if (!is_array($decoded)) {
+            return null;
+        }
+
+        $fromFormatted = self::decodeFormattedPayload($decoded);
+        if ($fromFormatted !== null) {
+            return $fromFormatted;
+        }
+
+        if (array_key_exists('value', $decoded) && array_key_exists('expires', $decoded)) {
+            return [
+                'value' => $decoded['value'],
+                'expires' => self::normalizeExpires($decoded['expires']),
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array{value:mixed,expires:int|null}|null
+     */
+    private static function decodeCacheItem(mixed $decoded): ?array
+    {
+        if (!$decoded instanceof CacheItemInterface) {
+            return null;
+        }
+
+        return ['value' => $decoded->get(), 'expires' => null];
+    }
+
+    /**
+     * @param array<string, mixed> $decoded
+     * @return array{value:mixed,expires:int|null}|null
+     */
+    private static function decodeFormattedPayload(array $decoded): ?array
+    {
+        if (($decoded['__imx_cache'] ?? null) !== self::FORMAT || !array_key_exists('value', $decoded)) {
+            return null;
+        }
+
+        return [
+            'value' => $decoded['value'],
+            'expires' => self::normalizeExpires($decoded['expires'] ?? null),
+        ];
+    }
+
     private static function normalizeExpires(mixed $expires): ?int
     {
         return is_int($expires) ? $expires : null;
+    }
+
+    private static function tryUnserialize(string $blob): mixed
+    {
+        try {
+            return ValueSerializer::unserialize($blob);
+        } catch (Throwable) {
+            return null;
+        }
     }
 }

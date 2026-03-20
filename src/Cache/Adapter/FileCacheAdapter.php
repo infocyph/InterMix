@@ -119,6 +119,13 @@ class FileCacheAdapter extends AbstractCacheAdapter
         return $item instanceof FileCacheItem;
     }
 
+    private function assertWritableDirectory(string $path, string $message): void
+    {
+        if (!is_writable($path)) {
+            throw new RuntimeException($message);
+        }
+    }
+
     private function createDirectory(string $ns, ?string $baseDir): void
     {
         $baseDir = rtrim($baseDir ?? sys_get_temp_dir(), DIRECTORY_SEPARATOR);
@@ -126,14 +133,17 @@ class FileCacheAdapter extends AbstractCacheAdapter
         $this->dir = $baseDir . DIRECTORY_SEPARATOR . 'cache_' . $ns . DIRECTORY_SEPARATOR;
 
         if (is_dir($this->dir)) {
-            if (!is_writable($this->dir)) {
-                throw new RuntimeException(
-                    "Cache directory '$this->dir' exists but is not writable"
-                );
-            }
+            $this->assertWritableDirectory($this->dir, "Cache directory '$this->dir' exists but is not writable");
             return;
         }
 
+        $this->ensureBaseDirectoryExists($baseDir);
+        $this->ensureCacheDirectoryExists($this->dir);
+        $this->assertWritableDirectory($this->dir, 'Cache directory ' . $this->dir . ' is not writable');
+    }
+
+    private function ensureBaseDirectoryExists(string $baseDir): void
+    {
         if (file_exists($baseDir) && !is_dir($baseDir)) {
             throw new RuntimeException(
                 'Cache base path ' . realpath($baseDir) . ' exists and is *not* a directory'
@@ -141,34 +151,31 @@ class FileCacheAdapter extends AbstractCacheAdapter
         }
 
         if (!is_dir($baseDir) && !@mkdir($baseDir, 0770, true) && !is_dir($baseDir)) {
-            $err = error_get_last()['message'] ?? 'unknown error';
+            $this->throwCreationError('Failed to create base directory ' . $baseDir);
+        }
+    }
+
+    private function ensureCacheDirectoryExists(string $cacheDir): void
+    {
+        if (file_exists($cacheDir) && !is_dir($cacheDir)) {
             throw new RuntimeException(
-                'Failed to create base directory ' . $baseDir . ": $err"
+                realpath($cacheDir) . ' exists and is not a directory'
             );
         }
 
-        if (file_exists($this->dir) && !is_dir($this->dir)) {
-            throw new RuntimeException(
-                realpath($this->dir) . ' exists and is not a directory'
-            );
-        }
-
-        if (!@mkdir($this->dir, 0770, true) && !is_dir($this->dir)) {
-            $err = error_get_last()['message'] ?? 'unknown error';
-            throw new RuntimeException(
-                'Failed to create cache directory ' . $this->dir . ": $err"
-            );
-        }
-
-        if (!is_writable($this->dir)) {
-            throw new RuntimeException(
-                'Cache directory ' . $this->dir . ' is not writable'
-            );
+        if (!@mkdir($cacheDir, 0770, true) && !is_dir($cacheDir)) {
+            $this->throwCreationError('Failed to create cache directory ' . $cacheDir);
         }
     }
 
     private function fileFor(string $key): string
     {
         return $this->dir . hash('xxh128', $key) . '.cache';
+    }
+
+    private function throwCreationError(string $prefix): void
+    {
+        $err = error_get_last()['message'] ?? 'unknown error';
+        throw new RuntimeException($prefix . ": $err");
     }
 }

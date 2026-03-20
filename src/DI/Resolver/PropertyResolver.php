@@ -78,6 +78,24 @@ class PropertyResolver
         $this->classResolver = $classResolver;
     }
 
+
+    private function applyPropertyValue(
+        ReflectionClass $class,
+        ReflectionProperty $property,
+        ?array $values,
+    ): void {
+        if ($values === [] || $values === null) {
+            return;
+        }
+
+        if ($property->isStatic()) {
+            $class->setStaticPropertyValue($property->getName(), $values[0]);
+            return;
+        }
+
+        $property->setValue($values[0], $values[1]);
+    }
+
     /**
      * Attempt to resolve a single property value using the built-in #[Infuse] attribute.
      *
@@ -198,6 +216,15 @@ class PropertyResolver
     }
 
     /**
+     * @return array<string, mixed>|null
+     */
+    private function getRegisteredProperties(string $className): ?array
+    {
+        $classResource = $this->repository->getClassResource();
+        return $classResource[$className]['property'] ?? null;
+    }
+
+    /**
      * Resolves any properties for the given class and instance.
      * Skips properties already set.
      *
@@ -211,36 +238,25 @@ class PropertyResolver
         array $properties,
         object $classInstance,
     ): void {
-        if (!$properties) {
+        if ($properties === []) {
             return;
         }
-        $className = $class->getName();
-        $classResource = $this->repository->getClassResource();
-        $registeredProps = $classResource[$className]['property'] ?? null;
 
-        if ($registeredProps === null && !$this->repository->isPropertyAttributeEnabled()) {
+        $className = $class->getName();
+        $registeredProps = $this->getRegisteredProperties($className);
+        if ($this->shouldSkipPropertyResolution($registeredProps)) {
             return;
         }
 
         /** @var ReflectionProperty $property */
         foreach ($properties as $property) {
-            if ($property->isPromoted()
-                && !isset(($registeredProps ?? [])[$property->getName()])
-                && empty($property->getAttributes(Infuse::class))
-            ) {
+            if ($this->shouldSkipProperty($property, $registeredProps)) {
                 continue;
             }
-            $this->repository->tracer()->push(
-                "prop {$property->getName()} of $className",
-                TraceLevelEnum::Verbose,
-            );
+
+            $this->tracePropertyResolution($property, $className);
             $values = $this->resolveValue($property, $registeredProps ?? [], $classInstance);
-            if ($values) {
-                match (true) {
-                    $property->isStatic() => $class->setStaticPropertyValue($property->getName(), $values[0]),
-                    default => $property->setValue($values[0], $values[1]),
-                };
-            }
+            $this->applyPropertyValue($class, $property, $values);
         }
     }
 
@@ -262,15 +278,18 @@ class PropertyResolver
         array $classPropertyValues,
         object $classInstance,
     ): ?array {
-        if ($attempt = $this->attemptUserOverride($property, $classPropertyValues, $classInstance)) {
+        $attempt = $this->attemptUserOverride($property, $classPropertyValues, $classInstance);
+        if ($attempt !== null) {
             return $attempt;
         }
 
-        if ($attempt = $this->attemptBuiltInInfuse($property, $classInstance)) {
+        $attempt = $this->attemptBuiltInInfuse($property, $classInstance);
+        if ($attempt !== null) {
             return $attempt;
         }
 
-        if ($attempt = $this->attemptCustomAttributes($property, $classInstance)) {
+        $attempt = $this->attemptCustomAttributes($property, $classInstance);
+        if ($attempt !== null) {
             return $attempt;
         }
 
@@ -322,36 +341,23 @@ class PropertyResolver
         return $this->classResolver->resolve($refClass)['instance'];
     }
 
+    private function shouldSkipProperty(ReflectionProperty $property, ?array $registeredProps): bool
+    {
+        return $property->isPromoted()
+            && !isset(($registeredProps ?? [])[$property->getName()])
+            && empty($property->getAttributes(Infuse::class));
+    }
 
-    /**
-     * Try to set a value for a property based on predefined values.
-     *
-     * Checks if a value is set in the predefined $classPropertyValues array
-     * and if so, returns it. If not, and attribute-based property resolution is
-     * enabled, returns null so that the attribute-based approach can be used.
-     *
-     * @param ReflectionProperty $property The property to set.
-     * @param array $classPropertyValues The predefined values for the class.
-     * @param object $classInstance The class instance.
-     *
-     * @return array|null An array containing the value to set, or null if not set.
-     */
-    private function setWithPredefined(
-        ReflectionProperty $property,
-        array $classPropertyValues,
-        object $classInstance,
-    ): ?array {
-        $propName = $property->getName();
-        if ($property->isStatic() && isset($classPropertyValues[$propName])) {
-            return [$classPropertyValues[$propName]];
-        }
-        if (isset($classPropertyValues[$propName])) {
-            return [$classInstance, $classPropertyValues[$propName]];
-        }
-        if (!$this->repository->isPropertyAttributeEnabled()) {
-            return [];
-        }
+    private function shouldSkipPropertyResolution(?array $registeredProps): bool
+    {
+        return $registeredProps === null && !$this->repository->isPropertyAttributeEnabled();
+    }
 
-        return null;
+    private function tracePropertyResolution(ReflectionProperty $property, string $className): void
+    {
+        $this->repository->tracer()->push(
+            "prop {$property->getName()} of $className",
+            TraceLevelEnum::Verbose,
+        );
     }
 }
