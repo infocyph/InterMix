@@ -10,8 +10,13 @@ use function Opis\Closure\{serialize as oc_serialize, unserialize as oc_unserial
 
 final class ValueSerializer
 {
+    private const int SERIALIZED_CLOSURE_MEMO_LIMIT = 2048;
+
     /** @var array<string,array{wrap:callable,restore:callable}> */
     private static array $resourceHandlers = [];
+
+    /** @var array<string,bool> */
+    private static array $serializedClosureMemo = [];
 
     /**
      * Clear all registered resource handlers.
@@ -24,6 +29,7 @@ final class ValueSerializer
     public static function clearResourceHandlers(): void
     {
         self::$resourceHandlers = [];
+        self::$serializedClosureMemo = [];
     }
 
     /**
@@ -77,17 +83,18 @@ final class ValueSerializer
      */
     public static function isSerializedClosure(string $str): bool
     {
-        static $memo = [];
-        if (isset($memo[$str])) {
-            return $memo[$str];
+        if (array_key_exists($str, self::$serializedClosureMemo)) {
+            return self::$serializedClosureMemo[$str];
         }
+
         if (!str_contains($str, 'Opis\\Closure')) {
-            return $memo[$str] = false;
+            return self::rememberSerializedClosureMemo($str, false);
         }
-        return $memo[$str] = (bool)preg_match(
+
+        return self::rememberSerializedClosureMemo($str, (bool)preg_match(
             '/^(?:C:\d+:"Opis\\\\Closure\\\\SerializableClosure|O:\d+:"Opis\\\\Closure\\\\Box"|O:\d+:"Opis\\\\Closure\\\\Serializable")/',
             $str,
-        );
+        ));
     }
 
     /**
@@ -188,6 +195,20 @@ final class ValueSerializer
     public static function wrap(mixed $value): mixed
     {
         return self::wrapRecursive($value);
+    }
+
+    private static function rememberSerializedClosureMemo(string $key, bool $value): bool
+    {
+        if (!array_key_exists($key, self::$serializedClosureMemo)
+            && count(self::$serializedClosureMemo) >= self::SERIALIZED_CLOSURE_MEMO_LIMIT) {
+            $oldest = array_key_first(self::$serializedClosureMemo);
+            if ($oldest !== null) {
+                unset(self::$serializedClosureMemo[$oldest]);
+            }
+        }
+
+        self::$serializedClosureMemo[$key] = $value;
+        return $value;
     }
 
     /**

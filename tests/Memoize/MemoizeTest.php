@@ -29,6 +29,25 @@ it('memoize() caches global callables', function () {
     ]);
 });
 
+it('memoize() differentiates cached results by parameters', function () {
+    $fn = fn (int $x): int => $x;
+
+    $a = memoize($fn, [1]);
+    $b = memoize($fn, [2]);
+    $c = memoize($fn, [1]);
+
+    expect($a)->toBe(1)
+        ->and($b)->toBe(2)
+        ->and($c)->toBe(1);
+
+    $stats = memoize()->stats();
+    expect($stats)->toMatchArray([
+        'hits'   => 1,
+        'misses' => 2,
+        'total'  => 3,
+    ]);
+});
+
 it('remember() returns Memoizer when called with no object', function () {
     $m = remember();
     expect($m)->toBeInstanceOf(Memoizer::class);

@@ -5,7 +5,7 @@ Scopes
 ========
 
 A **scope** is a *label* that groups together all services registered with the
-``Lifetime::Scoped`` lifetime.
+``LifetimeEnum::Scoped`` lifetime.
 Inside the same scope, a scoped service behaves like a singleton; change the
 label and you get a fresh instance.
 
@@ -23,30 +23,32 @@ API
 
 .. code-block:: php
 
-   $repo = $c->getRepository();
-
-   $repo->setScope('req-123');    // ① enter / switch scope
-   $current = $repo->getScope();  // ② read current label
-   $repo->resetScope();           // ③ back to root scope
+   $c->enterScope('req-123');     // ① enter / switch scope
+   // ... resolve scoped services ...
+   $c->leaveScope();              // ② leave and restore previous scope
 
 Switching scope *never* clears non-scoped singletons; only services bound with
-``Lifetime::Scoped`` are affected.
+``LifetimeEnum::Scoped`` are affected.
 
 Example 🍰
 ---------
 
 .. code-block:: php
 
-   $def->bind('user.ctx', fn () => new StdClass, Lifetime::Scoped);
+   use Infocyph\InterMix\DI\Support\LifetimeEnum;
+
+   $def->bind('user.ctx', fn () => new StdClass, LifetimeEnum::Scoped);
 
    // ── Request #1 ────────────────────────────────
-   $repo->setScope('req-A');
+   $c->enterScope('req-A');
    $a1 = $c->get('user.ctx');     // instance #1
    $a2 = $c->get('user.ctx');     // same object (cached)
+   $c->leaveScope();
 
    // ── Request #2 ────────────────────────────────
-   $repo->setScope('req-B');
+   $c->enterScope('req-B');
    $b1 = $c->get('user.ctx');     // new instance (instance #2)
+   $c->leaveScope();
 
    assert($a1 !== $b1);
 
@@ -57,12 +59,12 @@ If you need a *temporary* scope:
 
 .. code-block:: php
 
-   $repo->withScope('cli-batch-42', function () use ($c) {
+   $c->withinScope('cli-batch-42', function () use ($c) {
        $svc = $c->get('user.ctx');   // scoped inside the closure
    });
    // scope automatically restored
 
-( ``withScope`` is a thin utility that saves → sets → restores the label. )
+( ``withinScope`` enters the scope, runs your callback, then always restores. )
 
 Best practices 💡
 ----------------

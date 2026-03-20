@@ -2,6 +2,10 @@
 use Infocyph\InterMix\Serializer\ValueSerializer;
 use Infocyph\InterMix\Serializer\ResourceHandlers;
 
+beforeEach(function () {
+    ValueSerializer::clearResourceHandlers();
+});
+
 // A subclass that actually implements the registerXxx() methods:
 class MyResourceHandlers extends ResourceHandlers
 {

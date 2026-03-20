@@ -22,3 +22,4 @@ Contents
     cache
     remix
     memoize
+    di/attribute-deferred-initializer

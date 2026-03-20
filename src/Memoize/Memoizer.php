@@ -9,6 +9,19 @@ use Infocyph\InterMix\Fence\Single;
 use ReflectionException;
 use WeakMap;
 
+/**
+ * Memoization utility for caching function call results.
+ *
+ * This class provides both static and object-scoped memoization capabilities.
+ * It caches the results of function calls based on their signature, avoiding
+ * repeated expensive computations for the same inputs.
+ *
+ * Features:
+ * - Static memoization for global function results
+ * - Object-scoped memoization using WeakMap for automatic cleanup
+ * - Hit/miss statistics for performance monitoring
+ * - Thread-safe operations using Single trait
+ */
 final class Memoizer
 {
     use Single;
@@ -16,17 +29,17 @@ final class Memoizer
     private int $hits   = 0;
     private int $misses = 0;
 
-    /** @var WeakMap<object,array<string,mixed>> */
+    /** @var WeakMap<object,array<string,mixed>> Object-scoped cache using WeakMap for automatic garbage collection */
     private WeakMap $objectCache;
 
-    /** @var array<string,mixed> */
+    /** @var array<string,mixed> Static cache for function-level memoization */
     private array $staticCache = [];
-
 
     /**
      * Creates a new Memoizer instance.
      *
-     * This constructor initializes an empty WeakMap for object-scoped memoization.
+     * This constructor initializes an empty WeakMap for object-scoped memoization
+     * and prepares hit/miss counters for statistics tracking.
      */
     protected function __construct()
     {
@@ -59,15 +72,16 @@ final class Memoizer
         $sig = ReflectionResource::getSignature(
             ReflectionResource::getReflection($callable)
         );
+        $cacheKey = self::buildCacheKey($sig, $params);
 
-        if (array_key_exists($sig, $this->staticCache)) {
+        if (array_key_exists($cacheKey, $this->staticCache)) {
             $this->hits++;
-            return $this->staticCache[$sig];
+            return $this->staticCache[$cacheKey];
         }
 
         $this->misses++;
         $v = $callable(...$params);
-        $this->staticCache[$sig] = $v;
+        $this->staticCache[$cacheKey] = $v;
         return $v;
     }
 
@@ -85,16 +99,17 @@ final class Memoizer
         $sig = ReflectionResource::getSignature(
             ReflectionResource::getReflection($callable)
         );
+        $cacheKey = self::buildCacheKey($sig, $params);
 
         $bucket = $this->objectCache[$object] ?? [];
-        if (array_key_exists($sig, $bucket)) {
+        if (array_key_exists($cacheKey, $bucket)) {
             $this->hits++;
-            return $bucket[$sig];
+            return $bucket[$cacheKey];
         }
 
         $this->misses++;
         $value = $callable(...$params);
-        $bucket[$sig] = $value;
+        $bucket[$cacheKey] = $value;
         $this->objectCache[$object] = $bucket;
         return $value;
     }
@@ -115,5 +130,32 @@ final class Memoizer
             'misses' => $this->misses,
             'total'  => $this->hits + $this->misses,
         ];
+    }
+
+    /**
+     * Build a stable memoization cache key from callable signature + argument values.
+     */
+    private static function buildCacheKey(string $sig, array $params): string
+    {
+        if ($params === []) {
+            return $sig;
+        }
+
+        $normalized = array_map(self::normalizeParam(...), $params);
+        return $sig . '|' . hash('xxh3', serialize($normalized));
+    }
+
+    /**
+     * Normalize runtime values into serializable scalar/array forms for cache keys.
+     */
+    private static function normalizeParam(mixed $value): mixed
+    {
+        return match (true) {
+            $value instanceof \Closure => 'closure#' . spl_object_id($value),
+            is_object($value) => 'obj#' . spl_object_id($value),
+            is_resource($value) => 'res#' . get_resource_type($value) . '#' . (int)$value,
+            is_array($value) => array_map(self::normalizeParam(...), $value),
+            default => $value,
+        };
     }
 }

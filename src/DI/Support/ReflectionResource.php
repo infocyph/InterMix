@@ -13,8 +13,19 @@ use ReflectionFunction;
 use ReflectionFunctionAbstract;
 use ReflectionMethod;
 
+/**
+ * Utility class for managing reflection operations with caching.
+ *
+ * This class provides a centralized way to obtain and cache reflection
+ * objects for classes, functions, methods, and enums. It improves
+ * performance by avoiding repeated reflection operations on the same targets.
+ *
+ * The class supports various callable types and provides methods for
+ * generating signatures and extracting metadata from reflected objects.
+ */
 final class ReflectionResource
 {
+    /** @var array<string, mixed> Cache for reflection objects to improve performance */
     private static array $reflectionCache = [
         'classes'   => [],
         'enums'     => [],
@@ -22,6 +33,13 @@ final class ReflectionResource
         'methods'   => [],
     ];
 
+    /**
+     * Clears all internal reflection caches.
+     *
+     * This method resets the static cache, forcing subsequent reflection
+     * operations to create new reflection objects. Useful for testing
+     * or when working with dynamically loaded code.
+     */
     public static function clearCache(): void
     {
         self::$reflectionCache = [

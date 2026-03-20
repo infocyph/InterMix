@@ -13,7 +13,7 @@ collection.
 Add a Tag 🏷️
 -----------------
 
-Simply pass **`tags:[…]`** to :py:meth:`DefinitionManager.bind`.
+Simply pass **`tags:[…]`** to :php:meth:`DefinitionManager::bind`.
 
 .. code-block:: php
 
@@ -71,10 +71,15 @@ Need advanced filtering?
    // all services that carry *both* 'event' AND 'sms' tags
    $smsEvents = array_filter(
        $c->findByTag('sms'),
-       fn ($id) => in_array('event', $c->getRepository()->getTagsFor($id), true)
+       fn (string $id) => in_array(
+           'event',
+           $c->getRepository()->getDefinitionMeta($id)['tags'] ?? [],
+           true
+       ),
+       ARRAY_FILTER_USE_KEY
    );
 
-*(The low-level tag map is available via the repository API.)*
+*(For advanced tag metadata queries, use the low-level repository API.)*
 
 --------------------
 Common Use-Cases 🎯

@@ -9,6 +9,7 @@ use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Invoker\GenericCall;
 use Infocyph\InterMix\DI\Invoker\InjectedCall;
 use Infocyph\InterMix\DI\Resolver\Repository;
+use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\DI\Support\PreloadGenerator;
 use Infocyph\InterMix\DI\Support\TraceLevelEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
@@ -71,18 +72,18 @@ class OptionsManager implements ArrayAccess
      *
      * If enabled, the container will generate a detailed trace of all
      * resolutions, including the definitions and services that are being
-     * resolved. The trace level can be set to either `TraceLevel::Node` (default)
-     * to only log the top-most nodes, or `TraceLevel::Verbose` to log
+     * resolved. The trace level can be set to either `TraceLevelEnum::Node` (default)
+     * to only log the top-most nodes, or `TraceLevelEnum::Verbose` to log
      * everything.
      *
      * @param bool $enable Whether to enable debug tracing. Defaults to true.
-     * @param TraceLevelEnum $level The trace level to use. Defaults to `TraceLevel::Node`.
+     * @param TraceLevelEnum $level The trace level to use. Defaults to `TraceLevelEnum::Node`.
      *
      * @return $this
      */
     public function enableDebugTracing(bool $enable = true, TraceLevelEnum $level = TraceLevelEnum::Node): self
     {
-        $this->repository->tracer()->setLevel($enable ? $level : TraceLevel::Node);
+        $this->repository->tracer()->setLevel($enable ? $level : TraceLevelEnum::Node);
         return $this;
     }
 
@@ -169,6 +170,34 @@ class OptionsManager implements ArrayAccess
     public function registration(): RegistrationManager
     {
         return $this->container->registration();
+    }
+
+    /**
+     * Override definition lifetime/tags for a specific environment.
+     *
+     * @param string $env
+     * @param string $id Definition id
+     * @param LifetimeEnum|null $lifetime
+     * @param array<int, string>|null $tags
+     *
+     * @throws ContainerException
+     */
+    public function setDefinitionMetaForEnv(
+        string $env,
+        string $id,
+        ?LifetimeEnum $lifetime = null,
+        ?array $tags = null,
+    ): self {
+        $meta = [];
+        if ($lifetime !== null) {
+            $meta['lifetime'] = $lifetime;
+        }
+        if ($tags !== null) {
+            $meta['tags'] = $tags;
+        }
+
+        $this->repository->setDefinitionMetaForEnv($env, $id, $meta);
+        return $this;
     }
 
     /**

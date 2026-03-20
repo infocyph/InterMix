@@ -165,6 +165,48 @@ final class Container implements ContainerInterface, ArrayAccess
     }
 
     /**
+     * Enter a named scope for scoped-lifetime services.
+     *
+     * Scopes allow you to create isolated contexts for services with scoped lifetime.
+     * Services registered with scoped lifetime will be unique within each scope
+     * but shared across multiple requests within the same scope.
+     *
+     * @param string $scope The name of the scope to enter.
+     * @return self The container instance for method chaining.
+     * @throws ContainerException If the scope cannot be entered.
+     */
+    public function enterScope(string $scope): self
+    {
+        $this->repository->enterScope($scope);
+        return $this;
+    }
+
+    /**
+     * Export dependency graph data collected by tracer instrumentation.
+     *
+     * This method provides a detailed graph of service dependencies that have been
+     * resolved during the container's operation. The graph can be used for analysis,
+     * debugging, or visualization of the dependency structure.
+     *
+     * If $warmFromId is provided, the container will resolve that service first
+     * to ensure its dependencies are included in the graph.
+     *
+     * @param string|null $warmFromId Optional service ID to resolve before exporting the graph.
+     * @param bool $clear Whether to clear the tracer data after exporting. Defaults to false.
+     * @return array An array representing the dependency graph with nodes and edges.
+     * @throws Exception If there's an error during service resolution or graph generation.
+     * @throws \Psr\Cache\InvalidArgumentException If there's an issue with cache operations during tracing.
+     */
+    public function exportGraph(?string $warmFromId = null, bool $clear = false): array
+    {
+        if ($warmFromId !== null) {
+            $this->get($warmFromId);
+        }
+
+        return $this->repository->tracer()->dependencyGraph($clear);
+    }
+
+    /**
      * Finds and retrieves all service definitions tagged with a specified tag.
      *
      * This method iterates over the repository's definition metadata,
@@ -179,7 +221,8 @@ final class Container implements ContainerInterface, ArrayAccess
     public function findByTag(string $tag): array
     {
         $matches = [];
-        foreach ($this->repository->getAllDefinitionMeta() as $id => $meta) {
+        foreach ($this->repository->getFunctionReference() as $id => $_definition) {
+            $meta = $this->repository->getDefinitionMeta($id);
             if (in_array($tag, $meta['tags'], true)) {
                 $matches[$id] = $this->get($id);
             }
@@ -285,6 +328,22 @@ final class Container implements ContainerInterface, ArrayAccess
     public function invocation(): InvocationManager
     {
         return $this->invocationManager;
+    }
+
+    /**
+     * Leave the current scope and reset scoped instances for it.
+     *
+     * This method exits the current scope and cleans up any service instances
+     * that were created within that scope. Subsequent requests for scoped services
+     * will create new instances within the parent scope or default context.
+     *
+     * @return self The container instance for method chaining.
+     * @throws ContainerException If the scope cannot be left properly.
+     */
+    public function leaveScope(): self
+    {
+        $this->repository->leaveScope();
+        return $this;
     }
 
 
@@ -539,6 +598,32 @@ final class Container implements ContainerInterface, ArrayAccess
     public function unset(): void
     {
         unset(self::$instances[$this->instanceAlias]);
+    }
+
+    /**
+     * Execute a callback inside a named scope and always leave it afterward.
+     *
+     * This method provides a convenient way to execute operations within a specific
+     * scope while ensuring the scope is properly cleaned up afterward, even if
+     * an exception occurs during callback execution.
+     *
+     * The callback receives the container instance as its first argument,
+     * allowing it to perform scoped operations.
+     *
+     * @param string $scope The name of the scope to enter for the callback execution.
+     * @param callable $callback The callback to execute within the scope.
+     * @return mixed The return value of the callback.
+     * @throws ContainerException If the scope cannot be managed properly.
+     * @throws Throwable Any exception thrown by the callback will be rethrown after scope cleanup.
+     */
+    public function withinScope(string $scope, callable $callback): mixed
+    {
+        $this->enterScope($scope);
+        try {
+            return $callback($this);
+        } finally {
+            $this->leaveScope();
+        }
     }
 
     /**

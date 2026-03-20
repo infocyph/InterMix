@@ -31,6 +31,7 @@ class Repository
     private string $currentScope = 'root';
     private ?string $defaultMethod = null;
     private array $definitionMeta = [];
+    private array $definitionMetaByEnv = [];
     private bool $enableMethodAttribute = false;
     private bool $enablePropertyAttribute = false;
     private ?string $environment = null;
@@ -40,6 +41,7 @@ class Repository
     private array $resolved = [];
     private array $resolvedDefinition = [];
     private array $resolvedResource = [];
+    private array $scopeStack = [];
 
     /**
      * Constructs a Repository instance.
@@ -182,6 +184,17 @@ class Repository
     }
 
     /**
+     * Enter a named logical scope.
+     *
+     * @throws ContainerException
+     */
+    public function enterScope(string $scope): void
+    {
+        $this->scopeStack[] = $this->currentScope;
+        $this->currentScope = $scope;
+    }
+
+    /**
      * If the given value is an array with an 'instance' key, returns the value of that key.
      * Otherwise, returns the given value.
      *
@@ -291,7 +304,20 @@ class Repository
      */
     public function getDefinitionMeta(string $id): array
     {
-        return $this->definitionMeta[$id] ?? ['lifetime' => LifetimeEnum::Singleton, 'tags' => []];
+        $meta = $this->definitionMeta[$id] ?? ['lifetime' => LifetimeEnum::Singleton, 'tags' => []];
+        $env = $this->environment;
+
+        if ($env !== null && isset($this->definitionMetaByEnv[$env][$id])) {
+            $override = $this->definitionMetaByEnv[$env][$id];
+            if (array_key_exists('lifetime', $override)) {
+                $meta['lifetime'] = $override['lifetime'];
+            }
+            if (array_key_exists('tags', $override)) {
+                $meta['tags'] = $override['tags'];
+            }
+        }
+
+        return $meta;
     }
 
     /**
@@ -442,6 +468,12 @@ class Repository
         return $this->enablePropertyAttribute;
     }
 
+    public function leaveScope(): void
+    {
+        $this->clearScopeResolvedEntries($this->currentScope);
+        $this->currentScope = array_pop($this->scopeStack) ?? 'root';
+    }
+
     /**
      * Locks the container from future modifications.
      *
@@ -482,12 +514,8 @@ class Repository
      */
     public function resetScope(): void
     {
-        $suffix = '@' . $this->currentScope;
-        foreach ($this->resolved as $key => $_) {
-            if (str_ends_with((string)$key, $suffix)) {
-                unset($this->resolved[$key]);
-            }
-        }
+        $this->clearScopeResolvedEntries($this->currentScope);
+        $this->scopeStack = [];
         $this->currentScope = 'root';
     }
 
@@ -555,6 +583,34 @@ class Repository
     }
 
     /**
+     * Override definition meta for a specific environment.
+     *
+     * Supported keys:
+     *  - lifetime: LifetimeEnum
+     *  - tags: array<int, string>
+     *
+     * @throws ContainerException
+     */
+    public function setDefinitionMetaForEnv(string $env, string $id, array $meta): void
+    {
+        $this->checkIfLocked();
+
+        $normalized = [];
+        if (array_key_exists('lifetime', $meta) && $meta['lifetime'] instanceof LifetimeEnum) {
+            $normalized['lifetime'] = $meta['lifetime'];
+        }
+        if (array_key_exists('tags', $meta) && is_array($meta['tags'])) {
+            $normalized['tags'] = array_values(array_map(strval(...), $meta['tags']));
+        }
+
+        if ($normalized === []) {
+            return;
+        }
+
+        $this->definitionMetaByEnv[$env][$id] = $normalized;
+    }
+
+    /**
      * Set the environment for this repository.
      *
      * The environment can be used to resolve environment-based interface mappings.
@@ -570,7 +626,16 @@ class Repository
     public function setEnvironment(string $env): void
     {
         $this->checkIfLocked();
+        if ($this->environment === $env) {
+            return;
+        }
+
         $this->environment = $env;
+        $this->resolved = [];
+        $this->resolvedDefinition = [];
+        $this->resolvedResource = [];
+        $this->scopeStack = [];
+        $this->currentScope = 'root';
     }
 
     /**
@@ -673,6 +738,16 @@ class Repository
     {
         if ($this->isLocked) {
             throw new ContainerException('Container is locked! Unable to set/modify any value.');
+        }
+    }
+
+    private function clearScopeResolvedEntries(string $scope): void
+    {
+        $suffix = '@' . $scope;
+        foreach ($this->resolved as $key => $_) {
+            if (str_ends_with((string)$key, $suffix)) {
+                unset($this->resolved[$key]);
+            }
         }
     }
 }

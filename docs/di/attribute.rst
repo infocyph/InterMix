@@ -10,7 +10,7 @@ Two families exist:
 
 * **Built-in** tags shipped with InterMix (`Infuse` / `Autowire` / `Inject`)
 * **Custom** attributes you register at runtime through
-  :py:meth:`Infocyph.InterMix.DI.Attribute.AttributeRegistry.register`
+  :php:meth:`Infocyph\InterMix\DI\Attribute\AttributeRegistry::register`
 
 -------------------------------------------------
 Built-in Tags (Infuse / Autowire / Inject)
@@ -19,6 +19,7 @@ Built-in Tags (Infuse / Autowire / Inject)
 * ``#[Infuse]`` – canonical
 * ``#[Autowire]`` – Spring-style alias
 * ``#[Inject]`` – common DI alias
+* ``#[DeferredInitializer]`` – marks classes for lazy initialization
 
 They are **identical** and can inject via :
 
@@ -47,12 +48,17 @@ Quick syntax
        ) {}
    }
 
+.. toctree::
+    :maxdepth: 1
+    :hidden:
+    attribute-deferred-initializer
+
 -------------------------------------------------
 Custom Attribute Support
 -------------------------------------------------
 
 Create any attribute & a resolver that implements
-:pyclass:`Infocyph.InterMix.DI.Attribute.AttributeResolverInterface`.
+:php:class:`Infocyph\InterMix\DI\Attribute\AttributeResolverInterface`.
 
 .. code-block:: php
 
@@ -120,7 +126,8 @@ Whole-method defaults:
    }
 
 *Arguments provided* via :php:meth:`Container::call`,
-:py:meth:`registerMethod()` or explicit arrays always **override** attributes.
+:php:meth:`Infocyph\InterMix\DI\Managers\RegistrationManager::registerMethod`
+or explicit arrays always **override** attributes.
 
 -------------------------------------------------
 Property Injection
@@ -137,7 +144,8 @@ Enable with ``propertyAttributes: true``:
    }
 
 Properties are injected *after* construction.
-Values set via :py:meth:`registerProperty()` win over attributes.
+Values set via :php:meth:`Infocyph\InterMix\DI\Managers\RegistrationManager::registerProperty`
+win over attributes.
 
 -------------------------------------------------
 Resolution Workflow
@@ -204,7 +212,7 @@ Logic-only attribute (no injection):
 
    class LogCallResolver implements AttributeResolverInterface {
        public function resolve(object $attr, Reflector $target, Container $c): mixed {
-           $c->logger()->log($attr->level, "[DI] $target handled");
+           $c->get('logger')->log($attr->level, "[DI] $target handled");
            return null;       // no injection, marks as handled
        }
    }

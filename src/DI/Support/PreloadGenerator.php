@@ -47,7 +47,9 @@ final class PreloadGenerator
         $code = <<<PHP
             <?php
             foreach ($list as \$file) {
-                function_exists('opcache_is_script_cached') && opcache_is_script_cached(\$file) && continue;
+                if (function_exists('opcache_is_script_cached') && opcache_is_script_cached(\$file)) {
+                    continue;
+                }
                 require_once \$file;
                 opcache_compile_file(\$file);
             }

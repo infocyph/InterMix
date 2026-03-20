@@ -13,8 +13,25 @@ use ReflectionClass;
 use ReflectionException;
 use ReflectionMethod;
 
+/**
+ * Handles class resolution with dependency injection and attribute processing.
+ *
+ * This resolver is responsible for creating class instances with full dependency
+ * injection support. It handles constructor injection, property injection,
+ * method injection, and attribute-based configuration.
+ *
+ * Features:
+ * - Recursive dependency resolution with circular reference detection
+ * - Environment-based interface binding
+ * - Attribute processing for injection configuration
+ * - Support for singleton, transient, and scoped lifetimes
+ */
 class ClassResolver
 {
+    /** @var array<int, string> Stack for tracking class resolution depth to prevent infinite recursion */
+    private array $classStack = [];
+
+    /** @var array<string, bool> Tracks which entries are currently being resolved */
     private array $entriesResolving = [];
 
     /**
@@ -57,11 +74,21 @@ class ClassResolver
         // Possibly environment-based interface => check if $class->isInterface(), then environment override
         $class = $this->getConcreteClassForInterface($class, $supplied);
         $className = $class->getName();
+        $parent = end($this->classStack);
+        if (is_string($parent) && $parent !== $className) {
+            $this->repository->tracer()->recordDependency($parent, $className, 'class');
+        }
+
+        $this->classStack[] = $className;
         $this->repository->tracer()->push("class:$className");
 
-        return $make
-            ? $this->resolveMake($class, $className, $callMethod)
-            : $this->resolveClassResources($class, $className, $callMethod);
+        try {
+            return $make
+                ? $this->resolveMake($class, $className, $callMethod)
+                : $this->resolveClassResources($class, $className, $callMethod);
+        } finally {
+            array_pop($this->classStack);
+        }
     }
 
     /**
@@ -80,46 +107,25 @@ class ClassResolver
      */
     public function resolveInfuse(Infuse $infuse): mixed
     {
-        // 1) Extract the "type" (class name, function name, definition ID, etc.)
         $typeData = $infuse->getParameterData();
-        // e.g. ['type' => 'SomeClassOrFunction', 'data' => [...]]
-
         $type = $typeData['type'] ?? null;
-        $data = $typeData['data'] ?? [];  // extra data (array) if present
+        $data = $typeData['data'] ?? [];
 
-        // If no type, nothing to resolve
         if (!$type) {
             return new IMStdClass();
         }
 
-        // 2) If $type is in functionReference => let definitionResolver handle it
-        if ($this->repository->hasFunctionReference($type)) {
-            return $this->definitionResolver->resolve($type);
+        $fromDefinition = $this->resolveInfuseFromDefinition($type);
+        if ($fromDefinition !== null) {
+            return $fromDefinition;
         }
 
-        // 3) If $type is a global function name
-        if (function_exists($type)) {
-            $reflectionFn = new \ReflectionFunction($type);
-            $args = $this->parameterResolver->resolve($reflectionFn, (array)$data, 'constructor');
-            return $type(...$args);
+        $fromFunction = $this->resolveInfuseFromFunction($type, (array)$data);
+        if ($fromFunction !== null) {
+            return $fromFunction;
         }
 
-        // 4) If $type is a class or interface => do a reflection-based resolution
-        if (class_exists($type) || interface_exists($type)) {
-            if (interface_exists($type)) {
-                $envConcrete = $this->repository->getEnvConcrete($type);
-                if ($envConcrete && class_exists($envConcrete)) {
-                    $type = $envConcrete;
-                }
-            }
-
-            return $this->repository->fetchInstanceOrValue(
-                $this->resolve(ReflectionResource::getClassReflection($type)),
-            );
-        }
-
-        // 5) Otherwise, we have no way to resolve it
-        return null;
+        return $this->resolveInfuseFromClassOrInterface($type);
     }
 
     /**
@@ -164,6 +170,20 @@ class ClassResolver
         }
 
         return $reflect;
+    }
+
+    private function initializeMethodResolutionState(string $className): array
+    {
+        $resolvedResource = $this->repository->getResolvedResource()[$className] ?? [];
+        $resolvedResource['returned'] = null;
+        return $resolvedResource;
+    }
+
+    private function invokeResolvedMethod(string $className, string $method, object $instance): mixed
+    {
+        $refMethod = new ReflectionMethod($className, $method);
+        $args = $this->resolveMethodArguments($className, $refMethod);
+        return $refMethod->invokeArgs($instance, $args);
     }
 
     /**
@@ -245,6 +265,45 @@ class ClassResolver
         $this->repository->setResolvedResource($className, $resolvedResource);
     }
 
+    private function resolveInfuseFromClassOrInterface(string $type): mixed
+    {
+        if (!class_exists($type) && !interface_exists($type)) {
+            return null;
+        }
+
+        if (interface_exists($type)) {
+            $envConcrete = $this->repository->getEnvConcrete($type);
+            if ($envConcrete && class_exists($envConcrete)) {
+                $type = $envConcrete;
+            }
+        }
+
+        return $this->repository->fetchInstanceOrValue(
+            $this->resolve(ReflectionResource::getClassReflection($type)),
+        );
+    }
+
+    private function resolveInfuseFromDefinition(string $type): mixed
+    {
+        return $this->repository->hasFunctionReference($type)
+            ? $this->definitionResolver->resolve($type)
+            : null;
+    }
+
+    /**
+     * @param array<int|string, mixed> $data
+     */
+    private function resolveInfuseFromFunction(string $type, array $data): mixed
+    {
+        if (!function_exists($type)) {
+            return null;
+        }
+
+        $reflectionFn = new \ReflectionFunction($type);
+        $args = $this->parameterResolver->resolve($reflectionFn, $data, 'constructor');
+        return $type(...$args);
+    }
+
     /**
      * Resolve a class using the given ReflectionClass.
      *
@@ -306,35 +365,43 @@ class ClassResolver
         string|bool|null $callMethod,
     ): void {
         $className = $class->getName();
-        $resolvedResource = $this->repository->getResolvedResource()[$className] ?? [];
-        $resolvedResource['returned'] = null;
-
+        $resolvedResource = $this->initializeMethodResolutionState($className);
         if ($callMethod === false) {
             $this->repository->setResolvedResource($className, $resolvedResource);
-
             return;
         }
 
+        $method = $this->resolveTargetMethod($class, $className, $callMethod);
+        if ($method === null) {
+            $this->repository->setResolvedResource($className, $resolvedResource);
+            return;
+        }
+
+        $resolvedResource['returned'] = $this->invokeResolvedMethod($className, $method, $resolvedResource['instance']);
+        $this->repository->setResolvedResource($className, $resolvedResource);
+    }
+
+    private function resolveMethodArguments(string $className, ReflectionMethod $refMethod): array
+    {
+        $classRes = $this->repository->getClassResource();
+        $params = $classRes[$className]['method']['params'] ?? [];
+        return $this->parameterResolver->resolve($refMethod, $params, 'method');
+    }
+
+    private function resolveTargetMethod(
+        ReflectionClass $class,
+        string $className,
+        string|bool|null $callMethod,
+    ): ?string {
+        $callOn = $class->hasConstant('callOn') ? $class->getConstant('callOn') : null;
         $method = $callMethod
             ?: ($this->repository->getClassResource()[$className]['method']['on'] ?? null)
-                ?: ($class->getConstant('callOn') ?: $this->repository->getDefaultMethod());
+                ?: ($callOn ?: $this->repository->getDefaultMethod());
 
         if (!$method && $class->hasMethod('__invoke')) {
             $method = '__invoke';
         }
-        if (!$method || !$class->hasMethod($method)) {
-            $this->repository->setResolvedResource($className, $resolvedResource);
 
-            return;
-        }
-
-        $refMethod = new ReflectionMethod($className, $method);
-        $classRes = $this->repository->getClassResource();
-        $params = $classRes[$className]['method']['params'] ?? [];
-        $args = $this->parameterResolver->resolve($refMethod, $params, 'method');
-
-        $returned = $refMethod->invokeArgs($resolvedResource['instance'], $args);
-        $resolvedResource['returned'] = $returned;
-        $this->repository->setResolvedResource($className, $resolvedResource);
+        return is_string($method) && $class->hasMethod($method) ? $method : null;
     }
 }

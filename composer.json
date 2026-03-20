@@ -36,7 +36,7 @@
     },
     "require": {
         "php": ">=8.3",
-        "opis/closure": "^4.4",
+        "opis/closure": "^4.5",
         "psr/cache": "^3.0",
         "psr/container": "^2.0",
         "psr/simple-cache": "^3.0"
@@ -46,7 +46,8 @@
         "ext-redis": "For Redis-based caching (persistent, networked)",
         "ext-memcached": "For Memcached-based caching (distributed, RAM)",
         "ext-sqlite3": "For SQLite-based caching (file-based, portable)",
-        "ext-pdo": "For SQLite-based caching (file-based, portable)"
+        "ext-pdo": "For SQLite-based caching (file-based, portable)",
+        "ext-mbstring": "Recommended for development tools output formatting (Pest/Termwind)"
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
@@ -59,9 +60,9 @@
         }
     },
     "scripts": {
-        "test:code": "pest --parallel --processes=10",
-        "test:refactor": "rector process --dry-run",
-        "test:lint": "pint --test",
+        "test:code": "@php vendor/bin/pest --parallel --processes=10",
+        "test:refactor": "@php vendor/bin/rector process --dry-run",
+        "test:lint": "@php vendor/bin/pint --test",
         "test:hook": [
             "captainhook hook:post-checkout",
             "captainhook hook:pre-commit",
@@ -75,16 +76,17 @@
             "@test:lint",
             "@test:refactor"
         ],
-        "test": "pest",
-        "refactor": "rector process",
-        "lint": "pint",
-        "post-autoload-dump": "captainhook install --only-enabled -nf"
+        "test": "@php vendor/bin/pest",
+        "refactor": "@php vendor/bin/rector process",
+        "lint": "@php vendor/bin/pint",
+        "post-autoload-dump": "@php vendor/bin/captainhook install --only-enabled -nf"
     },
     "require-dev": {
-        "captainhook/captainhook": "^5.27",
-        "laravel/pint": "^1.26",
-        "pestphp/pest": "^4.2",
-        "rector/rector": "^2.2",
+        "captainhook/captainhook": "^5.28",
+        "laravel/pint": "^1.29",
+        "pestphp/pest": "^4.4",
+        "rector/rector": "^2.3",
+        "symfony/polyfill-mbstring": "^1.33",
         "symfony/var-dumper": "^7.4"
     }
 }

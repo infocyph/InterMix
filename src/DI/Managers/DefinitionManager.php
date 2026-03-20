@@ -167,4 +167,32 @@ class DefinitionManager implements ArrayAccess
     {
         return $this->container->registration();
     }
+
+    /**
+     * Override existing definition metadata for a specific environment.
+     *
+     * @param string $env
+     * @param string $id
+     * @param LifetimeEnum|null $lifetime
+     * @param array<int, string>|null $tags
+     *
+     * @throws ContainerException
+     */
+    public function setMetaForEnv(
+        string $env,
+        string $id,
+        ?LifetimeEnum $lifetime = null,
+        ?array $tags = null,
+    ): self {
+        $meta = [];
+        if ($lifetime !== null) {
+            $meta['lifetime'] = $lifetime;
+        }
+        if ($tags !== null) {
+            $meta['tags'] = $tags;
+        }
+
+        $this->repository->setDefinitionMetaForEnv($env, $id, $meta);
+        return $this;
+    }
 }
