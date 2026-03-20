@@ -261,6 +261,8 @@ if (!function_exists('once')) {
     function once(callable $callback, ?Container $container = null): mixed
     {
         static $cache = [];
+        static $order = [];
+        static $limit = 2048;
         $bt = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
         $key = ($bt[1]['file'] ?? '(unknown)') . ':' . ($bt[1]['line'] ?? 0);
 
@@ -278,6 +280,17 @@ if (!function_exists('once')) {
 
         $value = $callback();
         $cache[$key] = $value;
+
+        if (!in_array($key, $order, true)) {
+            $order[] = $key;
+            if (count($order) > $limit) {
+                $oldest = array_shift($order);
+                if ($oldest !== null) {
+                    unset($cache[$oldest]);
+                }
+            }
+        }
+
         return $value;
     }
 }

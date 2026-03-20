@@ -4,40 +4,18 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\Cache\Adapter;
 
-use Countable;
 use Infocyph\InterMix\Cache\Item\MemCacheItem;
 use Infocyph\InterMix\Exceptions\CacheInvalidArgumentException;
-use Infocyph\InterMix\Serializer\ValueSerializer;
 use Memcached;
 use Psr\Cache\CacheItemInterface;
-use Psr\Cache\CacheItemPoolInterface;
-use Psr\Cache\InvalidArgumentException;
 use RuntimeException;
 
-class MemCacheAdapter implements CacheItemPoolInterface, Countable
+class MemCacheAdapter extends AbstractCacheAdapter
 {
     private readonly Memcached $mc;
     private readonly string $ns;
-    private array $deferred = [];
     private array $knownKeys = [];
 
-    /**
-     * Create a new Memcache-based cache pool.
-     *
-     * @param string $namespace The namespace to use for the cache pool.
-     *     This is used to prefix all cache keys to avoid collisions.
-     *     Defaults to "default".
-     * @param array $servers An array of Memcache servers to connect to.
-     *     Each server is an array with the following elements:
-     *     - string $host The hostname or IP address of the Memcache server.
-     *     - int $port The port on which the Memcache server is listening.
-     *     - int $weight An optional weight for the server.
-     *     Defaults to [['127.0.0.1', 11211, 0]] which is a single server on
-     *     localhost.
-     * @param ?Memcached $client An optional Memcached client to use.
-     *     If not provided, a new Memcached client will be created and
-     *     connected to the servers in the $servers array.
-     */
     public function __construct(
         string $namespace = 'default',
         array $servers = [['127.0.0.1', 11211, 0]],
@@ -54,14 +32,6 @@ class MemCacheAdapter implements CacheItemPoolInterface, Countable
         }
     }
 
-    /**
-     * Clears the cache pool of all items.
-     *
-     * This method will remove all items in the cache pool, and reset
-     * the internal arrays of known keys and deferred items.
-     *
-     * @return bool True if the cache was successfully cleared, false otherwise.
-     */
     public function clear(): bool
     {
         $this->mc->flush();
@@ -70,64 +40,18 @@ class MemCacheAdapter implements CacheItemPoolInterface, Countable
         return true;
     }
 
-    /**
-     * Persists all deferred cache items to the cache pool.
-     *
-     * This method processes all items that have been deferred for
-     * saving by the saveDeferred() method. It attempts to save each
-     * item in the cache, and removes it from the deferred queue upon
-     * successful persistence. The method returns true only if all
-     * items were successfully saved.
-     *
-     * @return bool True if all deferred items were successfully saved,
-     *              false otherwise.
-     */
-    public function commit(): bool
-    {
-        $ok = true;
-        foreach ($this->deferred as $k => $it) {
-            $ok = $ok && $this->save($it);
-            unset($this->deferred[$k]);
-        }
-        return $ok;
-    }
-
-    /**
-     * Retrieves the number of items in the cache pool.
-     *
-     * @return int The number of items in the cache pool.
-     */
     public function count(): int
     {
         return count($this->fetchKeys());
     }
 
-    /**
-     * Removes the item identified by the given key from the cache pool.
-     *
-     * This method removes the item from the cache pool. If the item is not found,
-     * it is silently ignored.
-     *
-     * @param string $key The key under which the item to be removed is stored.
-     *
-     * @return bool True if the item was successfully removed, false otherwise.
-     */
     public function deleteItem(string $key): bool
     {
         $this->mc->delete($this->map($key));
+        unset($this->knownKeys[$key]);
         return true;
     }
 
-    /**
-     * Removes multiple items from the cache pool.
-     *
-     * This method removes the items identified by the keys from the cache pool.
-     * If any of the items are not found, they are silently ignored.
-     *
-     * @param string[] $keys An array of keys to remove from the cache pool.
-     *
-     * @return bool True if all items were successfully removed, false otherwise.
-     */
     public function deleteItems(array $keys): bool
     {
         foreach ($keys as $k) {
@@ -136,129 +60,38 @@ class MemCacheAdapter implements CacheItemPoolInterface, Countable
         return true;
     }
 
-
-    /**
-     * Retrieves the value associated with the specified key from the cache.
-     *
-     * This method attempts to fetch the cache item identified by the provided key.
-     * If the item is found and is a cache hit, it returns the stored value. If the
-     * item is not found or is a cache miss, it returns null.
-     *
-     * @param string $key The key of the cache item to retrieve.
-     * @return mixed The cached value if found and a cache hit, or null if not found.
-     * @throws InvalidArgumentException
-     */
-    public function get(string $key): mixed
-    {
-        $item = $this->getItem($key);
-        return $item->isHit() ? $item->get() : null;
-    }
-
-    /**
-     * {@inheritdoc}
-     *
-     * This method attempts to fetch the cache item identified by the provided key
-     * from the cache. If the item is found and is a cache hit, it returns the
-     * stored value. If the item is not found or is a cache miss, it returns a new
-     * instance of MemCacheItem without changing the cache.
-     *
-     * @param string $key The key of the cache item to retrieve.
-     * @return MemCacheItem The cached value if found and a cache hit, or a new MemCacheItem if not found.
-     */
     public function getItem(string $key): MemCacheItem
     {
         $raw = $this->mc->get($this->map($key));
         if ($this->mc->getResultCode() === Memcached::RES_SUCCESS && is_string($raw)) {
-            $item = ValueSerializer::unserialize($raw);
-            if ($item instanceof MemCacheItem && $item->isHit()) {
-                return $item;
+            $record = CachePayloadCodec::decode($raw);
+            if ($record !== null && !CachePayloadCodec::isExpired($record['expires'])) {
+                return new MemCacheItem(
+                    $this,
+                    $key,
+                    $record['value'],
+                    true,
+                    CachePayloadCodec::toDateTime($record['expires']),
+                );
             }
+            $this->mc->delete($this->map($key));
+            unset($this->knownKeys[$key]);
         }
         return new MemCacheItem($this, $key);
     }
 
-    /**
-     * Returns an iterable of all items in the cache that match the given
-     * keys.
-     *
-     * This method fetches all items that match the given keys from the cache.
-     * If no keys are provided, it will fetch all items from the cache.
-     *
-     * @param string[] $keys An array of keys to fetch from the cache.
-     * @return iterable An iterable of CacheItemInterface objects.
-     * @throws InvalidArgumentException
-     */
-    public function getItems(array $keys = []): iterable
-    {
-        foreach ($keys as $k) {
-            yield $k => $this->getItem($k);
-        }
-    }
-
-    /**
-     * Checks if a cache item exists in the cache pool.
-     *
-     * This method verifies whether the cache item identified by the given key
-     * is present in the cache and is a cache hit. It returns true if the item
-     * exists and is valid, or false otherwise.
-     *
-     * @param string $key The key of the cache item to check.
-     * @return bool True if the item exists and is a cache hit, false otherwise.
-     */
     public function hasItem(string $key): bool
     {
         $this->mc->get($this->map($key));
         return $this->mc->getResultCode() === \Memcached::RES_SUCCESS;
     }
 
-    /**
-     * @internal
-     * Persists a cache item in the cache pool.
-     *
-     * This method is called by the cache item when it is persisted
-     * using the `save()` method. It is not intended to be called
-     * directly.
-     *
-     * @param MemCacheItem $i The cache item to persist.
-     *
-     * @return bool TRUE if the item was successfully persisted, FALSE otherwise.
-     */
-    public function internalPersist(MemCacheItem $i): bool
-    {
-        return $this->save($i);
-    }
-
-    /**
-     * Adds the given cache item to the internal deferred queue.
-     *
-     * This method enqueues the cache item for later persistence in
-     * the cache pool. The item will not be saved immediately, but
-     * will be stored when the commit() method is called.
-     *
-     * @param MemCacheItem $i The cache item to be queued for deferred saving.
-     * @return bool True if the item was successfully queued, false otherwise.
-     * @internal
-     */
-    public function internalQueue(MemCacheItem $i): bool
-    {
-        return $this->saveDeferred($i);
-    }
-
-    /**
-     * Fetches multiple cache items by their keys.
-     *
-     * This method retrieves multiple cache items identified by the given array of keys.
-     * It maps each key to its corresponding namespaced key and attempts to fetch the
-     * items from the cache in a single operation. If a cache item is found and is a hit,
-     * it returns the item with its value; otherwise, it returns a new MemCacheItem
-     * instance with a cache miss status.
-     *
-     * @param string[] $keys An array of keys to fetch from the cache.
-     * @return MemCacheItem[] An array of MemCacheItem objects, each corresponding to the
-     *                        provided keys, with their respective cache hit or miss status.
-     */
     public function multiFetch(array $keys): array
     {
+        if ($keys === []) {
+            return [];
+        }
+
         $prefixed = array_map($this->map(...), $keys);
         $raw = $this->mc->getMulti($prefixed, Memcached::GET_PRESERVE_ORDER) ?: [];
 
@@ -266,114 +99,57 @@ class MemCacheAdapter implements CacheItemPoolInterface, Countable
         foreach ($keys as $k) {
             $p = $this->map($k);
             if (isset($raw[$p])) {
-                $val = ValueSerializer::unserialize($raw[$p]);
-                if ($val instanceof CacheItemInterface) {
-                    $val = $val->get();
+                $record = CachePayloadCodec::decode((string)$raw[$p]);
+                if ($record !== null && !CachePayloadCodec::isExpired($record['expires'])) {
+                    $items[$k] = new MemCacheItem(
+                        $this,
+                        $k,
+                        $record['value'],
+                        true,
+                        CachePayloadCodec::toDateTime($record['expires']),
+                    );
+                    continue;
                 }
-                $items[$k] = new MemCacheItem($this, $k, $val, true);
-            } else {
-                $items[$k] = new MemCacheItem($this, $k);
+                $this->mc->delete($p);
+                unset($this->knownKeys[$k]);
             }
+            $items[$k] = new MemCacheItem($this, $k);
         }
         return $items;
     }
 
-    /**
-     * Persists a cache item in the cache pool.
-     *
-     * This method is called by the cache item when it is persisted
-     * using the `save()` method. It is not intended to be called
-     * directly.
-     *
-     * @param MemCacheItem $item The cache item to persist.
-     *
-     * @return bool TRUE if the item was successfully persisted, FALSE otherwise.
-     * @throws CacheInvalidArgumentException If the item is not of the correct class.
-     */
     public function save(CacheItemInterface $item): bool
     {
-        if (!$item instanceof MemCacheItem) {
+        if (!$this->supportsItem($item)) {
             throw new CacheInvalidArgumentException('Wrong item class');
         }
-        $blob = ValueSerializer::serialize($item);
-        $ttl = $item->ttlSeconds();
+
+        $expires = CachePayloadCodec::expirationFromItem($item);
+        $ttl = $expires['ttl'];
+        if ($ttl === 0) {
+            $this->mc->delete($this->map($item->getKey()));
+            unset($this->knownKeys[$item->getKey()]);
+            return true;
+        }
+
+        $blob = CachePayloadCodec::encode($item->get(), $expires['expiresAt']);
         $ok = $this->mc->set($this->map($item->getKey()), $blob, $ttl ?? 0);
         if ($ok) {
-            // record key so that count() can be faster if desired
             $this->knownKeys[$item->getKey()] = true;
         }
         return $ok;
     }
 
-    /**
-     * Adds the given cache item to the internal deferred queue.
-     *
-     * This method enqueues the cache item for later persistence in
-     * the cache pool. The item will not be saved immediately, but
-     * will be stored when the commit() method is called.
-     *
-     * @param CacheItemInterface $item The cache item to be queued for deferred saving.
-     * @return bool True if the item was successfully queued, false otherwise.
-     * @internal
-     */
-    public function saveDeferred(CacheItemInterface $item): bool
+    protected function supportsItem(CacheItemInterface $item): bool
     {
-        if (!$item instanceof MemCacheItem) {
-            return false;
-        }
-        $this->deferred[$item->getKey()] = $item;
-        return true;
+        return $item instanceof MemCacheItem;
     }
 
-
-    /**
-     * Sets a value in the cache with an optional time-to-live.
-     *
-     * This method stores a value in the cache under the specified key.
-     * If the key already exists, its value will be updated. An optional
-     * TTL (time-to-live) can be provided to specify how long the value
-     * should be cached. If no TTL is provided, the value will be cached
-     * indefinitely.
-     *
-     * @param string $key The key under which the value will be stored.
-     * @param mixed $value The value to be cached.
-     * @param int|null $ttl Optional. The time-to-live in seconds. If null, the item is cached indefinitely.
-     * @return bool TRUE if the value was successfully stored, FALSE otherwise.
-     * @throws InvalidArgumentException
-     */
-    public function set(string $key, mixed $value, ?int $ttl = null): bool
-    {
-        $item = $this->getItem($key);
-        $item->set($value)->expiresAfter($ttl);
-        return $this->save($item);
-    }
-
-    /**
-     * Returns an array of keys that are known to be cached.
-     *
-     * This array is populated by calls to save() and saveDeferred().
-     * It allows for a faster way to retrieve the list of keys than
-     * using the "cachedump" command.
-     *
-     * @return string[] An array of keys that are known to be cached.
-     */
     private function fastKnownKeys(): array
     {
         return $this->knownKeys ? array_keys($this->knownKeys) : [];
     }
 
-    /**
-     * Fetches an array of all keys in the cache.
-     *
-     * This method will first try to return the list of keys that are
-     * known to be cached, which is populated by calls to save() and
-     * saveDeferred(). If that list is empty, it will try to call
-     * Memcached's "getAllKeys" method. If that fails (because the
-     * method is not available), it will fall back to using the
-     * "cachedump" command.
-     *
-     * @return string[] An array of all keys in the cache.
-     */
     private function fetchKeys(): array
     {
         if ($quick = $this->fastKnownKeys()) {
@@ -387,16 +163,6 @@ class MemCacheAdapter implements CacheItemPoolInterface, Countable
         return $this->keysFromSlabDump($pref);
     }
 
-    /**
-     * Given a prefix, returns an array of all keys in the cache that
-     * start with that prefix. This is done by calling Memcached's
-     * "getAllKeys" method. This is a faster method than using
-     * "cachedump" command, but is only available on newer Memcached
-     * versions (above 1.4.22).
-     *
-     * @param string $pref The prefix to filter keys by
-     * @return string[] An array of keys that start with the given prefix
-     */
     private function keysFromGetAll(string $pref): array
     {
         $all = $this->mc->getAllKeys();
@@ -406,18 +172,10 @@ class MemCacheAdapter implements CacheItemPoolInterface, Countable
         return $this->stripNamespace($all, $pref);
     }
 
-    /**
-     * Given a prefix, returns an array of all keys in the cache that
-     * start with that prefix. This is done by scraping the output of
-     * Memcached's "cachedump" command. This is a slower method than
-     * using getAllKeys(), but is available on older Memcached versions.
-     *
-     * @param string $pref The prefix to filter keys by
-     * @return string[] An array of keys that start with the given prefix
-     */
     private function keysFromSlabDump(string $pref): array
     {
         $out = [];
+        $seen = [];
         $stats = $this->mc->getStats('items');
         foreach ($stats as $server => $items) {
             foreach ($items as $name => $value) {
@@ -429,42 +187,24 @@ class MemCacheAdapter implements CacheItemPoolInterface, Countable
                 if (!isset($dump[$server])) {
                     continue;
                 }
-                $out = array_merge(
-                    $out,
-                    $this->stripNamespace(array_keys($dump[$server]), $pref)
-                );
+
+                foreach ($this->stripNamespace(array_keys($dump[$server]), $pref) as $key) {
+                    if (isset($seen[$key])) {
+                        continue;
+                    }
+                    $seen[$key] = true;
+                    $out[] = $key;
+                }
             }
         }
-        return array_values(array_unique($out));
+        return $out;
     }
 
-    /**
-     * Maps a given key to its corresponding namespaced key.
-     *
-     * The namespaced key is generated by concatenating the namespace prefix
-     * with the given key, separated by a colon (:) character. This method is
-     * used internally to map keys to their corresponding namespaced keys
-     * before using them to access the cache.
-     *
-     * @param string $key The key to be mapped.
-     * @return string The namespaced key.
-     */
     private function map(string $key): string
     {
         return $this->ns . ':' . $key;
     }
 
-    /**
-     * Removes the namespace prefix from an array of keys
-     *
-     * Takes an array of keys, filters out any that don't start with the
-     * given prefix, and then removes the prefix from the remaining keys.
-     * The result is an array of keys without the namespace prefix.
-     *
-     * @param string[] $fullKeys Full keys, including namespace prefix
-     * @param string   $pref     Namespace prefix to remove
-     * @return string[] Keys without namespace prefix
-     */
     private function stripNamespace(array $fullKeys, string $pref): array
     {
         return array_values(array_map(
