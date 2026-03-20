@@ -13,7 +13,7 @@ Overview
 
 .. code-block:: php
 
-   use Infocyph\InterMix\Container;
+   use Infocyph\InterMix\DI\Container;
    use Infocyph\InterMix\DI\Invoker;
 
    $invoker = Invoker::with(new Container());

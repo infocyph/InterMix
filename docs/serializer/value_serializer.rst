@@ -14,7 +14,9 @@ Under the hood it relies on:
    anonymous classes & deep object graphs.
 2. A **plugin system** (“resource handlers”) that can *wrap* any PHP
    **resource** into plain data and *restore* it on the way back.
-3. A tiny **memo-cache** inside :php:meth:`isSerializedClosure()` to detect
+3. A tiny **memo-cache** inside
+   :php:meth:`Infocyph\InterMix\Serializer\ValueSerializer::isSerializedClosure`
+   to detect
    Opis payloads with **O(1)** string checks.
 
 Why?
@@ -120,4 +122,3 @@ Registering a Resource Handler
        fn ($res) => /* …wrap… */ ,
        fn ($data) => /* …restore… */
    );
-
