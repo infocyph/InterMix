@@ -98,7 +98,14 @@ class DefinitionResolver
             $cacheAdapter = $this->repository->getCacheAdapter();
             if ($cacheAdapter) {
                 $cacheKey = $this->repository->makeCacheKey('def' . base64_encode($name));
-                $value = $cacheAdapter->get($cacheKey, $resolverCallback);
+                $item = $cacheAdapter->getItem($cacheKey);
+                if ($item->isHit()) {
+                    $value = $item->get();
+                } else {
+                    $value = $resolverCallback();
+                    $item->set($value);
+                    $cacheAdapter->save($item);
+                }
             } else {
                 $value = $resolverCallback();
             }

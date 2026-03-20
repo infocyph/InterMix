@@ -59,15 +59,16 @@ final class Memoizer
         $sig = ReflectionResource::getSignature(
             ReflectionResource::getReflection($callable)
         );
+        $cacheKey = self::buildCacheKey($sig, $params);
 
-        if (array_key_exists($sig, $this->staticCache)) {
+        if (array_key_exists($cacheKey, $this->staticCache)) {
             $this->hits++;
-            return $this->staticCache[$sig];
+            return $this->staticCache[$cacheKey];
         }
 
         $this->misses++;
         $v = $callable(...$params);
-        $this->staticCache[$sig] = $v;
+        $this->staticCache[$cacheKey] = $v;
         return $v;
     }
 
@@ -85,16 +86,17 @@ final class Memoizer
         $sig = ReflectionResource::getSignature(
             ReflectionResource::getReflection($callable)
         );
+        $cacheKey = self::buildCacheKey($sig, $params);
 
         $bucket = $this->objectCache[$object] ?? [];
-        if (array_key_exists($sig, $bucket)) {
+        if (array_key_exists($cacheKey, $bucket)) {
             $this->hits++;
-            return $bucket[$sig];
+            return $bucket[$cacheKey];
         }
 
         $this->misses++;
         $value = $callable(...$params);
-        $bucket[$sig] = $value;
+        $bucket[$cacheKey] = $value;
         $this->objectCache[$object] = $bucket;
         return $value;
     }
@@ -115,5 +117,32 @@ final class Memoizer
             'misses' => $this->misses,
             'total'  => $this->hits + $this->misses,
         ];
+    }
+
+    /**
+     * Build a stable memoization cache key from callable signature + argument values.
+     */
+    private static function buildCacheKey(string $sig, array $params): string
+    {
+        if ($params === []) {
+            return $sig;
+        }
+
+        $normalized = array_map(self::normalizeParam(...), $params);
+        return $sig . '|' . hash('xxh3', serialize($normalized));
+    }
+
+    /**
+     * Normalize runtime values into serializable scalar/array forms for cache keys.
+     */
+    private static function normalizeParam(mixed $value): mixed
+    {
+        return match (true) {
+            $value instanceof \Closure => 'closure#' . spl_object_id($value),
+            is_object($value) => 'obj#' . spl_object_id($value),
+            is_resource($value) => 'res#' . get_resource_type($value) . '#' . (int)$value,
+            is_array($value) => array_map(self::normalizeParam(...), $value),
+            default => $value,
+        };
     }
 }

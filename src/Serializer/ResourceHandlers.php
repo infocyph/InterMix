@@ -26,9 +26,9 @@ abstract class ResourceHandlers
      */
     public static function registerDefaults(): void
     {
-        foreach (get_class_methods(self::class) as $methods) {
-            if ($methods !== __FUNCTION__ && str_starts_with($methods, 'register')) {
-                self::$methods();
+        foreach (get_class_methods(static::class) as $method) {
+            if ($method !== __FUNCTION__ && str_starts_with($method, 'register')) {
+                static::{$method}();
             }
         }
     }

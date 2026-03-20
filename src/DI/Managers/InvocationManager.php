@@ -137,7 +137,7 @@ class InvocationManager implements ArrayAccess
         }
 
         // Resolve: definition map → class/closure fallback
-        if (isset($this->functionReference[$id])) {
+        if (isset($this->repository->getFunctionReference()[$id])) {
             $resolved = $this->resolveDefinition($id);
             $resolved = $resolved instanceof DeferredInitializer ? $resolved() : $resolved;
 

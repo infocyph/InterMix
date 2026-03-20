@@ -308,6 +308,7 @@ class ClassResolver
         $className = $class->getName();
         $resolvedResource = $this->repository->getResolvedResource()[$className] ?? [];
         $resolvedResource['returned'] = null;
+        $callOn = $class->hasConstant('callOn') ? $class->getConstant('callOn') : null;
 
         if ($callMethod === false) {
             $this->repository->setResolvedResource($className, $resolvedResource);
@@ -317,7 +318,7 @@ class ClassResolver
 
         $method = $callMethod
             ?: ($this->repository->getClassResource()[$className]['method']['on'] ?? null)
-                ?: ($class->getConstant('callOn') ?: $this->repository->getDefaultMethod());
+                ?: ($callOn ?: $this->repository->getDefaultMethod());
 
         if (!$method && $class->hasMethod('__invoke')) {
             $method = '__invoke';

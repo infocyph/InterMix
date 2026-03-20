@@ -160,7 +160,11 @@ if (!function_exists('when')) {
      */
     function when(mixed $value, callable $truthy, ?callable $falsy = null): mixed
     {
-        return $value ? $truthy($value) : ($falsy ? $falsy($value) : $value);
+        if ($value) {
+            return $truthy($value);
+        }
+
+        return $falsy ? $falsy($value) : $value;
     }
 }
 

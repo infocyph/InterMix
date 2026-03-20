@@ -24,7 +24,7 @@
 - **Fence** — Enforce singleton-style class safety
 - **MacroMix** — Dynamically extend objects or classes with macros
 - **Memoizer** — `once()` and `memoize()` helpers for deterministic caching
-- **Global Utilities** — Like `pipe()`, `retry()`, `measure()`, `flatten()`, and more
+- **Global Utilities** — Like `pipe()`, `retry()`, `measure()` and more
 
 ---
 
@@ -32,14 +32,14 @@
 
 ```bash
 composer require infocyph/intermix
-````
+```
 
 Supported PHP versions:
 
 | InterMix Version | PHP Version        |
 | ---------------- | ------------------ |
-| 2.x.x and above  | 8.2 or newer       |
-| 1.x.x            | 8.0–8.1 compatible |
+| 2.x.x and above  | 8.3 or newer       |
+| 1.x.x            | 8.0-8.2 compatible |
 
 ---
 
@@ -99,8 +99,6 @@ echo (new MacroTest)->hello('Ali'); // Hey, Ali!
 ### 🧠 `once()` Memoization
 
 ```php
-use function Infocyph\InterMix\Remix\once;
-
 $value = once(fn() => rand(1000, 9999)); // Only runs once per file+line
 ```
 
@@ -145,4 +143,3 @@ Got ideas or improvements? Join us!
 MIT Licensed — use it freely, modify it openly.
 
 🔗 [opensource.org/licenses/MIT](https://opensource.org/licenses/MIT)
-

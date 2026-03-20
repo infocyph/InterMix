@@ -71,18 +71,18 @@ class OptionsManager implements ArrayAccess
      *
      * If enabled, the container will generate a detailed trace of all
      * resolutions, including the definitions and services that are being
-     * resolved. The trace level can be set to either `TraceLevel::Node` (default)
-     * to only log the top-most nodes, or `TraceLevel::Verbose` to log
+     * resolved. The trace level can be set to either `TraceLevelEnum::Node` (default)
+     * to only log the top-most nodes, or `TraceLevelEnum::Verbose` to log
      * everything.
      *
      * @param bool $enable Whether to enable debug tracing. Defaults to true.
-     * @param TraceLevelEnum $level The trace level to use. Defaults to `TraceLevel::Node`.
+     * @param TraceLevelEnum $level The trace level to use. Defaults to `TraceLevelEnum::Node`.
      *
      * @return $this
      */
     public function enableDebugTracing(bool $enable = true, TraceLevelEnum $level = TraceLevelEnum::Node): self
     {
-        $this->repository->tracer()->setLevel($enable ? $level : TraceLevel::Node);
+        $this->repository->tracer()->setLevel($enable ? $level : TraceLevelEnum::Node);
         return $this;
     }
 
