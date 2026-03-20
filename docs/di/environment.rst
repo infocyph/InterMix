@@ -72,12 +72,13 @@ Priority & Resolution Order
 -----------------------------
 
 If multiple environments are defined, InterMix **only uses** the one explicitly
-set via :php:meth:`setEnvironment`.
+set via :php:meth:`Infocyph\InterMix\DI\Managers\OptionsManager::setEnvironment`.
 
 Resolution priority:
 
 1. **Environment-bound class** (if active)
-2. **Globally bound class** via :php:meth:`bind()`
+2. **Globally bound class** via
+   :php:meth:`Infocyph\InterMix\DI\Managers\DefinitionManager::bind`
 3. **Autowire fallback** (if `injection=true`)
 
 -------------------

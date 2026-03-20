@@ -125,7 +125,7 @@ Whole-method defaults:
        public function execute(int $retries, int $delay) {}
    }
 
-*Arguments provided* via :php:meth:`Container::call`,
+*Arguments provided* via :php:meth:`Infocyph\InterMix\DI\Container::call`,
 :php:meth:`Infocyph\InterMix\DI\Managers\RegistrationManager::registerMethod`
 or explicit arrays always **override** attributes.
 

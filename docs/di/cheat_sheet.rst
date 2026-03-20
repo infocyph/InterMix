@@ -1,28 +1,137 @@
 .. _di.cheat_sheet:
 
-=============
-Cheat‑Sheet
-=============
+=================
+DI Cheat Sheet
+=================
 
-A quick reference for the most common InterMix container actions:
+Quick reference for the current InterMix DI API.
 
-+----------+-----------------------------------------------------+-----------------------------+
-| Task     | Fluent Chain                                        | Stand‑Alone Call           |
-+==========+=====================================================+=============================+
-| Bind     | ``$c->definitions()->bind('k', 1)``          | –                           |
-+----------+-----------------------------------------------------+-----------------------------+
-| Register | ``$c->registration()->registerClass(Foo::class)``   | –                           |
-+----------+-----------------------------------------------------+-----------------------------+
-| Options  | ``$c->options()->setOptions(...)``           | –                           |
-+----------+-----------------------------------------------------+-----------------------------+
-| Call     | ``$c->invocation()->call(Foo::class)``              | ``$c->call(Foo::class)``    |
-+----------+-----------------------------------------------------+-----------------------------+
-| Make     | ``$c->invocation()->make(Foo::class)``              | ``$c->make(Foo::class)``    |
-+----------+-----------------------------------------------------+-----------------------------+
+-------------------------
+Container Entry Points
+-------------------------
 
-.. note::
++-----------------------------------------------+---------------------------------------------------------+
+| Action                                        | API                                                     |
++===============================================+=========================================================+
+| Create/get instance                           | ``container('app')`` / ``Container::instance('app')``   |
++-----------------------------------------------+---------------------------------------------------------+
+| Get manager                                   | ``$c->definitions()`` / ``$c->registration()`` /        |
+|                                               | ``$c->options()`` / ``$c->invocation()``               |
++-----------------------------------------------+---------------------------------------------------------+
+| Resolve by ID/class                           | ``$c->get($id)``                                        |
++-----------------------------------------------+---------------------------------------------------------+
+| Resolve + execute default/registered method   | ``$c->getReturn(Foo::class)``                           |
++-----------------------------------------------+---------------------------------------------------------+
+| Build class (optional method)                 | ``$c->make(Foo::class, false|'run')``                   |
++-----------------------------------------------+---------------------------------------------------------+
+| Call closure/function/class/method            | ``$c->call($target, $methodOrArgs)``                    |
++-----------------------------------------------+---------------------------------------------------------+
+| Scopes                                        | ``$c->enterScope('req-1')`` / ``$c->leaveScope()`` /    |
+|                                               | ``$c->withinScope('req-1', fn () => ...)``             |
++-----------------------------------------------+---------------------------------------------------------+
+| Tags / tracing / graph                        | ``$c->findByTag('event')``, ``$c->debug($id)``,         |
+|                                               | ``$c->tracer()->toArray()``, ``$c->exportGraph()``      |
++-----------------------------------------------+---------------------------------------------------------+
+| Freeze config                                 | ``$c->lock()``                                          |
++-----------------------------------------------+---------------------------------------------------------+
 
-   Fluent chains allow batch configuration with optional chaining of multiple actions.
-   Stand-alone calls are shortcut helpers available directly from the container.
+-----------------------------
+Managers At A Glance
+-----------------------------
 
-See also: :ref:`di.quickstart`, :ref:`di.usage`, :ref:`di.invocation`
++-----------------------+--------------------------------------------------------------+
+| Manager               | Core methods                                                  |
++=======================+==============================================================+
+| ``definitions()``     | ``bind()``, ``addDefinitions()``, ``enableDefinitionCache()``,|
+|                       | ``cacheAllDefinitions()``, ``setMetaForEnv()``               |
++-----------------------+--------------------------------------------------------------+
+| ``registration()``    | ``registerClass()``, ``registerMethod()``, ``registerProperty()``, |
+|                       | ``registerClosure()``, ``import()``                          |
++-----------------------+--------------------------------------------------------------+
+| ``options()``         | ``setOptions()``, ``enableLazyLoading()``, ``setEnvironment()``, |
+|                       | ``bindInterfaceForEnv()``, ``setDefinitionMetaForEnv()``,    |
+|                       | ``enableDebugTracing()``, ``registerAttributeResolver()``,   |
+|                       | ``generatePreload()``                                        |
++-----------------------+--------------------------------------------------------------+
+| ``invocation()``      | ``call()``, ``make()``, ``get()``, ``getReturn()``, ``has()`` |
++-----------------------+--------------------------------------------------------------+
+
+All managers support ``->end()`` to return to the container and continue chaining.
+
+------------------------------------------
+Task Matrix (Fluent vs Shortcut)
+------------------------------------------
+
++--------------------------+----------------------------------------------------+-----------------------------------+
+| Task                     | Fluent chain                                       | Shortcut on container             |
++==========================+====================================================+===================================+
+| Bind definition          | ``$c->definitions()->bind('answer', 42)``         | -                                 |
++--------------------------+----------------------------------------------------+-----------------------------------+
+| Register constructor map | ``$c->registration()->registerClass(Foo::class)`` | -                                 |
++--------------------------+----------------------------------------------------+-----------------------------------+
+| Set options              | ``$c->options()->setOptions(...)``                | ``$c->enableLazyLoading(true)``   |
++--------------------------+----------------------------------------------------+-----------------------------------+
+| Resolve service          | ``$c->invocation()->get(Foo::class)``             | ``$c->get(Foo::class)``           |
++--------------------------+----------------------------------------------------+-----------------------------------+
+| Resolve return value     | ``$c->invocation()->getReturn(Foo::class)``       | ``$c->getReturn(Foo::class)``     |
++--------------------------+----------------------------------------------------+-----------------------------------+
+| Call target              | ``$c->invocation()->call($target)``               | ``$c->call($target)``             |
++--------------------------+----------------------------------------------------+-----------------------------------+
+| Build target             | ``$c->invocation()->make(Foo::class)``            | ``$c->make(Foo::class)``          |
++--------------------------+----------------------------------------------------+-----------------------------------+
+
+----------------------
+Common Recipes
+----------------------
+
+Bootstrap chain:
+
+.. code-block:: php
+
+   $c->definitions()
+       ->bind(LoggerInterface::class, FileLogger::class)
+       ->registration()
+       ->registerClass(App::class, ['name' => 'InterMix'])
+       ->options()
+       ->setOptions(injection: true, methodAttributes: true)
+       ->enableLazyLoading(true)
+       ->end();
+
+Environment-specific binding + metadata:
+
+.. code-block:: php
+
+   use Infocyph\InterMix\DI\Support\LifetimeEnum;
+
+   $c->options()
+       ->bindInterfaceForEnv('prod', MailerInterface::class, SmtpMailer::class)
+       ->bindInterfaceForEnv('test', MailerInterface::class, FakeMailer::class)
+       ->setDefinitionMetaForEnv('test', 'mailer', LifetimeEnum::Transient, ['core', 'test-only'])
+       ->setEnvironment('test');
+
+Definition cache warmup:
+
+.. code-block:: php
+
+   $c->definitions()
+       ->enableDefinitionCache('intermix')
+       ->cacheAllDefinitions(forceClearFirst: true);
+
+Scoped resolution:
+
+.. code-block:: php
+
+   $result = $c->withinScope('request-42', function () use ($c) {
+       return $c->get(RequestContext::class);
+   });
+
+---------------------------
+Advanced Helpers
+---------------------------
+
+* ``$c->parseCallable($spec)``: normalize closure/function/class/method input.
+* ``$c->resolveNow(...)``: resolve with explicit runtime knobs.
+* ``$c->getRepository()``: inspect low-level runtime state.
+* ``$c->setResolverClass(FooResolver::class)``: swap resolver implementation.
+
+See also: :ref:`di.quickstart`, :ref:`di.definitions`, :ref:`di.registration`, :ref:`di.options`, :ref:`di.invocation`, :ref:`di.scopes`, :ref:`di.environment`, :ref:`di.debug_tracing`
