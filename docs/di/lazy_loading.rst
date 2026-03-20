@@ -37,17 +37,20 @@ When does InterMix create the instance?
 Default Rules
 ---------------
 
-+-------------------------------+--------------------------+
-| Definition type               | Lazy by default?         |
-+===============================+==========================+
-| Class / string                | ✅ Yes                   |
-+-------------------------------+--------------------------+
-| Array definition              | ✅ Yes                   |
-+-------------------------------+--------------------------+
-| User closure + Singleton/Scoped | ⚠️ Resolved on first ``get()`` (no DeferredInitializer) |
-+-------------------------------+--------------------------+
-| User closure + Transient      | ❌ No caching (runs each ``get()``) |
-+-------------------------------+--------------------------+
+.. list-table::
+   :header-rows: 1
+   :widths: 40 60
+
+   * - Definition type
+     - Lazy by default?
+   * - Class / string
+     - Yes
+   * - Array definition
+     - Yes
+   * - User closure plus Singleton/Scoped
+     - Resolved on first ``get()`` (no ``DeferredInitializer`` wrapper)
+   * - User closure plus Transient
+     - No caching (runs each ``get()``)
 
 ---------------
 Why not all?

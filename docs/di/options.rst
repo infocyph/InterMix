@@ -54,21 +54,20 @@ Flag                    Default    What it does
 2 · Convenience helpers (chainable)
 ----------------------------------------------------
 
-+---------------------------------------------+--------------------------------------------------------------+
-| **Helper**                                  | **Effect**                                                   |
-+=============================================+==============================================================+
-| ``enableLazyLoading(true)``                 | Store **class bindings** as :php:`DeferredInitializer` until |
-|                                             | the first :php:`get($id)`. Reduces boot cost.                |
-+---------------------------------------------+--------------------------------------------------------------+
-| ``setEnvironment('prod')``                  | Select the *current* environment. Used together with         |
-|                                             | ``bindInterfaceForEnv()`` to swap implementations.           |
-+---------------------------------------------+--------------------------------------------------------------+
-| ``bindInterfaceForEnv($env, I::class, C::class)`` | Map an **interface → concrete** **only** when            |
-|                                             | ``$env`` matches the active environment.                     |
-+---------------------------------------------+--------------------------------------------------------------+
-| ``enableDebugTracing(true, TraceLevelEnum::Verbose)`` | Capture **resolution traces** for debugging. See   |
-|                                             | :ref:`di.debug_tracing`.                                     |
-+---------------------------------------------+--------------------------------------------------------------+
+.. list-table::
+   :header-rows: 1
+   :widths: 40 60
+
+   * - Helper
+     - Effect
+   * - ``enableLazyLoading(true)``
+     - Store class bindings as :php:`DeferredInitializer` until first :php:`get($id)`; reduces boot cost.
+   * - ``setEnvironment('prod')``
+     - Select the active environment; used with ``bindInterfaceForEnv()`` to swap implementations.
+   * - ``bindInterfaceForEnv($env, I::class, C::class)``
+     - Map interface to concrete only when ``$env`` matches the active environment.
+   * - ``enableDebugTracing(true, TraceLevelEnum::Verbose)``
+     - Capture resolution traces for debugging. See :ref:`di.debug_tracing`.
 
 ----------------------------------------------------
 3 · Practical primer

@@ -10,7 +10,7 @@ we expose **two** global helper functions—``memoize()`` and ``remember()``—t
 shared singleton ``Memoizer``. The cache lives for the duration of the PHP process (or until
 you explicitly clear it).
 
-These functions are declared in ``Infocyph\InterMix\Memoize\functions.php`` and rely on
+These helpers are declared in ``src/functions.php`` as global functions and rely on
 the ``Infocyph\InterMix\Memoize\Memoizer`` class under the hood. They throw
 ``InvalidArgumentException`` when misused.
 
@@ -46,8 +46,6 @@ Functions
    **Example:**
 
    .. code-block:: php
-
-      use function Infocyph\\InterMix\\Memoize\\memoize;
 
       // 1) Retrieve the Memoizer instance to inspect stats:
       $m = memoize();
@@ -91,8 +89,6 @@ Functions
    **Example:**
 
    .. code-block:: php
-
-      use function Infocyph\\InterMix\\Memoize\\remember;
 
       class UserData { /* … */ }
 

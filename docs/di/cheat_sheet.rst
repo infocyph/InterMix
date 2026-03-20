@@ -10,51 +10,49 @@ Quick reference for the current InterMix DI API.
 Container Entry Points
 -------------------------
 
-+-----------------------------------------------+---------------------------------------------------------+
-| Action                                        | API                                                     |
-+===============================================+=========================================================+
-| Create/get instance                           | ``container('app')`` / ``Container::instance('app')``   |
-+-----------------------------------------------+---------------------------------------------------------+
-| Get manager                                   | ``$c->definitions()`` / ``$c->registration()`` /        |
-|                                               | ``$c->options()`` / ``$c->invocation()``               |
-+-----------------------------------------------+---------------------------------------------------------+
-| Resolve by ID/class                           | ``$c->get($id)``                                        |
-+-----------------------------------------------+---------------------------------------------------------+
-| Resolve + execute default/registered method   | ``$c->getReturn(Foo::class)``                           |
-+-----------------------------------------------+---------------------------------------------------------+
-| Build class (optional method)                 | ``$c->make(Foo::class, false|'run')``                   |
-+-----------------------------------------------+---------------------------------------------------------+
-| Call closure/function/class/method            | ``$c->call($target, $methodOrArgs)``                    |
-+-----------------------------------------------+---------------------------------------------------------+
-| Scopes                                        | ``$c->enterScope('req-1')`` / ``$c->leaveScope()`` /    |
-|                                               | ``$c->withinScope('req-1', fn () => ...)``             |
-+-----------------------------------------------+---------------------------------------------------------+
-| Tags / tracing / graph                        | ``$c->findByTag('event')``, ``$c->debug($id)``,         |
-|                                               | ``$c->tracer()->toArray()``, ``$c->exportGraph()``      |
-+-----------------------------------------------+---------------------------------------------------------+
-| Freeze config                                 | ``$c->lock()``                                          |
-+-----------------------------------------------+---------------------------------------------------------+
+.. list-table::
+   :header-rows: 1
+   :widths: 35 65
+
+   * - Action
+     - API
+   * - Create/get instance
+     - ``container('app')`` / ``Container::instance('app')``
+   * - Get manager
+     - ``$c->definitions()`` / ``$c->registration()`` / ``$c->options()`` / ``$c->invocation()``
+   * - Resolve by ID/class
+     - ``$c->get($id)``
+   * - Resolve + execute default/registered method
+     - ``$c->getReturn(Foo::class)``
+   * - Build class (optional method)
+     - ``$c->make(Foo::class, false|'run')``
+   * - Call closure/function/class/method
+     - ``$c->call($target, $methodOrArgs)``
+   * - Scopes
+     - ``$c->enterScope('req-1')`` / ``$c->leaveScope()`` / ``$c->withinScope('req-1', fn () => ...)``
+   * - Tags / tracing / graph
+     - ``$c->findByTag('event')``, ``$c->debug($id)``, ``$c->tracer()->toArray()``, ``$c->exportGraph()``
+   * - Freeze config
+     - ``$c->lock()``
 
 -----------------------------
 Managers At A Glance
 -----------------------------
 
-+-----------------------+--------------------------------------------------------------+
-| Manager               | Core methods                                                  |
-+=======================+==============================================================+
-| ``definitions()``     | ``bind()``, ``addDefinitions()``, ``enableDefinitionCache()``,|
-|                       | ``cacheAllDefinitions()``, ``setMetaForEnv()``               |
-+-----------------------+--------------------------------------------------------------+
-| ``registration()``    | ``registerClass()``, ``registerMethod()``, ``registerProperty()``, |
-|                       | ``registerClosure()``, ``import()``                          |
-+-----------------------+--------------------------------------------------------------+
-| ``options()``         | ``setOptions()``, ``enableLazyLoading()``, ``setEnvironment()``, |
-|                       | ``bindInterfaceForEnv()``, ``setDefinitionMetaForEnv()``,    |
-|                       | ``enableDebugTracing()``, ``registerAttributeResolver()``,   |
-|                       | ``generatePreload()``                                        |
-+-----------------------+--------------------------------------------------------------+
-| ``invocation()``      | ``call()``, ``make()``, ``get()``, ``getReturn()``, ``has()`` |
-+-----------------------+--------------------------------------------------------------+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 75
+
+   * - Manager
+     - Core methods
+   * - ``definitions()``
+     - ``bind()``, ``addDefinitions()``, ``enableDefinitionCache()``, ``cacheAllDefinitions()``, ``setMetaForEnv()``
+   * - ``registration()``
+     - ``registerClass()``, ``registerMethod()``, ``registerProperty()``, ``registerClosure()``, ``import()``
+   * - ``options()``
+     - ``setOptions()``, ``enableLazyLoading()``, ``setEnvironment()``, ``bindInterfaceForEnv()``, ``setDefinitionMetaForEnv()``, ``enableDebugTracing()``, ``registerAttributeResolver()``, ``generatePreload()``
+   * - ``invocation()``
+     - ``call()``, ``make()``, ``get()``, ``getReturn()``, ``has()``
 
 All managers support ``->end()`` to return to the container and continue chaining.
 
@@ -62,23 +60,34 @@ All managers support ``->end()`` to return to the container and continue chainin
 Task Matrix (Fluent vs Shortcut)
 ------------------------------------------
 
-+--------------------------+----------------------------------------------------+-----------------------------------+
-| Task                     | Fluent chain                                       | Shortcut on container             |
-+==========================+====================================================+===================================+
-| Bind definition          | ``$c->definitions()->bind('answer', 42)``         | -                                 |
-+--------------------------+----------------------------------------------------+-----------------------------------+
-| Register constructor map | ``$c->registration()->registerClass(Foo::class)`` | -                                 |
-+--------------------------+----------------------------------------------------+-----------------------------------+
-| Set options              | ``$c->options()->setOptions(...)``                | ``$c->enableLazyLoading(true)``   |
-+--------------------------+----------------------------------------------------+-----------------------------------+
-| Resolve service          | ``$c->invocation()->get(Foo::class)``             | ``$c->get(Foo::class)``           |
-+--------------------------+----------------------------------------------------+-----------------------------------+
-| Resolve return value     | ``$c->invocation()->getReturn(Foo::class)``       | ``$c->getReturn(Foo::class)``     |
-+--------------------------+----------------------------------------------------+-----------------------------------+
-| Call target              | ``$c->invocation()->call($target)``               | ``$c->call($target)``             |
-+--------------------------+----------------------------------------------------+-----------------------------------+
-| Build target             | ``$c->invocation()->make(Foo::class)``            | ``$c->make(Foo::class)``          |
-+--------------------------+----------------------------------------------------+-----------------------------------+
+.. list-table::
+   :header-rows: 1
+   :widths: 26 37 37
+
+   * - Task
+     - Fluent chain
+     - Shortcut on container
+   * - Bind definition
+     - ``$c->definitions()->bind('answer', 42)``
+     - -
+   * - Register constructor map
+     - ``$c->registration()->registerClass(Foo::class)``
+     - -
+   * - Set options
+     - ``$c->options()->setOptions(...)``
+     - ``$c->enableLazyLoading(true)``
+   * - Resolve service
+     - ``$c->invocation()->get(Foo::class)``
+     - ``$c->get(Foo::class)``
+   * - Resolve return value
+     - ``$c->invocation()->getReturn(Foo::class)``
+     - ``$c->getReturn(Foo::class)``
+   * - Call target
+     - ``$c->invocation()->call($target)``
+     - ``$c->call($target)``
+   * - Build target
+     - ``$c->invocation()->make(Foo::class)``
+     - ``$c->make(Foo::class)``
 
 ----------------------
 Common Recipes

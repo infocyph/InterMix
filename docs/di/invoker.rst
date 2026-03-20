@@ -22,19 +22,22 @@ Overview
 Key Features
 -------------
 
-+------------------------+---------------------------------------------+
-| Feature                | Description                                 |
-+========================+=============================================+
-| `invoke()`             | Dynamically call closures, classes, methods |
-+------------------------+---------------------------------------------+
-| `make()`               | Build object + optionally call a method     |
-+------------------------+---------------------------------------------+
-| `resolve()`            | Retrieve from container by key              |
-+------------------------+---------------------------------------------+
-| `serialize()`          | Serialize closures and values               |
-+------------------------+---------------------------------------------+
-| `unserialize()`        | Restore serialized closures or data         |
-+------------------------+---------------------------------------------+
+.. list-table::
+   :header-rows: 1
+   :widths: 35 65
+
+   * - Feature
+     - Description
+   * - ``invoke()``
+     - Dynamically call closures, classes, methods
+   * - ``make()``
+     - Build object plus optionally call a method
+   * - ``resolve()``
+     - Retrieve from container by key
+   * - ``serialize()``
+     - Serialize closures and values
+   * - ``unserialize()``
+     - Restore serialized closures or data
 
 ---------------
 Usage Examples
