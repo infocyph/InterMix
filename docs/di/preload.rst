@@ -71,7 +71,7 @@ Advanced Customization 🛠️
 --------------------------
 
 You may extend or modify the preload generation behavior by subclassing
-:php:class:`Infocyph\InterMix\DI\Support\PreloadGenerator`.
+:php:class:`Infocyph\\InterMix\\DI\\Support\\PreloadGenerator`.
 
 
 Next stop » :doc:`debug_tracing`

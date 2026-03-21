@@ -4,9 +4,9 @@
 infocyph/InterMix Manual
 =========================
 
-For `infpcyph/InterMix <https://github.com/infpcyph/InterMix>`_ |version|. Updated on |today|.
+For `infocyph/InterMix <https://github.com/infocyph/InterMix>`_ |version|. Updated on |today|.
 
-Licensed under `MIT <https://github.com/infpcyph/InterMix/blob/main/LICENSE>`_.
+Licensed under `MIT <https://github.com/infocyph/InterMix/blob/main/LICENSE>`_.
 
 Contents
 --------
