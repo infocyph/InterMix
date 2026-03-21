@@ -20,7 +20,7 @@ Trait API
 
       - Check if ``$this->__memo[$key]`` already exists.
         - If yes, return it (cache hit).
-        - If no, invoke ``$producer()``, store the result under ``$key``, and return it (cache miss).
+        - If no, invoke ``$producer()``, store the result under ``$key`` and return it (cache miss).
 
       - ``$key`` is typically something like ``__METHOD__`` (a unique string).
       - ``$producer`` is a zero‐argument closure that returns whatever you want cached.

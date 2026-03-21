@@ -31,7 +31,7 @@ Class API
 .. php:function:: void ResourceHandlers::registerDefaults()
 
    Iterates over all public static methods on ``self::class`` whose names start
-   with ``"register"``, except ``registerDefaults`` itself, and invokes each one.
+   with ``"register"``, except ``registerDefaults`` itself and invokes each one.
    In other words, every ``registerXxx()`` method in your subclass runs.
 
    Does nothing if no ``registerXxx()`` methods exist.

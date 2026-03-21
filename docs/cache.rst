@@ -17,13 +17,13 @@ It provides:
   - **PSR-6 extras**:
     - ``set(string $key, mixed $value, int|DateInterval|null $ttl = null): bool``
     - ``get(string $key, mixed $default = null): mixed``
-      - If ``$default`` is a callable, it will be invoked on a cache miss with the ``CacheItemInterface`` as argument, the returned value will be saved (with any TTL set inside the callback), and then returned.
+      - If ``$default`` is a callable, it will be invoked on a cache miss with the ``CacheItemInterface`` as argument, the returned value will be saved (with any TTL set inside the callback) and then returned.
   - **Magic properties** (``$cache->foo``, ``$cache->foo = 'bar'``)
   - **ArrayAccess** (``$cache['id']``)
   - **Countable** (``count($cache)``)
 * **Bulk fetch** (``getItems([...])``) that defers to adapter for single-round-trip performance
 * **Iteration** (``foreach ($cache->getItemsIterator() as $k => $v)``)
-* Automatic **serialization** of closures, resources, and arbitrary PHP values
+* Automatic **serialization** of closures, resources and arbitrary PHP values
 
 -------------------------------
 Quick Start

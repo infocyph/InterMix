@@ -74,7 +74,7 @@ Functions
       - Computes a signature for ``$fn`` (using ``ReflectionResource::getSignature()``).
       - Looks up the cache bucket for that particular object instance (stored in a ``WeakMap``).
       - If a cached value exists for that signature under ``$obj``, returns it (hit).
-      - Otherwise, invokes ``$fn(...$params)``, stores the result in this object’s bucket, and returns it (miss).
+      - Otherwise, invokes ``$fn(...$params)``, stores the result in this object’s bucket and returns it (miss).
 
    **Return value**
 
@@ -100,7 +100,7 @@ Functions
       // Second call with same object, same callable: cache hit
       $profile2 = remember($user, fn() => loadProfileFromDb($user));
 
-      // $profile1 and $profile2 are identical, and loadProfileFromDb() ran only once.
+      // $profile1 and $profile2 are identical and loadProfileFromDb() ran only once.
 
       // If you call remember() on a different object, closure runs again for that object.
 

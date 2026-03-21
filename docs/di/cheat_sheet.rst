@@ -54,7 +54,7 @@ Managers At A Glance
    * - ``invocation()``
      - ``call()``, ``make()``, ``get()``, ``getReturn()``, ``has()``
 
-All managers use ``ManagerProxy``: ``$mgr('id')``, ``$mgr->id``, ``$mgr['id']``, proxied container methods, and ``->end()`` to return to the container.
+All managers use ``ManagerProxy``: ``$mgr('id')``, ``$mgr->id``, ``$mgr['id']``, proxied container methods and ``->end()`` to return to the container.
 
 ------------------------------------------
 Task Matrix (Fluent vs Shortcut)

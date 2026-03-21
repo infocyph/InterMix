@@ -41,7 +41,7 @@ Concurrency & Locks
 * When you call ``save()``, the adapter uses ``file_put_contents(..., LOCK_EX)``
   to avoid partial writes.
 * Reading does **not** use locks (there is a small race-condition if a write is in progress).
-* Bulk ``getItems()`` scans the directory once, checks each file’s content, and unserializes hits.
+* Bulk ``getItems()`` scans the directory once, checks each file’s content and unserializes hits.
 
 Hot-Reload / Namespace Change
 -----------------------------

@@ -21,7 +21,7 @@ Key Concepts
 
 Implements all logic for requirement checks, keyed vs. singleton behavior,
 and instance‐count limits. You do **not** use ``Fence`` directly; one of the three
-wrapper traits sets two class‐constants, and the core logic runs on every
+wrapper traits sets two class‐constants and the core logic runs on every
 ``::instance()`` call.
 
 **Singleton (Single)**
