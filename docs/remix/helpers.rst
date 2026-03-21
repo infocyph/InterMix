@@ -36,7 +36,7 @@ measure()
 
 .. php:function:: measure(callable $fn, ?float &$ms = null): mixed
 
-**Goal**: Run a block of code, capture how many milliseconds it took, and
+**Goal**: Run a block of code, capture how many milliseconds it took and
 return the block’s result.
 
 - ``$fn``: any zero-argument callback to measure.

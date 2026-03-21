@@ -51,4 +51,4 @@ APCu stores only strings. We wrap/unserialize via:
 1. ``ValueSerializer::serialize($item)`` → store as string blob
 2. On fetch, ``ValueSerializer::unserialize($blob)`` → reconstruct the ``ApcuCacheItem`` object
 
-In other words, each APCu entry is a serialized ``ApcuCacheItem`` containing key, value, hit, and expiration.
+In other words, each APCu entry is a serialized ``ApcuCacheItem`` containing key, value, hit and expiration.

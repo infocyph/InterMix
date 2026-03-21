@@ -57,7 +57,7 @@ Why not all?
 ---------------
 
 User closures are not wrapped in ``DeferredInitializer``. They run when the
-service is resolved, and their reuse depends on lifetime (singleton/scoped cache
+service is resolved and their reuse depends on lifetime (singleton/scoped cache
 the resolved value; transient does not).
 
 --------------------

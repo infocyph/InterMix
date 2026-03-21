@@ -68,7 +68,7 @@ Trace levels are available via the ``TraceLevelEnum`` enum:
    * - ``Verbose``
      - Includes param names, fallback notices, env switches, etc
 
-Additional levels are available for custom filtering: ``Error``, ``Warn``, and ``Info``.
+Additional levels are available for custom filtering: ``Error``, ``Warn`` and ``Info``.
 
 -----------------------------
 Check If a Trace Exists 🧠
@@ -81,7 +81,7 @@ Check If a Trace Exists 🧠
        $steps = $c->tracer()->toArray();
    }
 
-Traces are only available **after resolution**, and only if tracing was enabled
+Traces are only available **after resolution** and only if tracing was enabled
 **before** the resolution occurred.
 
 -------------------------

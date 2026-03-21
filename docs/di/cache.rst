@@ -46,7 +46,7 @@ Eager warm-up (a.k.a. *compile* the container):
 ``cacheAllDefinitions()`` iterates every current definition **once**,
 resolves it and stores the result in:
 
-1. **The configured file cache namespace**, and
+1. **The configured file cache namespace** and
 2. The container’s in-process “resolved” map (so it is also fast in memory).
 
 You can now deploy the warmed cache files between runs.

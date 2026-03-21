@@ -68,7 +68,7 @@ InterMix in the picture
 #. **Register** recipes (definitions, class bindings, factory closures).
 #. **Resolve**: ``$c->get(StoreService::class)``.
 #. InterMix analyses the constructor, asks itself *“What fulfills GeolocationService right now?”*,
-   constructs the dependency (recursively if needed) **once**, and hands back a ready-to-use
+   constructs the dependency (recursively if needed) **once** and hands back a ready-to-use
    ``StoreService``.
 
 Environment-based overrides
