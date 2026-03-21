@@ -13,7 +13,7 @@ collection.
 Add a Tag 🏷️
 -----------------
 
-Simply pass **`tags:[…]`** to
+Simply pass **``tags:[…]``** to
 :php:meth:`Infocyph\InterMix\DI\Managers\DefinitionManager::bind`.
 
 .. code-block:: php

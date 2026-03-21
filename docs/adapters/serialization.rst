@@ -4,24 +4,24 @@
 Serialization Internals
 =====================
 
-All cache adapters rely on **`ValueSerializer`**
+All cache adapters rely on **``ValueSerializer``**
 to handle arbitrary PHP values—scalars, arrays, closures and resources.
 
 That component:
 
 1. **Wraps** native PHP resources using user-registered handlers
-2. Uses Opis Closure v4 (`serialize` / `unserialize`) to serialize closures
-3. Produces a string blob via PHP’s native `serialize()` internally if no closures are involved
+2. Uses Opis Closure v4 (``serialize`` / ``unserialize``) to serialize closures
+3. Produces a string blob via PHP’s native ``serialize()`` internally if no closures are involved
 4. On fetch, **unwraps** resources via your handler and restores closures
 
 Why is this necessary? PSR-6 requires that any stored value must be safely serializable if the adapter
 stores it as a string or BLOB (Redis, Memcached, SQLite, File). If you want to cache:
 
-* A **closure** (`fn(int $x) => $x + 5`)
-* A **stream** (e.g. `fopen('php://memory','r+')`)
+* A **closure** (``fn(int $x) => $x + 5``)
+* A **stream** (e.g. ``fopen('php://memory','r+')``)
 * A **cURL resource**, **XML parser**, or **GD image resource**, etc.
 
-Then you must teach `ValueSerializer` how to handle that resource type by registering a handler:
+Then you must teach ``ValueSerializer`` how to handle that resource type by registering a handler:
 
 .. code-block:: php
 

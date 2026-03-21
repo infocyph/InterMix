@@ -115,11 +115,10 @@ before any instance is created.
     }
 
     // By default, Limit uses 2. Override at runtime:
-    ReportCache::setLimit(5);
     ReportCache::instance("rA");
     ReportCache::instance("rB");
     ReportCache::instance("rC");           // throws LimitExceededException if >2 and setLimit not called
-    ReportCache::setLimit(3);
+    ReportCache::setLimit(3);              // Override to accept 3
     ReportCache::instance("rC");           // now allowed
 
 **Requirement Checking**

@@ -64,8 +64,8 @@ environment-specific overrides and gives you sugar for 1-liners.
 Creating & naming containers
 --------------------------------
 
-Every call to :php:`container('alias')` (or
-:php:`Container::instance('alias')`) returns an **isolated** registry.
+Every call to ``container('alias')`` (or
+``Container::instance('alias')``) returns an **isolated** registry.
 Use distinct aliases for tests, CLI workers, micro-modules, etc.
 
 --------------------------------
@@ -85,7 +85,7 @@ Modifying behaviour with ``options()->setOptions()``
 ---------------------------------------------
 
 + **injection** – reflection autowiring engine
-+ **methodAttributes / propertyAttributes** – enable **`#[Infuse]`**
++ **methodAttributes / propertyAttributes** – enable ``#[Infuse]``
 + **defaultMethod** – method to call when none supplied
 + **lazyLoading** – defer heavy construction until first use
 

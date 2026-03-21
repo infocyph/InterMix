@@ -46,7 +46,7 @@ Scoped services are tied to an identifier. You can switch scopes like this:
    // resolve scoped services
    $c->leaveScope();
 
-This creates a fresh "bucket" for services marked as `Scoped`, so each
+This creates a fresh "bucket" for services marked as ``Scoped``, so each
 scope can have independent instances without affecting others.
 
 ------------------------
@@ -63,9 +63,9 @@ When to Use What?
 Best Practices 💡
 ---------------------
 
-* Don’t overuse `Transient` unless necessary — caching saves performance.
-* Use `Scoped` with request-specific data or tenant-aware resolution.
-* Each container alias (`Container::instance('xyz')`) has its own Singleton set.
+* Don’t overuse ``Transient`` unless necessary — caching saves performance.
+* Use ``Scoped`` with request-specific data or tenant-aware resolution.
+* Each container alias (``Container::instance('xyz')``) has its own Singleton set.
 
 -----------
 Summary 📚
@@ -74,4 +74,4 @@ Summary 📚
 + **Singleton** – one per container instance
 + **Transient** – fresh each time
 + **Scoped** – one per logical scope
-+ Managed via `LifetimeEnum::*` constants on any `bind()`
++ Managed via ``LifetimeEnum::*`` constants on any ``bind()``

@@ -49,7 +49,8 @@ Configure behaviour (optional)
 Register something
 ------------------
 
-### Bind an ID to a value / factory
+Bind an ID to a value / factory
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: php
 
@@ -57,7 +58,8 @@ Register something
       ->bind('answer', 42)
       ->bind('now', fn () => new DateTimeImmutable());
 
-### Register a class with constructor parameters
+Register a class with constructor parameters
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: php
 
@@ -67,7 +69,8 @@ Register something
        'secret',                           // password
    ]);
 
-### Import a service provider
+Import a service provider
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: php
 

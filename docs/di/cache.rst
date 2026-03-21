@@ -43,7 +43,7 @@ Eager warm-up (a.k.a. *compile* the container):
 
    $c->definitions()->cacheAllDefinitions(forceClearFirst: true);
 
-`cacheAllDefinitions()` iterates every current definition **once**,
+``cacheAllDefinitions()`` iterates every current definition **once**,
 resolves it and stores the result in:
 
 1. **The configured file cache namespace**, and
@@ -72,7 +72,7 @@ pre-warmed cache.
 Cache Invalidation 🔄
 ----------------------
 
-* **forceClearFirst** in `cacheAllDefinitions()` clears InterMix keys **before**
+* **forceClearFirst** in ``cacheAllDefinitions()`` clears InterMix keys **before**
   warming.
 * Clear the namespace directory whenever you update service wiring and do not
   use force-clear warmup.

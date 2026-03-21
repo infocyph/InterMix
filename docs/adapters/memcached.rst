@@ -4,7 +4,7 @@
 Memcached Adapter
 ========================
 
-The **MemCacheAdapter** connects to one or more Memcached servers via the `\Memcached` extension.
+The **MemCacheAdapter** connects to one or more Memcached servers via the ``\Memcached`` extension.
 Suitable for:
 
 * **Distributed caching** across multiple web servers
@@ -16,8 +16,8 @@ Connection
 
 You must supply either:
 
-1. A pre-configured `\Memcached` instance
-2. A list of server triples (`[host, port, weight]`)
+1. A pre-configured ``\Memcached`` instance
+2. A list of server triples (``[host, port, weight]``)
 
 Example:
 
@@ -42,16 +42,16 @@ ensure your namespace + key fit within this limit.
 multiFetch()
 ------------
 
-Internally, `getItems()` calls `multiFetch(array $keys)`, which:
+Internally, ``getItems()`` calls ``multiFetch(array $keys)``, which:
 
-1. Maps each key to `<ns>:<key>`
-2. Calls `$memcached->getMulti([...])`
-3. Returns an array of `MemCacheItem` instances, preserving order
+1. Maps each key to ``<ns>:<key>``
+2. Calls ``$memcached->getMulti([...])``
+3. Returns an array of ``MemCacheItem`` instances, preserving order
 
 TTL & Eviction
 --------------
 
-* TTL is stored per-item via `$memcached->set($ns . ':' . $key, $blob, $ttl)`.
+* TTL is stored per-item via ``$memcached->set($ns . ':' . $key, $blob, $ttl)``.
 * Memcached’s LRU + slab allocator evicts entries when RAM is full.
 * No persistence across server restarts.
 

@@ -4,8 +4,9 @@
 Options & Feature Toggles
 =========================
 
-The **OptionsManager** (which utilizes the `ManagerProxy` trait) lets you fine-tune *how* InterMix behaves.
-Option toggles are configured via explicit methods:
+The **OptionsManager** (which uses the ``ManagerProxy`` trait) lets you fine-tune *how* InterMix behaves.
+Option toggles are configured via explicit methods.
+Because this manager proxies container access, you can also call container APIs directly from it (for example ``get()``, ``has()``, or magic/array sugar like ``$opt('id')`` and ``$opt['id']``).
 
 .. code-block:: php
 
@@ -30,12 +31,12 @@ Option toggles are configured via explicit methods:
 Flag                    Default    What it does
 ======================  =========  ==========================================================
 ``injection``           ``true``   Turn the **reflection autowiring engine** on / off.
-                                  When *false* the container switches to :php:`GenericCall`
+                                  When *false* the container switches to ``GenericCall``
                                   and **every** dependency must be supplied via
                                   :ref:`di.registration`.
-``methodAttributes``    ``false``  Honour :php:`#[Infuse]` on **method parameters**.
-``propertyAttributes``  ``false``  Honour :php:`#[Infuse]` on **class properties**.
-``defaultMethod``       ``null``   If you call :php:`getReturn(Foo::class)` **without** a
+``methodAttributes``    ``false``  Honour ``#[Infuse]`` on **method parameters**.
+``propertyAttributes``  ``false``  Honour ``#[Infuse]`` on **class properties**.
+``defaultMethod``       ``null``   If you call ``getReturn(Foo::class)`` **without** a
                                   registered method, the container will execute this method
                                   on the freshly-built instance (e.g. ``'__invoke'`` or
                                   ``'handle'`` in CQRS/HTTP handlers).
@@ -61,7 +62,7 @@ Flag                    Default    What it does
    * - Helper
      - Effect
    * - ``enableLazyLoading(true)``
-     - Store class bindings as :php:`DeferredInitializer` until first :php:`get($id)`; reduces boot cost.
+     - Store class bindings as ``DeferredInitializer`` until first ``get($id)``; reduces boot cost.
    * - ``setEnvironment('prod')``
      - Select the active environment; used with ``bindInterfaceForEnv()`` to swap implementations.
    * - ``bindInterfaceForEnv($env, I::class, C::class)``

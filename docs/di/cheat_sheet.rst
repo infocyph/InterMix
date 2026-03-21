@@ -27,7 +27,7 @@ Container Entry Points
    * - Build class (optional method)
      - ``$c->make(Foo::class, false|'run')``
    * - Call closure/function/class/method
-     - ``$c->call($target, $methodOrArgs)``
+     - ``$c->call($target, $method)``
    * - Scopes
      - ``$c->enterScope('req-1')`` / ``$c->leaveScope()`` / ``$c->withinScope('req-1', fn () => ...)``
    * - Tags / tracing / graph
@@ -54,7 +54,7 @@ Managers At A Glance
    * - ``invocation()``
      - ``call()``, ``make()``, ``get()``, ``getReturn()``, ``has()``
 
-All managers support ``->end()`` to return to the container and continue chaining.
+All managers use ``ManagerProxy``: ``$mgr('id')``, ``$mgr->id``, ``$mgr['id']``, proxied container methods, and ``->end()`` to return to the container.
 
 ------------------------------------------
 Task Matrix (Fluent vs Shortcut)
