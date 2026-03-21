@@ -14,7 +14,7 @@ Add a Tag 🏷️
 -----------------
 
 Simply pass **``tags:[…]``** to
-:php:meth:`Infocyph\InterMix\DI\Managers\DefinitionManager::bind`.
+:php:meth:`Infocyph\\InterMix\\DI\\Managers\\DefinitionManager::bind`.
 
 .. code-block:: php
 
@@ -36,7 +36,7 @@ Retrieve All by Tag 📬
        $factory()->handle($event);
    }
 
-* :php:meth:`Infocyph\InterMix\DI\Container::findByTag` returns an **array**:
+* :php:meth:`Infocyph\\InterMix\\DI\\Container::findByTag` returns an **array**:
   ``[id => callable|object, …]``
 * Services are resolved **lazily** – if the definition was a class string the
   container still honours lazy loading & lifetimes.

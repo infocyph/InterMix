@@ -104,7 +104,7 @@ once()
 **Goal**: Execute a zero-argument callback exactly once **per call site** (determined by ``file:line``). On the first invocation at that source location, ``once()`` runs the callback and caches its result. All subsequent calls from that same location return the stored value, never re-evaluating the callback.
 
 - ``$callback`` – A zero-argument callable to evaluate.
-- ``$container`` *(optional)* – an :php:class:`Infocyph\InterMix\DI\Container`
+- ``$container`` *(optional)* – an :php:class:`Infocyph\\InterMix\\DI\\Container`
   instance. If supplied, ``once()`` stores/retrieves via container resolution
   instead of the internal static cache.
 

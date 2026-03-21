@@ -10,7 +10,7 @@ Two families exist:
 
 * **Built-in** tags shipped with InterMix (``Infuse`` / ``Autowire`` / ``Inject``)
 * **Custom** attributes you register at runtime through
-  :php:meth:`Infocyph\InterMix\DI\Attribute\AttributeRegistry::register`
+  :php:meth:`Infocyph\\InterMix\\DI\\Attribute\\AttributeRegistry::register`
 
 -------------------------------------------------
 Built-in Tags (Infuse / Autowire / Inject)
@@ -58,7 +58,7 @@ Custom Attribute Support
 -------------------------------------------------
 
 Create any attribute & a resolver that implements
-:php:class:`Infocyph\InterMix\DI\Attribute\AttributeResolverInterface`.
+:php:class:`Infocyph\\InterMix\\DI\\Attribute\\AttributeResolverInterface`.
 
 .. code-block:: php
 
@@ -125,8 +125,8 @@ Whole-method defaults:
        public function execute(int $retries, int $delay) {}
    }
 
-*Arguments provided* via :php:meth:`Infocyph\InterMix\DI\Container::call`,
-:php:meth:`Infocyph\InterMix\DI\Managers\RegistrationManager::registerMethod`
+*Arguments provided* via :php:meth:`Infocyph\\InterMix\\DI\\Container::call`,
+:php:meth:`Infocyph\\InterMix\\DI\\Managers\\RegistrationManager::registerMethod`
 or explicit arrays always **override** attributes.
 
 -------------------------------------------------
@@ -144,7 +144,7 @@ Enable with ``propertyAttributes: true``:
    }
 
 Properties are injected *after* construction.
-Values set via :php:meth:`Infocyph\InterMix\DI\Managers\RegistrationManager::registerProperty`
+Values set via :php:meth:`Infocyph\\InterMix\\DI\\Managers\\RegistrationManager::registerProperty`
 win over attributes.
 
 -------------------------------------------------

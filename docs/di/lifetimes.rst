@@ -5,7 +5,7 @@ Service Lifetimes
 ===================
 
 InterMix supports three configurable **lifetimes** via
-:php:class:`Infocyph\InterMix\DI\Support\LifetimeEnum`.
+:php:class:`Infocyph\\InterMix\\DI\\Support\\LifetimeEnum`.
 
 This allows fine-grained control over how instances are reused or regenerated.
 

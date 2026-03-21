@@ -15,7 +15,7 @@ Under the hood it relies on:
 2. A **plugin system** (“resource handlers”) that can *wrap* any PHP
    **resource** into plain data and *restore* it on the way back.
 3. A tiny **memo-cache** inside
-   :php:meth:`Infocyph\InterMix\Serializer\ValueSerializer::isSerializedClosure`
+   :php:meth:`Infocyph\\InterMix\\Serializer\\ValueSerializer::isSerializedClosure`
    to detect
    Opis payloads with **O(1)** string checks.
 

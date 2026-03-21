@@ -1,14 +1,14 @@
 # InterMix
 
 [![Security & Standards](https://github.com/infocyph/InterMix/actions/workflows/build.yml/badge.svg)](https://github.com/infocyph/InterMix/actions/workflows/build.yml)
-[![Documentation Status](https://readthedocs.org/projects/intermix/badge/?version=latest)](https://intermix.readthedocs.io)
+[![Documentation](https://img.shields.io/badge/Documentation-InterMix-blue?logo=readthedocs&logoColor=white)](https://docs.infocyph.com/projects/intermix/)
 ![Packagist Downloads](https://img.shields.io/packagist/dt/infocyph/intermix?color=green&link=https%3A%2F%2Fpackagist.org%2Fpackages%2Finfocyph%2Fintermix)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 ![Packagist Version](https://img.shields.io/packagist/v/infocyph/intermix)
 ![Packagist PHP Version](https://img.shields.io/packagist/dependency-v/infocyph/intermix/php)
 ![GitHub Code Size](https://img.shields.io/github/languages/code-size/infocyph/intermix)
 
-`InterMix` is a modern, lightweight PHP toolkit for developers who love class-oriented design, clean architecture, and fast execution. From dependency injection to dynamic macros, every utility is designed to **just work** — with minimal config and maximum control.
+`InterMix` is a modern, lightweight PHP toolkit for developers who value class-oriented design, clean architecture, and fast execution. It combines dependency injection, caching, serialization, memoization, macro-style extensibility, and helper utilities with minimal config and maximum control.
 
 ---
 
@@ -21,7 +21,9 @@
   - environment-specific overrides
   - debug tracing & cache support
 - **Caching** — Dual PSR-6 & PSR-16 compatible cache engine
+- **Serializer** — Closure-aware value serialization and resource handlers
 - **Fence** — Enforce singleton-style class safety
+- **Remix** — Fluent traits, proxies, and global helper functions
 - **MacroMix** — Dynamically extend objects or classes with macros
 - **Memoizer** — `once()` and `memoize()` helpers for deterministic caching
 - **Global Utilities** — Like `pipe()`, `retry()`, `measure()` and more
@@ -78,7 +80,7 @@ foreach ($c->findByTag('service') as $svc) {
 ```
 
 See full container guide at:
-📖 [https://intermix.readthedocs.io/en/latest/di/overview.html](https://intermix.readthedocs.io/en/latest/di/overview.html)
+📖 [https://docs.infocyph.com/projects/intermix/di/overview.html](https://docs.infocyph.com/projects/intermix/di/overview.html)
 
 ---
 
@@ -106,15 +108,15 @@ $value = once(fn() => rand(1000, 9999)); // Only runs once per file+line
 
 ## 📚 Documentation
 
-Full documentation available on **ReadTheDocs**:
+Full documentation available at:
 
-🔗 [https://intermix.readthedocs.io](https://intermix.readthedocs.io)
+🔗 [https://docs.infocyph.com/projects/intermix/](https://docs.infocyph.com/projects/intermix/)
 
 Includes:
 
 * ✅ Getting Started & Quickstart
 * 📦 DI Container Guide (bindings, scopes, attributes, lifetimes)
-* 🧩 Modules: Memoizer, Fence, MacroMix
+* 🧩 Modules: Cache, Serializer, Remix, Memoizer, Fence, MacroMix
 * 🧪 Testing & Caching Tips
 * 📘 PDF/ePub formats
 
