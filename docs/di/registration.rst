@@ -13,9 +13,11 @@ Why register?
 * **Add scalars / env values** a constructor would otherwise not receive.
 * **Call a bootstrap method** right after instantiation.
 * **Override private / static properties** in legacy classes.
-* **Disable autowiring** entirely ( `injection:false` ) and describe everything up-front.
+* **Disable autowiring** entirely ( ``injection:false`` ) and describe everything up-front.
 
-The **RegistrationManager** (which utilizes the `ManagerProxy` trait) provides a **fluent** interface for class registration. You can also use array access for a more concise syntax. Finish with ``->end()`` to return to the container.
+The **RegistrationManager** (which uses the ``ManagerProxy`` trait) provides a **fluent** interface for class registration. You can also use array access for a more concise syntax.
+Because it proxies container access, direct calls such as ``$reg->get(Foo::class)`` and sugar forms like ``$reg('id')`` / ``$reg['id']`` also work.
+Finish with ``->end()`` to return to the container.
 
 ------------------------------------------------------------------
 1 · registerClass( FQCN , array $args = [] )
@@ -32,7 +34,7 @@ Pass **positional** or **named** arguments – just like PHP itself.
            'root',                               // position #2
            'p@ssw0rd',                           // position #3
            'flags' => [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION], // named
-       ]);  // Returns to container
+       ]);  // stays on RegistrationManager
 
    // Using array access (via ManagerProxy)
    $reg[Db::class] = [  // Same as registerClass()
@@ -47,7 +49,7 @@ Hints
 ^^^^^
 
 * Un-listed parameters fall back to **autowiring** (if enabled) or
-  :php:`#[Infuse]` attributes.
+  ``#[Infuse]`` attributes.
 * The registration **overrides** anything the attribute would set for the
   same parameter.
 
@@ -73,12 +75,12 @@ When you later do:
 
 the container:
 
-1. Builds `EmailService`
+1. Builds ``EmailService``
 2. Injects the supplied parameters (plus Infuse fallbacks)
-3. Executes `setConfig()`
+3. Executes ``setConfig()``
 4. Stores/returns the **configured instance**
 
-**Tip** | You can omit ``$args`` to rely solely on `#[Infuse]` in the
+**Tip** | You can omit ``$args`` to rely solely on ``#[Infuse]`` in the
 method signature.
 
 ------------------------------------------------------------------
@@ -99,7 +101,7 @@ gymnastics.
 Precedence (highest → lowest):
 
 1. **registerProperty()**
-2. `#[Infuse]` on the property (if propertyAttributes = true)
+2. ``#[Infuse]`` on the property (if propertyAttributes = true)
 3. Do nothing (property remains untouched)
 
 ------------------------------------------------------------------

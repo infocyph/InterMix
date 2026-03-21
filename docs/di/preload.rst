@@ -41,7 +41,7 @@ The generated file looks like:
 No logic — just ``require_once`` entries for reflection-resolved classes.
 
 -----------------------------------
-Use with `opcache.preload` in PHP
+Use with ``opcache.preload`` in PHP
 -----------------------------------
 
 In your ``php.ini``:
@@ -75,4 +75,3 @@ You may extend or modify the preload generation behavior by subclassing
 
 
 Next stop » :doc:`debug_tracing`
-

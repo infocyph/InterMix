@@ -76,9 +76,9 @@ Internals
 
 The invoker uses:
 
-- `routeCallable()` — detects callable types: closures, invokable classes, strings, or serialized closures
-- `viaClosure()` — injects closures into the container for contextual execution
-- Integration with `ValueSerializer` for full closure support
+- ``routeCallable()`` — detects callable types: closures, invokable classes, strings, or serialized closures
+- ``viaClosure()`` — injects closures into the container for contextual execution
+- Integration with ``ValueSerializer`` for full closure support
 
 --------
 

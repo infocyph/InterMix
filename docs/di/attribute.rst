@@ -8,7 +8,7 @@ InterMix supports **PHP 8+ native attributes** for expressive, declarative
 injection.
 Two families exist:
 
-* **Built-in** tags shipped with InterMix (`Infuse` / `Autowire` / `Inject`)
+* **Built-in** tags shipped with InterMix (``Infuse`` / ``Autowire`` / ``Inject``)
 * **Custom** attributes you register at runtime through
   :php:meth:`Infocyph\InterMix\DI\Attribute\AttributeRegistry::register`
 
@@ -24,7 +24,7 @@ Built-in Tags (Infuse / Autowire / Inject)
 They are **identical** and can inject via :
 
 * **Type-hint** (class / interface)
-* **Container key** (`'cfg.debug'`, `'db.host'`, …)
+* **Container key** (``'cfg.debug'``, ``'db.host'``, …)
 * **Global callable** (e.g. ``#[Inject(strtotime: 'next monday')]``)
 
 -------------------------------------------------
@@ -151,11 +151,11 @@ win over attributes.
 Resolution Workflow
 -------------------------------------------------
 
-#. **Built-in tag** (`Infuse` / `Autowire` / `Inject`) – first match wins
+#. **Built-in tag** (``Infuse`` / ``Autowire`` / ``Inject``) – first match wins
 #. **Custom attributes** – executed in registration order:
 
-   * if a resolver returns **non-null & not `IMStdClass`** → injected
-   * if resolver returns `null` or `IMStdClass` → treated as “logic-only”
+   * if a resolver returns **non-null & not ``IMStdClass``** → injected
+   * if resolver returns ``null`` or ``IMStdClass`` → treated as “logic-only”
 
 -------------------------------------------------
 Enabling Attributes
@@ -176,7 +176,7 @@ Resolution Priority (high → low)
 -------------------------------------------------
 
 1. ``registerClass()`` / ``registerMethod()`` / ``registerProperty()``
-2. Supplied args (`call()`, `make()`, etc.)
+2. Supplied args (``call()``, ``make()``, etc.)
 3. ``definitions()`` map
 4. Built-in tags (Infuse / Autowire / Inject)
 5. Custom attributes via **AttributeRegistry**

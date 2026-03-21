@@ -4,10 +4,11 @@
 Invocation & Shortcuts
 ========================
 
-The **InvocationManager** (which utilizes the `ManagerProxy` trait) provides a **mini-helper API** that goes beyond PSR-11
+The **InvocationManager** (which utilizes the ``ManagerProxy`` trait) provides a **mini-helper API** that goes beyond PSR-11
 ``get()`` / ``has()``.
 These helpers *call* things immediately so you can treat functions,
 closures or whole classes as **actions**. The manager supports both fluent method chaining and array access.
+As with other managers, ``ManagerProxy`` also enables direct container access through this manager (``$inv->get()``, ``$inv('id')``, ``$inv['id']``).
 
 -------------------------------------------------------
 1 · call( callable|string $target , ?string $method )
@@ -15,8 +16,9 @@ closures or whole classes as **actions**. The manager supports both fluent metho
 
 .. code-block:: php
 
-   // (a) global / namespaced function -----------------
-   $len = $c->call('strlen', ['InterMix']);            // → 7
+   // (a) function with explicit args via registration metadata
+   $c->registration()->registerClosure('strlen.call', 'strlen', ['InterMix']);
+   $len = $c->call('strlen.call');                     // → 8
 
    // (b) invokable object or closure ------------------
    $iso = $c->call(fn (DateTimeImmutable $now) => $now->format('c'));
@@ -24,15 +26,15 @@ closures or whole classes as **actions**. The manager supports both fluent metho
    // (c) class & method (autowired) -------------------
    $c->call(JobProcessor::class, 'handle');
 
-   // Or using array access (via ManagerProxy)
+   // Shortcut invocation manager helpers (via ManagerProxy)
    $invoker = $c->invocation();
-   $result = $invoker(JobProcessor::class, 'handle');  // __invoke()
+   $job = $invoker(JobProcessor::class);               // __invoke() -> get()
 
 **Rules**
 
 * All parameters (including constructor params) are **auto-resolved** unless
-  you pass them explicitly in the arg array.
-* `$method` is optional; omit it for classes with an ``__invoke`` or the
+  you provide explicit values through registration metadata.
+* ``$method`` is optional; omit it for classes with an ``__invoke`` or the
   *defaultMethod* you set in :ref:`di.options`.
 
 -------------------------------------------------------
@@ -58,7 +60,7 @@ Internally the container:
 3. Returns the result to you.
 
 -------------------------------------------------------
-3 · make( string $class , ?string $method [, array $args] )
+3 · make( string $class , string|bool $method = false )
 -------------------------------------------------------
 
 *Always* returns a **brand-new** instance (or the method’s output) and thus
@@ -70,12 +72,10 @@ stateless workers.
    // just the object
    $pdf = $c->make(PdfBuilder::class);
 
-   // build → call render() → pass explicit args
-   $html = $c->make(
-       PdfBuilder::class,
-       'render',
-       [$template, $payload]        // ← overrides auto-wiring
-   );
+   // build -> call render() (no explicit arg array in make())
+   $html = $c->make(PdfBuilder::class, 'render');
+
+If ``render()`` needs explicit scalar arguments, register method metadata first via :ref:`di.registration`.
 
 -------------------------------------------------------
 4 · When to use what?

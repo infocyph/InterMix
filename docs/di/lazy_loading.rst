@@ -31,7 +31,7 @@ When does InterMix create the instance?
 
 * On your first call to ``$c->get('expensive')``
 * If another service depends on it via autowiring or attribute
-* If preloading or caching is used (`resolveDefinition()` internally)
+* If preloading or caching is used (``resolveDefinition()`` internally)
 
 ---------------
 Default Rules

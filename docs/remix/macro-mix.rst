@@ -240,5 +240,5 @@ If you define the constant:
 
 Then:
 
-- Write operations (`macro()`, `removeMacro()`, `loadMacrosFromConfig()`) acquire an exclusive file lock on the trait source.
-- Read operations (e.g. `hasMacro()`, `getMacros()`, macro calls) skip locking.
+- Write operations (``macro()``, ``removeMacro()``, ``loadMacrosFromConfig()``) acquire an exclusive file lock on the trait source.
+- Read operations (e.g. ``hasMacro()``, ``getMacros()``, macro calls) skip locking.

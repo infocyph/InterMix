@@ -13,7 +13,7 @@ Why another container?
 
 * **Simple first** – one-liner definitions, no config files
 * **Reflection-aware** – autowiring you can *switch off*
-* **Attribute powered** – `#[Infuse]`, `#[Autowire]`, `#[Inject]`
+* **Attribute powered** – ``#[Infuse]``, ``#[Autowire]``, ``#[Inject]``
 * **Fluent API** – four tiny managers that chain like one object
 * **Performant** – static reflection cache, optional PSR-6/16 cache,
   lazy services by default
@@ -65,6 +65,12 @@ still land back on the main container:
          ->invocation()
              ->call(App::class, 'boot')
        ->lock();
+
+That proxy is ``ManagerProxy`` and it contributes three important behaviors:
+
+* Magic access: ``$mgr->serviceId``, ``$mgr('serviceId')``, ``$mgr['serviceId']``.
+* Method pass-through: unknown manager calls are forwarded to the container.
+* Chain safety: if a forwarded call returns the container, the manager keeps the fluent chain.
 
 Ascii peek
 ~~~~~~~~~~

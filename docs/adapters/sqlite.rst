@@ -10,14 +10,14 @@ Ideal for:
 * **CLI tools** or single-host PHP processes
 * **Small apps** needing persistence without a full Redis/Memcached setup
 
-Bulk Fetch (`multiFetch`)
+Bulk Fetch (``multiFetch``)
 -------------------------
 
-Instead of N separate `SELECT` calls, `getItems()` does:
+Instead of N separate ``SELECT`` calls, ``getItems()`` does:
 
-- If found **and** not expired: `ValueSerializer::unserialize(value)` → return `SqliteCacheItem` (hit)
-- If expired: `DELETE FROM cache WHERE key = ?` → return new `SqliteCacheItem` (miss)
-- If not found: return new `SqliteCacheItem` (miss)
+- If found **and** not expired: ``ValueSerializer::unserialize(value)`` → return ``SqliteCacheItem`` (hit)
+- If expired: ``DELETE FROM cache WHERE key = ?`` → return new ``SqliteCacheItem`` (miss)
+- If not found: return new ``SqliteCacheItem`` (miss)
 
 Example:
 
@@ -45,11 +45,11 @@ Example:
 Clearing All Entries
 --------------------
 
-`clear()` simply runs `DELETE FROM cache` on the table and resets the deferred queue.
+``clear()`` simply runs ``DELETE FROM cache`` on the table and resets the deferred queue.
 
 Performance Notes
 -----------------
 
 * A single SQLite file can handle thousands of keys, but write throughput is limited by
   SQLite’s journaling overhead.
-* Consider using `memory:` or `file::memory:?cache=shared` DSNs for in-memory databases in tests.
+* Consider using ``memory:`` or ``file::memory:?cache=shared`` DSNs for in-memory databases in tests.

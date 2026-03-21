@@ -28,7 +28,7 @@ Without DI – brittle coupling
        }
    }
 
-A future switch to *OpenStreetMap* touches **every line** that new’s `GoogleMaps`.
+A future switch to *OpenStreetMap* touches **every line** that new’s ``GoogleMaps``.
 
 With DI – pluggable design
 --------------------------
@@ -50,8 +50,8 @@ With DI – pluggable design
        }
    }
 
-Business code knows only *the contract* (`GeolocationService`).
-Swap concrete classes at runtime, in tests, or by environment – no edits in `StoreService`.
+Business code knows only *the contract* (``GeolocationService``).
+Swap concrete classes at runtime, in tests, or by environment – no edits in ``StoreService``.
 
 -------------------------------------------------------------
 Why use a container instead of manual wiring?
@@ -69,7 +69,7 @@ InterMix in the picture
 #. **Resolve**: ``$c->get(StoreService::class)``.
 #. InterMix analyses the constructor, asks itself *“What fulfills GeolocationService right now?”*,
    constructs the dependency (recursively if needed) **once**, and hands back a ready-to-use
-   `StoreService`.
+   ``StoreService``.
 
 Environment-based overrides
 ---------------------------
@@ -83,7 +83,7 @@ One-liner switches for prod vs. local (or staging, CI, …):
       ->bindInterfaceForEnv('local', GeolocationService::class, OpenStreetMap::class)
       ->setEnvironment($_ENV['APP_ENV'] ?? 'local');
 
-Running in production will now build `GoogleMaps`; developers get `OpenStreetMap`
+Running in production will now build ``GoogleMaps``; developers get ``OpenStreetMap``
 automatically.
 
 -------------------------------------------------

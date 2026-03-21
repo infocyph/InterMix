@@ -4,20 +4,20 @@
 Redis Adapter
 ==================
 
-The **RedisCacheAdapter** uses the `Redis` (phpredis) extension. It supports:
+The **RedisCacheAdapter** uses the ``Redis`` (phpredis) extension. It supports:
 
 * **Single or clustered Redis** (including Sentinel or Cluster modes)
-* **ACL/username/password** via DSN (e.g. `redis://:pass@host:6379/0`)
-* **UNIX socket** connections (`redis:///path/to/socket`)
+* **ACL/username/password** via DSN (e.g. ``redis://:pass@host:6379/0``)
+* **UNIX socket** connections (``redis:///path/to/socket``)
 
 Highlights
 ----------
 
-* **multiFetch()** via `MGET` → one round-trip for any number of keys
-* **Native TTL** → uses `SETEX` or `EXPIRE`
+* **multiFetch()** via ``MGET`` → one round-trip for any number of keys
+* **Native TTL** → uses ``SETEX`` or ``EXPIRE``
 * **Atomic** operations guaranteed by Redis
 * **Persistence** depends on your Redis configuration (RDB/AOF)
-* Values are stored as plain strings (the result of `ValueSerializer::serialize($item)`)
+* Values are stored as plain strings (the result of ``ValueSerializer::serialize($item)``)
 
 Quick Setup
 -----------
@@ -39,7 +39,7 @@ Quick Setup
 Saving with TTL
 ---------------
 
-Internally, on `save(CacheItemInterface $item)`, the adapter does:
+Internally, on ``save(CacheItemInterface $item)``, the adapter does:
 
 .. code-block:: php
 
@@ -64,7 +64,7 @@ Bulk Fetch Example
 Clearing a Namespace
 --------------------
 
-`clear(): bool` uses `SCAN` to iterate over all keys in the `“ns:*”` pattern and deletes them in batches,
+``clear(): bool`` uses ``SCAN`` to iterate over all keys in the ``“ns:*”`` pattern and deletes them in batches,
 avoiding large blocking operations.
 
 Example:

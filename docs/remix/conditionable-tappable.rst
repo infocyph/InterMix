@@ -80,11 +80,11 @@ when()
 **Behavior:**
 
 - **No arguments:** Returns a ``ConditionalProxy`` that captures the next property or method as the condition.
-- **One argument `$value`:** Returns a proxy using `$value` as the condition.
-- **With `$value` and `$callback`:**
-  - If `$value` is truthy (or `$value()` returns truthy), runs `$callback($this, $value)` and returns the result (or `$this` if null).
-  - Otherwise, if a `$default` is provided, runs `$default($this, $value)` and returns that (or `$this` if null).
-  - If neither applies, returns `$this`.
+- **One argument ``$value``:** Returns a proxy using ``$value`` as the condition.
+- **With ``$value`` and ``$callback``:**
+  - If ``$value`` is truthy (or ``$value()`` returns truthy), runs ``$callback($this, $value)`` and returns the result (or ``$this`` if null).
+  - Otherwise, if a ``$default`` is provided, runs ``$default($this, $value)`` and returns that (or ``$this`` if null).
+  - If neither applies, returns ``$this``.
 
 **Example:**
 
@@ -112,9 +112,9 @@ unless()
 
 Same as ``when()``, but with inverted condition:
 
-- If `$value` is falsy (or `$value()` returns falsy), run `$callback($this, $value)`.
-- Else, if `$default` is provided, run `$default($this, $value)`.
-- Otherwise return `$this`.
+- If ``$value`` is falsy (or ``$value()`` returns falsy), run ``$callback($this, $value)``.
+- Else, if ``$default`` is provided, run ``$default($this, $value)``.
+- Otherwise return ``$this``.
 
 **Example:**
 
@@ -135,7 +135,7 @@ tap()
 
 **Behavior:**
 
-- **With `$callback` provided:** Executes ``$callback($this)`` and returns `$this`.
+- **With ``$callback`` provided:** Executes ``$callback($this)`` and returns ``$this``.
 - **With no arguments:** Returns a ``TapProxy``. Any method you call on it will run, but return the original object.
 
 **Examples:**

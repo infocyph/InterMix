@@ -27,7 +27,7 @@ ultimately lives in this registry.
    // 💠 factory closure
    $def->bind('uuid', fn () => bin2hex(random_bytes(16)));
 
-You may chain calls – the manager is **fluent** and `->end()` brings you back to
+You may chain calls – the manager is **fluent** and ``->end()`` brings you back to
 the container:
 
 .. code-block:: php
@@ -98,8 +98,8 @@ Use tags for plug-in systems, domain events, command buses, etc.
        LoggerInterface::class => FileLogger::class,   // interface ⇒ concrete
    ]);
 
-**Property / array magic** (handy for tests & prototyping) – available on both the
-container *and* all manager classes (DefinitionManager, OptionsManager, InvocationManager, RegistrationManager) thanks to the *ManagerProxy* trait:
+**Property / array / invoke sugar** (handy for tests & prototyping) – available on both the
+container *and* all manager classes (DefinitionManager, OptionsManager, InvocationManager, RegistrationManager) thanks to the ``ManagerProxy`` trait:
 
 .. code-block:: php
 
@@ -108,6 +108,8 @@ container *and* all manager classes (DefinitionManager, OptionsManager, Invocati
 
    $log = $c->logger;          // magic __get
    $cfg = $c('cfg');           // __invoke
+
+The same trait also proxies container methods via ``__call()`` (for example ``$def->get('foo')`` or ``$def->has('foo')``), while preserving fluent manager chaining.
 
 ----------------------------------------------------
 5.  Lazy loading — opt-in or opt-out

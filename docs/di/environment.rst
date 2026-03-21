@@ -41,9 +41,9 @@ When you resolve an interface like:
 
 The container internally checks:
 
-1. Is `env` mode active?
-2. Is there a matching `bindInterfaceForEnv()` mapping for the current env?
-3. If yes, use the target class (e.g. `StripeGateway`)
+1. Is ``env`` mode active?
+2. Is there a matching ``bindInterfaceForEnv()`` mapping for the current env?
+3. If yes, use the target class (e.g. ``StripeGateway``)
 4. Otherwise, fallback to global bindings or autowiring
 
 This keeps your **business logic decoupled** from deployment configs.
@@ -79,7 +79,7 @@ Resolution priority:
 1. **Environment-bound class** (if active)
 2. **Globally bound class** via
    :php:meth:`Infocyph\InterMix\DI\Managers\DefinitionManager::bind`
-3. **Autowire fallback** (if `injection=true`)
+3. **Autowire fallback** (if ``injection=true``)
 
 -------------------
 Best Practices 💡
@@ -87,7 +87,7 @@ Best Practices 💡
 
 * Use environment bindings for **external systems** (payment, mail, auth).
 * Avoid overusing for things easily toggled with config values.
-* Prefer strings like `"prod"`, `"test"`, `"local"` – but any name is allowed.
+* Prefer strings like ``"prod"``, ``"test"``, ``"local"`` – but any name is allowed.
 
 You can also override definition metadata (lifetime/tags) per environment:
 
@@ -100,7 +100,7 @@ You can also override definition metadata (lifetime/tags) per environment:
      ->setDefinitionMetaForEnv('test', 'mailer', LifetimeEnum::Transient, ['core', 'test-only'])
      ->setEnvironment('test');
 
-Now `mailer` behaves as transient in `test`, while using default metadata in
+Now ``mailer`` behaves as transient in ``test``, while using default metadata in
 other environments.
 
 Next stop » :doc:`cache`
