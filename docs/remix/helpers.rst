@@ -9,10 +9,14 @@ common tasks more fluent. They are declared in ``src/functions.php`` and are
 available as global helpers.
 
 - **tap()**     – covered in :ref:`remix.tap-proxy`.
+- **when()**    – conditionally apply callbacks to values.
 - **pipe()**    – passes a value through a callback and returns the callback’s result.
 - **measure()** – times a callback and returns its result plus elapsed ms.
 - **retry()**   – runs a callback repeatedly until success or max attempts.
 - **once()**    – ensures a callback is evaluated only once per call site.
+
+For DI-oriented global helpers such as ``container()``, ``resolve()`` and ``direct()``,
+see :ref:`functions`.
 
 pipe()
 ======
@@ -30,6 +34,29 @@ This is equivalent to::
 
    $sum = pipe([1, 2, 3], 'array_sum');
    // $sum === 6
+
+when()
+======
+
+.. php:function:: when(mixed $value, callable $truthy, ?callable $falsy = null): mixed
+
+**Goal**: Apply one callback for truthy values and optionally another callback
+for falsy values.
+
+- If ``$value`` is truthy, returns ``$truthy($value)``.
+- If ``$value`` is falsy and ``$falsy`` exists, returns ``$falsy($value)``.
+- Otherwise, returns ``$value`` unchanged.
+
+**Example**:
+
+.. code-block:: php
+
+   $status = when(
+       0,
+       fn (int $v) => "ok:{$v}",
+       fn (int $v) => "fallback:{$v}"
+   );
+   // $status === "fallback:0"
 
 measure()
 =========

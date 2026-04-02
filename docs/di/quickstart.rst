@@ -16,15 +16,17 @@ Each alias is an *isolated* registry of services.
 
 .. code-block:: php
 
-   use function Infocyph\InterMix\container;
    use Infocyph\InterMix\DI\Container;
+   use function Infocyph\InterMix\container;
 
-   $c1 = container();              // default alias “intermix”
-   $c2 = container('cli');         // a second, independent container
+   $c1 = container();              // default alias is current source directory (__DIR__)
+   $c2 = Container::instance('cli'); // a second, independent container
    // identical:
    $c3 = Container::instance('cli');
 
 Keep aliases short and memorable – tests often use a random alias to isolate state.
+For production/runtime stability, prefer explicit aliases instead of relying on the
+default ``__DIR__`` alias.
 
 Configure behaviour (optional)
 ------------------------------

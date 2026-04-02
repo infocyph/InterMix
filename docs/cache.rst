@@ -8,6 +8,7 @@ The **``Cache``** class is a PSR-6 and PSR-16–compliant cache façade with an 
 It provides:
 
 * **Static factories** for common back-ends:
+  - ``Cache::local()``
   - ``Cache::file()``
   - ``Cache::apcu()``
   - ``Cache::memcache()``
@@ -103,6 +104,8 @@ PSR-16 Methods (implemented on top of PSR-6):
   - Equivalent to ``deleteItem(string $key)``.
 * **``clear(): bool``**
   - Equivalent to ``clear()``.
+* **``clearCache(): bool``**
+  - Alias of ``clear()``.
 * **``getMultiple(iterable $keys, mixed $default = null): iterable``**
   - Fetches multiple keys.
   - If a ``$default`` is provided (scalar or callable), it applies per-key on miss.

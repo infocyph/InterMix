@@ -20,9 +20,9 @@ Quick Example 🚀
 
 .. code-block:: php
 
-   use function Infocyph\InterMix\container;
+   use Infocyph\InterMix\DI\Container;
 
-   $c = container('intermix');
+   $c = Container::instance('intermix');
 
    // ① enable definition cache (file-backed, namespaced)
    $c->definitions()->enableDefinitionCache('intermix');

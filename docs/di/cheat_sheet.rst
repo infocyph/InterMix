@@ -17,7 +17,7 @@ Container Entry Points
    * - Action
      - API
    * - Create/get instance
-     - ``container('app')`` / ``Container::instance('app')``
+     - ``container()`` / ``Container::instance('app')`` / ``resolve(null, [], 'app')``
    * - Get manager
      - ``$c->definitions()`` / ``$c->registration()`` / ``$c->options()`` / ``$c->invocation()``
    * - Resolve by ID/class
