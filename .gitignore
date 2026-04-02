@@ -7,3 +7,8 @@ composer.lock
 git-story_media
 *~
 diffs.txt
+.phpunit.cache
+.psalm-cache
+*.patch
+patch.php
+AI_CONTEXT.md

@@ -6,9 +6,6 @@
     "notPath": [
         "rector.php"
     ],
-    "notName": [
-        "*Enum.php"
-    ],
     "rules": {
         "ordered_imports": {
             "imports_order": ["class", "function", "const"],
