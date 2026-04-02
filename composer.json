@@ -80,7 +80,7 @@
         ],
         "git:hook": "captainhook install --only-enabled -nf",
         "test": "@php vendor/bin/pest",
-        "bench:hello": "@php bench/hello_matchers.php",
+        "benchmark": "@php -r \"echo 'No benchmark script configured for InterMix.'.PHP_EOL;\"",
         "refactor": "@php vendor/bin/rector process",
         "lint": "@php vendor/bin/pint",
         "security:scan": "@test:security",

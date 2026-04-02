@@ -10,7 +10,7 @@ return static function (RectorConfig $rectorConfig): void {
 
     $setConstant = SetList::class . '::PHP_' . PHP_MAJOR_VERSION . PHP_MINOR_VERSION;
     if (!defined($setConstant)) {
-        $setConstant = SetList::class . '::PHP_84';
+        $setConstant = SetList::class . '::PHP_83';
     }
 
     $rectorConfig->sets([
