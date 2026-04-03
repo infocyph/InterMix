@@ -60,10 +60,10 @@
         }
     },
     "scripts": {
-        "test:code": "@php vendor/bin/pest --parallel --processes=10",
-        "test:security": "@php -d error_reporting=$((E_ALL & ~E_DEPRECATED)) vendor/bin/psalm --security-analysis --show-info=false --no-progress --threads=1",
-        "test:refactor": "@php vendor/bin/rector process --dry-run",
-        "test:lint": "@php vendor/bin/pint --test",
+        "test:code": "@php -d error_reporting=8191 vendor/bin/pest --parallel --processes=10",
+        "test:security": "@php -d error_reporting=8191 vendor/bin/psalm --security-analysis --show-info=false --no-progress --threads=1",
+        "test:refactor": "@php -d error_reporting=8191 vendor/bin/rector process --dry-run",
+        "test:lint": "@php -d error_reporting=8191 vendor/bin/pint --test",
         "test:hook": [
             "captainhook hook:post-checkout",
             "captainhook hook:pre-commit",
@@ -87,12 +87,12 @@
         "post-autoload-dump": "captainhook install --only-enabled -nf"
     },
     "require-dev": {
-        "captainhook/captainhook": "^5.29",
+        "captainhook/captainhook": "^5.29.2",
         "laravel/pint": "^1.29",
-        "pestphp/pest": "^4.4",
+        "pestphp/pest": "^4.4.3",
         "pestphp/pest-plugin-drift": "^4.1",
-        "rector/rector": "^2.3",
-        "symfony/var-dumper": "^7.3 || ^8.0",
-        "vimeo/psalm": "^6.16"
+        "rector/rector": "^2.3.9",
+        "symfony/var-dumper": "^7.3 || ^8.0.8",
+        "vimeo/psalm": "^6.16.1"
     }
 }

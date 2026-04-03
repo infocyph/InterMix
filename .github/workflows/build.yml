@@ -86,7 +86,7 @@ jobs:
       # Run Psalm (Deep Taint Analysis)
       - name: Run Psalm Security Scan
         run: |
-          php -d error_reporting=$((E_ALL & ~E_DEPRECATED)) ./vendor/bin/psalm --config=psalm.xml --security-analysis --threads=1 --report=psalm-results.sarif || true
+          php -d error_reporting=8191 ./vendor/bin/psalm --config=psalm.xml --security-analysis --threads=1 --report=psalm-results.sarif || true
         continue-on-error: true
 
       - name: Upload Psalm Results
