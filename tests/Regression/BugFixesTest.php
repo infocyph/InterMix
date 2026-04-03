@@ -1,6 +1,7 @@
 <?php
 
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\DI\Support\PreloadGenerator;
 use Infocyph\InterMix\DI\Support\TraceLevelEnum;
 use Infocyph\InterMix\Serializer\ResourceHandlers;
@@ -28,13 +29,41 @@ class RegressionResourceHandlers extends ResourceHandlers
     }
 }
 
+interface RegressionTokenSource
+{
+    public function token(): string;
+}
+
+class RegressionTransientTokenSource implements RegressionTokenSource
+{
+    private readonly string $value;
+
+    public function __construct(?string $value = null)
+    {
+        $this->value = $value ?? bin2hex(random_bytes(8));
+    }
+
+    public function token(): string
+    {
+        return $this->value;
+    }
+}
+
+class RegressionMethodConsumer
+{
+    public function current(RegressionTokenSource $tokenSource): string
+    {
+        return $tokenSource->token();
+    }
+}
+
 it('disables debug tracing without throwing', function () {
     $c = Container::instance(uniqid('trace_'));
 
     $out = $c->options()->enableDebugTracing(false)->end();
 
     expect($out)->toBe($c)
-        ->and($c->tracer()->level())->toBe(TraceLevelEnum::Node);
+        ->and($c->tracer()->level())->toBe(TraceLevelEnum::Off);
 });
 
 it('generates a syntactically valid preload file', function () {
@@ -178,4 +207,18 @@ it('registerDefaults discovers subclass register methods', function () {
     expect(is_resource($rest))->toBeTrue()
         ->and(get_resource_type($rest))->toBe('stream')
         ->and(stream_get_contents($rest))->toBe('ok');
+});
+
+it('does not reuse non-constructor method parameter resolution values across calls', function () {
+    $c = Container::instance(uniqid('method_args_'));
+    $c->definitions()->bind(
+        RegressionTokenSource::class,
+        fn () => new RegressionTransientTokenSource(),
+        LifetimeEnum::Transient,
+    );
+
+    $first = $c->call(RegressionMethodConsumer::class, 'current');
+    $second = $c->call(RegressionMethodConsumer::class, 'current');
+
+    expect($first)->not->toBe($second);
 });

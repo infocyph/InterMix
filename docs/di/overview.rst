@@ -15,7 +15,8 @@ Why another container?
 * **Reflection-aware** – autowiring you can *switch off*
 * **Attribute powered** – ``#[Infuse]``, ``#[Autowire]``, ``#[Inject]``
 * **Fluent API** – four tiny managers that chain like one object
-* **Performant** – static reflection cache, optional PSR-6/16 cache,
+* **Performant** – static reflection cache, parameter-resolution planning cache,
+  optional PSR-6/16 cache,
   lazy services by default
 * **Production ready** – env-specific bindings, scoped lifetimes,
   preload file generator
@@ -109,22 +110,25 @@ pipeline below – applying *lazy placeholders*, *caching* and *autowiring* as
 needed.
 
 #. **Already resolved?**
+
    * Return immediately if found in the in-memory cache.
-   * If the cache entry is a :php:class:`DeferredInitializer` *lazy* wrapper,
-     execute it now and swap in the real object.
+   * If the cache entry is a :php:class:`DeferredInitializer` *lazy* wrapper, execute it now and swap in the real object.
 
 #. **FunctionReference lookup**
+
    If the ID exists in your *definitions*, InterMix runs
    ``resolveDefinition($id)`` which
    honours caching, env overrides, user closures, etc.
 
 #. **Fallback: class name**
+
    If autowiring is **on**, reflection builds the class (constructor injection,
    property/parameter attributes, method call).
    If autowiring is **off**, the lightweight
    :php:class:`GenericCall` path instantiates without reflection magic.
 
 #. **Cache layer**
+
    With definition caching enabled, cache is consulted. Resolution
    results are stored back for next time.
 
@@ -151,6 +155,14 @@ Reflection metadata lives in a **static cache**. In common *process-per-request*
 set-ups (PHP-FPM, CLI), this is safe.
 In rare multi-thread situations (Swoole, ReactPHP, pthreads) you might clear or
 synchronise that cache manually.
+
+Parameter resolution cache note
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+InterMix caches **resolution plans** (reflector metadata such as parameters and
+attribute presence) across constructor/method/property paths.
+Resolved argument **values** are only memoised for constructor paths, so
+non-constructor method calls keep per-invocation behavior.
 
 Typical lifecycle
 -----------------

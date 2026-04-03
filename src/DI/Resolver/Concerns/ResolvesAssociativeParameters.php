@@ -75,7 +75,7 @@ trait ResolvesAssociativeParameters
         mixed $supplied,
     ): object {
         if ($type === 'constructor' && $supplied !== null && $class->getConstructor()) {
-            $existing = $this->repository->getClassResource()[$class->getName()]['constructor']['params'] ?? [];
+            $existing = $this->repository->getClassResourceFor($class->getName())['constructor']['params'] ?? [];
             $this->repository->addClassResource(
                 $class->getName(),
                 'constructor',

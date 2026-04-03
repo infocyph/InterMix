@@ -83,7 +83,7 @@ class OptionsManager implements ArrayAccess
      */
     public function enableDebugTracing(bool $enable = true, TraceLevelEnum $level = TraceLevelEnum::Node): self
     {
-        $this->repository->tracer()->setLevel($enable ? $level : TraceLevelEnum::Node);
+        $this->repository->tracer()->setLevel($enable ? $level : TraceLevelEnum::Off);
         return $this;
     }
 

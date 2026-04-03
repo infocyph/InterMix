@@ -36,7 +36,6 @@ the container:
    $c->definitions()
        ->bind('foo', 123)
        ->bind('bar', 456)
-       ->end()
        ->lock();  // lock the container after definitions are registered
 
    // Using array access (via ManagerProxy)

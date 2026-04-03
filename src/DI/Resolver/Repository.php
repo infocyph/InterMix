@@ -40,8 +40,11 @@ class Repository
     private bool $lazyLoading = true;
     private array $resolved = [];
     private array $resolvedDefinition = [];
+    private array $resolvedKeysByScope = [];
     private array $resolvedResource = [];
     private array $scopeStack = [];
+    private array $tagIndex = [];
+    private array $tagIndexByEnv = [];
 
     /**
      * Constructs a Repository instance.
@@ -267,6 +270,11 @@ class Repository
         return $this->classResource;
     }
 
+    public function getClassResourceFor(string $class): array
+    {
+        return $this->classResource[$class] ?? [];
+    }
+
     /**
      * Retrieves the array of closure resources.
      *
@@ -281,6 +289,11 @@ class Repository
         return $this->closureResource;
     }
 
+    public function getClosureResourceEntry(string $alias): ?array
+    {
+        return $this->closureResource[$alias] ?? null;
+    }
+
     /**
      * Retrieves the default method to be called when resolving a class.
      *
@@ -292,6 +305,21 @@ class Repository
     public function getDefaultMethod(): ?string
     {
         return $this->defaultMethod;
+    }
+
+    public function getDefinitionLifetime(string $id): LifetimeEnum
+    {
+        $lifetime = $this->definitionMeta[$id]['lifetime'] ?? LifetimeEnum::Singleton;
+        $env = $this->environment;
+
+        if ($env !== null
+            && isset($this->definitionMetaByEnv[$env][$id]['lifetime'])
+            && $this->definitionMetaByEnv[$env][$id]['lifetime'] instanceof LifetimeEnum
+        ) {
+            $lifetime = $this->definitionMetaByEnv[$env][$id]['lifetime'];
+        }
+
+        return $lifetime;
     }
 
     /**
@@ -349,6 +377,11 @@ class Repository
         return $this->environment;
     }
 
+    public function getFunctionDefinition(string $id): mixed
+    {
+        return $this->functionReference[$id] ?? null;
+    }
+
     /**
      * Returns the array of function references.
      *
@@ -361,6 +394,33 @@ class Repository
     public function getFunctionReference(): array
     {
         return $this->functionReference;
+    }
+
+    public function getIdsByTag(string $tag): array
+    {
+        $ids = $this->tagIndex[$tag] ?? [];
+        $env = $this->environment;
+
+        if ($env === null) {
+            return array_keys($ids);
+        }
+
+        foreach ($this->tagIndexByEnv[$env][$tag] ?? [] as $id => $_) {
+            $ids[$id] = true;
+        }
+
+        $overrides = $this->definitionMetaByEnv[$env] ?? [];
+        foreach ($overrides as $id => $override) {
+            if (!array_key_exists('tags', $override)) {
+                continue;
+            }
+
+            if (!in_array($tag, (array) $override['tags'], true)) {
+                unset($ids[$id]);
+            }
+        }
+
+        return array_keys($ids);
     }
 
     /**
@@ -389,6 +449,16 @@ class Repository
         return $this->resolvedDefinition;
     }
 
+    public function getResolvedDefinitionEntry(string $key): mixed
+    {
+        return $this->resolvedDefinition[$key] ?? null;
+    }
+
+    public function getResolvedEntry(string $key): mixed
+    {
+        return $this->resolved[$key] ?? null;
+    }
+
     /**
      * Returns the array of resolved resources for class-based resources.
      *
@@ -401,6 +471,11 @@ class Repository
     public function getResolvedResource(): array
     {
         return $this->resolvedResource;
+    }
+
+    public function getResolvedResourceFor(string $class): array
+    {
+        return $this->resolvedResource[$class] ?? [];
     }
 
     /**
@@ -416,6 +491,11 @@ class Repository
         return $this->currentScope;
     }
 
+    public function hasClosureResource(string $alias): bool
+    {
+        return array_key_exists($alias, $this->closureResource);
+    }
+
     /**
      * Checks if a function reference exists for the given identifier.
      *
@@ -427,7 +507,17 @@ class Repository
      */
     public function hasFunctionReference(string $id): bool
     {
-        return isset($this->functionReference[$id]);
+        return isset($this->functionReference[$id]) || array_key_exists($id, $this->functionReference);
+    }
+
+    public function hasResolved(string $key): bool
+    {
+        return isset($this->resolved[$key]) || array_key_exists($key, $this->resolved);
+    }
+
+    public function hasResolvedDefinition(string $key): bool
+    {
+        return array_key_exists($key, $this->resolvedDefinition);
     }
 
     /**
@@ -517,6 +607,7 @@ class Repository
         $this->clearScopeResolvedEntries($this->currentScope);
         $this->scopeStack = [];
         $this->currentScope = 'root';
+        $this->resolvedKeysByScope = [];
     }
 
     /**
@@ -579,7 +670,12 @@ class Repository
     public function setDefinitionMeta(string $id, array $meta): void
     {
         $this->checkIfLocked();
-        $this->definitionMeta[$id] = $meta + ['lifetime' => LifetimeEnum::Singleton, 'tags' => []];
+        $normalized = $meta + ['lifetime' => LifetimeEnum::Singleton, 'tags' => []];
+        $normalized['tags'] = array_values(array_map(strval(...), (array) ($normalized['tags'] ?? [])));
+        $oldTags = $this->definitionMeta[$id]['tags'] ?? [];
+
+        $this->definitionMeta[$id] = $normalized;
+        $this->refreshBaseTagIndex($id, $oldTags, $normalized['tags']);
     }
 
     /**
@@ -594,6 +690,7 @@ class Repository
     public function setDefinitionMetaForEnv(string $env, string $id, array $meta): void
     {
         $this->checkIfLocked();
+        $existing = $this->definitionMetaByEnv[$env][$id] ?? [];
 
         $normalized = [];
         if (array_key_exists('lifetime', $meta) && $meta['lifetime'] instanceof LifetimeEnum) {
@@ -607,7 +704,11 @@ class Repository
             return;
         }
 
-        $this->definitionMetaByEnv[$env][$id] = $normalized;
+        $this->definitionMetaByEnv[$env][$id] = $normalized + $existing;
+        if (array_key_exists('tags', $normalized)) {
+            $oldTags = (array) ($existing['tags'] ?? []);
+            $this->refreshEnvTagIndex($env, $id, $oldTags, $normalized['tags']);
+        }
     }
 
     /**
@@ -634,6 +735,7 @@ class Repository
         $this->resolved = [];
         $this->resolvedDefinition = [];
         $this->resolvedResource = [];
+        $this->resolvedKeysByScope = [];
         $this->scopeStack = [];
         $this->currentScope = 'root';
     }
@@ -704,6 +806,12 @@ class Repository
         $this->resolvedResource[$className] = $data;
     }
 
+    public function setResolvedScoped(string $scope, string $id, mixed $value): void
+    {
+        $this->resolved[$id] = $value;
+        $this->resolvedKeysByScope[$scope][$id] = true;
+    }
+
     /**
      * Set the current scope for the container.
      *
@@ -743,11 +851,57 @@ class Repository
 
     private function clearScopeResolvedEntries(string $scope): void
     {
-        $suffix = '@' . $scope;
-        foreach ($this->resolved as $key => $_) {
-            if (str_ends_with((string)$key, $suffix)) {
+        $keys = $this->resolvedKeysByScope[$scope] ?? null;
+        if (is_array($keys)) {
+            foreach (array_keys($keys) as $key) {
                 unset($this->resolved[$key]);
             }
+            unset($this->resolvedKeysByScope[$scope]);
+            return;
+        }
+
+        // Fallback for entries created before scope-indexing was introduced.
+        $suffix = '@' . $scope;
+        foreach (array_keys($this->resolved) as $key) {
+            if (str_ends_with($key, $suffix)) {
+                unset($this->resolved[$key]);
+            }
+        }
+    }
+
+    /**
+     * @param array<int, string> $oldTags
+     * @param array<int, string> $newTags
+     */
+    private function refreshBaseTagIndex(string $id, array $oldTags, array $newTags): void
+    {
+        foreach ($oldTags as $tag) {
+            unset($this->tagIndex[$tag][$id]);
+            if (($this->tagIndex[$tag] ?? []) === []) {
+                unset($this->tagIndex[$tag]);
+            }
+        }
+
+        foreach ($newTags as $tag) {
+            $this->tagIndex[$tag][$id] = true;
+        }
+    }
+
+    /**
+     * @param array<int, string> $oldTags
+     * @param array<int, string> $newTags
+     */
+    private function refreshEnvTagIndex(string $env, string $id, array $oldTags, array $newTags): void
+    {
+        foreach ($oldTags as $tag) {
+            unset($this->tagIndexByEnv[$env][$tag][$id]);
+            if (($this->tagIndexByEnv[$env][$tag] ?? []) === []) {
+                unset($this->tagIndexByEnv[$env][$tag]);
+            }
+        }
+
+        foreach ($newTags as $tag) {
+            $this->tagIndexByEnv[$env][$tag][$id] = true;
         }
     }
 }

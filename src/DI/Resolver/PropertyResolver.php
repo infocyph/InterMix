@@ -18,7 +18,11 @@ use ReflectionType;
 
 class PropertyResolver
 {
+    private const int PROPERTY_PLAN_CACHE_LIMIT = 1024;
+
     private ClassResolver $classResolver;
+    /** @var array<string, array> */
+    private array $propertyPlanCache = [];
 
     /**
      * Constructs a PropertyResolver instance.
@@ -46,22 +50,19 @@ class PropertyResolver
     public function resolve(ReflectionClass $class): void
     {
         $className = $class->getName();
-        $allResolved = $this->repository->getResolvedResource()[$className] ?? [];
+        $allResolved = $this->repository->getResolvedResourceFor($className);
         if (!isset($allResolved['instance'])) {
             return; // no instance => no property injection
         }
 
         $instance = $allResolved['instance'];
+        $plan = $this->getPropertyPlan($class);
 
-        $this->processProperties($class, $class->getProperties(), $instance);
+        $this->processProperties($class, $plan['classProperties'], $instance);
 
-        if ($parentClass = $class->getParentClass()) {
+        if ($plan['parentClass'] instanceof ReflectionClass) {
             // handle parent private props
-            $this->processProperties(
-                $parentClass,
-                $parentClass->getProperties(ReflectionProperty::IS_PRIVATE),
-                $instance,
-            );
+            $this->processProperties($plan['parentClass'], $plan['parentPrivateProperties'], $instance);
         }
 
         $allResolved['property'] = true;
@@ -215,13 +216,30 @@ class PropertyResolver
             : [$classInstance, $classPropertyValues[$name]];
     }
 
+    private function getPropertyPlan(ReflectionClass $class): array
+    {
+        $className = $class->getName();
+        if (array_key_exists($className, $this->propertyPlanCache)) {
+            return $this->propertyPlanCache[$className];
+        }
+
+        $parent = $class->getParentClass();
+        return $this->rememberPropertyPlan($className, [
+            'classProperties' => $class->getProperties(),
+            'parentClass' => $parent ?: null,
+            'parentPrivateProperties' => $parent
+                ? $parent->getProperties(ReflectionProperty::IS_PRIVATE)
+                : [],
+        ]);
+    }
+
     /**
      * @return array<string, mixed>|null
      */
     private function getRegisteredProperties(string $className): ?array
     {
-        $classResource = $this->repository->getClassResource();
-        return $classResource[$className]['property'] ?? null;
+        $classResource = $this->repository->getClassResourceFor($className);
+        return $classResource['property'] ?? null;
     }
 
     /**
@@ -258,6 +276,21 @@ class PropertyResolver
             $values = $this->resolveValue($property, $registeredProps ?? [], $classInstance);
             $this->applyPropertyValue($class, $property, $values);
         }
+    }
+
+    private function rememberPropertyPlan(string $key, array $plan): array
+    {
+        if (!array_key_exists($key, $this->propertyPlanCache)
+            && count($this->propertyPlanCache) >= self::PROPERTY_PLAN_CACHE_LIMIT
+        ) {
+            $oldest = array_key_first($this->propertyPlanCache);
+            if ($oldest !== null) {
+                unset($this->propertyPlanCache[$oldest]);
+            }
+        }
+
+        $this->propertyPlanCache[$key] = $plan;
+        return $plan;
     }
 
     /**

@@ -74,9 +74,37 @@ Register a class with constructor parameters
 Import a service provider
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
+Use a provider when you want one class to own all wiring for a feature/module.
+This keeps bootstrap files clean and lets you reuse the same registration set
+across CLI, HTTP, and tests.
+
 .. code-block:: php
 
-   $c1->registration()->import(App\Providers\BusProvider::class);
+   use Infocyph\InterMix\DI\Container;
+   use Infocyph\InterMix\DI\Support\ServiceProviderInterface;
+
+   interface MailerInterface { public function send(string $to, string $text): void; }
+   final class Mailer implements MailerInterface
+   {
+       public function send(string $to, string $text): void
+       {
+           // send email...
+       }
+   }
+
+   final class MailProvider implements ServiceProviderInterface
+   {
+       public function register(Container $container): void
+       {
+           $container->definitions()->bind(MailerInterface::class, Mailer::class);
+       }
+   }
+
+   // import by class name (or pass new MailProvider())
+   $c1->registration()->import(MailProvider::class);
+
+   $mailer = $c1->get(MailerInterface::class);
+   $mailer->send('ops@example.com', 'InterMix is running');
 
 
 Resolve

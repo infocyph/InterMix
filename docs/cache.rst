@@ -4,7 +4,7 @@
 Cache – Unified Facade
 ===========================
 
-The **``Cache``** class is a PSR-6 and PSR-16–compliant cache façade with an adapter-agnostic interface.
+The ** ``Cache`` ** class is a PSR-6 and PSR-16–compliant cache façade with an adapter-agnostic interface.
 It provides:
 
 * **Static factories** for common back-ends:

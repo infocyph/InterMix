@@ -221,11 +221,8 @@ final class Container implements ContainerInterface, ArrayAccess
     public function findByTag(string $tag): array
     {
         $matches = [];
-        foreach ($this->repository->getFunctionReference() as $id => $_definition) {
-            $meta = $this->repository->getDefinitionMeta($id);
-            if (in_array($tag, $meta['tags'], true)) {
-                $matches[$id] = $this->get($id);
-            }
+        foreach ($this->repository->getIdsByTag($tag) as $id) {
+            $matches[$id] = $this->get($id);
         }
         return $matches;
     }

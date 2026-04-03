@@ -22,7 +22,8 @@ trait ResolvesParameterAttributes
      */
     private function resolveParameterAttribute(ReflectionParameter $param): array
     {
-        $infuse = $param->getAttributes(Infuse::class);
+        $plan = $this->getParameterAttributePlan($param);
+        $infuse = $plan['infuse'] ?? [];
         if ($infuse && !empty($infuse[0]->getArguments())) {
             /** @var Infuse $infuse */
             $resolved = $this->classResolver->resolveInfuse($infuse[0]->newInstance());
@@ -38,7 +39,7 @@ trait ResolvesParameterAttributes
         $injectVal = null;
         $handled = false;
 
-        foreach ($param->getAttributes() as $raw) {
+        foreach (($plan['all'] ?? []) as $raw) {
             $attrObj = $raw->newInstance();
 
             if (!$registry->has($attrObj::class)) {

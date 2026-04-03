@@ -174,14 +174,15 @@ class ClassResolver
 
     private function initializeMethodResolutionState(string $className): array
     {
-        $resolvedResource = $this->repository->getResolvedResource()[$className] ?? [];
+        $resolvedResource = $this->repository->getResolvedResourceFor($className);
         $resolvedResource['returned'] = null;
         return $resolvedResource;
     }
 
     private function invokeResolvedMethod(string $className, string $method, object $instance): mixed
     {
-        $refMethod = new ReflectionMethod($className, $method);
+        /** @var ReflectionMethod $refMethod */
+        $refMethod = ReflectionResource::getCallableReflection([$className, $method]);
         $args = $this->resolveMethodArguments($className, $refMethod);
         return $refMethod->invokeArgs($instance, $args);
     }
@@ -214,7 +215,7 @@ class ClassResolver
         $this->entriesResolving[$className] = true;
 
         try {
-            $resolvedResource = $this->repository->getResolvedResource()[$className] ?? [];
+            $resolvedResource = $this->repository->getResolvedResourceFor($className);
 
             if (!isset($resolvedResource['instance'])) {
                 $this->resolveConstructor($class);
@@ -224,7 +225,7 @@ class ClassResolver
             }
             $this->resolveMethod($class, $callMethod);
 
-            return $this->repository->getResolvedResource()[$className] ?? [];
+            return $this->repository->getResolvedResourceFor($className);
         } finally {
             unset($this->entriesResolving[$className]);
         }
@@ -252,13 +253,13 @@ class ClassResolver
             throw new ContainerException("$className is not instantiable!");
         }
         $constructor = $class->getConstructor();
-        $resolvedResource = $this->repository->getResolvedResource()[$className] ?? [];
+        $resolvedResource = $this->repository->getResolvedResourceFor($className);
 
         if ($constructor === null) {
             $resolvedResource['instance'] = $class->newInstanceWithoutConstructor();
         } else {
-            $classRes = $this->repository->getClassResource();
-            $params = $classRes[$className]['constructor']['params'] ?? [];
+            $classRes = $this->repository->getClassResourceFor($className);
+            $params = $classRes['constructor']['params'] ?? [];
             $args = $this->parameterResolver->resolve($constructor, $params, 'constructor');
             $resolvedResource['instance'] = $class->newInstanceArgs($args);
         }
@@ -327,14 +328,14 @@ class ClassResolver
         string $className,
         string|bool|null $callMethod,
     ): array {
-        $existing = $this->repository->getResolvedResource()[$className] ?? [];
+        $existing = $this->repository->getResolvedResourceFor($className);
 
         // build fresh
         $this->resolveConstructor($class);
         $this->propertyResolver->resolve($class);
         $this->resolveMethod($class, $callMethod);
 
-        $newlyBuilt = $this->repository->getResolvedResource()[$className] ?? [];
+        $newlyBuilt = $this->repository->getResolvedResourceFor($className);
         // revert the old
         $this->repository->setResolvedResource($className, $existing);
 
@@ -383,8 +384,8 @@ class ClassResolver
 
     private function resolveMethodArguments(string $className, ReflectionMethod $refMethod): array
     {
-        $classRes = $this->repository->getClassResource();
-        $params = $classRes[$className]['method']['params'] ?? [];
+        $classRes = $this->repository->getClassResourceFor($className);
+        $params = $classRes['method']['params'] ?? [];
         return $this->parameterResolver->resolve($refMethod, $params, 'method');
     }
 
@@ -394,8 +395,9 @@ class ClassResolver
         string|bool|null $callMethod,
     ): ?string {
         $callOn = $class->hasConstant('callOn') ? $class->getConstant('callOn') : null;
+        $classRes = $this->repository->getClassResourceFor($className);
         $method = $callMethod
-            ?: ($this->repository->getClassResource()[$className]['method']['on'] ?? null)
+            ?: ($classRes['method']['on'] ?? null)
                 ?: ($callOn ?: $this->repository->getDefaultMethod());
 
         if (!$method && $class->hasMethod('__invoke')) {

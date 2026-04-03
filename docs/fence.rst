@@ -229,7 +229,7 @@ Applying requirements::
 Best Practices
 --------------
 
-* **Always call ``::instance()``** instead of ``new``.
+* **Always call ``::instance()`` ** instead of ``new``.
 * If your class must remain a singleton, use ``Single``.
 * If you need per‐key instances, use ``Multi``.
 * If you want to cap how many objects can coexist, use ``Limit``.

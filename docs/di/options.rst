@@ -68,7 +68,7 @@ Flag                    Default    What it does
    * - ``bindInterfaceForEnv($env, I::class, C::class)``
      - Map interface to concrete only when ``$env`` matches the active environment.
    * - ``enableDebugTracing(true, TraceLevelEnum::Verbose)``
-     - Capture resolution traces for debugging. See :ref:`di.debug_tracing`.
+     - Capture resolution traces for debugging. Pass ``false`` to fully disable tracing (sets level to ``Off``). See :ref:`di.debug_tracing`.
 
 ----------------------------------------------------
 3 · Practical primer
@@ -86,7 +86,7 @@ Flag                    Default    What it does
            propertyAttributes: true,
        )
        ->enableLazyLoading(false)          // eager
-       ->enableDebugTracing()              // verbose logs
+       ->enableDebugTracing()              // Node-level logs
        ->setEnvironment('local');
 
 **Production** – lazy, cached, minimal reflection:
@@ -100,6 +100,7 @@ Flag                    Default    What it does
            methodAttributes: false,        // skip attribute scanning
            propertyAttributes: false,
        )
+       ->enableDebugTracing(false)         // fully off (TraceLevelEnum::Off)
        ->enableLazyLoading(true)           // default – save memory
        ->setEnvironment('prod')
        ->end();

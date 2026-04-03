@@ -40,6 +40,8 @@ Retrieve All by Tag 📬
   ``[id => callable|object, …]``
 * Services are resolved **lazily** – if the definition was a class string the
   container still honours lazy loading & lifetimes.
+* Tag lookup is **environment-aware**. If you override tags with
+  ``setDefinitionMetaForEnv(...)``, ``findByTag()`` uses the active environment.
 
 -----------------------
 Multiple Tags per ID
@@ -60,6 +62,18 @@ Retrieve by **any** tag:
 .. code-block:: php
 
    $nightlyJobs = $c->findByTag('cron');
+
+Example with environment-aware tags:
+
+.. code-block:: php
+
+   $c->definitions()->bind('mailer', Mailer::class, tags: ['core']);
+
+   $c->options()
+     ->setDefinitionMetaForEnv('test', 'mailer', tags: ['core', 'test-only'])
+     ->setEnvironment('test');
+
+   $testOnly = $c->findByTag('test-only'); // contains 'mailer' only in test env
 
 ------------------------
 Tag Queries and Filters

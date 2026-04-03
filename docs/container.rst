@@ -72,7 +72,7 @@ CLI workers, micro-modules, etc.
 Container Features
 --------------------------------
 
-* **Scoped services** – ``enterScope()``, ``leaveScope()``, ``withinScope()` for request/fiber isolation
+* **Scoped services** – ``enterScope()``, ``leaveScope()``, ``withinScope()`` for request/fiber isolation
 * **Dependency graph export** – ``exportGraph()`` for debugging and analysis
 * **Environment-specific bindings** – ``setEnvironment()`` for different deployment configs
 * **Debug tracing** – ``debug()`` and ``tracer()`` for development insight
