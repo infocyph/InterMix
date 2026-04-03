@@ -60,10 +60,10 @@
         }
     },
     "scripts": {
-        "test:code": "@php -d error_reporting=8191 vendor/bin/pest --parallel --processes=10",
-        "test:security": "@php -d error_reporting=8191 vendor/bin/psalm --security-analysis --show-info=false --no-progress --threads=1",
-        "test:refactor": "@php -d error_reporting=8191 vendor/bin/rector process --dry-run",
-        "test:lint": "@php -d error_reporting=8191 vendor/bin/pint --test",
+        "test:code": "@php vendor/bin/pest --parallel --processes=10",
+        "test:security": "@php vendor/bin/psalm --config=psalm.xml --security-analysis --show-info=false --no-progress --threads=1",
+        "test:refactor": "@php vendor/bin/rector process --dry-run",
+        "test:lint": "@php vendor/bin/pint --test",
         "test:hook": [
             "captainhook hook:post-checkout",
             "captainhook hook:pre-commit",

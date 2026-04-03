@@ -53,7 +53,14 @@ jobs:
         run: composer update --no-interaction --prefer-dist --no-progress --${{ matrix.dependency-version }}
 
       - name: Test
-        run: composer tests
+        run: |
+          composer test:code
+          composer test:lint
+          composer test:refactor
+          # Skip Psalm on prefer-lowest: older transitive amphp versions can trigger PHP 8.4+ deprecations at startup.
+          if [ "${{ matrix.dependency-version }}" != "prefer-lowest" ]; then
+            composer test:security
+          fi
 
   analyze:
     needs: prepare
@@ -86,7 +93,7 @@ jobs:
       # Run Psalm (Deep Taint Analysis)
       - name: Run Psalm Security Scan
         run: |
-          php -d error_reporting=8191 ./vendor/bin/psalm --config=psalm.xml --security-analysis --threads=1 --report=psalm-results.sarif || true
+          php ./vendor/bin/psalm --config=psalm.xml --security-analysis --threads=1 --report=psalm-results.sarif || true
         continue-on-error: true
 
       - name: Upload Psalm Results
