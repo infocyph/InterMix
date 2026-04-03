@@ -61,7 +61,7 @@
     },
     "scripts": {
         "test:code": "@php vendor/bin/pest --parallel --processes=10",
-        "test:security": "@php vendor/bin/psalm --security-analysis --show-info=false --no-progress --threads=1",
+        "test:security": "@php -d error_reporting=$((E_ALL & ~E_DEPRECATED)) vendor/bin/psalm --security-analysis --show-info=false --no-progress --threads=1",
         "test:refactor": "@php vendor/bin/rector process --dry-run",
         "test:lint": "@php vendor/bin/pint --test",
         "test:hook": [
