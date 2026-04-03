@@ -64,9 +64,9 @@ environment-specific overrides and gives you sugar for 1-liners.
 Creating & naming containers
 --------------------------------
 
-Every call to ``container('alias')`` (or
-``Container::instance('alias')``) returns an **isolated** registry.
-Use distinct aliases for tests, CLI workers, micro-modules, etc.
+Use ``Container::instance('alias')`` for explicit named containers.
+Each alias returns an **isolated** registry. Use distinct aliases for tests,
+CLI workers, micro-modules, etc.
 
 --------------------------------
 Container Features

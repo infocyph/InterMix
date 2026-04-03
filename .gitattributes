@@ -9,5 +9,7 @@ phpunit.xml export-ignore
 pint.json export-ignore
 rector.php export-ignore
 .gitattributes export-ignore
+psalm.xml export-ignore
+pest.xml export-ignore
 
 *  text eol=lf

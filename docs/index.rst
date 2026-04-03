@@ -1,10 +1,10 @@
 .. _index:
 
 =========================
-infocyph/InterMix Manual
+InterMix Manual
 =========================
 
-For `infocyph/InterMix <https://github.com/infocyph/InterMix>`_ |version|. Updated on |today|.
+For `InterMix <https://github.com/infocyph/InterMix>`_ |version|. Updated on |today|.
 
 Licensed under `MIT <https://github.com/infocyph/InterMix/blob/main/LICENSE>`_.
 
@@ -22,5 +22,7 @@ Contents
     serializer
     cache
     remix
+    functions
     memoize
+    benchmark
     di/attribute-deferred-initializer
