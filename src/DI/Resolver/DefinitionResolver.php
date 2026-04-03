@@ -104,8 +104,7 @@ class DefinitionResolver
             return $this->resolveDefinition($name);
         }
 
-        $resolvedDefs = $this->repository->getResolvedDefinition();
-        if (!isset($resolvedDefs[$resolvedKey])) {
+        if (!$this->repository->hasResolvedDefinition($resolvedKey)) {
             $resolverCallback = fn () => $this->resolveDefinition($name);
             $cacheAdapter = $this->repository->getCacheAdapter();
             if ($cacheAdapter) {
@@ -123,7 +122,7 @@ class DefinitionResolver
             }
             $this->repository->setResolvedDefinition($resolvedKey, $value);
         }
-        return $this->repository->getResolvedDefinition()[$resolvedKey];
+        return $this->repository->getResolvedDefinitionEntry($resolvedKey);
     }
 
     /**
@@ -161,7 +160,7 @@ class DefinitionResolver
      */
     private function resolveDefinition(string $name): mixed
     {
-        $definition = $this->repository->getFunctionReference()[$name] ?? null;
+        $definition = $this->repository->getFunctionDefinition($name);
         switch (true) {
             case $definition instanceof Closure:
                 // reflect closure

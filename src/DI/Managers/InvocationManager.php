@@ -66,8 +66,7 @@ class InvocationManager implements ArrayAccess
         $resolver = $this->container->getCurrentResolver();
 
         // 1) If string & in functionReference
-        if (is_string($classOrClosure) &&
-            isset($this->repository->getFunctionReference()[$classOrClosure])) {
+        if (is_string($classOrClosure) && $this->repository->hasFunctionReference($classOrClosure)) {
             return $resolver->resolveByDefinition($classOrClosure);
         }
 
@@ -77,10 +76,13 @@ class InvocationManager implements ArrayAccess
         }
 
         // 3) If closure alias
-        $closureRes = $this->repository->getClosureResource();
-        if (is_string($classOrClosure) && isset($closureRes[$classOrClosure])) {
-            $on = $closureRes[$classOrClosure]['on'];
-            $params = $closureRes[$classOrClosure]['params'];
+        if (is_string($classOrClosure) && $this->repository->hasClosureResource($classOrClosure)) {
+            $closureRes = $this->repository->getClosureResourceEntry($classOrClosure) ?? [];
+            $on = $closureRes['on'] ?? null;
+            $params = $closureRes['params'] ?? [];
+            if (!is_callable($on)) {
+                throw new ContainerException("Closure resource '$classOrClosure' is not callable.");
+            }
 
             return $resolver->closureSettler($on, $params);
         }
@@ -117,17 +119,31 @@ class InvocationManager implements ArrayAccess
     {
         $this->repository->tracer()->push("return:$id", TraceLevelEnum::Verbose);
 
-        $meta = $this->repository->getDefinitionMeta($id);
-        $lifetime = $meta['lifetime'] ?? LifetimeEnum::Singleton;
+        $lifetime = $this->repository->getDefinitionLifetime($id);
+        if ($lifetime === LifetimeEnum::Singleton) {
+            $resolved = $this->repository->getResolvedEntry($id);
+            if ($resolved !== null || $this->repository->hasResolved($id)) {
+                if ($resolved instanceof DeferredInitializer) {
+                    $resolved = $resolved();
+                    $this->repository->setResolved($id, $resolved);
+                }
+
+                return $this->repository->fetchInstanceOrValue($resolved);
+            }
+
+            return $this->resolveAndCache($id, $id, true, false);
+        }
+
         $scopeKey = $this->scopeKeyFor($id, $lifetime);
+        $isScoped = $lifetime === LifetimeEnum::Scoped;
         $cacheable = $lifetime !== LifetimeEnum::Transient;
 
-        [$hasCached, $cached] = $this->resolveCachedEntry($scopeKey, $cacheable);
+        [$hasCached, $cached] = $this->resolveCachedEntry($scopeKey, $cacheable, $isScoped);
         if ($hasCached) {
             return $cached;
         }
 
-        return $this->resolveAndCache($id, $scopeKey, $cacheable);
+        return $this->resolveAndCache($id, $scopeKey, $cacheable, $isScoped);
     }
 
 
@@ -147,7 +163,7 @@ class InvocationManager implements ArrayAccess
     public function getReturn(string $id): mixed
     {
         $resolved = $this->get($id);
-        $resource = $this->repository->getResolved()[$id] ?? [];
+        $resource = $this->repository->getResolvedEntry($id) ?? [];
 
         return is_array($resource) && array_key_exists('returned', $resource) ? $resource['returned'] : $resolved;
     }
@@ -164,8 +180,8 @@ class InvocationManager implements ArrayAccess
      */
     public function has(string $id): bool
     {
-        return isset($this->repository->getFunctionReference()[$id]) ||
-            isset($this->repository->getResolved()[$id]);
+        return $this->repository->hasFunctionReference($id)
+            || $this->repository->hasResolved($id);
     }
 
 
@@ -232,7 +248,7 @@ class InvocationManager implements ArrayAccess
     protected function resolveDefinition(string $id): mixed
     {
         $resolver = $this->container->getCurrentResolver();
-        $definition = $this->repository->getFunctionReference()[$id];
+        $definition = $this->repository->getFunctionDefinition($id);
 
         if ($this->repository->isLazyLoading() && !($definition instanceof Closure)) {
             $lazy = new DeferredInitializer(fn () => $resolver->resolveByDefinition($id), $this->container);
@@ -246,14 +262,14 @@ class InvocationManager implements ArrayAccess
         return $this->repository->fetchInstanceOrValue($value);
     }
 
-    private function resolveAndCache(string $id, string $scopeKey, bool $cacheable): mixed
+    private function resolveAndCache(string $id, string $scopeKey, bool $cacheable, bool $isScoped): mixed
     {
-        if (isset($this->repository->getFunctionReference()[$id])) {
+        if ($this->repository->hasFunctionReference($id)) {
             $resolved = $this->resolveDefinition($id);
             $resolved = $resolved instanceof DeferredInitializer ? $resolved() : $resolved;
 
             if ($cacheable) {
-                $this->repository->setResolved($scopeKey, $resolved);
+                $this->storeResolvedByLifetime($scopeKey, $resolved, $isScoped);
             }
 
             return $resolved;
@@ -261,7 +277,7 @@ class InvocationManager implements ArrayAccess
 
         $resolved = $this->call($id);
         if ($cacheable) {
-            $this->repository->setResolved($scopeKey, $resolved);
+            $this->storeResolvedByLifetime($scopeKey, $resolved, $isScoped);
         }
 
         return $this->repository->fetchInstanceOrValue($resolved);
@@ -270,16 +286,20 @@ class InvocationManager implements ArrayAccess
     /**
      * @return array{0:bool,1:mixed}
      */
-    private function resolveCachedEntry(string $scopeKey, bool $cacheable): array
+    private function resolveCachedEntry(string $scopeKey, bool $cacheable, bool $isScoped): array
     {
-        if (!$cacheable || !isset($this->repository->getResolved()[$scopeKey])) {
+        if (!$cacheable) {
             return [false, null];
         }
 
-        $resolved = $this->repository->getResolved()[$scopeKey];
+        $resolved = $this->repository->getResolvedEntry($scopeKey);
+        if ($resolved === null && !$this->repository->hasResolved($scopeKey)) {
+            return [false, null];
+        }
+
         if ($resolved instanceof DeferredInitializer) {
             $resolved = $resolved();
-            $this->repository->setResolved($scopeKey, $resolved);
+            $this->storeResolvedByLifetime($scopeKey, $resolved, $isScoped);
         }
 
         return [true, $this->repository->fetchInstanceOrValue($resolved)];
@@ -290,5 +310,16 @@ class InvocationManager implements ArrayAccess
         return $lifetime === LifetimeEnum::Scoped
             ? $id . '@' . $this->repository->getScope()
             : $id;
+    }
+
+    private function storeResolvedByLifetime(string $scopeKey, mixed $resolved, bool $isScoped): void
+    {
+        if ($isScoped) {
+            $scope = substr($scopeKey, strrpos($scopeKey, '@') + 1);
+            $this->repository->setResolvedScoped($scope, $scopeKey, $resolved);
+            return;
+        }
+
+        $this->repository->setResolved($scopeKey, $resolved);
     }
 }

@@ -22,7 +22,7 @@ Contents
     serializer
     cache
     remix
-    functions
     memoize
+    functions
     benchmark
     di/attribute-deferred-initializer

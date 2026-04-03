@@ -22,6 +22,12 @@ Enable Tracing 🛠️
 Once tracing is enabled, every container action (like ``get()``, ``call()``, etc.)
 is tracked with a per-service log.
 
+Disable tracing completely:
+
+.. code-block:: php
+
+   $c->options()->enableDebugTracing(false); // sets level to TraceLevelEnum::Off
+
 ---------------------
 See the Trace Output 👀
 ---------------------

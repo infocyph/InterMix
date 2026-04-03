@@ -59,6 +59,10 @@ Internally the container:
 2. Executes **healthCheck()** with injected parameters.
 3. Returns the result to you.
 
+For singleton resolution paths, method execution happens when the entry is first resolved.
+Later ``get()`` / ``getReturn()`` calls reuse cached singleton state (including the last ``returned`` value).
+If you need a fresh method result on every call, use ``call()`` or ``make()``.
+
 -------------------------------------------------------
 3 · make( string $class , string|bool $method = false )
 -------------------------------------------------------
@@ -99,7 +103,7 @@ Helper             Caches object?  Returns    Typical use-case
 =================  ==============  =========  =====================================================
 ``get($id)``       **Yes**         object     Core PSR-11 retrieval.
 ``call()``         n/a             mixed      Invoke a callable with DI.
-``getReturn()``    **Yes**         mixed      Skip instance, grab method result.
+``getReturn()``    **Yes**         mixed      Reads cached singleton method result; use ``call()``/``make()`` for fresh execution.
 ``make()``         **No**          object\|mixed  Factory pattern, transient workflows.
 =================  ==============  =========  =====================================================
 

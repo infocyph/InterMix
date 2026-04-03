@@ -17,6 +17,7 @@ use ReflectionClass;
 use ReflectionException;
 use ReflectionFunctionAbstract;
 use ReflectionIntersectionType;
+use ReflectionMethod;
 use ReflectionNamedType;
 use ReflectionParameter;
 use ReflectionUnionType;
@@ -42,13 +43,19 @@ class ParameterResolver
     use ResolvesParameterAttributes;
 
     private const int INFUSE_CACHE_LIMIT = 1024;
+    private const int PARAM_ATTRIBUTE_PLAN_CACHE_LIMIT = 4096;
     private const int RESOLUTION_CACHE_LIMIT = 4096;
+    private const int RESOLUTION_PLAN_CACHE_LIMIT = 2048;
 
     private readonly IMStdClass $stdClass;
     private ClassResolver $classResolver;
 
     /** @var array<string, array> Cache for attribute-based injection configurations */
     private array $infuseCache = [];
+    /** @var array<string, array> Cache for per-parameter attribute descriptors */
+    private array $parameterAttributePlanCache = [];
+    /** @var array<string, array> Cache for reflector-level parameter resolution plans */
+    private array $resolutionPlanCache = [];
 
     /** @var array<string, array> Cache for resolved parameter values to improve performance */
     private array $resolvedCache = [];
@@ -70,9 +77,14 @@ class ParameterResolver
         array $suppliedParameters,
         string $type,
     ): array {
-        $cacheKey = $this->makeResolutionCacheKey($reflector, $suppliedParameters, $type);
-        if (array_key_exists($cacheKey, $this->resolvedCache)) {
-            return $this->resolvedCache[$cacheKey];
+        $useValueCache = $this->shouldUseValueCache($reflector, $type);
+        $cacheKey = null;
+
+        if ($useValueCache) {
+            $cacheKey = $this->makeResolutionCacheKey($reflector, $suppliedParameters, $type);
+            if (array_key_exists($cacheKey, $this->resolvedCache)) {
+                return $this->resolvedCache[$cacheKey];
+            }
         }
 
         $this->repository->tracer()->push(
@@ -80,20 +92,14 @@ class ParameterResolver
             TraceLevelEnum::Verbose,
         );
 
-        $availableParams = $reflector->getParameters();
+        $plan = $this->getResolutionPlan($reflector, $type);
+        $availableParams = $plan['availableParams'];
         if (!$availableParams) {
-            return $this->rememberResolved($cacheKey, []);
+            return $useValueCache ? $this->rememberResolved((string) $cacheKey, []) : [];
         }
 
-        $applyAttribute = $this->repository->isMethodAttributeEnabled()
-            && ($type === 'constructor' xor ($reflector->class ?? null));
-
-        $attributeData = [];
-        if ($applyAttribute) {
-            $attributeData = $this->resolveMethodAttributes(
-                $this->getInfuseAttributes($reflector),
-            );
-        }
+        $applyAttribute = $plan['applyAttribute'];
+        $attributeData = $plan['attributeData'];
 
         [
             'availableParams' => $paramsLeft,
@@ -108,7 +114,7 @@ class ParameterResolver
             $attributeData,
         );
         if (!$paramsLeft) {
-            return $this->rememberResolved($cacheKey, $processed);
+            return $useValueCache ? $this->rememberResolved((string) $cacheKey, $processed) : $processed;
         }
 
         [
@@ -126,7 +132,7 @@ class ParameterResolver
             $processed = $this->processVariadic($processed, $variadic, $sort);
         }
 
-        return $this->rememberResolved($cacheKey, $processed);
+        return $useValueCache ? $this->rememberResolved((string) $cacheKey, $processed) : $processed;
     }
 
     /**
@@ -225,6 +231,41 @@ class ParameterResolver
         );
     }
 
+    private function getParameterAttributePlan(ReflectionParameter $parameter): array
+    {
+        $key = $this->makeParameterAttributePlanKey($parameter);
+        if (array_key_exists($key, $this->parameterAttributePlanCache)) {
+            return $this->parameterAttributePlanCache[$key];
+        }
+
+        return $this->rememberParameterAttributePlan($key, [
+            'infuse' => $parameter->getAttributes(Infuse::class),
+            'all' => $parameter->getAttributes(),
+        ]);
+    }
+
+    private function getResolutionPlan(ReflectionFunctionAbstract $reflector, string $type): array
+    {
+        $key = $this->makeResolutionPlanKey($reflector, $type);
+        if (array_key_exists($key, $this->resolutionPlanCache)) {
+            return $this->resolutionPlanCache[$key];
+        }
+
+        $applyAttribute = $this->repository->isMethodAttributeEnabled()
+            && ($type === 'constructor' xor ($reflector->class ?? null));
+
+        $attributeData = [];
+        if ($applyAttribute) {
+            $attributeData = $this->resolveMethodAttributes($this->getInfuseAttributes($reflector));
+        }
+
+        return $this->rememberResolutionPlan($key, [
+            'availableParams' => $reflector->getParameters(),
+            'applyAttribute' => $applyAttribute,
+            'attributeData' => $attributeData,
+        ]);
+    }
+
     /**
      * @throws ContainerException
      * @throws ReflectionException
@@ -261,15 +302,66 @@ class ParameterResolver
         return $reflection;
     }
 
+    private function makeFastScalarFingerprint(array $supplied): ?string
+    {
+        if (count($supplied) > 16) {
+            return null;
+        }
+
+        $parts = [];
+        foreach ($supplied as $key => $value) {
+            if (is_array($value) || is_object($value) || is_resource($value)) {
+                return null;
+            }
+
+            $parts[] = (string) $key . '=' . match (true) {
+                $value === null => 'n:null',
+                is_bool($value) => 'b:' . ($value ? '1' : '0'),
+                is_int($value) => 'i:' . $value,
+                is_float($value) => 'f:' . $value,
+                default => 's:' . base64_encode((string) $value),
+            };
+        }
+
+        return 'f:' . implode('|', $parts);
+    }
+
+    private function makeParameterAttributePlanKey(ReflectionParameter $parameter): string
+    {
+        $function = $parameter->getDeclaringFunction();
+        $owner = $function->class ?? '';
+        $signature = ReflectionResource::getSignature($function);
+
+        return $owner . '::' . $function->getName() . '|p:' . $parameter->getPosition() . '|sig:' . $signature;
+    }
+
     private function makeResolutionCacheKey(
         ReflectionFunctionAbstract $reflector,
         array $supplied,
         string $type,
     ): string {
         $owner = $reflector->class ?? '';
+        if ($supplied === []) {
+            return "$owner::{$reflector->getName()}|$type|empty";
+        }
+
+        $fast = $this->makeFastScalarFingerprint($supplied);
+        if ($fast !== null) {
+            return "$owner::{$reflector->getName()}|$type|$fast";
+        }
+
         $norm = array_map([self::class, 'normalise'], $supplied);
         $argsHash = hash('xxh3', json_encode($norm, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
-        return "$owner::{$reflector->getName()}|$type|$argsHash";
+        return "$owner::{$reflector->getName()}|$type|h:$argsHash";
+    }
+
+    private function makeResolutionPlanKey(ReflectionFunctionAbstract $reflector, string $type): string
+    {
+        $owner = $reflector->class ?? '';
+        $signature = ReflectionResource::getSignature($reflector);
+        $methodAttrEnabled = $this->repository->isMethodAttributeEnabled() ? '1' : '0';
+
+        return $owner . '::' . $reflector->getName() . "|$type|ma:$methodAttrEnabled|sig:$signature";
     }
 
     /**
@@ -325,8 +417,34 @@ class ParameterResolver
         return $this->rememberBounded($this->infuseCache, $key, $value, self::INFUSE_CACHE_LIMIT);
     }
 
+    private function rememberParameterAttributePlan(string $key, array $value): array
+    {
+        return $this->rememberBounded(
+            $this->parameterAttributePlanCache,
+            $key,
+            $value,
+            self::PARAM_ATTRIBUTE_PLAN_CACHE_LIMIT,
+        );
+    }
+
+    private function rememberResolutionPlan(string $key, array $value): array
+    {
+        return $this->rememberBounded(
+            $this->resolutionPlanCache,
+            $key,
+            $value,
+            self::RESOLUTION_PLAN_CACHE_LIMIT,
+        );
+    }
+
     private function rememberResolved(string $key, array $value): array
     {
         return $this->rememberBounded($this->resolvedCache, $key, $value, self::RESOLUTION_CACHE_LIMIT);
+    }
+
+    private function shouldUseValueCache(ReflectionFunctionAbstract $reflector, string $type): bool
+    {
+        return $type === 'constructor'
+            && (!($reflector instanceof ReflectionMethod) || $reflector->getName() === '__construct');
     }
 }
