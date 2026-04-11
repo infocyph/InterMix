@@ -17,9 +17,7 @@ final class DeferredInitializer
      * @param Closure $factory A closure that will be invoked to initialize the lazy-loaded instance.
      * @param Container $container The container to which this instance is bound.
      */
-    public function __construct(private readonly Closure $factory, private readonly Container $container)
-    {
-    }
+    public function __construct(private readonly Closure $factory, private readonly Container $container) {}
 
     /**
      * Calls the underlying factory closure to initialize the lazy-loaded instance.

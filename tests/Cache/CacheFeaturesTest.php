@@ -103,7 +103,7 @@ test('rejects empty tags in tag operations', function () {
 test('remember respects ttl argument expiry', function () {
     $this->cache->remember('short', fn ($item) => 'value', 1);
 
-    sleep(2);
+    usleep(2_000_000);
 
     expect($this->cache->get('short'))->toBeNull();
 });

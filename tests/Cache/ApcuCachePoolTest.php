@@ -82,7 +82,7 @@ test('get returns default when key missing (apcu)', function () {
     expect($this->cache->get('dyn'))->toBe('computed');
 
     // After expiry, returns the new default again
-    sleep(2);
+    usleep(2_000_000);
     expect($this->cache->get('dyn', 'fallback'))->toBe('fallback');
 });
 
@@ -122,7 +122,7 @@ test('ArrayAccess & magic props (apcu)', function () {
 /* ─── TTL / expiration ───────────────────────────────────────────── */
 test('expiration honours TTL (apcu)', function () {
     $this->cache->getItem('ttl')->set('live')->expiresAfter(1)->save();
-    sleep(2);
+    usleep(2_000_000);
     expect($this->cache->hasItem('ttl'))->toBeFalse();
 });
 

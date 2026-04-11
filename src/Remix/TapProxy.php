@@ -21,15 +21,11 @@ class TapProxy
      *
      * @param mixed $target The target object to proxy method calls to.
      */
-    public function __construct(public mixed $target)
-    {
-    }
+    public function __construct(public mixed $target) {}
 
     /**
      * Proxy a method call to the target, then return the target.
      *
-     * @param string $method
-     * @param array $parameters
      * @return mixed
      */
     public function __call(string $method, array $parameters)

@@ -47,8 +47,7 @@ class ClassResolver
         private readonly ParameterResolver $parameterResolver,
         private readonly PropertyResolver $propertyResolver,
         private readonly DefinitionResolver $definitionResolver,
-    ) {
-    }
+    ) {}
 
     /**
      * Resolve a class using the given ReflectionClass.
@@ -120,7 +119,7 @@ class ClassResolver
             return $fromDefinition;
         }
 
-        $fromFunction = $this->resolveInfuseFromFunction($type, (array)$data);
+        $fromFunction = $this->resolveInfuseFromFunction($type, (array) $data);
         if ($fromFunction !== null) {
             return $fromFunction;
         }

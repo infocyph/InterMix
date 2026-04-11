@@ -39,8 +39,7 @@ abstract class AbstractCacheItem implements CacheItemInterface
         private mixed $value = null,
         private bool $hit = false,
         private ?DateTimeInterface $exp = null,
-    ) {
-    }
+    ) {}
 
     public function __serialize(): array
     {

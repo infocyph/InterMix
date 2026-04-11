@@ -87,7 +87,7 @@ test('get returns default when key missing (redis)', function () {
     expect($val)->toBe('xyz');
     expect($this->cache->get('dynamic'))->toBe('xyz');
 
-    sleep(2);
+    usleep(2_000_000);
     expect($this->cache->get('dynamic', 'again'))->toBe('again');
 });
 
@@ -127,7 +127,7 @@ test('ArrayAccess & magic (redis)', function () {
 /* ── 6. TTL expiration ─────────────────────────────────────────── */
 test('expiration honours TTL (redis)', function () {
     $this->cache->getItem('ttl')->set('x')->expiresAfter(1)->save();
-    sleep(2);
+    usleep(2_000_000);
     expect($this->cache->hasItem('ttl'))->toBeFalse();
 });
 

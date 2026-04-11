@@ -146,7 +146,7 @@ class FileCacheAdapter extends AbstractCacheAdapter
     {
         if (file_exists($baseDir) && !is_dir($baseDir)) {
             throw new RuntimeException(
-                'Cache base path ' . realpath($baseDir) . ' exists and is *not* a directory'
+                'Cache base path ' . realpath($baseDir) . ' exists and is *not* a directory',
             );
         }
 
@@ -159,7 +159,7 @@ class FileCacheAdapter extends AbstractCacheAdapter
     {
         if (file_exists($cacheDir) && !is_dir($cacheDir)) {
             throw new RuntimeException(
-                realpath($cacheDir) . ' exists and is not a directory'
+                realpath($cacheDir) . ' exists and is not a directory',
             );
         }
 

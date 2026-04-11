@@ -26,9 +26,8 @@ class RegistrationManager implements ArrayAccess
      */
     public function __construct(
         protected Repository $repository,
-        protected Container  $container
-    ) {
-    }
+        protected Container  $container,
+    ) {}
 
     /**
      * Retrieves the definition manager associated with the container.
@@ -63,7 +62,7 @@ class RegistrationManager implements ArrayAccess
 
         if (!$provider instanceof ServiceProviderInterface) {
             throw new ContainerException(
-                'Service-provider must implement ServiceProviderInterface.'
+                'Service-provider must implement ServiceProviderInterface.',
             );
         }
 
@@ -132,7 +131,7 @@ class RegistrationManager implements ArrayAccess
     public function registerClosure(
         string $closureAlias,
         callable|Closure $function,
-        array $parameters = []
+        array $parameters = [],
     ): self {
         $this->repository->addClosureResource($closureAlias, $function, $parameters);
         return $this;
@@ -156,7 +155,7 @@ class RegistrationManager implements ArrayAccess
     public function registerMethod(
         string $class,
         string $method,
-        array $parameters = []
+        array $parameters = [],
     ): self {
         $this->repository->addClassResource($class, 'method', [
             'on'     => $method,

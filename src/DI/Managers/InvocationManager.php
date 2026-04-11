@@ -31,8 +31,7 @@ class InvocationManager implements ArrayAccess
     public function __construct(
         protected Repository $repository,
         protected Container $container,
-    ) {
-    }
+    ) {}
 
 
     /**
@@ -76,7 +75,7 @@ class InvocationManager implements ArrayAccess
         }
 
         // 3) If closure alias
-        if (is_string($classOrClosure) && $this->repository->hasClosureResource($classOrClosure)) {
+        if ($this->repository->hasClosureResource($classOrClosure)) {
             $closureRes = $this->repository->getClosureResourceEntry($classOrClosure) ?? [];
             $on = $closureRes['on'] ?? null;
             $params = $closureRes['params'] ?? [];
@@ -251,7 +250,7 @@ class InvocationManager implements ArrayAccess
         $definition = $this->repository->getFunctionDefinition($id);
 
         if ($this->repository->isLazyLoading() && !($definition instanceof Closure)) {
-            $lazy = new DeferredInitializer(fn () => $resolver->resolveByDefinition($id), $this->container);
+            $lazy = new DeferredInitializer(fn() => $resolver->resolveByDefinition($id), $this->container);
             $this->repository->setResolved($id, $lazy);
             return $lazy;
         }

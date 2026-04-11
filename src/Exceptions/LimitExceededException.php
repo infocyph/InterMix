@@ -6,6 +6,4 @@ namespace Infocyph\InterMix\Exceptions;
 
 use RuntimeException;
 
-class LimitExceededException extends RuntimeException
-{
-}
+class LimitExceededException extends RuntimeException {}

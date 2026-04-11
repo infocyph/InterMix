@@ -12,6 +12,4 @@ namespace Infocyph\InterMix\Cache\Item;
  * standard PSR-6 cache item functionality while being optimized
  * for filesystem-based storage.
  */
-final class FileCacheItem extends AbstractCacheItem
-{
-}
+final class FileCacheItem extends AbstractCacheItem {}

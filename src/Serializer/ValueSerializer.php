@@ -23,8 +23,6 @@ final class ValueSerializer
      *
      * Use this method to reset the state of ValueSerializer in test cases,
      * or when you want to ensure that no resource handlers are registered.
-     *
-     * @return void
      */
     public static function clearResourceHandlers(): void
     {
@@ -91,7 +89,7 @@ final class ValueSerializer
             return self::rememberSerializedClosureMemo($str, false);
         }
 
-        return self::rememberSerializedClosureMemo($str, (bool)preg_match(
+        return self::rememberSerializedClosureMemo($str, (bool) preg_match(
             '/^(?:C:\d+:"Opis\\\\Closure\\\\SerializableClosure|O:\d+:"Opis\\\\Closure\\\\Box"|O:\d+:"Opis\\\\Closure\\\\Serializable")/',
             $str,
         ));
@@ -222,9 +220,9 @@ final class ValueSerializer
     private static function unwrapRecursive(mixed $resource): mixed
     {
         if (
-            is_array($resource) &&
-            ($resource['__wrapped_resource'] ?? false) &&
-            isset(self::$resourceHandlers[$resource['type']])
+            is_array($resource)
+            && ($resource['__wrapped_resource'] ?? false)
+            && isset(self::$resourceHandlers[$resource['type']])
         ) {
             return (self::$resourceHandlers[$resource['type']]['restore'])($resource['data']);
         }

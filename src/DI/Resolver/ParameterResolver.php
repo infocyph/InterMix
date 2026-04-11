@@ -151,7 +151,7 @@ class ParameterResolver
         $namedTypes = match (true) {
             $parameterType instanceof ReflectionNamedType => [$parameterType],
             $parameterType instanceof ReflectionUnionType, $parameterType instanceof ReflectionIntersectionType => $parameterType->getTypes(),
-            default => []
+            default => [],
         };
 
         foreach ($namedTypes as $named) {
@@ -180,7 +180,7 @@ class ParameterResolver
         return match (true) {
             $value instanceof \Closure => 'closure#' . spl_object_id($value),
             is_object($value) => 'obj#' . spl_object_id($value),
-            is_resource($value) => 'res#' . get_resource_type($value) . '#' . (int)$value,
+            is_resource($value) => 'res#' . get_resource_type($value) . '#' . (int) $value,
             is_array($value) => array_map([self::class, 'normalise'], $value),
             default => $value,
         };
@@ -214,7 +214,7 @@ class ParameterResolver
         return match (true) {
             $type instanceof ReflectionNamedType => [$type],
             $type instanceof ReflectionUnionType, $type instanceof ReflectionIntersectionType => $type->getTypes(),
-            default => []
+            default => [],
         };
     }
 
@@ -314,7 +314,7 @@ class ParameterResolver
                 return null;
             }
 
-            $parts[] = (string) $key . '=' . match (true) {
+            $parts[] = $key . '=' . match (true) {
                 $value === null => 'n:null',
                 is_bool($value) => 'b:' . ($value ? '1' : '0'),
                 is_int($value) => 'i:' . $value,

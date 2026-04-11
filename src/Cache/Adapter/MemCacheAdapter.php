@@ -99,7 +99,7 @@ class MemCacheAdapter extends AbstractCacheAdapter
         foreach ($keys as $k) {
             $p = $this->map($k);
             if (isset($raw[$p])) {
-                $record = CachePayloadCodec::decode((string)$raw[$p]);
+                $record = CachePayloadCodec::decode((string) $raw[$p]);
                 if ($record !== null && !CachePayloadCodec::isExpired($record['expires'])) {
                     $items[$k] = new MemCacheItem(
                         $this,
@@ -184,11 +184,11 @@ class MemCacheAdapter extends AbstractCacheAdapter
         $ids = [];
 
         foreach ($items as $name => $value) {
-            if (!preg_match('/items:(\d+):number/', (string)$name, $m)) {
+            if (!preg_match('/items:(\d+):number/', (string) $name, $m)) {
                 continue;
             }
 
-            $ids[] = (int)$m[1];
+            $ids[] = (int) $m[1];
         }
 
         return array_values(array_unique($ids));
@@ -253,8 +253,8 @@ class MemCacheAdapter extends AbstractCacheAdapter
     private function stripNamespace(array $fullKeys, string $pref): array
     {
         return array_values(array_map(
-            fn (string $k) => substr($k, strlen($pref)),
-            array_filter($fullKeys, fn (string $k) => str_starts_with($k, $pref))
+            fn(string $k) => substr($k, strlen($pref)),
+            array_filter($fullKeys, fn(string $k) => str_starts_with($k, $pref)),
         ));
     }
 }

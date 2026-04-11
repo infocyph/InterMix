@@ -27,7 +27,7 @@ final readonly class InjectedCall
      * @param Repository $repository The DI repository which contains definitions, classes, functions, and parameters.
      */
     public function __construct(
-        private Repository $repository
+        private Repository $repository,
     ) {
         $this->initializeResolvers();
     }
@@ -45,13 +45,13 @@ final readonly class InjectedCall
     public function classSettler(
         string|object $class,
         ?string $method = null,
-        bool $make = false
+        bool $make = false,
     ): array {
         return $this->classResolver->resolve(
             ReflectionResource::getClassReflection($class),
             null,
             $method,
-            $make
+            $make,
         );
     }
 
@@ -71,8 +71,8 @@ final readonly class InjectedCall
             ...$this->parameterResolver->resolve(
                 ReflectionResource::getFunctionReflection($closure),
                 $params,
-                'constructor'
-            )
+                'constructor',
+            ),
         );
     }
 
@@ -108,7 +108,7 @@ final readonly class InjectedCall
             $this->repository,
             $this->parameterResolver,
             $propertyResolver,
-            $this->definitionResolver
+            $this->definitionResolver,
         );
 
         // Inject references back for cross-communication

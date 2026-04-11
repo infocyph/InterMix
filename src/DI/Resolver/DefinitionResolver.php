@@ -26,8 +26,7 @@ class DefinitionResolver
      */
     public function __construct(
         private readonly Repository $repository,
-    ) {
-    }
+    ) {}
 
 
     /**
@@ -105,7 +104,7 @@ class DefinitionResolver
         }
 
         if (!$this->repository->hasResolvedDefinition($resolvedKey)) {
-            $resolverCallback = fn () => $this->resolveDefinition($name);
+            $resolverCallback = fn() => $this->resolveDefinition($name);
             $cacheAdapter = $this->repository->getCacheAdapter();
             if ($cacheAdapter) {
                 $cacheKey = $this->repository->makeCacheKey('def' . base64_encode($resolvedKey));
@@ -169,7 +168,7 @@ class DefinitionResolver
                 return $definition(...$args);
 
             case is_array($definition) && isset($definition[0]) && class_exists($definition[0]):
-                $this->repository->tracer()->recordDependency($name, (string)$definition[0], 'definition-class');
+                $this->repository->tracer()->recordDependency($name, $definition[0], 'definition-class');
                 return $this->resolveArrayDefinition($definition);
 
             case is_string($definition) && class_exists($definition):

@@ -44,7 +44,7 @@ final class DebugTracer
         array $context = [],
     ): Closure {
         if (!$this->enabled || $lvl->value > $this->level->value) {
-            return fn () => null;
+            return fn() => null;
         }
         $id = dechex(++$this->seq);
         $depth = \count($this->activeSpans);

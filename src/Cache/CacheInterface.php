@@ -23,6 +23,4 @@ use Psr\SimpleCache\CacheInterface as SimpleCacheInterface;
  * and advanced caching use cases, supporting features like tagged cache
  * invalidation, cache stampede protection, and multiple storage adapters.
  */
-interface CacheInterface extends CacheItemPoolInterface, SimpleCacheInterface, ArrayAccess, Countable
-{
-}
+interface CacheInterface extends CacheItemPoolInterface, SimpleCacheInterface, ArrayAccess, Countable {}

@@ -62,15 +62,12 @@ final class Memoizer
     /**
      * Memoize a callable for the **entire** process.
      *
-     * @param callable $callable
-     * @param array $params
-     * @return mixed
      * @throws ReflectionException
      */
     public function get(callable $callable, array $params = []): mixed
     {
         $sig = ReflectionResource::getSignature(
-            ReflectionResource::getReflection($callable)
+            ReflectionResource::getReflection($callable),
         );
         $cacheKey = self::buildCacheKey($sig, $params);
 
@@ -88,16 +85,12 @@ final class Memoizer
     /**
      * Memoize a callable **per object instance**.
      *
-     * @param object $object
-     * @param callable $callable
-     * @param array $params
-     * @return mixed
      * @throws ReflectionException
      */
     public function getFor(object $object, callable $callable, array $params = []): mixed
     {
         $sig = ReflectionResource::getSignature(
-            ReflectionResource::getReflection($callable)
+            ReflectionResource::getReflection($callable),
         );
         $cacheKey = self::buildCacheKey($sig, $params);
 
@@ -153,7 +146,7 @@ final class Memoizer
         return match (true) {
             $value instanceof \Closure => 'closure#' . spl_object_id($value),
             is_object($value) => 'obj#' . spl_object_id($value),
-            is_resource($value) => 'res#' . get_resource_type($value) . '#' . (int)$value,
+            is_resource($value) => 'res#' . get_resource_type($value) . '#' . (int) $value,
             is_array($value) => array_map(self::normalizeParam(...), $value),
             default => $value,
         };

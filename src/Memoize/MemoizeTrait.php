@@ -35,7 +35,6 @@ trait MemoizeTrait
      * If a key is provided, only the corresponding cached value will be removed.
      *
      * @param string|null $key The key of the cached value to clear, or null to clear all cached values.
-     * @return void
      */
     protected function memoizeClear(?string $key = null): void
     {

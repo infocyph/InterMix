@@ -8,6 +8,4 @@ use Psr\Cache\InvalidArgumentException as PsrInvalidArgumentException;
 /**
  * Thrown when a cache key or argument is invalid.
  */
-class CacheInvalidArgumentException extends InvalidArgumentException implements PsrInvalidArgumentException
-{
-}
+class CacheInvalidArgumentException extends InvalidArgumentException implements PsrInvalidArgumentException {}

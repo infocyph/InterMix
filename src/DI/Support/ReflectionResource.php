@@ -170,7 +170,7 @@ final class ReflectionResource
      * @throws InvalidArgumentException|ReflectionException If the given subject is invalid.
      */
     public static function getReflection(
-        string|object|array|callable $subject
+        string|object|array|callable $subject,
     ): ReflectionClass|ReflectionEnum|ReflectionFunction|ReflectionMethod {
         if ($subject instanceof Closure) {
             return self::getFunctionReflection($subject);
@@ -213,7 +213,7 @@ final class ReflectionResource
      * @return string The signature string.
      */
     public static function getSignature(
-        ReflectionClass|ReflectionEnum|ReflectionMethod|ReflectionFunction|ReflectionFunctionAbstract $reflection
+        ReflectionClass|ReflectionEnum|ReflectionMethod|ReflectionFunction|ReflectionFunctionAbstract $reflection,
     ): string {
         $fileName = $reflection->getFileName() ?: 'unknown';
         $startLine = 0;

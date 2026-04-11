@@ -30,7 +30,7 @@ class SqliteCacheAdapter extends AbstractCacheAdapter
                 key TEXT PRIMARY KEY,
                 value BLOB NOT NULL,
                 expires INTEGER
-             )'
+             )',
         );
         $this->pdo->exec('CREATE INDEX IF NOT EXISTS exp_idx ON cache(expires)');
     }
@@ -45,7 +45,7 @@ class SqliteCacheAdapter extends AbstractCacheAdapter
     public function count(): int
     {
         return (int) $this->pdo->query(
-            'SELECT COUNT(*) FROM cache WHERE expires IS NULL OR expires > ' . time()
+            'SELECT COUNT(*) FROM cache WHERE expires IS NULL OR expires > ' . time(),
         )->fetchColumn();
     }
 
@@ -66,7 +66,7 @@ class SqliteCacheAdapter extends AbstractCacheAdapter
     public function getItem(string $key): SqliteCacheItem
     {
         $stmt = $this->pdo->prepare(
-            'SELECT value, expires FROM cache WHERE key = :k LIMIT 1'
+            'SELECT value, expires FROM cache WHERE key = :k LIMIT 1',
         );
         $stmt->execute([':k' => $key]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -74,7 +74,7 @@ class SqliteCacheAdapter extends AbstractCacheAdapter
         $now = time();
         if ($row && (!$row['expires'] || $row['expires'] > $now)) {
             $record = CachePayloadCodec::decode($row['value']);
-            $expiresAt = is_numeric($row['expires']) ? (int)$row['expires'] : null;
+            $expiresAt = is_numeric($row['expires']) ? (int) $row['expires'] : null;
             if ($record !== null) {
                 $expiresAt = $record['expires'] ?? $expiresAt;
                 if (!CachePayloadCodec::isExpired($expiresAt, $now)) {
@@ -130,7 +130,7 @@ class SqliteCacheAdapter extends AbstractCacheAdapter
         $blob = CachePayloadCodec::encode($item->get(), $expires['expiresAt']);
 
         $stmt = $this->pdo->prepare(
-            'REPLACE INTO cache(key, value, expires) VALUES(:k, :v, :e)'
+            'REPLACE INTO cache(key, value, expires) VALUES(:k, :v, :e)',
         );
         return $stmt->execute([
             ':k' => $item->getKey(),
@@ -170,7 +170,7 @@ class SqliteCacheAdapter extends AbstractCacheAdapter
         $stmt = $this->pdo->prepare(
             "SELECT key, value, expires
          FROM cache
-         WHERE key IN ($marks)"
+         WHERE key IN ($marks)",
         );
         $stmt->execute($keys);
 

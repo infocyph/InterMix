@@ -51,7 +51,6 @@ class Infuse
      * Retrieves data used for a method injection scenario.
      *
      * @param  int|string|null  $key  If provided, returns just the sub-value from the array.
-     * @return mixed
      */
     public function getMethodArguments(int|string|null $key = null): mixed
     {
@@ -65,7 +64,6 @@ class Infuse
      * The attribute stores the "firstKey" as a "type" and the corresponding value as "data".
      *
      * @param  int|string|null  $key  If provided, returns just the sub-value from the array.
-     * @return mixed
      */
     public function getParameterData(int|string|null $key = null): mixed
     {

@@ -140,7 +140,6 @@ class Repository
      *
      * @param bool $lazy whether to enable lazy loading
      *
-     * @return void
      *
      * @throws ContainerException if the container is locked
      */
@@ -211,7 +210,7 @@ class Repository
     {
         return match (true) {
             is_array($value) && isset($value['instance']) => $value['instance'],
-            default => $value
+            default => $value,
         };
     }
 
@@ -570,8 +569,6 @@ class Repository
      * Once the container is locked, no more definitions, values, or options can be set.
      * This method is useful for tests or other scenarios where you want to ensure that
      * the container does not change after it has been configured.
-     *
-     * @return void
      */
     public function lock(): void
     {
@@ -720,7 +717,6 @@ class Repository
      *
      * @param string $env environment name
      *
-     * @return void
      *
      * @throws ContainerException if the container is locked
      */
@@ -863,7 +859,7 @@ class Repository
         // Fallback for entries created before scope-indexing was introduced.
         $suffix = '@' . $scope;
         foreach (array_keys($this->resolved) as $key) {
-            if (str_ends_with($key, $suffix)) {
+            if (str_ends_with((string) $key, $suffix)) {
                 unset($this->resolved[$key]);
             }
         }

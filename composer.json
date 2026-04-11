@@ -21,6 +21,14 @@
             "email": "abmmhasan@gmail.com"
         }
     ],
+    "suggest": {
+        "ext-apcu": "For APCu-based caching (in-memory, per-process)",
+        "ext-redis": "For Redis-based caching (persistent, networked)",
+        "ext-memcached": "For Memcached-based caching (distributed, RAM)",
+        "ext-sqlite3": "For SQLite-based caching (file-based, portable)",
+        "ext-pdo": "For SQLite-based caching (file-based, portable)",
+        "ext-mbstring": "Recommended for development tools output formatting (Pest/Termwind)"
+    },
     "autoload": {
         "files": [
             "src/functions.php"
@@ -41,13 +49,59 @@
         "psr/container": "^2.0",
         "psr/simple-cache": "^3.0"
     },
-    "suggest": {
-        "ext-apcu": "For APCu-based caching (in-memory, per-process)",
-        "ext-redis": "For Redis-based caching (persistent, networked)",
-        "ext-memcached": "For Memcached-based caching (distributed, RAM)",
-        "ext-sqlite3": "For SQLite-based caching (file-based, portable)",
-        "ext-pdo": "For SQLite-based caching (file-based, portable)",
-        "ext-mbstring": "Recommended for development tools output formatting (Pest/Termwind)"
+    "require-dev": {
+        "captainhook/captainhook": "^5.29.2",
+        "laravel/pint": "^1.29",
+        "pestphp/pest": "^4.4.5",
+        "pestphp/pest-plugin-drift": "^4.1",
+        "phpbench/phpbench": "^1.6",
+        "rector/rector": "^2.4.1",
+        "squizlabs/php_codesniffer": "^4.0.1",
+        "symfony/var-dumper": "^7.3 || ^8.0.8",
+        "tomasvotruba/cognitive-complexity": "^1.1",
+        "vimeo/psalm": "^6.16.1"
+    },
+    "scripts": {
+        "test:syntax": "@php -d error_reporting=24575 .github/scripts/syntax.php src tests benchmarks examples",
+        "test:code": "@php -d error_reporting=24575 vendor/bin/pest",
+        "test:lint": "@php -d error_reporting=24575 vendor/bin/pint --test",
+        "test:sniff": "@php -d error_reporting=24575 vendor/bin/phpcs --standard=phpcs.xml.dist --report=full",
+        "test:static": "@php -d error_reporting=24575 vendor/bin/phpstan analyse --configuration=phpstan.neon.dist --memory-limit=1G",
+        "test:static:strict": "@php -d error_reporting=24575 vendor/bin/phpstan analyse --configuration=phpstan.neon.dist --memory-limit=1G --no-progress",
+        "test:security": "@php -d error_reporting=24575 vendor/bin/psalm --config=psalm.xml --security-analysis --threads=1 --no-cache",
+        "test:security:strict": "@php -d error_reporting=24575 vendor/bin/psalm --config=psalm.xml --security-analysis --show-info=false --no-progress --threads=1 --no-cache",
+        "test:refactor": "@php -d error_reporting=24575 vendor/bin/rector process --dry-run --debug",
+        "test:bench": "@php -d error_reporting=24575 vendor/bin/phpbench run --config=phpbench.json --report=aggregate",
+        "test:all": [
+            "@test:syntax",
+            "@php -d error_reporting=24575 vendor/bin/pest --parallel --processes=10",
+            "@php -d error_reporting=24575 vendor/bin/pint --test",
+            "@php -d error_reporting=24575 vendor/bin/phpcs --standard=phpcs.xml.dist --report=summary",
+            "@test:static:strict",
+            "@php -d error_reporting=24575 vendor/bin/rector process --dry-run",
+            "@test:security:strict"
+        ],
+        "release:audit": "@php .github/scripts/composer-audit-guard.php",
+        "release:guard": [
+            "@composer validate --strict",
+            "@release:audit",
+            "@tests"
+        ],
+        "process:lint": "@php vendor/bin/pint",
+        "process:sniff:fix": "@php vendor/bin/phpcbf --standard=phpcs.xml.dist --runtime-set ignore_errors_on_exit 1",
+        "process:refactor": "@php vendor/bin/rector process",
+        "process:all": [
+            "@process:refactor",
+            "@process:lint",
+            "@process:sniff:fix"
+        ],
+        "bench:run": "@php vendor/bin/phpbench run --config=phpbench.json --report=aggregate",
+        "bench:quick": "@php vendor/bin/phpbench run --config=phpbench.json --report=aggregate --revs=10 --iterations=3 --warmup=1",
+        "bench:chart": "@php vendor/bin/phpbench run --config=phpbench.json --report=chart",
+        "tests": "@test:all",
+        "process": "@process:all",
+        "benchmark": "@bench:run",
+        "post-autoload-dump": "captainhook install --only-enabled -nf"
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
@@ -58,41 +112,5 @@
         "allow-plugins": {
             "pestphp/pest-plugin": true
         }
-    },
-    "scripts": {
-        "test:code": "@php vendor/bin/pest --parallel --processes=10",
-        "test:security": "@php vendor/bin/psalm --config=psalm.xml --security-analysis --show-info=false --no-progress --threads=1",
-        "test:refactor": "@php vendor/bin/rector process --dry-run",
-        "test:lint": "@php vendor/bin/pint --test",
-        "test:hook": [
-            "captainhook hook:post-checkout",
-            "captainhook hook:pre-commit",
-            "captainhook hook:post-commit",
-            "captainhook hook:post-merge",
-            "captainhook hook:post-rewrite",
-            "captainhook hook:pre-push"
-        ],
-        "tests": [
-            "@test:code",
-            "@test:lint",
-            "@test:refactor",
-            "@test:security"
-        ],
-        "git:hook": "captainhook install --only-enabled -nf",
-        "test": "@php vendor/bin/pest",
-        "benchmark": "@php benchmark/intermix_benchmark.php",
-        "refactor": "@php vendor/bin/rector process",
-        "lint": "@php vendor/bin/pint",
-        "security:scan": "@test:security",
-        "post-autoload-dump": "captainhook install --only-enabled -nf"
-    },
-    "require-dev": {
-        "captainhook/captainhook": "^5.29.2",
-        "laravel/pint": "^1.29",
-        "pestphp/pest": "^4.4.3",
-        "pestphp/pest-plugin-drift": "^4.1",
-        "rector/rector": "^2.3.9",
-        "symfony/var-dumper": "^7.3 || ^8.0.8",
-        "vimeo/psalm": "^6.16.1"
     }
 }

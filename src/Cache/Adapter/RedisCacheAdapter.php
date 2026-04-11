@@ -116,7 +116,7 @@ class RedisCacheAdapter extends AbstractCacheAdapter
         foreach ($keys as $idx => $k) {
             $v = $rawVals[$idx];
             if ($v !== null && $v !== false) {
-                $record = CachePayloadCodec::decode((string)$v);
+                $record = CachePayloadCodec::decode((string) $v);
                 if ($record !== null && !CachePayloadCodec::isExpired($record['expires'])) {
                     $items[$k] = new RedisCacheItem(
                         $this,
@@ -167,12 +167,12 @@ class RedisCacheAdapter extends AbstractCacheAdapter
         }
         $host = $parts['host'] ?? '127.0.0.1';
         $port = $parts['port'] ?? 6379;
-        $r->connect($host, (int)$port);
+        $r->connect($host, (int) $port);
         if (isset($parts['pass'])) {
             $r->auth($parts['pass']);
         }
         if (isset($parts['path']) && $parts['path'] !== '/') {
-            $db = (int)ltrim($parts['path'], '/');
+            $db = (int) ltrim($parts['path'], '/');
             $r->select($db);
         }
         return $r;

@@ -17,9 +17,9 @@ trait ResolvesNumericAndVariadicParameters
         array $variadic,
         array $sort,
     ): array {
-        $variadicValue = (array)$variadic['value'];
+        $variadicValue = (array) $variadic['value'];
         if (isset($variadicValue[0])) {
-            uksort($processed, static fn ($a, $b) => $sort[$a] <=> $sort[$b]);
+            uksort($processed, static fn($a, $b) => $sort[$a] <=> $sort[$b]);
             $processed = array_values($processed);
             array_push($processed, ...array_values($variadicValue));
             return $processed;
@@ -71,10 +71,10 @@ trait ResolvesNumericAndVariadicParameters
                 $param->isDefaultValueAvailable() => $param->getDefaultValue(),
                 $param->allowsNull() => null,
                 default => throw new ContainerException(
-                    "Resolution failed for '$paramName' in " .
-                    ($reflector->class ?? $reflector->getName()) .
-                    "::{$reflector->getShortName()}()",
-                )
+                    "Resolution failed for '$paramName' in "
+                    . ($reflector->class ?? $reflector->getName())
+                    . "::{$reflector->getShortName()}()",
+                ),
             };
         }
 

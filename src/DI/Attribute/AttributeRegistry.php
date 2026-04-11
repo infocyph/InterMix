@@ -13,9 +13,7 @@ final class AttributeRegistry
     /** @var array<class-string, AttributeResolverInterface> */
     private array $map = [];
 
-    public function __construct(private readonly Container $container)
-    {
-    }
+    public function __construct(private readonly Container $container) {}
 
     /**
      * Returns whether an attribute resolver is registered for the given attribute class.

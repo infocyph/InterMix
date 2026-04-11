@@ -4,9 +4,9 @@
 Benchmarking InterMix
 =====================
 
-InterMix ships with a container benchmark script at:
+InterMix ships with a phpbench benchmark suite at:
 
-- ``benchmark/intermix_benchmark.php``
+- ``benchmarks/IntermixBench.php``
 
 Run via Composer:
 
@@ -14,39 +14,38 @@ Run via Composer:
 
    composer benchmark
 
+Other useful variants:
+
+.. code-block:: bash
+
+   composer bench:quick
+   composer bench:chart
+
 What it measures
 ----------------
 
-The benchmark compares:
+The suite covers DI paths end-to-end:
 
 - Singleton ``get()`` hot-path throughput
 - Transient object graph creation via ``make()``
 - Closure invocation through container DI
+- Class-method invocation via ``registerMethod()`` + ``make(..., method)``
+- Property wiring via ``registerProperty()`` + ``make()``
+- Immediate resolution via ``resolveNow()`` (class and method paths)
+- Scoped lifetime behavior with ``enterScope()`` / ``leaveScope()``
+- Tagged service lookup via ``findByTag()``
+- ``Invoker`` wrapper method invocation path
+- Service-provider registration path
+- Environment-conditional interface binding path
 - Manual object graph baseline (non-container)
-
-Progress output
----------------
-
-Progress is reported as total percentage:
-
-- ``[progress] 0%`` ... ``[progress] 100%``
-
-Environment knobs
------------------
-
-Use environment variables to tune iteration counts:
-
-.. code-block:: bash
-
-   INTERMIX_BENCH_HOT_ITERATIONS=200000 INTERMIX_BENCH_COLD_ITERATIONS=25000 composer benchmark
-
-- ``INTERMIX_BENCH_HOT_ITERATIONS`` defaults to ``200000``
-- ``INTERMIX_BENCH_COLD_ITERATIONS`` defaults to ``25000``
 
 Output columns
 --------------
 
-- ``iterations``: Number of loop iterations
-- ``time (ms)``: Elapsed time per scenario
-- ``ops/sec``: Throughput
-- ``checksum``: Sanity signal to prevent dead-code elimination effects
+- ``benchmark``: benchmark class name
+- ``subject``: measured scenario method
+- ``revs``: revolutions per iteration
+- ``its``: number of iterations
+- ``mem_peak``: peak memory in the measured process
+- ``mode``: modal execution time for the subject
+- ``rstdev``: relative standard deviation

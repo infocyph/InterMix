@@ -27,8 +27,7 @@ class DefinitionManager implements ArrayAccess
     public function __construct(
         protected Repository $repository,
         protected Container $container,
-    ) {
-    }
+    ) {}
 
     /**
      * Adds multiple definitions to the container.
@@ -140,8 +139,6 @@ class DefinitionManager implements ArrayAccess
 
     /**
      * Jump to InvocationManager
-     *
-     * @return InvocationManager
      */
     public function invocation(): InvocationManager
     {
@@ -150,8 +147,6 @@ class DefinitionManager implements ArrayAccess
 
     /**
      * Jump to OptionsManager
-     *
-     * @return OptionsManager
      */
     public function options(): OptionsManager
     {
@@ -160,8 +155,6 @@ class DefinitionManager implements ArrayAccess
 
     /**
      * Jump to RegistrationManager
-     *
-     * @return RegistrationManager
      */
     public function registration(): RegistrationManager
     {
@@ -171,9 +164,6 @@ class DefinitionManager implements ArrayAccess
     /**
      * Override existing definition metadata for a specific environment.
      *
-     * @param string $env
-     * @param string $id
-     * @param LifetimeEnum|null $lifetime
      * @param array<int, string>|null $tags
      *
      * @throws ContainerException

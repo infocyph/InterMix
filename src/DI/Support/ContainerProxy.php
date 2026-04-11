@@ -38,9 +38,7 @@ trait ContainerProxy
     /**
      * Magic getter method.
      *
-     * @param string $id
      *
-     * @return mixed
      * @throws InvalidArgumentException
      */
     public function __get(string $id): mixed
@@ -50,9 +48,7 @@ trait ContainerProxy
     /**
      * Allows for a quick shorthand: `$container('id')`
      *
-     * @param string $id
      *
-     * @return mixed
      * @throws InvalidArgumentException
      */
     public function __invoke(string $id): mixed
@@ -63,9 +59,7 @@ trait ContainerProxy
     /**
      * Magic isset() method.
      *
-     * @param string $id
      *
-     * @return bool
      */
     public function __isset(string $id): bool
     {
@@ -75,10 +69,7 @@ trait ContainerProxy
     /**
      * Magic setter method.
      *
-     * @param string $id
-     * @param mixed $def
      *
-     * @return void
      * @throws ContainerException
      */
     public function __set(string $id, mixed $def): void
@@ -92,7 +83,7 @@ trait ContainerProxy
      */
     public function offsetExists(mixed $offset): bool
     {
-        return $this->has((string)$offset);
+        return $this->has((string) $offset);
     }
 
     /**
@@ -109,7 +100,7 @@ trait ContainerProxy
      */
     public function offsetGet(mixed $offset): mixed
     {
-        return $this->get((string)$offset);
+        return $this->get((string) $offset);
     }
 
     /**
@@ -121,12 +112,11 @@ trait ContainerProxy
      * @param mixed $offset The key at which to set the value.
      * @param mixed $v The value to bind to the offset.
      *
-     * @return void
      * @throws ContainerException
      */
     public function offsetSet(mixed $offset, mixed $v): void
     {
-        $this->definitions()->bind((string)$offset, $v);
+        $this->definitions()->bind((string) $offset, $v);
     }
 
     /**
@@ -134,7 +124,6 @@ trait ContainerProxy
      *
      * @param mixed $offset The key to unset.
      *
-     * @return void
      *
      * @suppress PhanUnreferencedPublicMethod
      */

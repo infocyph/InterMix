@@ -77,7 +77,7 @@ test('get returns default when key missing (file)', function () {
     expect($this->cache->get('x'))->toBe('xyz');
 
     // After TTL expires, fallback
-    sleep(2);
+    usleep(2_000_000);
     expect($this->cache->get('x', 'fallback'))->toBe('fallback');
 });
 
@@ -156,7 +156,7 @@ test('runtime re-namespace and directory swap', function () {
 
 test('expiration honours TTL', function () {
     $this->cache->getItem('ttl')->set('x')->expiresAfter(1)->save();
-    sleep(2);
+    usleep(2_000_000);
     expect($this->cache->getItem('ttl')->isHit())->toBeFalse();
 });
 

@@ -13,8 +13,6 @@ final class PreloadGenerator
      * definitions and extracting the class names. The resulting file can be used
      * to preload classes in a production environment.
      *
-     * @param Container $container
-     * @param string $filePath
      * @throws ReflectionException
      */
     public function generate(Container $container, string $filePath): void

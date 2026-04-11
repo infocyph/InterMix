@@ -97,7 +97,7 @@ test('get returns default when key missing (memcached)', function () {
     expect($val)->toBe('hello');
     expect($this->cache->get('call'))->toBe('hello');
 
-    sleep(2);
+    usleep(2_000_000);
     expect($this->cache->get('call', 'again'))->toBe('again');
 });
 
@@ -134,7 +134,7 @@ test('ArrayAccess & magic props', function () {
 
 test('TTL expiration', function () {
     $this->cache->getItem('ttl')->set('x')->expiresAfter(1)->save();
-    sleep(2);
+    usleep(2_000_000);
     expect($this->cache->hasItem('ttl'))->toBeFalse();
 });
 

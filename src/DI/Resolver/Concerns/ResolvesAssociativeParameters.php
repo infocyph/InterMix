@@ -79,7 +79,7 @@ trait ResolvesAssociativeParameters
             $this->repository->addClassResource(
                 $class->getName(),
                 'constructor',
-                ['on' => '__constructor', 'params' => (array)$supplied + $existing],
+                ['on' => '__constructor', 'params' => (array) $supplied + $existing],
             );
         }
         return $this->classResolver->resolve($class)['instance'];

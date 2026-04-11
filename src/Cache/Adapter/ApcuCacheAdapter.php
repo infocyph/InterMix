@@ -103,7 +103,7 @@ class ApcuCacheAdapter extends AbstractCacheAdapter
         foreach ($keys as $k) {
             $p = $this->map($k);
             if (array_key_exists($p, $raw)) {
-                $record = CachePayloadCodec::decode((string)$raw[$p]);
+                $record = CachePayloadCodec::decode((string) $raw[$p]);
                 if ($record !== null && !CachePayloadCodec::isExpired($record['expires'])) {
                     $items[$k] = new ApcuCacheItem(
                         $this,
@@ -145,8 +145,8 @@ class ApcuCacheAdapter extends AbstractCacheAdapter
     private function listKeys(): array
     {
         $iter = new \APCUIterator(
-            '/^'.preg_quote($this->ns.':', '/').'/',
-            APC_ITER_KEY
+            '/^' . preg_quote($this->ns . ':', '/') . '/',
+            APC_ITER_KEY,
         );
         $out = [];
         foreach ($iter as $k => $unused) {

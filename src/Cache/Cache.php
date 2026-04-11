@@ -24,9 +24,7 @@ readonly class Cache implements CacheInterface
      *
      * @param CacheItemPoolInterface $adapter Any PSR-6 cache pool.
      */
-    public function __construct(private CacheItemPoolInterface $adapter)
-    {
-    }
+    public function __construct(private CacheItemPoolInterface $adapter) {}
 
     /**
      * Retrieves a value from the cache using magic property access.
@@ -46,8 +44,6 @@ readonly class Cache implements CacheInterface
     /**
      * Whether the given key is set in the cache.
      *
-     * @param string $name
-     * @return bool
      * @throws Psr6InvalidArgumentException
      */
     public function __isset(string $name): bool
@@ -60,15 +56,12 @@ readonly class Cache implements CacheInterface
      *
      * Magic property setter, equivalent to calling `set($name, $value, null)`.
      *
-     * @param string $name
-     * @param mixed $value
-     * @return void
      *
      * @throws SimpleCacheInvalidArgument if the key is invalid
      */
     public function __set(string $name, mixed $value): void
     {
-        $this->set($name, $value, null);
+        $this->set($name, $value);
     }
 
     /**
@@ -78,7 +71,6 @@ readonly class Cache implements CacheInterface
      *
      * @param string $name The name of the cache item to unset.
      *
-     * @return void
      * @throws SimpleCacheInvalidArgument
      */
     public function __unset(string $name): void
@@ -190,8 +182,6 @@ readonly class Cache implements CacheInterface
 
     /**
      * Wipes out the entire cache.
-     *
-     * @return bool
      */
     public function clearCache(): bool
     {
@@ -220,7 +210,6 @@ readonly class Cache implements CacheInterface
      * used to retrieve the count. Otherwise, this method will use the
      * {@see iterable} interface to count the items.
      *
-     * @return int
      * @throws Psr6InvalidArgumentException
      */
     public function count(): int
@@ -233,8 +222,6 @@ readonly class Cache implements CacheInterface
     /**
      * Delete an item from the cache.
      *
-     * @param string $key
-     * @return bool
      * @throws SimpleCacheInvalidArgument if the key is invalid
      */
     public function delete(string $key): bool
@@ -242,11 +229,7 @@ readonly class Cache implements CacheInterface
         $this->validateKey($key);
 
         if (method_exists($this->adapter, 'delete')) {
-            try {
-                return $this->adapter->delete($key);
-            } catch (\Psr\SimpleCache\InvalidArgumentException $e) {
-                throw $e;
-            }
+            return $this->adapter->delete($key);
         }
 
         // Fall back to PSR-6 deleteItem()
@@ -287,7 +270,7 @@ readonly class Cache implements CacheInterface
     public function deleteItems(array $keys): bool
     {
         foreach ($keys as $k) {
-            $this->validateKey((string)$k);
+            $this->validateKey((string) $k);
         }
         return $this->adapter->deleteItems($keys);
     }
@@ -296,7 +279,6 @@ readonly class Cache implements CacheInterface
      * Deletes multiple keys from the cache.
      *
      * @param iterable<int|string, string> $keys
-     * @return bool
      * @throws SimpleCacheInvalidArgument if any key is invalid
      */
     public function deleteMultiple(iterable $keys): bool
@@ -315,9 +297,6 @@ readonly class Cache implements CacheInterface
     /**
      * Fetches a value from the cache. If the key does not exist, returns $default.
      *
-     * @param string $key
-     * @param mixed $default
-     * @return mixed
      * @throws SimpleCacheInvalidArgument|Psr6InvalidArgumentException if the key is invalid
      */
     public function get(string $key, mixed $default = null): mixed
@@ -432,7 +411,6 @@ readonly class Cache implements CacheInterface
      * Obtains multiple values by their keys.
      *
      * @param iterable<int|string, string> $keys
-     * @param mixed $default
      * @return iterable<string, mixed>
      * @throws SimpleCacheInvalidArgument|Psr6InvalidArgumentException if any key is invalid
      */
@@ -450,8 +428,6 @@ readonly class Cache implements CacheInterface
     /**
      * Determines whether an item exists in the cache.
      *
-     * @param string $key
-     * @return bool
      * @throws Psr6InvalidArgumentException if the key is invalid
      */
     public function has(string $key): bool
@@ -494,7 +470,7 @@ readonly class Cache implements CacheInterface
             return true;
         }
 
-        $keys = array_values(array_unique(array_filter((array)$item->get(), is_string(...))));
+        $keys = array_values(array_unique(array_filter((array) $item->get(), is_string(...))));
         $ok = true;
         if ($keys !== []) {
             $existingKeys = [];
@@ -530,7 +506,7 @@ readonly class Cache implements CacheInterface
         $seen = [];
 
         foreach ($tags as $tag) {
-            $normalized = $this->normalizeTag((string)$tag);
+            $normalized = $this->normalizeTag((string) $tag);
             if (isset($seen[$normalized])) {
                 continue;
             }
@@ -552,7 +528,7 @@ readonly class Cache implements CacheInterface
      */
     public function offsetExists(mixed $offset): bool
     {
-        return $this->has((string)$offset);
+        return $this->has((string) $offset);
     }
 
     /**
@@ -568,7 +544,7 @@ readonly class Cache implements CacheInterface
      */
     public function offsetGet(mixed $offset): mixed
     {
-        return $this->get((string)$offset);
+        return $this->get((string) $offset);
     }
 
     /**
@@ -581,24 +557,22 @@ readonly class Cache implements CacheInterface
      * @param mixed $offset The key at which to set the value.
      * @param mixed $value The value to be stored at the specified offset.
      *
-     * @return void
      * @throws SimpleCacheInvalidArgument if the key is invalid
      */
     public function offsetSet(mixed $offset, mixed $value): void
     {
-        $this->set((string)$offset, $value, null);
+        $this->set((string) $offset, $value);
     }
 
     /**
      * Unsets a key from the cache.
      *
      * @param string $offset
-     * @return void
      * @throws Psr6InvalidArgumentException|SimpleCacheInvalidArgument if the key is invalid
      */
     public function offsetUnset(mixed $offset): void
     {
-        $this->delete((string)$offset);
+        $this->delete((string) $offset);
     }
 
     /**
@@ -689,10 +663,7 @@ readonly class Cache implements CacheInterface
     /**
      * Persists a value in the cache, optionally with a TTL.
      *
-     * @param string $key
-     * @param mixed $value
      * @param int|DateInterval|null $ttl Time-to-live in seconds or a DateInterval
-     * @return bool
      * @throws SimpleCacheInvalidArgument if the key or TTL is invalid
      */
     public function set(string $key, mixed $value, mixed $ttl = null): bool
@@ -722,7 +693,6 @@ readonly class Cache implements CacheInterface
      *
      * @param iterable<int|string, mixed> $values key ⇒ value mapping
      * @param int|DateInterval|null $ttl TTL for all items
-     * @return bool
      * @throws SimpleCacheInvalidArgument if any key is invalid
      */
     public function setMultiple(iterable $values, mixed $ttl = null): bool
@@ -845,7 +815,7 @@ readonly class Cache implements CacheInterface
             return;
         }
 
-        $maxJitter = max(1, (int)floor($ttl * (self::STAMPEDE_JITTER_PERCENT / 100)));
+        $maxJitter = max(1, (int) floor($ttl * (self::STAMPEDE_JITTER_PERCENT / 100)));
         $jitter = random_int(0, $maxJitter);
         $item->expiresAfter(max(1, $ttl - $jitter));
     }
@@ -859,7 +829,7 @@ readonly class Cache implements CacheInterface
             $tagKey = $this->tagIndexKey($tag);
             $item = $this->getItem($tagKey);
             $keys = $item->isHit()
-                ? array_values(array_unique(array_filter((array)$item->get(), is_string(...))))
+                ? array_values(array_unique(array_filter((array) $item->get(), is_string(...))))
                 : [];
 
             if (!in_array($key, $keys, true)) {

@@ -242,7 +242,7 @@ if (!function_exists('retry')) {
             if ($sleep > 0) {
                 usleep($sleep * 1000);
             }
-            $sleep = (int)($sleep * $backoff);
+            $sleep = (int) ($sleep * $backoff);
             goto beginning;
         }
     }
@@ -253,7 +253,6 @@ if (!function_exists('once')) {
      * On subsequent calls from the same file and line, return the cached result.
      *
      * @param callable $callback A zero‐argument function to run once.
-     * @param Container|null $container
      * @return mixed The callback’s return value (cached on repeat calls).
      * @throws ContainerException
      * @throws \Psr\Cache\InvalidArgumentException

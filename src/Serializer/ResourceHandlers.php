@@ -12,17 +12,13 @@ abstract class ResourceHandlers
      * This constructor is private to enforce static usage of the class methods,
      * ensuring that no instances of this class can be created.
      */
-    private function __construct()
-    {
-    }
+    private function __construct() {}
     /**
      * Registers all default resource handlers.
      *
      * This method iterates over all class methods prefixed with "register" and
      * invokes them. This is a convenient way to register all default resource
      * handlers at once.
-     *
-     * @return void
      */
     public static function registerDefaults(): void
     {
