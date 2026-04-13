@@ -18,9 +18,7 @@ final readonly class Invoker
      *
      * @param Container $container The container to use for resolving callables.
      */
-    private function __construct(private Container $container)
-    {
-    }
+    private function __construct(private Container $container) {}
 
     /**
      * Retrieve a shared instance of the invoker.

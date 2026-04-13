@@ -15,9 +15,8 @@ final readonly class GenericCall
      * @param Repository $repository The repository instance used for resource management.
      */
     public function __construct(
-        private Repository $repository
-    ) {
-    }
+        private Repository $repository,
+    ) {}
 
     /**
      * Resolves a class instance (without any DI magic),
@@ -95,7 +94,6 @@ final readonly class GenericCall
      *
      * @param object $instance Object to set properties on
      * @param array $properties Properties to set
-     * @return void
      * @throws ReflectionException
      */
     private function setProperties(object $instance, array $properties): void

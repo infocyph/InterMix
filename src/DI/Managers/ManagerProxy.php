@@ -125,7 +125,7 @@ trait ManagerProxy
      */
     public function offsetExists(mixed $offset): bool
     {
-        return $this->__isset((string)$offset);
+        return $this->__isset((string) $offset);
     }
 
     /**
@@ -137,7 +137,7 @@ trait ManagerProxy
      */
     public function offsetGet(mixed $offset): mixed
     {
-        return $this->__get((string)$offset);
+        return $this->__get((string) $offset);
     }
 
     /**
@@ -149,7 +149,7 @@ trait ManagerProxy
      */
     public function offsetSet(mixed $offset, mixed $value): void
     {
-        $this->__set((string)$offset, $value);
+        $this->__set((string) $offset, $value);
     }
 
     /**

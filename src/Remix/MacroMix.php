@@ -18,7 +18,7 @@ trait MacroMix
     /**
      * @var resource|null
      */
-    private static $lockHandle = null;
+    private static $lockHandle;
 
 
     /**
@@ -105,7 +105,7 @@ trait MacroMix
             $docComment = $method->getDocComment();
             if ($docComment && preg_match('/@Macro\("(\w+)"\)/', $docComment, $matches)) {
                 $macroName = $matches[1];
-                $macro = fn (...$args) => $method->invoke($class, ...$args);
+                $macro = fn(...$args) => $method->invoke($class, ...$args);
                 static::macro($macroName, $macro);
             }
         }
@@ -121,8 +121,6 @@ trait MacroMix
      *
      * @param array<string, callable> $config An associative array where keys are
      *        macro names and values are callable macros.
-     *
-     * @return void
      */
     public static function loadMacrosFromConfig(array $config): void
     {
@@ -146,8 +144,6 @@ trait MacroMix
      *
      * @param string $name The macro name.
      * @param callable|object $macro The macro to register.
-     *
-     * @return void
      */
     public static function macro(string $name, callable|object $macro): void
     {
@@ -168,7 +164,6 @@ trait MacroMix
      * @param object|string $mixin The object or class to mix methods from.
      * @param bool $replace Whether to replace existing macros with the same names.
      *
-     * @return void
      * @throws ReflectionException
      */
     public static function mix(object|string $mixin, bool $replace = true): void
@@ -186,8 +181,8 @@ trait MacroMix
             }
 
             $macro = $method->isStatic()
-                ? fn (...$args) => $method->invoke(null, ...$args)
-                : fn (...$args) => $method->invoke($instance, ...$args);
+                ? fn(...$args) => $method->invoke(null, ...$args)
+                : fn(...$args) => $method->invoke($instance, ...$args);
 
             static::macro($name, $macro);
         }
@@ -200,8 +195,6 @@ trait MacroMix
      * Removes a macro with the specified name from the registered macros array.
      *
      * @param string $name The name of the macro to remove.
-     *
-     * @return void
      */
     public static function removeMacro(string $name): void
     {
@@ -215,8 +208,6 @@ trait MacroMix
      * This method checks if locking is enabled and acquires an exclusive lock
      * on the current file. It initializes the lock handle if it is not already set.
      * If the lock handle is valid, it uses `flock` to apply an exclusive lock.
-     *
-     * @return void
      */
     private static function acquireLock(): void
     {
@@ -288,8 +279,6 @@ trait MacroMix
      * the lock handle and sets it to null to indicate that the lock is no longer
      * held. If locking is not enabled or the lock handle is not set, the method
      * returns without taking any action.
-     *
-     * @return void
      */
     private static function releaseLock(): void
     {

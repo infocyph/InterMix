@@ -30,9 +30,8 @@ class OptionsManager implements ArrayAccess
      */
     public function __construct(
         protected Repository $repository,
-        protected Container  $container
-    ) {
-    }
+        protected Container  $container,
+    ) {}
 
     /**
      * Binds a concrete implementation to an interface for a specific environment.
@@ -150,7 +149,7 @@ class OptionsManager implements ArrayAccess
      */
     public function registerAttributeResolver(
         string $attributeFqcn,
-        string $resolverFqcn
+        string $resolverFqcn,
     ): self {
         $this->repository
             ->attributeRegistry()
@@ -175,9 +174,7 @@ class OptionsManager implements ArrayAccess
     /**
      * Override definition lifetime/tags for a specific environment.
      *
-     * @param string $env
      * @param string $id Definition id
-     * @param LifetimeEnum|null $lifetime
      * @param array<int, string>|null $tags
      *
      * @throws ContainerException
@@ -235,7 +232,7 @@ class OptionsManager implements ArrayAccess
         bool $injection = true,
         bool $methodAttributes = false,
         bool $propertyAttributes = false,
-        ?string $defaultMethod = null
+        ?string $defaultMethod = null,
     ): self {
         // The repository does its own lock check
         $this->repository->enableMethodAttribute($methodAttributes);
@@ -244,7 +241,7 @@ class OptionsManager implements ArrayAccess
 
         // Switch container’s $resolver
         $this->container->setResolverClass(
-            $injection ? InjectedCall::class : GenericCall::class
+            $injection ? InjectedCall::class : GenericCall::class,
         );
         return $this;
     }

@@ -186,8 +186,9 @@ it('supports pure PSR-6 pools when resolving definitions', function () {
     };
 
     $c = Container::instance(uniqid('psr6_'));
-    $c->getRepository()->setCacheAdapter($pool);
-    $c->definitions()->bind('answer', fn () => 42);
+    $c->definitions()
+        ->enableDefinitionCache($pool)
+        ->bind('answer', fn () => 42);
 
     expect($c->get('answer'))->toBe(42)
         ->and($c->get('answer'))->toBe(42);

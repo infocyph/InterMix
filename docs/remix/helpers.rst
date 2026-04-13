@@ -13,7 +13,6 @@ available as global helpers.
 - **pipe()**    – passes a value through a callback and returns the callback’s result.
 - **measure()** – times a callback and returns its result plus elapsed ms.
 - **retry()**   – runs a callback repeatedly until success or max attempts.
-- **once()**    – ensures a callback is evaluated only once per call site.
 
 For DI-oriented global helpers such as ``container()``, ``resolve()`` and ``direct()``,
 see :ref:`functions`.
@@ -122,68 +121,3 @@ Parameters:
        backoff: 2.0
    );
    // After two failures, on the third try it returns "ok".
-
-once()
-======
-
-.. php:function:: once(callable $callback, ?Container $container = null): mixed
-
-**Goal**: Execute a zero-argument callback exactly once **per call site** (determined by ``file:line``). On the first invocation at that source location, ``once()`` runs the callback and caches its result. All subsequent calls from that same location return the stored value, never re-evaluating the callback.
-
-- ``$callback`` – A zero-argument callable to evaluate.
-- ``$container`` *(optional)* – an :php:class:`Infocyph\\InterMix\\DI\\Container`
-  instance. If supplied, ``once()`` stores/retrieves via container resolution
-  instead of the internal static cache.
-
-This ensures memoization based on where ``once()`` is called—regardless of class or function.
-
-**Behavior:**
-
-- If called without a container, a function-local static array stores values per ``file:line``.
-- If called with a container, it uses ``has()`` + ``registration()->registerClosure()``
-  + ``get()`` under the same ``file:line`` key.
-
-**Example (using built-in static cache)**:
-
-.. code-block:: php
-
-   function stableRandom(): int
-   {
-       // same call site inside this function on every invocation
-       return once(fn() => rand(1, 999));
-   }
-
-   $a = stableRandom();
-   $b = stableRandom();
-   // $a === $b (cached by file:line)
-
-   // Different line = new execution
-   $c = once(fn() => rand(1, 999)); // this is a new line = new result
-
-**Example (with container)**:
-
-.. code-block:: php
-
-   use Infocyph\InterMix\DI\Container;
-
-   $container = Container::instance('once-demo');
-
-   function cachedConfig(Container $container): mixed
-   {
-       return once(
-           fn() => computeSomething(),
-           $container
-       );
-   }
-
-   $v1 = cachedConfig($container);
-   $v2 = cachedConfig($container);
-
-   // $v1 === $v2 for the same call site
-
-**Use Cases**:
-
-- Expensive initialization code
-- Runtime configuration values
-- Deterministic memoization per exact file+line
-- Optional use of a shared container for testability or multi-scope consistency

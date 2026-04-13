@@ -53,6 +53,14 @@ Public API
    – Rebuild a value produced by ``encode()``.
    Decodes base64 (when enabled) and forwards to ``unserialize()``.
 
+.. php:function:: void ValueSerializer::setPayloadSigningKey(?string $key)
+
+   Configure HMAC payload signing/verification for ``serialize()``/``unserialize()``
+   and ``encode()``/``decode()``.
+
+   - ``null`` disables signing checks (backward-compatible mode).
+   - non-null enables signed payload mode (HMAC-SHA256 envelope required on decode).
+
 .. php:function:: bool ValueSerializer::isSerializedClosure(string $str)
 
    Cheap Opis payload detector used by *Invoker*.
@@ -104,6 +112,22 @@ Encode / Decode (base64)
    $clone   = ValueSerializer::decode($token);
 
    echo ($clone['cb'])();   // "hi"
+
+Signed payload mode (recommended for untrusted transport)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. code-block:: php
+
+   ValueSerializer::setPayloadSigningKey($_ENV['INTERMIX_SIGNING_KEY']);
+
+   $token = ValueSerializer::encode(['id' => 7]); // signed internally
+   $same  = ValueSerializer::decode($token);      // signature verified
+
+Security note
+~~~~~~~~~~~~~
+
+If payloads can be modified by external/untrusted actors, enable
+``setPayloadSigningKey(...)`` before using ``decode()``/``unserialize()``.
 
 Manual wrap / unwrap
 ~~~~~~~~~~~~~~~~~~~~

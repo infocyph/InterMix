@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Managers;
 
 use ArrayAccess;
-use Infocyph\InterMix\Cache\Cache;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
@@ -27,8 +26,7 @@ class DefinitionManager implements ArrayAccess
     public function __construct(
         protected Repository $repository,
         protected Container $container,
-    ) {
-    }
+    ) {}
 
     /**
      * Adds multiple definitions to the container.
@@ -122,26 +120,21 @@ class DefinitionManager implements ArrayAccess
     }
 
     /**
-     * Enable definition caching.
+     * Enable definition caching with an assigned cache pool.
      *
-     * This method takes a {@see CacheItemPoolInterface} and enables caching of
-     * definitions. It will throw a {@see ContainerException} if the container
-     * is locked.
+     * The given adapter can be any PHP-FIG PSR-6 pool implementation.
      *
-     * @param string|null $namespace The namespace to use for the cache.
      * @return $this
      * @throws ContainerException
      */
-    public function enableDefinitionCache(?string $namespace = null): self
+    public function enableDefinitionCache(CacheItemPoolInterface $adapter): self
     {
-        $this->repository->setCacheAdapter(Cache::file($namespace ?? $this->repository->getAlias()));
+        $this->repository->setCacheAdapter($adapter);
         return $this;
     }
 
     /**
      * Jump to InvocationManager
-     *
-     * @return InvocationManager
      */
     public function invocation(): InvocationManager
     {
@@ -150,8 +143,6 @@ class DefinitionManager implements ArrayAccess
 
     /**
      * Jump to OptionsManager
-     *
-     * @return OptionsManager
      */
     public function options(): OptionsManager
     {
@@ -160,8 +151,6 @@ class DefinitionManager implements ArrayAccess
 
     /**
      * Jump to RegistrationManager
-     *
-     * @return RegistrationManager
      */
     public function registration(): RegistrationManager
     {
@@ -171,9 +160,6 @@ class DefinitionManager implements ArrayAccess
     /**
      * Override existing definition metadata for a specific environment.
      *
-     * @param string $env
-     * @param string $id
-     * @param LifetimeEnum|null $lifetime
      * @param array<int, string>|null $tags
      *
      * @throws ContainerException

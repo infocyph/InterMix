@@ -53,7 +53,7 @@ final class Container implements ContainerInterface, ArrayAccess
             ContainerInterface::class,
             $this,
         );
-        $this->resolver = fn () => new InjectedCall($this->repository);
+        $this->resolver = fn() => new InjectedCall($this->repository);
         $this->definitionManager = new DefinitionManager($this->repository, $this);
         $this->registrationManager = new RegistrationManager($this->repository, $this);
         $this->optionsManager = new OptionsManager($this->repository, $this);
@@ -448,8 +448,8 @@ final class Container implements ContainerInterface, ArrayAccess
                 => throw new ContainerException(
                     sprintf(
                         "Unknown callable string '%s'. Expected 'class@method', 'class::method', class, or function.",
-                        $spec
-                    )
+                        $spec,
+                    ),
                 ),
             },
 
@@ -461,8 +461,8 @@ final class Container implements ContainerInterface, ArrayAccess
             => throw new ContainerException(
                 sprintf(
                     "Unknown callable spec for '%s'. Expected closure/callable, 'class@method', 'class::method', [class,method], class, or function.",
-                    is_string($spec) ? $spec : gettype($spec)
-                )
+                    is_string($spec) ? $spec : gettype($spec),
+                ),
             ),
         };
     }
@@ -489,9 +489,6 @@ final class Container implements ContainerInterface, ArrayAccess
      * - registerClass(string $class, array $params = [])
      * - registerMethod(string $class, string $method, array $params = [])
      *
-     * @param string|Closure|callable|array|null $spec
-     * @param array $parameters
-     * @return mixed
      * @throws ContainerException|\ReflectionException|InvalidArgumentException
      */
     public function resolveNow(
@@ -559,11 +556,10 @@ final class Container implements ContainerInterface, ArrayAccess
      * for resolvers.
      *
      * @param string $resolverClass The fully qualified class name of the new resolver.
-     * @return void
      */
     public function setResolverClass(string $resolverClass): void
     {
-        $this->resolver = fn () => new $resolverClass($this->repository);
+        $this->resolver = fn() => new $resolverClass($this->repository);
     }
 
     /**
@@ -589,8 +585,6 @@ final class Container implements ContainerInterface, ArrayAccess
      * and makes it eligible for garbage collection. This is useful if you
      * want to ensure that the container instance is no longer referenced
      * after it has been used.
-     *
-     * @return void
      */
     public function unset(): void
     {

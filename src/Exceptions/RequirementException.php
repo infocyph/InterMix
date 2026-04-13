@@ -6,6 +6,4 @@ namespace Infocyph\InterMix\Exceptions;
 
 use RuntimeException;
 
-class RequirementException extends RuntimeException
-{
-}
+class RequirementException extends RuntimeException {}

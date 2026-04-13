@@ -8,7 +8,7 @@
 ![Packagist PHP Version](https://img.shields.io/packagist/dependency-v/infocyph/intermix/php)
 ![GitHub Code Size](https://img.shields.io/github/languages/code-size/infocyph/intermix)
 
-`InterMix` is a modern, lightweight PHP toolkit for developers who value class-oriented design, clean architecture, and fast execution. It combines dependency injection, caching, serialization, memoization, macro-style extensibility, and helper utilities with minimal config and maximum control.
+`InterMix` is a modern, lightweight PHP toolkit for developers who value class-oriented design, clean architecture, and fast execution. It combines dependency injection, serialization, macro-style extensibility, and helper utilities with minimal config and maximum control.
 
 ---
 
@@ -19,13 +19,11 @@
   - scoped lifetimes
   - lazy loading
   - environment-specific overrides
-  - debug tracing & cache support
-- **Caching** — Dual PSR-6 & PSR-16 compatible cache engine
+  - debug tracing & definition-cache integration via assignable PSR-6 pool
 - **Serializer** — Closure-aware value serialization and resource handlers
 - **Fence** — Enforce singleton-style class safety
 - **Remix** — Fluent traits, proxies, and global helper functions
 - **MacroMix** — Dynamically extend objects or classes with macros
-- **Memoizer** — `once()` and `memoize()` helpers for deterministic caching
 - **Global Utilities** — Like `pipe()`, `retry()`, `measure()` and more
 
 ---
@@ -98,10 +96,13 @@ echo (new MacroTest)->hello('Ali'); // Hey, Ali!
 
 ---
 
-### 🧠 `once()` Memoization
+### 🧠 Definition Cache (Injectable)
 
 ```php
-$value = once(fn() => rand(1000, 9999)); // Only runs once per file+line
+use Psr\Cache\CacheItemPoolInterface;
+
+$pool = /* any PSR-6 pool, e.g. from infocyph/cachelayer */;
+$c->definitions()->enableDefinitionCache($pool);
 ```
 
 ---
@@ -116,7 +117,7 @@ Includes:
 
 * ✅ Getting Started & Quickstart
 * 📦 DI Container Guide (bindings, scopes, attributes, lifetimes)
-* 🧩 Modules: Cache, Serializer, Remix, Memoizer, Fence, MacroMix
+* 🧩 Modules: DI, Serializer, Remix, Fence, MacroMix
 * 🧪 Testing & Caching Tips
 * 📘 PDF/ePub formats
 

@@ -23,8 +23,7 @@ final readonly class TraceEntry
         public int $line,
         public int $memory = 0,
         public int $hrtime = 0,
-    ) {
-    }
+    ) {}
 
     /**
      * Convenience helper – seconds (float) elapsed since another event.

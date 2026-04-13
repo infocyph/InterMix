@@ -2,7 +2,6 @@
 
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\Exceptions\ContainerException;
-use Infocyph\InterMix\Memoize\Memoizer;
 use Infocyph\InterMix\Remix\TapProxy;
 
 if (!function_exists('container')) {
@@ -77,54 +76,6 @@ if (!function_exists('direct')) {
         return $spec === null
             ? $instance
             : $instance->resolveNow($spec, $parameters);
-    }
-}
-
-if (!function_exists('memoize')) {
-    /**
-     * Global memoization: caches a callable once for the entire process.
-     *
-     * If $callable is null, returns the Memoizer instance.
-     *
-     * @param callable|null $callable The function to memoize.
-     * @param array $params The parameters to pass the callable (optional).
-     *
-     * @return mixed The result of the memoized callable.
-     * @throws Exception
-     */
-    function memoize(?callable $callable = null, array $params = []): mixed
-    {
-        $m = Memoizer::instance();
-        if ($callable === null) {
-            return $m;
-        }
-        return $m->get($callable, $params);
-    }
-}
-
-if (!function_exists('remember')) {
-    /**
-     * Object-scoped memoization: caches a callable once per instance.
-     *
-     * @param object|null $object $object The object to scope the cache for.
-     * @param callable|null $callable $callable The function to memoize.
-     * @param array $params The parameters to pass the callable (optional).
-     *
-     * @return mixed The result of the memoized callable.
-     *
-     * @throws Exception
-     */
-    function remember(?object $object = null, ?callable $callable = null, array $params = []): mixed
-    {
-        $m = Memoizer::instance();
-
-        if ($object === null) {
-            return $m;
-        }
-        if ($callable === null) {
-            throw new InvalidArgumentException('remember() requires both object and callable');
-        }
-        return $m->getFor($object, $callable, $params);
     }
 }
 
@@ -242,71 +193,8 @@ if (!function_exists('retry')) {
             if ($sleep > 0) {
                 usleep($sleep * 1000);
             }
-            $sleep = (int)($sleep * $backoff);
+            $sleep = (int) ($sleep * $backoff);
             goto beginning;
         }
-    }
-}
-if (!function_exists('once')) {
-    /**
-     * Execute the given zero‐argument callback once at this call site (file:line).
-     * On subsequent calls from the same file and line, return the cached result.
-     *
-     * @param callable $callback A zero‐argument function to run once.
-     * @param Container|null $container
-     * @return mixed The callback’s return value (cached on repeat calls).
-     * @throws ContainerException
-     * @throws \Psr\Cache\InvalidArgumentException
-     */
-    function once(callable $callback, ?Container $container = null): mixed
-    {
-        static $cache = [];
-        static $order = [];
-        static $limit = 2048;
-        $bt = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
-        $key = ($bt[1]['file'] ?? '(unknown)') . ':' . ($bt[1]['line'] ?? 0);
-
-        if ($container !== null) {
-            if (!$container->has($key)) {
-                $container->registration()->registerClosure($key, $callback);
-            }
-
-            return $container->get($key);
-        }
-
-        if (array_key_exists($key, $cache)) {
-            return $cache[$key];
-        }
-
-        $value = $callback();
-        $cache[$key] = $value;
-
-        if (!in_array($key, $order, true)) {
-            $order[] = $key;
-            if (count($order) > $limit) {
-                $oldest = array_shift($order);
-                if ($oldest !== null) {
-                    unset($cache[$oldest]);
-                }
-            }
-        }
-
-        return $value;
-    }
-}
-if (!function_exists('sanitize_cache_ns')) {
-    /**
-     * Sanitizes a cache namespace by replacing all non-alphanumeric characters
-     * (except for underscore and hyphen) with an underscore.
-     *
-     * The result is cached to avoid redundant computation.
-     *
-     * @param string $ns The namespace to sanitize.
-     * @return string The sanitized namespace.
-     */
-    function sanitize_cache_ns(string $ns): string
-    {
-        static $cache = [];
-        return $cache[$ns] ??= preg_replace('/[^A-Za-z0-9_\-]/', '_', $ns);
     }
 }

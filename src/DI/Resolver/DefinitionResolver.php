@@ -26,8 +26,7 @@ class DefinitionResolver
      */
     public function __construct(
         private readonly Repository $repository,
-    ) {
-    }
+    ) {}
 
 
     /**
@@ -83,6 +82,13 @@ class DefinitionResolver
         $this->parameterResolver = $parameterResolver;
     }
 
+    private static function stableHash(string $value): string
+    {
+        static $algorithm = null;
+        $algorithm ??= in_array('xxh128', hash_algos(), true) ? 'xxh128' : 'sha256';
+        return hash($algorithm, $value);
+    }
+
     /**
      * Tries to get a definition from the cache, otherwise resolves it using the
      * `resolveDefinition` method and caches the result.
@@ -105,10 +111,10 @@ class DefinitionResolver
         }
 
         if (!$this->repository->hasResolvedDefinition($resolvedKey)) {
-            $resolverCallback = fn () => $this->resolveDefinition($name);
+            $resolverCallback = fn() => $this->resolveDefinition($name);
             $cacheAdapter = $this->repository->getCacheAdapter();
             if ($cacheAdapter) {
-                $cacheKey = $this->repository->makeCacheKey('def' . base64_encode($resolvedKey));
+                $cacheKey = $this->repository->makeCacheKey('def:' . self::stableHash($resolvedKey));
                 $item = $cacheAdapter->getItem($cacheKey);
                 if ($item->isHit()) {
                     $value = $item->get();
@@ -169,7 +175,7 @@ class DefinitionResolver
                 return $definition(...$args);
 
             case is_array($definition) && isset($definition[0]) && class_exists($definition[0]):
-                $this->repository->tracer()->recordDependency($name, (string)$definition[0], 'definition-class');
+                $this->repository->tracer()->recordDependency($name, $definition[0], 'definition-class');
                 return $this->resolveArrayDefinition($definition);
 
             case is_string($definition) && class_exists($definition):

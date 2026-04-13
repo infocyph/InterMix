@@ -10,7 +10,10 @@ use function Opis\Closure\{serialize as oc_serialize, unserialize as oc_unserial
 
 final class ValueSerializer
 {
+    private const string PAYLOAD_HMAC_ALGO = 'sha256';
     private const int SERIALIZED_CLOSURE_MEMO_LIMIT = 2048;
+    private const string SIGNED_PAYLOAD_PREFIX = 'imxv1.';
+    private static ?string $payloadSigningKey = null;
 
     /** @var array<string,array{wrap:callable,restore:callable}> */
     private static array $resourceHandlers = [];
@@ -23,8 +26,6 @@ final class ValueSerializer
      *
      * Use this method to reset the state of ValueSerializer in test cases,
      * or when you want to ensure that no resource handlers are registered.
-     *
-     * @return void
      */
     public static function clearResourceHandlers(): void
     {
@@ -83,6 +84,14 @@ final class ValueSerializer
      */
     public static function isSerializedClosure(string $str): bool
     {
+        if (self::$payloadSigningKey !== null && str_starts_with($str, self::SIGNED_PAYLOAD_PREFIX)) {
+            try {
+                $str = self::extractSignedBlob($str, self::$payloadSigningKey);
+            } catch (InvalidArgumentException) {
+                return false;
+            }
+        }
+
         if (array_key_exists($str, self::$serializedClosureMemo)) {
             return self::$serializedClosureMemo[$str];
         }
@@ -91,7 +100,7 @@ final class ValueSerializer
             return self::rememberSerializedClosureMemo($str, false);
         }
 
-        return self::rememberSerializedClosureMemo($str, (bool)preg_match(
+        return self::rememberSerializedClosureMemo($str, (bool) preg_match(
             '/^(?:C:\d+:"Opis\\\\Closure\\\\SerializableClosure|O:\d+:"Opis\\\\Closure\\\\Box"|O:\d+:"Opis\\\\Closure\\\\Serializable")/',
             $str,
         ));
@@ -138,10 +147,33 @@ final class ValueSerializer
      */
     public static function serialize(mixed $value): string
     {
-        if (is_scalar($value) || $value === null) {
-            return serialize($value);
+        $blob = match (true) {
+            is_scalar($value), $value === null => serialize($value),
+            default => oc_serialize(self::wrapRecursive($value)),
+        };
+
+        return self::$payloadSigningKey === null
+            ? $blob
+            : self::signBlob($blob, self::$payloadSigningKey);
+    }
+
+    /**
+     * Set or clear the payload signing key used for serialize/unserialize.
+     *
+     * When a key is set:
+     * - serialize()/encode() output is signed (HMAC-SHA256 envelope).
+     * - unserialize()/decode() require and verify the signature.
+     *
+     * @throws InvalidArgumentException if an empty key is provided
+     */
+    public static function setPayloadSigningKey(?string $key): void
+    {
+        if ($key === '') {
+            throw new InvalidArgumentException('Payload signing key cannot be empty.');
         }
-        return oc_serialize(self::wrapRecursive($value));
+
+        self::$payloadSigningKey = $key;
+        self::$serializedClosureMemo = [];
     }
 
 
@@ -159,6 +191,10 @@ final class ValueSerializer
      */
     public static function unserialize(string $blob): mixed
     {
+        if (self::$payloadSigningKey !== null) {
+            $blob = self::extractSignedBlob($blob, self::$payloadSigningKey);
+        }
+
         if (!ValueSerializer::isSerializedClosure($blob) && str_starts_with($blob, 's:')) {
             return unserialize($blob, ['allowed_classes' => true]);
         }
@@ -197,6 +233,37 @@ final class ValueSerializer
         return self::wrapRecursive($value);
     }
 
+    private static function extractSignedBlob(string $payload, string $key): string
+    {
+        if (!str_starts_with($payload, self::SIGNED_PAYLOAD_PREFIX)) {
+            throw new InvalidArgumentException('Signed payload expected but signature envelope is missing.');
+        }
+
+        $raw = substr($payload, strlen(self::SIGNED_PAYLOAD_PREFIX));
+        if ($raw === false) {
+            throw new InvalidArgumentException('Invalid signed payload.');
+        }
+
+        $separatorPosition = strpos($raw, '.');
+        if ($separatorPosition === false) {
+            throw new InvalidArgumentException('Invalid signed payload format.');
+        }
+
+        $signature = substr($raw, 0, $separatorPosition);
+        $encodedBlob = substr($raw, $separatorPosition + 1);
+        $blob = base64_decode($encodedBlob, true);
+        if ($blob === false) {
+            throw new InvalidArgumentException('Invalid signed payload body.');
+        }
+
+        $expected = hash_hmac(self::PAYLOAD_HMAC_ALGO, $blob, $key);
+        if (!hash_equals($expected, $signature)) {
+            throw new InvalidArgumentException('Signed payload verification failed.');
+        }
+
+        return $blob;
+    }
+
     private static function rememberSerializedClosureMemo(string $key, bool $value): bool
     {
         if (!array_key_exists($key, self::$serializedClosureMemo)
@@ -211,6 +278,12 @@ final class ValueSerializer
         return $value;
     }
 
+    private static function signBlob(string $blob, string $key): string
+    {
+        $signature = hash_hmac(self::PAYLOAD_HMAC_ALGO, $blob, $key);
+        return self::SIGNED_PAYLOAD_PREFIX . $signature . '.' . base64_encode($blob);
+    }
+
     /**
      * Reverse {@see wrapRecursive} by recursively unwrapping values
      * that were wrapped by {@see wrapRecursive}.
@@ -222,9 +295,9 @@ final class ValueSerializer
     private static function unwrapRecursive(mixed $resource): mixed
     {
         if (
-            is_array($resource) &&
-            ($resource['__wrapped_resource'] ?? false) &&
-            isset(self::$resourceHandlers[$resource['type']])
+            is_array($resource)
+            && ($resource['__wrapped_resource'] ?? false)
+            && isset(self::$resourceHandlers[$resource['type']])
         ) {
             return (self::$resourceHandlers[$resource['type']]['restore'])($resource['data']);
         }

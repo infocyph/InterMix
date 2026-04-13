@@ -7,7 +7,9 @@ namespace Infocyph\InterMix\DI\Resolver;
 use Infocyph\InterMix\DI\Attribute\AttributeRegistry;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Support\DebugTracer;
+use Infocyph\InterMix\DI\Support\DefinitionCachePoolInterface;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
+use Infocyph\InterMix\DI\Support\Psr6DefinitionCachePoolAdapter;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\CacheItemPoolInterface;
 
@@ -24,7 +26,7 @@ class Repository
     private readonly AttributeRegistry $attributeRegistry;
     private readonly DebugTracer $tracer;
     private string $alias = 'default';
-    private ?CacheItemPoolInterface $cacheAdapter = null;
+    private ?DefinitionCachePoolInterface $cacheAdapter = null;
     private array $classResource = [];
     private array $closureResource = [];
     private array $conditionalBindings = [];
@@ -140,7 +142,6 @@ class Repository
      *
      * @param bool $lazy whether to enable lazy loading
      *
-     * @return void
      *
      * @throws ContainerException if the container is locked
      */
@@ -211,7 +212,7 @@ class Repository
     {
         return match (true) {
             is_array($value) && isset($value['instance']) => $value['instance'],
-            default => $value
+            default => $value,
         };
     }
 
@@ -249,9 +250,9 @@ class Repository
     /**
      * Gets the cache adapter instance.
      *
-     * @return CacheItemPoolInterface|null The cache adapter, or null if no cache adapter is set.
+     * @return DefinitionCachePoolInterface|null The cache adapter, or null if no cache adapter is set.
      */
-    public function getCacheAdapter(): ?CacheItemPoolInterface
+    public function getCacheAdapter(): ?DefinitionCachePoolInterface
     {
         return $this->cacheAdapter;
     }
@@ -570,8 +571,6 @@ class Repository
      * Once the container is locked, no more definitions, values, or options can be set.
      * This method is useful for tests or other scenarios where you want to ensure that
      * the container does not change after it has been configured.
-     *
-     * @return void
      */
     public function lock(): void
     {
@@ -641,7 +640,9 @@ class Repository
     public function setCacheAdapter(CacheItemPoolInterface $adapter): void
     {
         $this->checkIfLocked();
-        $this->cacheAdapter = $adapter;
+        $this->cacheAdapter = $adapter instanceof DefinitionCachePoolInterface
+            ? $adapter
+            : new Psr6DefinitionCachePoolAdapter($adapter);
     }
 
     /**
@@ -720,7 +721,6 @@ class Repository
      *
      * @param string $env environment name
      *
-     * @return void
      *
      * @throws ContainerException if the container is locked
      */
@@ -863,7 +863,7 @@ class Repository
         // Fallback for entries created before scope-indexing was introduced.
         $suffix = '@' . $scope;
         foreach (array_keys($this->resolved) as $key) {
-            if (str_ends_with($key, $suffix)) {
+            if (str_ends_with((string) $key, $suffix)) {
                 unset($this->resolved[$key]);
             }
         }

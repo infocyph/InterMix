@@ -66,8 +66,6 @@ trait Fence
      * If the class using this trait has `FENCE_KEYED = false`, this will be
      * an array with a single element `__single`.  Otherwise, this will be an
      * array of the strings used as the first argument to `instance()`.
-     *
-     * @return array
      */
     final public static function getKeys(): array
     {
@@ -81,7 +79,6 @@ trait Fence
      * against that key.  Otherwise, the check is done against the
      * special key '__single'.
      *
-     * @param string|null $key
      * @return bool true if an instance exists for the given key
      */
     final public static function hasInstance(?string $key = 'default'): bool
@@ -103,9 +100,7 @@ trait Fence
      *
      * those values are honoured.  Otherwise defaults are keyed=true, limit=∞.
      *
-     * @param string|null $key
      * @param array|null $constraints ['extensions'=>[], 'classes'=>[]]
-     * @return Fence
      */
     final public static function instance(
         ?string $key = 'default',
@@ -124,7 +119,7 @@ trait Fence
 
         if (self::$instanceCount >= self::getLimit(static::class)) {
             throw new LimitExceededException(
-                'Instance limit of '.self::getLimit(static::class).' exceeded for '.static::class
+                'Instance limit of ' . self::getLimit(static::class) . ' exceeded for ' . static::class,
             );
         }
 
@@ -160,8 +155,8 @@ trait Fence
 
         self::warmRequirementCaches();
 
-        $missingE = self::findMissingExtensions((array)($c['extensions'] ?? []));
-        $missingC = self::findMissingClasses((array)($c['classes'] ?? []));
+        $missingE = self::findMissingExtensions((array) ($c['extensions'] ?? []));
+        $missingC = self::findMissingClasses((array) ($c['classes'] ?? []));
 
         if ($missingE === [] && $missingC === []) {
             return;

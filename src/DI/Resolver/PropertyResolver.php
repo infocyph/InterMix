@@ -31,8 +31,7 @@ class PropertyResolver
      */
     public function __construct(
         private readonly Repository $repository,
-    ) {
-    }
+    ) {}
 
 
     /**
@@ -303,14 +302,14 @@ class PropertyResolver
      * @param ReflectionProperty $property The property to resolve a value for.
      * @param array $classPropertyValues The user-supplied values for the class.
      * @param object $classInstance The instance of the class to set the property on.
-     * @return ?array An array of two items: the instance and the resolved value. Or null if not possible to resolve.
+     * @return mixed[] An array of two items: the instance and the resolved value. Or null if not possible to resolve.
      * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
     private function resolveValue(
         ReflectionProperty $property,
         array $classPropertyValues,
         object $classInstance,
-    ): ?array {
+    ): array {
         $attempt = $this->attemptUserOverride($property, $classPropertyValues, $classInstance);
         if ($attempt !== null) {
             return $attempt;
@@ -351,8 +350,8 @@ class PropertyResolver
     ): object {
         if (!$parameterType instanceof ReflectionNamedType || $parameterType->isBuiltin()) {
             throw new ContainerException(
-                'Malformed #[Infuse] or invalid property type on ' .
-                "{$property->getDeclaringClass()->getName()}::\${$property->getName()}",
+                'Malformed #[Infuse] or invalid property type on '
+                . "{$property->getDeclaringClass()->getName()}::\${$property->getName()}",
             );
         }
         // environment-based override if interface
