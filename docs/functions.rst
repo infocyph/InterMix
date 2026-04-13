@@ -44,33 +44,10 @@ Resolve immediately with injection disabled (generic invocation path).
 Functional Helpers
 ------------------
 
-tap(), when(), pipe(), measure(), retry(), once()
+tap(), when(), pipe(), measure(), retry()
 =================================================
 
 These helpers are documented in detail in:
 
 - :ref:`remix.tap-proxy`
 - :ref:`remix.helpers`
-
-Memoization Helpers
--------------------
-
-memoize(), remember()
-=====================
-
-These helpers are documented in detail in:
-
-- :ref:`memoize.functions`
-
-Cache Namespace Helper
-----------------------
-
-sanitize_cache_ns()
-===================
-
-.. php:function:: sanitize_cache_ns(string $ns): string
-
-Normalize cache namespace strings to safe key prefixes by replacing
-non ``[A-Za-z0-9_-]`` characters with ``_``.
-
-- The helper keeps an internal static memoization map for repeated inputs.

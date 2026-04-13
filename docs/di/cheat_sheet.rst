@@ -46,7 +46,7 @@ Managers At A Glance
    * - Manager
      - Core methods
    * - ``definitions()``
-     - ``bind()``, ``addDefinitions()``, ``enableDefinitionCache()``, ``cacheAllDefinitions()``, ``setMetaForEnv()``
+     - ``bind()``, ``addDefinitions()``, ``enableDefinitionCache($pool)``, ``cacheAllDefinitions()``, ``setMetaForEnv()``
    * - ``registration()``
      - ``registerClass()``, ``registerMethod()``, ``registerProperty()``, ``registerClosure()``, ``import()``
    * - ``options()``
@@ -123,7 +123,7 @@ Definition cache warmup:
 .. code-block:: php
 
    $c->definitions()
-       ->enableDefinitionCache('intermix')
+       ->enableDefinitionCache($pool)
        ->cacheAllDefinitions(forceClearFirst: true);
 
 Scoped resolution:

@@ -20,9 +20,7 @@ Contents
     container
     fence
     serializer
-    cache
     remix
-    memoize
     functions
     benchmark
     di/attribute-deferred-initializer

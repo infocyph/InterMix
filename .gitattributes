@@ -18,4 +18,4 @@ pint.json export-ignore
 psalm.xml export-ignore
 rector.php export-ignore
 
-*  text eol=lf
+* text eol=lf

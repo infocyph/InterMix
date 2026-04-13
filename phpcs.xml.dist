@@ -2,7 +2,7 @@
 <ruleset
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="vendor/squizlabs/php_codesniffer/phpcs.xsd"
-    name="InterMix"
+    name="CacheLayer"
 >
     <description>Semantic PHPCS checks not covered by Pint/Psalm/PHPStan.</description>
 
@@ -13,7 +13,6 @@
 
     <file>./src</file>
     <file>./tests</file>
-    <file>./examples</file>
 
     <exclude-pattern>*/vendor/*</exclude-pattern>
     <exclude-pattern>*/.git/*</exclude-pattern>
@@ -29,12 +28,10 @@
     <rule ref="Squiz.PHP.NonExecutableCode"/>
 
     <rule ref="Generic.CodeAnalysis.EmptyStatement">
-        <exclude-pattern>*/examples/*</exclude-pattern>
         <exclude name="Generic.CodeAnalysis.EmptyStatement.DetectedCatch"/>
     </rule>
 
     <rule ref="Generic.PHP.ForbiddenFunctions">
-        <exclude-pattern>*/examples/*</exclude-pattern>
         <properties>
             <property name="forbiddenFunctions" type="array">
                 <element key="echo" value="null"/>

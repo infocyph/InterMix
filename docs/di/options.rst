@@ -105,8 +105,8 @@ Flag                    Default    What it does
        ->setEnvironment('prod')
        ->end();
 
-   // definition cache is configured on DefinitionManager
-   $c->definitions()->enableDefinitionCache();
+   // definition cache is configured on DefinitionManager with a PSR-6 pool
+   $c->definitions()->enableDefinitionCache($pool);
 
 ----------------------------------------------------
 4 · Inspecting state

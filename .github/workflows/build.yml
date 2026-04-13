@@ -19,7 +19,7 @@ jobs:
       - name: Define shared matrix values
         id: matrix
         run: |
-          echo 'php_versions=["8.4","8.5"]' >> "$GITHUB_OUTPUT"
+          echo 'php_versions=["8.3","8.4","8.5"]' >> "$GITHUB_OUTPUT"
           echo 'dependency_versions=["prefer-lowest","prefer-stable"]' >> "$GITHUB_OUTPUT"
 
   run:
@@ -60,10 +60,10 @@ jobs:
           composer test:sniff
           composer test:refactor
           if [ "${{ matrix.dependency-version }}" != "prefer-lowest" ]; then
-            composer test:static:strict
+            composer test:static
           fi
           if [ "${{ matrix.dependency-version }}" != "prefer-lowest" ]; then
-            composer test:security:strict
+            composer test:security
           fi
 
   analyze:
@@ -87,6 +87,7 @@ jobs:
         with:
           php-version: ${{ matrix.php-versions }}
           tools: composer:v2
+          coverage: xdebug
 
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
@@ -95,10 +96,10 @@ jobs:
         run: composer release:audit
 
       - name: Quality Gate (PHPStan)
-        run: composer test:static:strict
+        run: composer test:static
 
       - name: Security Gate (Psalm)
-        run: composer test:security:strict
+        run: composer test:security
 
       - name: Run PHPStan (Code Scanning)
         run: |

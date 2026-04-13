@@ -6,6 +6,7 @@ use Infocyph\InterMix\Serializer\ValueSerializer;
 
 beforeEach(function () {
     ValueSerializer::clearResourceHandlers();
+    ValueSerializer::setPayloadSigningKey(null);
 });
 
 it('serialises and unserialises scalars and arrays', function () {
@@ -51,4 +52,25 @@ it('throws when wrapping a resource with no handler', function () {
         ->toThrow(InvalidArgumentException::class);
 
     fclose($s);
+});
+
+it('verifies signed payloads when signing key is configured', function () {
+    ValueSerializer::setPayloadSigningKey('test-signing-key');
+
+    $payload = ['id' => 42, 'cb' => fn () => 'ok'];
+    $blob = ValueSerializer::serialize($payload);
+    $out = ValueSerializer::unserialize($blob);
+
+    expect($out['id'])->toBe(42)
+        ->and(($out['cb'])())->toBe('ok');
+});
+
+it('rejects tampered payloads when signing key is configured', function () {
+    ValueSerializer::setPayloadSigningKey('test-signing-key');
+
+    $blob = ValueSerializer::serialize(['safe' => true]);
+    $tampered = substr_replace($blob, 'x', -1);
+
+    expect(fn () => ValueSerializer::unserialize($tampered))
+        ->toThrow(InvalidArgumentException::class);
 });

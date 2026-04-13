@@ -186,6 +186,13 @@ class ParameterResolver
         };
     }
 
+    private static function stableHash(string $value): string
+    {
+        static $algorithm = null;
+        $algorithm ??= in_array('xxh128', hash_algos(), true) ? 'xxh128' : 'xxh3';
+        return hash($algorithm, $value);
+    }
+
     private function alreadyExist(string $className, array $parameters): bool
     {
         foreach ($parameters as $value) {
@@ -351,7 +358,7 @@ class ParameterResolver
         }
 
         $norm = array_map([self::class, 'normalise'], $supplied);
-        $argsHash = hash('xxh3', json_encode($norm, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
+        $argsHash = self::stableHash(json_encode($norm, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
         return "$owner::{$reflector->getName()}|$type|h:$argsHash";
     }
 

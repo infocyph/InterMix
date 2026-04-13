@@ -15,7 +15,7 @@
                 "options": []
             },
             {
-                "action": "composer audit --no-interaction --abandoned=ignore",
+                "action": "composer release:audit",
                 "options": []
             },
             {

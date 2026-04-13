@@ -9,7 +9,6 @@
         "container",
         "dependency",
         "injection",
-        "memoize",
         "macro",
         "mixin",
         "cache",
@@ -22,11 +21,7 @@
         }
     ],
     "suggest": {
-        "ext-apcu": "For APCu-based caching (in-memory, per-process)",
-        "ext-redis": "For Redis-based caching (persistent, networked)",
-        "ext-memcached": "For Memcached-based caching (distributed, RAM)",
-        "ext-sqlite3": "For SQLite-based caching (file-based, portable)",
-        "ext-pdo": "For SQLite-based caching (file-based, portable)",
+        "infocyph/cachelayer": "Optional cache adapters for InterMix definition cache integration (PSR-6)",
         "ext-mbstring": "Recommended for development tools output formatting (Pest/Termwind)"
     },
     "autoload": {
@@ -46,15 +41,15 @@
         "php": ">=8.3",
         "opis/closure": "^4.5",
         "psr/cache": "^3.0",
-        "psr/container": "^2.0",
-        "psr/simple-cache": "^3.0"
+        "psr/container": "^2.0"
     },
     "require-dev": {
         "captainhook/captainhook": "^5.29.2",
         "laravel/pint": "^1.29",
-        "pestphp/pest": "^4.4.5",
+        "pestphp/pest": "^4.5",
         "pestphp/pest-plugin-drift": "^4.1",
         "phpbench/phpbench": "^1.6",
+        "phpstan/phpstan": "^2.1",
         "rector/rector": "^2.4.1",
         "squizlabs/php_codesniffer": "^4.0.1",
         "symfony/var-dumper": "^7.3 || ^8.0.8",
@@ -62,24 +57,31 @@
         "vimeo/psalm": "^6.16.1"
     },
     "scripts": {
-        "test:syntax": "@php -d error_reporting=24575 .github/scripts/syntax.php src tests benchmarks examples",
-        "test:code": "@php -d error_reporting=24575 vendor/bin/pest",
-        "test:lint": "@php -d error_reporting=24575 vendor/bin/pint --test",
-        "test:sniff": "@php -d error_reporting=24575 vendor/bin/phpcs --standard=phpcs.xml.dist --report=full",
-        "test:static": "@php -d error_reporting=24575 vendor/bin/phpstan analyse --configuration=phpstan.neon.dist --memory-limit=1G",
-        "test:static:strict": "@php -d error_reporting=24575 vendor/bin/phpstan analyse --configuration=phpstan.neon.dist --memory-limit=1G --no-progress",
-        "test:security": "@php -d error_reporting=24575 vendor/bin/psalm --config=psalm.xml --security-analysis --threads=1 --no-cache",
-        "test:security:strict": "@php -d error_reporting=24575 vendor/bin/psalm --config=psalm.xml --security-analysis --show-info=false --no-progress --threads=1 --no-cache",
-        "test:refactor": "@php -d error_reporting=24575 vendor/bin/rector process --dry-run --debug",
-        "test:bench": "@php -d error_reporting=24575 vendor/bin/phpbench run --config=phpbench.json --report=aggregate",
+        "test:syntax": "@php .github/scripts/syntax.php src tests benchmarks examples",
+        "test:code": "@php vendor/bin/pest",
+        "test:lint": "@php vendor/bin/pint --test",
+        "test:sniff": "@php vendor/bin/phpcs --standard=phpcs.xml.dist --report=full",
+        "test:static": "@php vendor/bin/phpstan analyse --configuration=phpstan.neon.dist --memory-limit=1G",
+        "test:security": "@php vendor/bin/psalm --config=psalm.xml --security-analysis --threads=1 --no-cache",
+        "test:refactor": "@php vendor/bin/rector process --dry-run --debug",
+        "test:bench": "@php vendor/bin/phpbench run --config=phpbench.json --report=aggregate",
+        "test:details": [
+            "@test:syntax",
+            "@test:code",
+            "@test:lint",
+            "@test:sniff",
+            "@test:static",
+            "@test:security",
+            "@test:refactor"
+        ],
         "test:all": [
             "@test:syntax",
-            "@php -d error_reporting=24575 vendor/bin/pest --parallel --processes=10",
-            "@php -d error_reporting=24575 vendor/bin/pint --test",
-            "@php -d error_reporting=24575 vendor/bin/phpcs --standard=phpcs.xml.dist --report=summary",
-            "@test:static:strict",
-            "@php -d error_reporting=24575 vendor/bin/rector process --dry-run",
-            "@test:security:strict"
+            "@php vendor/bin/pest --parallel --processes=10",
+            "@php vendor/bin/pint --test",
+            "@php vendor/bin/phpcs --standard=phpcs.xml.dist --report=summary",
+            "@php vendor/bin/phpstan analyse --configuration=phpstan.neon.dist --memory-limit=1G --no-progress --debug",
+            "@php vendor/bin/psalm --config=psalm.xml --show-info=false --security-analysis --threads=1 --no-progress --no-cache",
+            "@php vendor/bin/rector process --dry-run --debug"
         ],
         "release:audit": "@php .github/scripts/composer-audit-guard.php",
         "release:guard": [

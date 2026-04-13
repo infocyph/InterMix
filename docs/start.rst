@@ -9,7 +9,7 @@ infocyph/InterMix is a PHP library to provide with some class oriented tools tha
 What Is this?
 ##############
 
-Lots of class oriented functionality that we need like; Dependency Injection, Memoization, Mixins, Class barrier etc.
+Lots of class oriented functionality that we need like; Dependency Injection, Mixins, Class barrier etc.
 are simply put together. As my other projects, it focuses on being lightweight, updated, least complex
 and balanced within Speed & Scalability!.
 
