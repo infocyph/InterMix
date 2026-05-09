@@ -19,7 +19,9 @@ use PhpBench\Attributes\Warmup;
 final class IntermixBench
 {
     private Container $container;
+
     private Invoker $invoker;
+
     private int $scopeCounter = 0;
 
     #[BeforeMethods('setUpContainer')]
@@ -222,6 +224,7 @@ final class BenchPropertyConsumer
 final class BenchScopedToken
 {
     private static int $counter = 0;
+
     public int $id;
 
     public function __construct()

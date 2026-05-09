@@ -1,11 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Infocyph\InterMix\Remix;
 
 use Closure;
 use Exception;
 use Infocyph\InterMix\DI\Support\ReflectionResource;
 use ReflectionException;
+use ReflectionFunction;
 use ReflectionMethod;
 
 trait MacroMix
@@ -16,10 +19,9 @@ trait MacroMix
     protected static array $macros = [];
 
     /**
-     * @var resource|null
+     * @var resource|false|null
      */
     private static $lockHandle;
-
 
     /**
      * Handles dynamic calls to the object.
@@ -28,7 +30,7 @@ trait MacroMix
      * delegates the call to the registered macro if it exists.
      *
      * @param string $method The method name.
-     * @param array $parameters Parameters to pass to the method.
+     * @param array<int, mixed> $parameters Parameters to pass to the method.
      *
      * @return mixed The result of the macro call.
      *
@@ -39,7 +41,6 @@ trait MacroMix
         return self::process($this, $method, $parameters);
     }
 
-
     /**
      * Handles static calls to the class.
      *
@@ -47,7 +48,7 @@ trait MacroMix
      * delegates the call to the registered macro if it exists.
      *
      * @param string $method The method name.
-     * @param array $parameters Parameters to pass to the method.
+     * @param array<int, mixed> $parameters Parameters to pass to the method.
      *
      * @return mixed The result of the macro call.
      *
@@ -57,7 +58,6 @@ trait MacroMix
     {
         return self::process(null, $method, $parameters);
     }
-
 
     /**
      * Returns all registered macros.
@@ -70,7 +70,6 @@ trait MacroMix
     {
         return static::$macros;
     }
-
 
     /**
      * Checks if a macro is registered.
@@ -86,7 +85,6 @@ trait MacroMix
         return isset(static::$macros[$name]);
     }
 
-
     /**
      * Loads macros from a class based on annotations.
      *
@@ -95,22 +93,24 @@ trait MacroMix
      * macro with the given name, pointing to the corresponding method.
      *
      * @param string|object $class The class to load macros from. Can be a class name
-     *        or an instance of the class.
+     *                             or an instance of the class.
      * @throws ReflectionException
      */
     public static function loadMacrosFromAnnotations(string|object $class): void
     {
-        $reflection = ReflectionResource::getClassReflection($class);
+        $instance = is_object($class) ? $class : new $class();
+        $reflection = ReflectionResource::getClassReflection($instance);
         foreach ($reflection->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
             $docComment = $method->getDocComment();
             if ($docComment && preg_match('/@Macro\("(\w+)"\)/', $docComment, $matches)) {
                 $macroName = $matches[1];
-                $macro = fn(...$args) => $method->invoke($class, ...$args);
+                $macro = $method->isStatic()
+                    ? fn(...$args) => $method->invoke(null, ...$args)
+                    : fn(...$args) => $method->invoke($instance, ...$args);
                 static::macro($macroName, $macro);
             }
         }
     }
-
 
     /**
      * Loads macros from a given configuration array.
@@ -120,11 +120,12 @@ trait MacroMix
      * the shared state and releasing the lock afterward.
      *
      * @param array<string, callable> $config An associative array where keys are
-     *        macro names and values are callable macros.
+     *                                        macro names and values are callable macros.
      */
     public static function loadMacrosFromConfig(array $config): void
     {
         self::acquireLock();
+
         try {
             foreach ($config as $name => $macro) {
                 static::macro($name, $macro);
@@ -134,22 +135,16 @@ trait MacroMix
         }
     }
 
-
     /**
      * Registers a macro.
      *
-     * Registers a macro with the given name. If the macro is a callable, it will be
-     * wrapped with the chaining mechanism. If the macro is an object, it will be
-     * stored directly.
+     * Registers a macro with the given name.
      *
      * @param string $name The macro name.
      * @param callable|object $macro The macro to register.
      */
     public static function macro(string $name, callable|object $macro): void
     {
-        if (is_callable($macro)) {
-            $macro = static::wrapWithChaining($macro);
-        }
         static::$macros[$name] = $macro;
     }
 
@@ -188,7 +183,6 @@ trait MacroMix
         }
     }
 
-
     /**
      * Removes a macro.
      *
@@ -200,7 +194,6 @@ trait MacroMix
     {
         unset(static::$macros[$name]);
     }
-
 
     /**
      * Acquires a lock to ensure thread-safe operations.
@@ -235,9 +228,8 @@ trait MacroMix
      */
     private static function isLockEnabled(): bool
     {
-        return defined('static::ENABLE_LOCK') ? static::ENABLE_LOCK : false;
+        return defined('static::ENABLE_LOCK') && (bool) static::ENABLE_LOCK;
     }
-
 
     /**
      * Process a macro call.
@@ -246,9 +238,9 @@ trait MacroMix
      * exist, an exception is thrown.
      *
      * @param object|null $bind The object to bind the macro call to, or null
-     *     for static calls.
+     *                          for static calls.
      * @param string $method The method name to call.
-     * @param array $parameters Parameters to pass to the macro.
+     * @param array<int, mixed> $parameters Parameters to pass to the macro.
      *
      * @return mixed The result of the macro call.
      *
@@ -265,10 +257,28 @@ trait MacroMix
         $macro = static::$macros[$method];
 
         if ($macro instanceof Closure) {
-            $macro = $macro->bindTo($bind, static::class);
+            $result = null;
+            $closure = $macro;
+
+            if ($bind !== null && !(new ReflectionFunction($macro))->isStatic()) {
+                $bound = $macro->bindTo($bind, static::class);
+                $closure = $bound instanceof Closure ? $bound : $macro;
+            }
+
+            $result = $closure(...$parameters);
+
+            return $result ?? $bind ?? static::class;
         }
 
-        return $macro(...$parameters);
+        if (!is_callable($macro)) {
+            throw new Exception(
+                sprintf('Method %s::%s is not callable.', static::class, $method),
+            );
+        }
+
+        $result = $macro(...$parameters);
+
+        return $result ?? $bind ?? static::class;
     }
 
     /**
@@ -291,31 +301,5 @@ trait MacroMix
             fclose(self::$lockHandle);
             self::$lockHandle = null;
         }
-    }
-
-
-    /**
-     * Wraps a callable to chain method calls.
-     *
-     * If the callable is a closure, it is bound to the current object (if
-     * available) and called with the given arguments. If the callable is not a
-     * closure, it is called directly with the given arguments.
-     *
-     * If the result of the callable is not set, the method returns the current
-     * object (if available) or the class name (if not available).
-     *
-     * @param callable $callable The callable to wrap.
-     *
-     * @return callable The wrapped callable.
-     */
-    private static function wrapWithChaining(callable $callable): callable
-    {
-        return function (...$args) use ($callable) {
-            $result = isset($this) && $callable instanceof Closure
-                ? $callable->bindTo($this, static::class)(...$args)
-                : call_user_func_array($callable, $args);
-
-            return $result ?? $this ?? static::class;
-        };
     }
 }

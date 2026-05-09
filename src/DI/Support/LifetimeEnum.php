@@ -21,6 +21,7 @@ enum LifetimeEnum: string
      * Instances are shared within the same scope but isolated between different scopes.
      */
     case Scoped = 'scoped';
+
     /**
      * One instance per container for the entire lifetime.
      * The same instance is returned on all subsequent requests.

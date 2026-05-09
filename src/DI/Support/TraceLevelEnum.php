@@ -19,10 +19,15 @@ namespace Infocyph\InterMix\DI\Support;
  */
 enum TraceLevelEnum: int
 {
-    case Error   = 1;
-    case Info    = 3;
-    case Node    = 4;
-    case Off     = 0;
+    case Error = 1;
+
+    case Info = 3;
+
+    case Node = 4;
+
+    case Off = 0;
+
     case Verbose = 5;
-    case Warn    = 2;
+
+    case Warn = 2;
 }

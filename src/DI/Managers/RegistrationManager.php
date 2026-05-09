@@ -13,6 +13,8 @@ use Infocyph\InterMix\Exceptions\ContainerException;
 
 /**
  * Handles registering closures, classes, methods, and properties.
+ *
+ * @implements ArrayAccess<string, mixed>
  */
 class RegistrationManager implements ArrayAccess
 {
@@ -22,7 +24,7 @@ class RegistrationManager implements ArrayAccess
      * Initializes the registration manager with a repository and a container.
      *
      * @param Repository $repository The internal repository of definitions, resolved instances, etc.
-     * @param Container  $container  The container instance to which this manager is bound.
+     * @param Container $container The container instance to which this manager is bound.
      */
     public function __construct(
         protected Repository $repository,
@@ -67,6 +69,7 @@ class RegistrationManager implements ArrayAccess
         }
 
         $provider->register($this->container);
+
         return $this;
     }
 
@@ -96,7 +99,6 @@ class RegistrationManager implements ArrayAccess
         return $this->container->options();
     }
 
-
     /**
      * Registers a class with associated constructor parameters.
      *
@@ -104,7 +106,7 @@ class RegistrationManager implements ArrayAccess
      * allowing the container to resolve and instantiate the class with the provided parameters.
      *
      * @param string $class The name of the class to register.
-     * @param array $parameters An array of parameters to be passed to the class constructor.
+     * @param array<int|string, mixed> $parameters An array of parameters to be passed to the class constructor.
      *
      * @return $this
      * @throws ContainerException
@@ -112,9 +114,10 @@ class RegistrationManager implements ArrayAccess
     public function registerClass(string $class, array $parameters = []): self
     {
         $this->repository->addClassResource($class, 'constructor', [
-            'on'     => '__constructor',
+            'on' => '__constructor',
             'params' => $parameters,
         ]);
+
         return $this;
     }
 
@@ -123,7 +126,7 @@ class RegistrationManager implements ArrayAccess
      *
      * @param string $closureAlias The alias under which the closure will be stored.
      * @param callable|Closure $function The closure to be registered.
-     * @param array $parameters Any parameters to be passed to the closure.
+     * @param array<int|string, mixed> $parameters Any parameters to be passed to the closure.
      *
      * @return $this
      * @throws ContainerException
@@ -134,9 +137,9 @@ class RegistrationManager implements ArrayAccess
         array $parameters = [],
     ): self {
         $this->repository->addClosureResource($closureAlias, $function, $parameters);
+
         return $this;
     }
-
 
     /**
      * Registers a method with associated parameters for a given class.
@@ -147,7 +150,7 @@ class RegistrationManager implements ArrayAccess
      *
      * @param string $class The name of the class whose method is being registered.
      * @param string $method The name of the method to register.
-     * @param array $parameters An array of parameters to be passed to the method.
+     * @param array<int|string, mixed> $parameters An array of parameters to be passed to the method.
      *
      * @return $this
      * @throws ContainerException
@@ -158,12 +161,12 @@ class RegistrationManager implements ArrayAccess
         array $parameters = [],
     ): self {
         $this->repository->addClassResource($class, 'method', [
-            'on'     => $method,
+            'on' => $method,
             'params' => $parameters,
         ]);
+
         return $this;
     }
-
 
     /**
      * Registers a property with associated parameters for a given class.
@@ -173,7 +176,7 @@ class RegistrationManager implements ArrayAccess
      * when the class is instantiated.
      *
      * @param string $class The name of the class whose property is being registered.
-     * @param array $property An array of property names as keys and their associated values as values.
+     * @param array<string, mixed> $property An array of property names as keys and their associated values as values.
      *
      * @return $this
      * @throws ContainerException
@@ -181,10 +184,20 @@ class RegistrationManager implements ArrayAccess
     public function registerProperty(string $class, array $property): self
     {
         // Merge with existing
-        $existing = $this->repository->getClassResource()[$class]['property'] ?? [];
-        $merged   = $property + $existing;
+        $classResource = $this->repository->getClassResourceFor($class);
+        $rawExisting = $classResource['property'] ?? [];
+        $existing = [];
+        if (is_array($rawExisting)) {
+            foreach ($rawExisting as $key => $value) {
+                if (is_string($key)) {
+                    $existing[$key] = $value;
+                }
+            }
+        }
+        $merged = $property + $existing;
 
         $this->repository->addClassResource($class, 'property', $merged);
+
         return $this;
     }
 }

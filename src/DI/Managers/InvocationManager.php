@@ -17,6 +17,8 @@ use ReflectionException;
 
 /**
  * Handles get(), has(), getReturn(), call(), make() with optional lazy loading.
+ *
+ * @implements ArrayAccess<string, mixed>
  */
 class InvocationManager implements ArrayAccess
 {
@@ -32,7 +34,6 @@ class InvocationManager implements ArrayAccess
         protected Repository $repository,
         protected Container $container,
     ) {}
-
 
     /**
      * Invokes a given class or closure with optional method name.
@@ -87,7 +88,9 @@ class InvocationManager implements ArrayAccess
         }
 
         // 4) Otherwise assume class name
-        return $resolver->classSettler($classOrClosure, $method);
+        $targetMethod = is_string($method) ? $method : null;
+
+        return $resolver->classSettler($classOrClosure, $targetMethod);
     }
 
     /**
@@ -145,7 +148,6 @@ class InvocationManager implements ArrayAccess
         return $this->resolveAndCache($id, $scopeKey, $cacheable, $isScoped);
     }
 
-
     /**
      * Resolves a definition ID and returns the result of the resolved instance.
      *
@@ -183,7 +185,6 @@ class InvocationManager implements ArrayAccess
             || $this->repository->hasResolved($id);
     }
 
-
     /**
      * Creates a new instance of the given class with dependency injection,
      * without caching the result.
@@ -203,10 +204,11 @@ class InvocationManager implements ArrayAccess
     public function make(string $class, string|bool $method = false): mixed
     {
         $resolver = $this->container->getCurrentResolver();
+        $targetMethod = is_string($method) ? $method : null;
 
-        $fresh = $resolver->classSettler($class, $method ?: null, true);
+        $fresh = $resolver->classSettler($class, $targetMethod, true);
 
-        return $method ? $fresh['returned'] : $fresh['instance'];
+        return $method === false ? $fresh['instance'] : $fresh['returned'];
     }
 
     /**
@@ -228,7 +230,6 @@ class InvocationManager implements ArrayAccess
     {
         return $this->container->registration();
     }
-
 
     /**
      * Resolves a definition by its ID and returns the resolved instance.
@@ -252,6 +253,7 @@ class InvocationManager implements ArrayAccess
         if ($this->repository->isLazyLoading() && !($definition instanceof Closure)) {
             $lazy = new DeferredInitializer(fn() => $resolver->resolveByDefinition($id), $this->container);
             $this->repository->setResolved($id, $lazy);
+
             return $lazy;
         }
 
@@ -316,6 +318,7 @@ class InvocationManager implements ArrayAccess
         if ($isScoped) {
             $scope = substr($scopeKey, strrpos($scopeKey, '@') + 1);
             $this->repository->setResolvedScoped($scope, $scopeKey, $resolved);
+
             return;
         }
 

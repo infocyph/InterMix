@@ -14,6 +14,7 @@ class EmailService
     public function setConfig(array $config): void
     {
         // For testing method injection
+        count($config);
         $this->initialized = true;
     }
 
@@ -22,7 +23,7 @@ class EmailService
         if (! $this->initialized) {
             throw new \RuntimeException('EmailService not configured!');
         }
-        // Suppose it "sends" mail
-        return true;
+        // Keep fixture behavior simple while intentionally consuming inputs.
+        return $to !== '' && $subject !== '' && $body !== '';
     }
 }

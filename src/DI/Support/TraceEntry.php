@@ -14,6 +14,9 @@ use DateTimeImmutable;
  */
 final readonly class TraceEntry
 {
+    /**
+     * @param array<int|string, mixed> $context
+     */
     public function __construct(
         public TraceLevelEnum $level,
         public string $message,

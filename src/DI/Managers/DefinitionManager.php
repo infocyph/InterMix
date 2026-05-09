@@ -6,6 +6,7 @@ namespace Infocyph\InterMix\DI\Managers;
 
 use ArrayAccess;
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Invoker\GenericCall;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
@@ -13,6 +14,9 @@ use Psr\Cache\CacheItemPoolInterface;
 use Psr\Cache\InvalidArgumentException;
 use ReflectionException;
 
+/**
+ * @implements ArrayAccess<string, mixed>
+ */
 class DefinitionManager implements ArrayAccess
 {
     use ManagerProxy;
@@ -60,7 +64,7 @@ class DefinitionManager implements ArrayAccess
      * @param string $id The identifier of the definition.
      * @param mixed $definition The definition itself.
      * @param LifetimeEnum $lifetime The lifetime of the definition.
-     * @param array $tags An array of tags to associate with the definition.
+     * @param array<int, string> $tags An array of tags to associate with the definition.
      *
      * @return $this
      * @throws ContainerException if the container is locked or if the id is the same as the definition.
@@ -79,6 +83,7 @@ class DefinitionManager implements ArrayAccess
             'lifetime' => $lifetime,
             'tags' => $tags,
         ]);
+
         return $this;
     }
 
@@ -110,6 +115,9 @@ class DefinitionManager implements ArrayAccess
 
         // Use the container’s set resolver to pre-resolve
         $resolver = $this->container->getCurrentResolver();
+        if ($resolver instanceof GenericCall) {
+            throw new ContainerException('Definition caching requires injection-enabled resolver.');
+        }
 
         foreach ($this->repository->getFunctionReference() as $id => $_def) {
             // This triggers definition resolution + caching
@@ -130,6 +138,7 @@ class DefinitionManager implements ArrayAccess
     public function enableDefinitionCache(CacheItemPoolInterface $adapter): self
     {
         $this->repository->setCacheAdapter($adapter);
+
         return $this;
     }
 
@@ -170,15 +179,8 @@ class DefinitionManager implements ArrayAccess
         ?LifetimeEnum $lifetime = null,
         ?array $tags = null,
     ): self {
-        $meta = [];
-        if ($lifetime !== null) {
-            $meta['lifetime'] = $lifetime;
-        }
-        if ($tags !== null) {
-            $meta['tags'] = $tags;
-        }
+        $this->container->options()->setDefinitionMetaForEnv($env, $id, $lifetime, $tags);
 
-        $this->repository->setDefinitionMetaForEnv($env, $id, $meta);
         return $this;
     }
 }

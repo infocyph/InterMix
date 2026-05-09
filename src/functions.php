@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Remix\TapProxy;
@@ -18,6 +20,7 @@ if (!function_exists('container')) {
      *
      * @throws ContainerException
      * @throws Exception|InvalidArgumentException|\Psr\Cache\InvalidArgumentException
+     * @param array{0:string,1:string}|null|string|Closure|callable $closureOrClass
      */
     function container(
         string|Closure|callable|array|null $closureOrClass = null,
@@ -36,10 +39,11 @@ if (!function_exists('resolve')) {
      * Resolve a callable/class immediately with DI enabled.
      *
      * @param string|Closure|callable|array|null $spec Closure|function|Class|[Class,method]|"Class@method"|"Class::method"
-     * @param array $parameters Parameters for constructor/method/closure
+     * @param array<int|string, mixed> $parameters Parameters for constructor/method/closure
      * @param string $alias Optional container instance alias (default: __DIR__)
      * @return mixed Container instance (when $spec is null) or resolved return value
      * @throws ContainerException|ReflectionException|InvalidArgumentException
+     * @param array{0:string,1:string}|null|string|Closure|callable $spec
      */
     function resolve(
         string|Closure|callable|array|null $spec = null,
@@ -47,6 +51,7 @@ if (!function_exists('resolve')) {
         string $alias = __DIR__ . 'DI',
     ): mixed {
         $instance = Container::instance($alias); // DI is on by default
+
         return $spec === null
             ? $instance
             : $instance->resolveNow($spec, $parameters);
@@ -58,10 +63,11 @@ if (!function_exists('direct')) {
      * Resolve a callable/class immediately with DI disabled (no injection).
      *
      * @param string|Closure|callable|array|null $spec Closure|function|Class|[Class,method]|"Class@method"|"Class::method"
-     * @param array $parameters Parameters for constructor/method/closure
+     * @param array<int|string, mixed> $parameters Parameters for constructor/method/closure
      * @param string $alias Optional container instance alias (default: __DIR__)
      * @return mixed Container instance (when $spec is null) or resolved return value
      * @throws ContainerException|ReflectionException|InvalidArgumentException
+     * @param array{0:string,1:string}|null|string|Closure|callable $spec
      */
     function direct(
         string|Closure|callable|array|null $spec = null,
@@ -95,6 +101,7 @@ if (!function_exists('tap')) {
             return new TapProxy($value);
         }
         $callback($value);
+
         return $value;
     }
 }
@@ -139,8 +146,9 @@ if (!function_exists('measure')) {
      *
      * @param callable $fn The callback function to execute.
      * @param float|null &$ms A variable to store the execution time in milliseconds.
-     *                         Passed by reference and will be updated with the elapsed time.
-     *                         Defaults to null if not provided.
+     *                        Passed by reference and will be updated with the elapsed time.
+     *                        Defaults to null if not provided.
+     * @param-out float $ms
      * @return mixed The result of the callback function execution.
      */
     function measure(callable $fn, ?float &$ms = null): mixed
@@ -148,6 +156,7 @@ if (!function_exists('measure')) {
         $t0 = microtime(true);
         $out = $fn();
         $ms = (microtime(true) - $t0) * 1000;
+
         return $out;
     }
 }
@@ -160,15 +169,15 @@ if (!function_exists('retry')) {
      * @param int $attempts The number of times to attempt the callback.
      * @param callable $callback The function to call, which may throw an exception.
      * @param callable|null $shouldRetry A function that takes a Throwable and
-     *     returns true if the operation should be retried, false otherwise.
+     *                                   returns true if the operation should be retried, false otherwise.
      * @param int $delayMs The base delay to sleep between retries, in milliseconds.
      * @param float $backoff The backoff factor to apply to the delay after each retry.
-     *     Defaults to 1.0 (no backoff).  For example, a value of 2.0 will double the
-     *     delay after each retry.
+     *                       Defaults to 1.0 (no backoff).  For example, a value of 2.0 will double the
+     *                       delay after each retry.
      *
      * @return mixed The result of the callback, if it succeeds.
      * @throws Throwable The exception that was thrown by the callback on the last
-     *     attempt, if it never succeeds.
+     *                   attempt, if it never succeeds.
      */
     function retry(
         int $attempts,
@@ -177,24 +186,26 @@ if (!function_exists('retry')) {
         int $delayMs = 0,
         float $backoff = 1.0,
     ): mixed {
-        $tries = 0;
-        $sleep = $delayMs;
+        if ($attempts < 1) {
+            throw new InvalidArgumentException('Attempts must be at least 1.');
+        }
 
-        beginning:
-        try {
-            return $callback(++$tries);
-        } catch (Throwable $e) {
-            if ($tries >= $attempts) {
-                throw $e;
+        $sleep = max(0, $delayMs);
+        for ($tries = 1; $tries <= $attempts; $tries++) {
+            try {
+                return $callback($tries);
+            } catch (Throwable $e) {
+                if ($tries >= $attempts || ($shouldRetry && !$shouldRetry($e))) {
+                    throw $e;
+                }
             }
-            if ($shouldRetry && !$shouldRetry($e)) {
-                throw $e;
-            }
+
             if ($sleep > 0) {
                 usleep($sleep * 1000);
+                $sleep = (int) ($sleep * max($backoff, 0.0));
             }
-            $sleep = (int) ($sleep * $backoff);
-            goto beginning;
         }
+
+        throw new \RuntimeException('Retry loop exited unexpectedly.');
     }
 }

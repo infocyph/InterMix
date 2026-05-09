@@ -7,6 +7,7 @@ namespace Infocyph\InterMix\DI\Support;
 use BadMethodCallException;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\InvalidArgumentException;
+use Stringable;
 
 /**
  * Tiny syntactic sugar layer for the Container *itself*.
@@ -20,7 +21,7 @@ trait ContainerProxy
      * Delegate calls to methods on the container.
      *
      * @param string $method The name of the method to call.
-     * @param array $args The arguments to pass to the method.
+     * @param array<int, mixed> $args The arguments to pass to the method.
      *
      * @return mixed The result of the method call.
      *
@@ -31,9 +32,9 @@ trait ContainerProxy
         if (!\method_exists($this, $method)) {
             throw new BadMethodCallException("Undefined method $method()");
         }
+
         return $this->$method(...$args);
     }
-
 
     /**
      * Magic getter method.
@@ -45,6 +46,7 @@ trait ContainerProxy
     {
         return $this->get($id);
     }
+
     /**
      * Allows for a quick shorthand: `$container('id')`
      *
@@ -58,8 +60,6 @@ trait ContainerProxy
 
     /**
      * Magic isset() method.
-     *
-     *
      */
     public function __isset(string $id): bool
     {
@@ -77,13 +77,12 @@ trait ContainerProxy
         $this->definitions()->bind($id, $def);
     }
 
-
     /**
      * @inheritDoc
      */
     public function offsetExists(mixed $offset): bool
     {
-        return $this->has((string) $offset);
+        return $this->has($this->offsetToString($offset));
     }
 
     /**
@@ -100,7 +99,7 @@ trait ContainerProxy
      */
     public function offsetGet(mixed $offset): mixed
     {
-        return $this->get((string) $offset);
+        return $this->get($this->offsetToString($offset));
     }
 
     /**
@@ -116,7 +115,7 @@ trait ContainerProxy
      */
     public function offsetSet(mixed $offset, mixed $v): void
     {
-        $this->definitions()->bind((string) $offset, $v);
+        $this->definitions()->bind($this->offsetToString($offset), $v);
     }
 
     /**
@@ -129,5 +128,20 @@ trait ContainerProxy
      */
     public function offsetUnset(mixed $offset): void
     { /* silently ignore */
+    }
+
+    private function offsetToString(mixed $offset): string
+    {
+        if (is_string($offset)) {
+            return $offset;
+        }
+        if ($offset instanceof Stringable) {
+            return (string) $offset;
+        }
+        if (is_int($offset) || is_float($offset) || is_bool($offset) || $offset === null) {
+            return (string) $offset;
+        }
+
+        throw new BadMethodCallException('Array-access offset must be string-convertible.');
     }
 }

@@ -11,6 +11,9 @@ class MethodTarget
         #[Inject('api_key')] string $override,
         #[ExampleAttr('TEST')] string $custom
     ) {
-        $this->result = compact('override', 'custom');
+        $this->result = [
+            'override' => $override,
+            'custom' => $custom,
+        ];
     }
 }

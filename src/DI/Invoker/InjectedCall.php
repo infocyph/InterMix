@@ -15,10 +15,12 @@ use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\InvalidArgumentException;
 use ReflectionException;
 
-final readonly class InjectedCall
+final class InjectedCall
 {
     private ClassResolver $classResolver;
+
     private DefinitionResolver $definitionResolver;
+
     private ParameterResolver $parameterResolver;
 
     /**
@@ -27,7 +29,7 @@ final readonly class InjectedCall
      * @param Repository $repository The DI repository which contains definitions, classes, functions, and parameters.
      */
     public function __construct(
-        private Repository $repository,
+        private readonly Repository $repository,
     ) {
         $this->initializeResolvers();
     }
@@ -35,10 +37,10 @@ final readonly class InjectedCall
     /**
      * Settles (resolves) a class with dependency injection.
      *
-     * @param  string|object  $class  The class name or object to settle.
-     * @param  string|null  $method  The method to call after construction (or null).
-     * @param  bool  $make  Whether to create a new instance (bypassing any cached instance).
-     * @return array An associative array with keys 'instance' and possibly 'returned'.
+     * @param string|object $class The class name or object to settle.
+     * @param string|null $method The method to call after construction (or null).
+     * @param bool $make Whether to create a new instance (bypassing any cached instance).
+     * @return array<string, mixed> An associative array with keys 'instance' and possibly 'returned'.
      *
      * @throws ReflectionException|ContainerException
      */
@@ -47,25 +49,37 @@ final readonly class InjectedCall
         ?string $method = null,
         bool $make = false,
     ): array {
-        return $this->classResolver->resolve(
+        $resolved = $this->classResolver->resolve(
             ReflectionResource::getClassReflection($class),
             null,
             $method,
             $make,
         );
+
+        return [
+            'instance' => $resolved['instance'] ?? null,
+            'returned' => $resolved['returned'] ?? null,
+        ];
     }
 
     /**
      * Executes a closure (or function) with the given parameters and returns its result.
      *
-     * @param  string|Closure  $closure  The closure or function name to be executed.
-     * @param  array  $params  Additional parameters to be passed.
+     * @param string|Closure $closure The closure or function name to be executed.
+     * @param array<int|string, mixed> $params Additional parameters to be passed.
      * @return mixed The result of executing the closure/function.
      *
      * @throws ReflectionException|ContainerException|InvalidArgumentException
      */
     public function closureSettler(string|Closure $closure, array $params = []): mixed
     {
+        if (is_string($closure)) {
+            if (!function_exists($closure)) {
+                throw new ContainerException("Function '$closure' is not defined.");
+            }
+            $closure = $closure(...);
+        }
+
         // Invoke the closure with resolved arguments
         return $closure(
             ...$this->parameterResolver->resolve(
@@ -75,7 +89,6 @@ final readonly class InjectedCall
             ),
         );
     }
-
 
     /**
      * Resolve a definition by name (id).
@@ -89,7 +102,6 @@ final readonly class InjectedCall
     {
         return $this->definitionResolver->resolve($name);
     }
-
 
     /**
      * Initialize resolvers required for injected method calls.

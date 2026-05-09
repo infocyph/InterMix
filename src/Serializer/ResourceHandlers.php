@@ -13,6 +13,7 @@ abstract class ResourceHandlers
      * ensuring that no instances of this class can be created.
      */
     private function __construct() {}
+
     /**
      * Registers all default resource handlers.
      *

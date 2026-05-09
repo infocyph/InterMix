@@ -7,6 +7,7 @@ namespace Infocyph\InterMix\DI\Resolver\Concerns;
 use Infocyph\InterMix\DI\Support\ReflectionResource;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\InvalidArgumentException;
+use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionFunctionAbstract;
@@ -15,6 +16,42 @@ use ReflectionParameter;
 trait ResolvesAssociativeParameters
 {
     /**
+     * @param ReflectionClass<object> $class
+     * @param array<int|string, mixed>|mixed $supplied
+     */
+    private function appendConstructorSupplied(
+        ReflectionClass $class,
+        string $type,
+        mixed $supplied,
+    ): void {
+        if ($type !== 'constructor' || $supplied === null || $class->getConstructor() === null) {
+            return;
+        }
+
+        $resource = $this->repository->getClassResourceFor($class->getName());
+        $ctor = $resource['constructor'] ?? [];
+        $existing = is_array($ctor) && is_array($ctor['params'] ?? null)
+            ? $ctor['params']
+            : [];
+        $suppliedList = is_array($supplied) ? $supplied : [$supplied];
+        $this->repository->addClassResource(
+            $class->getName(),
+            'constructor',
+            ['on' => '__constructor', 'params' => $suppliedList + $existing],
+        );
+    }
+
+    /**
+     * @param array<int, ReflectionParameter> $availableParams
+     * @param array<int|string, mixed> $suppliedParameters
+     * @param array<string, string> $parameterAttribute
+     * @return array{
+     *   availableParams: array<int, ReflectionParameter>,
+     *   processed: array<string, mixed>,
+     *   availableSupply: array<int|string, mixed>,
+     *   sort: array<string, int>
+     * }
+     *
      * @throws ContainerException
      * @throws ReflectionException
      * @throws InvalidArgumentException
@@ -36,6 +73,7 @@ trait ResolvesAssociativeParameters
 
             if ($param->isVariadic()) {
                 $paramsLeft[] = $param;
+
                 break;
             }
 
@@ -50,6 +88,7 @@ trait ResolvesAssociativeParameters
 
             if ($resolvedValue !== $this->stdClass) {
                 $processed[$paramName] = $resolvedValue;
+
                 continue;
             }
 
@@ -65,6 +104,9 @@ trait ResolvesAssociativeParameters
     }
 
     /**
+     * @param ReflectionClass<object> $class
+     * @param array<int|string, mixed>|mixed $supplied
+     *
      * @throws ContainerException
      * @throws ReflectionException
      * @throws InvalidArgumentException
@@ -74,15 +116,9 @@ trait ResolvesAssociativeParameters
         string $type,
         mixed $supplied,
     ): object {
-        if ($type === 'constructor' && $supplied !== null && $class->getConstructor()) {
-            $existing = $this->repository->getClassResourceFor($class->getName())['constructor']['params'] ?? [];
-            $this->repository->addClassResource(
-                $class->getName(),
-                'constructor',
-                ['on' => '__constructor', 'params' => (array) $supplied + $existing],
-            );
-        }
-        return $this->classResolver->resolve($class)['instance'];
+        $this->appendConstructorSupplied($class, $type, $supplied);
+
+        return $this->classResolver->resolveClassInstance($class);
     }
 
     /**
@@ -101,21 +137,45 @@ trait ResolvesAssociativeParameters
 
         if (function_exists($attributeValue)) {
             $reflectionFn = ReflectionResource::getFunctionReflection($attributeValue);
+
             return $attributeValue(...$this->resolve($reflectionFn, [], 'constructor'));
         }
 
         return $this->stdClass;
     }
 
+    /**
+     * @param array<int, ReflectionAttribute<\Infocyph\InterMix\DI\Attribute\Infuse>> $attributes
+     * @return array<string, string>
+     */
     private function resolveMethodAttributes(array $attributes): array
     {
-        if (!$attributes || empty($attributes[0]->getArguments())) {
+        $first = $attributes[0] ?? null;
+        if ($first === null || $first->getArguments() === []) {
             return [];
         }
-        return $attributes[0]->newInstance()->getMethodArguments();
+
+        $instance = $first->newInstance();
+        $arguments = $instance->getMethodArguments();
+        if (!is_array($arguments)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($arguments as $key => $value) {
+            if (is_string($key) && is_string($value)) {
+                $normalized[$key] = $value;
+            }
+        }
+
+        return $normalized;
     }
 
     /**
+     * @param array<int|string, mixed> $suppliedParameters
+     * @param array<string, string> $parameterAttribute
+     * @param array<string, mixed> $processed
+     *
      * @throws ContainerException
      * @throws ReflectionException
      * @throws InvalidArgumentException

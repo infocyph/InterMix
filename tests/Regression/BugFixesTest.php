@@ -118,16 +118,20 @@ it('supports pure PSR-6 pools when resolving definitions', function () {
                     return $this;
                 }
 
-                public function expiresAt(?DateTimeInterface $expiration): static
-                {
-                    return $this;
-                }
+            public function expiresAt(?DateTimeInterface $expiration): static
+            {
+                $this->value = [$this->value, $expiration];
 
-                public function expiresAfter(int|\DateInterval|null $time): static
-                {
-                    return $this;
-                }
-            };
+                return $this;
+            }
+
+            public function expiresAfter(int|\DateInterval|null $time): static
+            {
+                $this->hit = $this->hit && $time !== -1;
+
+                return $this;
+            }
+        };
         }
 
         public function getItems(array $keys = []): iterable

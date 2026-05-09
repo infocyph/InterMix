@@ -18,7 +18,8 @@ class UserService
 
     public function createUser(array $userData): bool
     {
-        $this->logger->log('Creating user in '.$this->dbName);
+        $this->logger->log('Creating user in '.$this->dbName.' with '.count($userData).' field(s)');
+
         return true;
     }
 

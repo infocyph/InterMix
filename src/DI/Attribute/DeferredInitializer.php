@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Infocyph\InterMix\DI\Attribute;
 
 use Closure;
@@ -9,6 +11,7 @@ use Infocyph\InterMix\DI\Support\TraceLevelEnum;
 final class DeferredInitializer
 {
     private bool $done = false;
+
     private mixed $value = null;
 
     /**
@@ -31,7 +34,8 @@ final class DeferredInitializer
         }
         $this->container->tracer()->push('lazy-init', TraceLevelEnum::Verbose);
         $this->value = ($this->factory)();
-        $this->done  = true;
+        $this->done = true;
+
         return $this->value;
     }
 }

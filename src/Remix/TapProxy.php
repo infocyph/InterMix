@@ -25,12 +25,14 @@ class TapProxy
 
     /**
      * Proxy a method call to the target, then return the target.
-     *
-     * @return mixed
      */
-    public function __call(string $method, array $parameters)
+    /**
+     * @param array<int, mixed> $parameters
+     */
+    public function __call(string $method, array $parameters): mixed
     {
         $this->target->{$method}(...$parameters);
+
         return $this->target;
     }
 }

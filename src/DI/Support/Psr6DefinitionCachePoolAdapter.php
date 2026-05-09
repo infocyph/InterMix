@@ -38,9 +38,19 @@ readonly class Psr6DefinitionCachePoolAdapter implements DefinitionCachePoolInte
         return $this->pool->getItem($key);
     }
 
+    /**
+     * @return iterable<string, CacheItemInterface>
+     */
     public function getItems(array $keys = []): iterable
     {
-        return $this->pool->getItems($keys);
+        $items = [];
+        foreach ($this->pool->getItems($keys) as $key => $item) {
+            if (is_string($key) && $item instanceof CacheItemInterface) {
+                $items[$key] = $item;
+            }
+        }
+
+        return $items;
     }
 
     public function hasItem(string $key): bool
