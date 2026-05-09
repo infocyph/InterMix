@@ -11,8 +11,11 @@ use function Opis\Closure\{serialize as oc_serialize, unserialize as oc_unserial
 final class ValueSerializer
 {
     private const string PAYLOAD_HMAC_ALGO = 'sha256';
+
     private const int SERIALIZED_CLOSURE_MEMO_LIMIT = 2048;
+
     private const string SIGNED_PAYLOAD_PREFIX = 'imxv1.';
+
     private static ?string $payloadSigningKey = null;
 
     /** @var array<string,array{wrap:callable,restore:callable}> */
@@ -38,7 +41,7 @@ final class ValueSerializer
      *
      * @param string $payload The encoded string
      * @param bool $base64 True ⇒ expect base64; false ⇒ raw
-     * @return mixed                   Original value
+     * @return mixed Original value
      * @throws InvalidArgumentException Forwarded from ::unserialize()
      */
     public static function decode(string $payload, bool $base64 = true): mixed
@@ -62,12 +65,13 @@ final class ValueSerializer
      *
      * @param mixed $value Any PHP value
      * @param bool $base64 True ⇒ wrap with base64; false ⇒ raw
-     * @return string                  Encoded payload
+     * @return string Encoded payload
      * @throws InvalidArgumentException Forwarded from ::serialize()
      */
     public static function encode(mixed $value, bool $base64 = true): string
     {
         $blob = self::serialize($value);
+
         return $base64 ? base64_encode($blob) : $blob;
     }
 
@@ -118,8 +122,6 @@ final class ValueSerializer
      * @param string $type The type of resource this handler is for.
      * @param callable $wrapFn The callable that wraps the resource.
      * @param callable $restoreFn The callable that restores the resource.
-     *
-     * @throws InvalidArgumentException If a handler for `$type` already exists.
      */
     public static function registerResourceHandler(
         string $type,
@@ -176,7 +178,6 @@ final class ValueSerializer
         self::$serializedClosureMemo = [];
     }
 
-
     /**
      * Unserializes a given string into its original value.
      *
@@ -198,9 +199,9 @@ final class ValueSerializer
         if (!ValueSerializer::isSerializedClosure($blob) && str_starts_with($blob, 's:')) {
             return unserialize($blob, ['allowed_classes' => true]);
         }
+
         return self::unwrapRecursive(oc_unserialize($blob));
     }
-
 
     /**
      * Reverse {@see wrap} by recursively unwrapping values that were wrapped by
@@ -215,7 +216,6 @@ final class ValueSerializer
     {
         return self::unwrapRecursive($resource);
     }
-
 
     /**
      * Wraps resources within a given value.
@@ -240,9 +240,6 @@ final class ValueSerializer
         }
 
         $raw = substr($payload, strlen(self::SIGNED_PAYLOAD_PREFIX));
-        if ($raw === false) {
-            throw new InvalidArgumentException('Invalid signed payload.');
-        }
 
         $separatorPosition = strpos($raw, '.');
         if ($separatorPosition === false) {
@@ -268,19 +265,18 @@ final class ValueSerializer
     {
         if (!array_key_exists($key, self::$serializedClosureMemo)
             && count(self::$serializedClosureMemo) >= self::SERIALIZED_CLOSURE_MEMO_LIMIT) {
-            $oldest = array_key_first(self::$serializedClosureMemo);
-            if ($oldest !== null) {
-                unset(self::$serializedClosureMemo[$oldest]);
-            }
+            unset(self::$serializedClosureMemo[array_key_first(self::$serializedClosureMemo)]);
         }
 
         self::$serializedClosureMemo[$key] = $value;
+
         return $value;
     }
 
     private static function signBlob(string $blob, string $key): string
     {
         $signature = hash_hmac(self::PAYLOAD_HMAC_ALGO, $blob, $key);
+
         return self::SIGNED_PAYLOAD_PREFIX . $signature . '.' . base64_encode($blob);
     }
 
@@ -297,6 +293,7 @@ final class ValueSerializer
         if (
             is_array($resource)
             && ($resource['__wrapped_resource'] ?? false)
+            && is_string($resource['type'] ?? null)
             && isset(self::$resourceHandlers[$resource['type']])
         ) {
             return (self::$resourceHandlers[$resource['type']]['restore'])($resource['data']);
@@ -307,6 +304,7 @@ final class ValueSerializer
                 $resource[$key] = self::unwrapRecursive($item);
             }
         }
+
         return $resource;
     }
 
@@ -336,6 +334,7 @@ final class ValueSerializer
             if (!$arr) {
                 throw new InvalidArgumentException("No handler for resource type '$type'");
             }
+
             return [
                 '__wrapped_resource' => true,
                 'type' => $type,
@@ -348,6 +347,7 @@ final class ValueSerializer
                 $resource[$key] = self::wrapRecursive($value);
             }
         }
+
         return $resource;
     }
 }

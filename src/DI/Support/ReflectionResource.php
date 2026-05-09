@@ -12,62 +12,47 @@ use ReflectionException;
 use ReflectionFunction;
 use ReflectionFunctionAbstract;
 use ReflectionMethod;
+use Throwable;
+use UnitEnum;
 
 /**
  * Utility class for managing reflection operations with caching.
- *
- * This class provides a centralized way to obtain and cache reflection
- * objects for classes, functions, methods, and enums. It improves
- * performance by avoiding repeated reflection operations on the same targets.
- *
- * The class supports various callable types and provides methods for
- * generating signatures and extracting metadata from reflected objects.
  */
 final class ReflectionResource
 {
-    /** @var array<string, mixed> Cache for reflection objects to improve performance */
+    /**
+     * @var array{
+     *   classes: array<class-string, ReflectionClass<object>>,
+     *   enums: array<class-string, ReflectionEnum<UnitEnum>>,
+     *   functions: array<string, ReflectionFunction>,
+     *   methods: array<string, ReflectionMethod>
+     * }
+     */
     private static array $reflectionCache = [
-        'classes'   => [],
-        'enums'     => [],
+        'classes' => [],
+        'enums' => [],
         'functions' => [],
-        'methods'   => [],
+        'methods' => [],
     ];
 
-    /**
-     * Clears all internal reflection caches.
-     *
-     * This method resets the static cache, forcing subsequent reflection
-     * operations to create new reflection objects. Useful for testing
-     * or when working with dynamically loaded code.
-     */
     public static function clearCache(): void
     {
         self::$reflectionCache = [
-            'classes'   => [],
-            'enums'     => [],
+            'classes' => [],
+            'enums' => [],
             'functions' => [],
-            'methods'   => [],
+            'methods' => [],
         ];
     }
 
     /**
-     * Gets a ReflectionMethod or ReflectionFunction for the given callable.
+     * @param callable|array{0: object|string, 1: string}|string|object $callable
      *
-     * The given callable can be a string function or method name, an array
-     * of class and method name, an object with an __invoke method, or a
-     * Closure. If the callable does not exist, an InvalidArgumentException
-     * is thrown.
-     *
-     * @param callable|array|string|object $callable The callable to get the
-     *     ReflectionMethod or ReflectionFunction for.
-     *
-     * @return ReflectionMethod|ReflectionFunction The ReflectionMethod or
-     *     ReflectionFunction for the given callable.
-     *
-     * @throws InvalidArgumentException|ReflectionException If the callable does not exist.
+     * @throws InvalidArgumentException|ReflectionException
      */
-    public static function getCallableReflection(callable|array|string|object $callable): ReflectionMethod|ReflectionFunction
-    {
+    public static function getCallableReflection(
+        callable|array|string|object $callable,
+    ): ReflectionMethod|ReflectionFunction {
         if ($callable instanceof Closure) {
             return self::getFunctionReflection($callable);
         }
@@ -76,7 +61,14 @@ final class ReflectionResource
             return self::resolveStringCallable($callable);
         }
 
-        if (is_array($callable) && count($callable) === 2) {
+        if (is_array($callable)) {
+            if (count($callable) !== 2
+                || (!is_string($callable[0]) && !is_object($callable[0]))
+                || !is_string($callable[1])
+            ) {
+                throw new InvalidArgumentException('Invalid callable provided.');
+            }
+
             return self::resolveArrayCallable($callable);
         }
 
@@ -88,86 +80,57 @@ final class ReflectionResource
     }
 
     /**
-     * Gets a ReflectionClass for the given class name or object.
+     * @return ReflectionClass<object>
      *
-     * The resulting ReflectionClass is cached by class name to avoid redundant lookups.
-     * If the class does not exist, a ReflectionException is thrown.
-     *
-     * @param string|object $class The class name or object to get the ReflectionClass for.
-     *
-     * @return ReflectionClass The ReflectionClass for the given class.
-     *
-     * @throws ReflectionException If the class does not exist.
+     * @throws ReflectionException
      */
     public static function getClassReflection(string|object $class): ReflectionClass
     {
         $className = is_object($class) ? $class::class : $class;
-
-        $cache = & self::$reflectionCache['classes'];
-        if (!isset($cache[$className])) {
-            $cache[$className] = new ReflectionClass($class);
+        if (!class_exists($className) && !interface_exists($className)) {
+            throw new ReflectionException("Class '$className' not found.");
         }
-        return $cache[$className];
+
+        if (!isset(self::$reflectionCache['classes'][$className])) {
+            self::$reflectionCache['classes'][$className] = new ReflectionClass($className);
+        }
+
+        return self::$reflectionCache['classes'][$className];
     }
 
     /**
-     * Gets a ReflectionEnum for the given enum name.
+     * @return ReflectionEnum<UnitEnum>
      *
-     * The resulting ReflectionEnum is cached by enum name to avoid redundant lookups.
-     * If the enum does not exist, a ReflectionException is thrown.
-     *
-     * @param string $enumName The enum name to get the ReflectionEnum for.
-     *
-     * @return ReflectionEnum The ReflectionEnum for the given enum.
-     *
-     * @throws ReflectionException If the enum does not exist.
+     * @throws ReflectionException
      */
     public static function getEnumReflection(string $enumName): ReflectionEnum
     {
-        return self::$reflectionCache['enums'][$enumName]
-            ??= new ReflectionEnum($enumName);
+        if (!enum_exists($enumName)) {
+            throw new ReflectionException("Enum '$enumName' not found.");
+        }
+
+        if (!isset(self::$reflectionCache['enums'][$enumName])) {
+            self::$reflectionCache['enums'][$enumName] = new ReflectionEnum($enumName);
+        }
+
+        return self::$reflectionCache['enums'][$enumName];
     }
 
-    /**
-     * Gets a ReflectionFunction for the given function name or Closure.
-     *
-     * The resulting ReflectionFunction is cached by function name or
-     * Closure object hash to avoid redundant lookups. If the function
-     * does not exist, a ReflectionException is thrown.
-     *
-     * @param string|Closure $function The function name or Closure to get the ReflectionFunction for.
-     *
-     * @return ReflectionFunction The ReflectionFunction for the given function.
-     *
-     * @throws ReflectionException If the function does not exist.
-     */
     public static function getFunctionReflection(string|Closure $function): ReflectionFunction
     {
         $key = is_string($function) ? $function : spl_object_hash($function);
+        if (!isset(self::$reflectionCache['functions'][$key])) {
+            self::$reflectionCache['functions'][$key] = new ReflectionFunction($function);
+        }
 
-        return self::$reflectionCache['functions'][$key]
-            ??= new ReflectionFunction($function);
+        return self::$reflectionCache['functions'][$key];
     }
 
     /**
-     * Resolves a given subject to a reflection object.
+     * @param string|object|callable|array{0: object|string, 1: string} $subject
+     * @return ReflectionClass<object>|ReflectionEnum<UnitEnum>|ReflectionFunction|ReflectionMethod
      *
-     * The given subject can be a string (class name, function name, enum name, etc.),
-     * an object (class instance), an array (callable), or a callable (function, method, etc.).
-     *
-     * The resolved reflection object is one of the following types:
-     * - ReflectionClass (for a class)
-     * - ReflectionEnum (for an enum)
-     * - ReflectionFunction (for a function)
-     * - ReflectionMethod (for a method)
-     *
-     * If the given subject is invalid, an InvalidArgumentException is thrown.
-     *
-     * @param string|object|array|callable $subject The subject to resolve.
-     *
-     * @return ReflectionClass|ReflectionEnum|ReflectionFunction|ReflectionMethod The resolved reflection object.
-     *
-     * @throws InvalidArgumentException|ReflectionException If the given subject is invalid.
+     * @throws InvalidArgumentException|ReflectionException
      */
     public static function getReflection(
         string|object|array|callable $subject,
@@ -180,157 +143,103 @@ final class ReflectionResource
             return self::getCallableReflection($subject);
         }
 
-        if (is_string($subject) || is_object($subject)) {
-            $className = is_object($subject) ? $subject::class : $subject;
-
-            if (enum_exists($className)) {
-                return self::getEnumReflection($className);
-            }
-
-            if (class_exists($className)) {
-                return self::getClassReflection($subject);
-            }
-
-            if (is_string($subject) && function_exists($subject)) {
-                return self::getFunctionReflection($subject);
-            }
+        if (is_array($subject)) {
+            return self::getCallableReflection($subject);
         }
 
-        throw new InvalidArgumentException("Invalid reflection subject.");
+        $className = is_object($subject) ? $subject::class : $subject;
+        if (enum_exists($className)) {
+            return self::getEnumReflection($className);
+        }
+        if (class_exists($className)) {
+            return self::getClassReflection($subject);
+        }
+        if (is_string($subject) && function_exists($subject)) {
+            return self::getFunctionReflection($subject);
+        }
+
+        throw new InvalidArgumentException('Invalid reflection subject.');
     }
 
     /**
-     * Returns a unique string signature for the given Reflection object.
-     *
-     * The signature is a base64-encoded string of the file name and start line
-     * of the reflection object. If the file name is unknown (e.g. for anonymous
-     * classes), it is replaced with "unknown". For ReflectionEnum, the start line
-     * is always 0.
-     *
-     * @param ReflectionClass|ReflectionEnum|ReflectionMethod|ReflectionFunction|ReflectionFunctionAbstract $reflection
-     *     The reflection object to get the signature for.
-     *
-     * @return string The signature string.
+     * @param ReflectionClass<object>|ReflectionEnum<UnitEnum>|ReflectionFunctionAbstract $reflection
      */
     public static function getSignature(
-        ReflectionClass|ReflectionEnum|ReflectionMethod|ReflectionFunction|ReflectionFunctionAbstract $reflection,
+        ReflectionClass|ReflectionEnum|ReflectionFunctionAbstract $reflection,
     ): string {
         $fileName = $reflection->getFileName() ?: 'unknown';
-        $startLine = 0;
-        if (!$reflection instanceof ReflectionEnum) {
-            $startLine = $reflection->getStartLine() ?: 0;
-        }
+        $startLine = $reflection instanceof ReflectionEnum ? 0 : ($reflection->getStartLine() ?: 0);
 
         return base64_encode("$fileName:$startLine");
     }
 
     /**
-     * Resolves an array callable to a ReflectionMethod.
+     * @param callable(): ReflectionMethod $resolver
+     */
+    private static function rememberMethod(string $key, callable $resolver): ReflectionMethod
+    {
+        if (!isset(self::$reflectionCache['methods'][$key])) {
+            try {
+                $method = $resolver();
+                self::$reflectionCache['methods'][$key] = $method;
+            } catch (Throwable $exception) {
+                throw new InvalidArgumentException($exception->getMessage(), 0, $exception);
+            }
+        }
+
+        return self::$reflectionCache['methods'][$key];
+    }
+
+    /**
+     * @param array{0: object|string, 1: string} $callable
      *
-     * The given array callable should consist of two elements: a class name
-     * or an object instance, and a method name. The method must exist in
-     * the specified class or object.
-     *
-     * The resolved ReflectionMethod is cached by the class and method name
-     * to avoid redundant lookups.
-     *
-     * @param array $callable An array consisting of a class or object and a method name.
-     * @return ReflectionMethod The resolved ReflectionMethod.
-     * @throws InvalidArgumentException If the method does not exist in the class or object.
+     * @throws InvalidArgumentException
      */
     private static function resolveArrayCallable(array $callable): ReflectionMethod
     {
         [$class, $method] = $callable;
         $className = is_object($class) ? $class::class : $class;
-
         if (!method_exists($class, $method)) {
             throw new InvalidArgumentException("Method '$method' does not exist in class '$className'.");
         }
 
         $key = "$className::$method";
 
-        return self::$reflectionCache['methods'][$key]
-            ??= new ReflectionMethod($class, $method);
+        return self::rememberMethod($key, static fn(): ReflectionMethod => new ReflectionMethod($class, $method));
     }
 
     /**
-     * Resolves an object callable to a ReflectionMethod.
-     *
-     * The given object must have an __invoke method, which is the method
-     * that is called when the object is treated as a callable. The method
-     * must exist in the object's class.
-     *
-     * The resolved ReflectionMethod is cached by the class name and
-     * method name to avoid redundant lookups.
-     *
-     * @param object $callable An object with an __invoke method.
-     * @return ReflectionMethod The resolved ReflectionMethod.
-     * @throws InvalidArgumentException If the object does not have an __invoke method.
+     * @throws InvalidArgumentException
      */
     private static function resolveObjectCallable(object $callable): ReflectionMethod
     {
-        if (method_exists($callable, '__invoke')) {
-            $className = $callable::class;
-            $key = "$className::__invoke";
-
-            return self::$reflectionCache['methods'][$key]
-                ??= new ReflectionMethod($callable, '__invoke');
+        if (!method_exists($callable, '__invoke')) {
+            throw new InvalidArgumentException('Object does not have an __invoke method.');
         }
 
-        throw new InvalidArgumentException('Object does not have an __invoke method.');
+        $className = $callable::class;
+        $key = "$className::__invoke";
+
+        return self::rememberMethod($key, static fn(): ReflectionMethod => new ReflectionMethod($callable, '__invoke'));
     }
 
     /**
-     * Resolves a static method callable to a ReflectionMethod.
-     *
-     * The given string callable is expected to be in the form of
-     * "ClassName::methodName".
-     *
-     * If the method does not exist, an InvalidArgumentException is thrown.
-     *
-     * @param string $callable The string callable to resolve.
-     *
-     * @return ReflectionMethod The resolved ReflectionMethod.
-     *
-     * @throws InvalidArgumentException If the callable does not exist.
+     * @throws InvalidArgumentException
      */
     private static function resolveStaticMethodCallable(string $callable): ReflectionMethod
     {
         [$className, $method] = explode('::', $callable, 2);
-
         if (!method_exists($className, $method)) {
             throw new InvalidArgumentException("Method '$method' does not exist in class '$className'.");
         }
 
         $key = "$className::$method";
 
-        return self::$reflectionCache['methods'][$key]
-            ??= new ReflectionMethod($className, $method);
+        return self::rememberMethod($key, static fn(): ReflectionMethod => new ReflectionMethod($className, $method));
     }
 
     /**
-     * Resolves a string callable to a ReflectionMethod or ReflectionFunction.
-     *
-     * The given string callable can be a function name, a static method call
-     * in the form of "ClassName::methodName", or an instance method call in
-     * the form of "$object->methodName".
-     *
-     * If the callable is a function, it is resolved using
-     * ReflectionResource::getFunctionReflection.
-     *
-     * If the callable is a static method call, it is resolved using
-     * ReflectionResource::resolveStaticMethodCallable.
-     *
-     * If the callable is an instance method call, it is resolved using
-     * ReflectionResource::resolveObjectCallable.
-     *
-     * If the callable does not exist, an InvalidArgumentException is thrown.
-     *
-     * @param string $callable The string callable to resolve.
-     *
-     * @return ReflectionMethod|ReflectionFunction The resolved ReflectionMethod or ReflectionFunction.
-     *
-     * @throws InvalidArgumentException|ReflectionException If the callable does not exist.
+     * @throws InvalidArgumentException|ReflectionException
      */
     private static function resolveStringCallable(string $callable): ReflectionMethod|ReflectionFunction
     {

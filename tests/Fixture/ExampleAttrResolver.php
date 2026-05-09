@@ -14,6 +14,9 @@ class ExampleAttrResolver implements AttributeResolverInterface
         Container $container
     ): mixed {
         /** @var ExampleAttr $attributeInstance */
+        $target->getName();
+        $container->tracer();
+
         return strtoupper($attributeInstance->value);
     }
 }

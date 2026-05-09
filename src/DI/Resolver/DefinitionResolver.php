@@ -14,9 +14,13 @@ use ReflectionException;
 class DefinitionResolver
 {
     private ClassResolver $classResolver;
+
     /** @var array<int, string> */
     private array $definitionStack = [];
+
+    /** @var array<string, bool> */
     private array $entriesResolving = [];
+
     private ParameterResolver $parameterResolver;
 
     /**
@@ -27,7 +31,6 @@ class DefinitionResolver
     public function __construct(
         private readonly Repository $repository,
     ) {}
-
 
     /**
      * Resolve a definition by its name.
@@ -56,6 +59,7 @@ class DefinitionResolver
         $this->entriesResolving[$name] = true;
         $this->definitionStack[] = $name;
         $this->repository->tracer()->push("def:$name");
+
         try {
             return $this->getFromCacheOrResolve($name);
         } finally {
@@ -84,8 +88,8 @@ class DefinitionResolver
 
     private static function stableHash(string $value): string
     {
-        static $algorithm = null;
-        $algorithm ??= in_array('xxh128', hash_algos(), true) ? 'xxh128' : 'sha256';
+        $algorithm = in_array('xxh128', hash_algos(), true) ? 'xxh128' : 'sha256';
+
         return hash($algorithm, $value);
     }
 
@@ -101,7 +105,7 @@ class DefinitionResolver
      */
     private function getFromCacheOrResolve(string $name): mixed
     {
-        $lifetime = $this->repository->getDefinitionMeta($name)['lifetime'] ?? LifetimeEnum::Singleton;
+        $lifetime = $this->repository->getDefinitionMeta($name)['lifetime'];
         $environment = $this->repository->getEnvironment() ?? 'default';
         $resolvedKey = $name . '@env:' . $environment;
 
@@ -128,6 +132,7 @@ class DefinitionResolver
             }
             $this->repository->setResolvedDefinition($resolvedKey, $value);
         }
+
         return $this->repository->getResolvedDefinitionEntry($resolvedKey);
     }
 
@@ -140,14 +145,24 @@ class DefinitionResolver
      * the method call if the second element is provided, or the resolved
      * instance if not.
      *
-     * @param array $definition An array containing a class name and optionally a method name or boolean.
+     * @param array<int, mixed> $definition An array containing a class name and optionally a method name.
      * @return mixed The resolved value or instance.
      * @throws ContainerException|ReflectionException
      */
     private function resolveArrayDefinition(array $definition): mixed
     {
-        $resolved = $this->classResolver->resolve(...$definition);
-        return !empty($definition[1]) ? $resolved['returned'] : $resolved['instance'];
+        $class = $definition[0] ?? null;
+        if (!is_string($class)) {
+            return $definition;
+        }
+        $method = isset($definition[1]) && is_string($definition[1]) ? $definition[1] : null;
+        $resolved = $this->classResolver->resolve(
+            ReflectionResource::getClassReflection($class),
+            null,
+            $method,
+        );
+
+        return $method !== null ? $resolved['returned'] : $resolved['instance'];
     }
 
     /**
@@ -172,16 +187,19 @@ class DefinitionResolver
                 // reflect closure
                 $reflectionFn = ReflectionResource::getFunctionReflection($definition);
                 $args = $this->parameterResolver->resolve($reflectionFn, [], 'constructor');
+
                 return $definition(...$args);
 
-            case is_array($definition) && isset($definition[0]) && class_exists($definition[0]):
+            case is_array($definition) && isset($definition[0]) && is_string($definition[0]) && class_exists($definition[0]):
                 $this->repository->tracer()->recordDependency($name, $definition[0], 'definition-class');
-                return $this->resolveArrayDefinition($definition);
+
+                return $this->resolveArrayDefinition(array_values($definition));
 
             case is_string($definition) && class_exists($definition):
                 $this->repository->tracer()->recordDependency($name, $definition, 'definition-class');
                 $refClass = ReflectionResource::getClassReflection($definition);
                 $res = $this->classResolver->resolve($refClass);
+
                 return $res['instance'];
 
             default:

@@ -11,14 +11,19 @@ use InvalidArgumentException;
 use Random\RandomException;
 use ReflectionException;
 
-final readonly class Invoker
+final class Invoker
 {
+    /** @var array<string, callable(): mixed> */
+    private static array $callableCache = [];
+
+    private static ?self $sharedInstance = null;
+
     /**
      * Construct an instance of the invoker.
      *
      * @param Container $container The container to use for resolving callables.
      */
-    private function __construct(private Container $container) {}
+    private function __construct(private readonly Container $container) {}
 
     /**
      * Retrieve a shared instance of the invoker.
@@ -31,8 +36,11 @@ final readonly class Invoker
      */
     public static function shared(): self
     {
-        static $inst;
-        return $inst ??= new self(Container::instance(__DIR__));
+        if (!self::$sharedInstance instanceof self) {
+            self::$sharedInstance = new self(Container::instance(__DIR__));
+        }
+
+        return self::$sharedInstance;
     }
 
     /**
@@ -46,7 +54,6 @@ final readonly class Invoker
     {
         return new self($container);
     }
-
 
     /**
      * Returns a callable for the given target, caching the result.
@@ -65,23 +72,25 @@ final readonly class Invoker
      */
     public function callableFor(string|object $target): callable
     {
-        static $cache = [];
         $key = \is_string($target) ? $target : $target::class;
-        return $cache[$key] ??= (function () use ($target) {
-            // ① get an *instance* (DI still runs only once)
-            $instance = \is_string($target)
-                ? $this->make($target)     // ctor-injected object
-                : $target;                 // already an object
 
-            if (!\is_callable($instance)) {
-                throw new InvalidArgumentException(
-                    sprintf('%s is not invokable.', $key = $instance::class),
-                );
-            }
+        if (isset(self::$callableCache[$key])) {
+            return self::$callableCache[$key];
+        }
 
-            // ② turn “object with __invoke” into a bound Closure (PHP 8+)
-            return $instance(...);        // promoted callable
-        })();
+        $instance = \is_string($target) ? $this->make($target) : $target;
+        if (!\is_object($instance) || !\is_callable($instance)) {
+            throw new InvalidArgumentException(
+                sprintf(
+                    '%s is not invokable.',
+                    \is_object($instance) ? $instance::class : $key,
+                ),
+            );
+        }
+
+        self::$callableCache[$key] = $instance(...);
+
+        return self::$callableCache[$key];
     }
 
     /**
@@ -102,8 +111,8 @@ final readonly class Invoker
      * If the callable is a class with a method, the method is invoked.
      * If the callable is a closure or a plain string/object, it is executed directly.
      *
-     * @param array|string|object $target The callable to be executed.
-     * @param array $args Optional parameters to pass to the callable.
+     * @param string|array{0: string, 1: string}|callable $target The callable to be executed.
+     * @param array<int|string, mixed> $args Optional parameters to pass to the callable.
      *
      * @return mixed The result of executing the callable.
      *
@@ -111,7 +120,7 @@ final readonly class Invoker
      * @throws ReflectionException If the callable is a class without a default constructor.
      * @throws InvalidArgumentException|RandomException If the callable is not a valid callable.
      */
-    public function invoke(array|string|object $target, array $args = []): mixed
+    public function invoke(string|array|callable $target, array $args = []): mixed
     {
         // Serialized closure fast-path
         if (is_string($target) && ValueSerializer::isSerializedClosure($target)) {
@@ -149,9 +158,9 @@ final readonly class Invoker
      * instance will be returned.
      *
      * @param string $class The fully-qualified class name to create an instance of.
-     * @param array $ctorArgs An array of constructor parameters.
+     * @param array<int|string, mixed> $ctorArgs An array of constructor parameters.
      * @param string|bool $method The name of the method to invoke, or false to not invoke a method.
-     * @param array $methodArgs An array of method parameters.
+     * @param array<int|string, mixed> $methodArgs An array of method parameters.
      *
      * @throws ContainerException|ReflectionException
      */
@@ -167,7 +176,12 @@ final readonly class Invoker
             return $this->container->make($class, false);
         }
 
+        if ($method === true) {
+            return $this->container->make($class, true);
+        }
+
         $this->container->registration()->registerMethod($class, $method, $methodArgs);
+
         return $this->container->make($class, $method);
     }
 
@@ -229,22 +243,30 @@ final readonly class Invoker
      * are detected and unserialized for execution.
      *
      * @param mixed $callable The callable to be routed and executed.
-     * @param array $args The arguments to pass to the callable.
+     * @param array<int|string, mixed> $args The arguments to pass to the callable.
      * @return mixed The result of executing the callable.
      * @throws ContainerException|RandomException|ReflectionException|\Psr\Cache\InvalidArgumentException
      */
     private function routeCallable(mixed $callable, array $args): mixed
     {
+        if (\is_string($callable) && ValueSerializer::isSerializedClosure($callable)) {
+            $unserialized = ValueSerializer::unserialize($callable);
+            if (!$unserialized instanceof \Closure) {
+                throw new \InvalidArgumentException('Serialized closure payload did not produce a Closure.');
+            }
+
+            return $this->viaClosure($unserialized, $args);
+        }
+
         return match (true) {
             \is_string($callable) => match (true) {
-                ValueSerializer::isSerializedClosure($callable) => $this->viaClosure(ValueSerializer::unserialize($callable), $args, ),
-                !\str_contains($callable, '::') && \function_exists($callable) => $this->viaClosure($callable(...), $args),
-                \str_contains($callable, '::') && \is_callable($callable) => $this->viaClosure($callable(...), $args),
+                !\str_contains($callable, '::') && \function_exists($callable) => $this->viaClosure(\Closure::fromCallable($callable), $args),
+                \str_contains($callable, '::') && \is_callable($callable) => $this->viaClosure(\Closure::fromCallable($callable), $args),
                 \class_exists($callable) => $this->container->make($callable),
                 default => throw new \InvalidArgumentException('Unsupported callable formation.'),
             },
             $callable instanceof \Closure => $this->viaClosure($callable, $args),
-            \is_object($callable) && \is_callable($callable) => $this->viaClosure($callable(...), $args),
+            \is_object($callable) && \is_callable($callable) => $this->viaClosure(\Closure::fromCallable($callable), $args),
             default => throw new \InvalidArgumentException('Unsupported callable formation.'),
         };
     }
@@ -254,14 +276,19 @@ final readonly class Invoker
      * that registers the closure with the container and retrieves the result.
      *
      * @param Closure $fn The closure to invoke.
-     * @param array $args The arguments to pass to the closure.
+     * @param array<int|string, mixed> $args The arguments to pass to the closure.
      * @return mixed The result of the closure invocation.
      * @throws ContainerException|ReflectionException|\Psr\Cache\InvalidArgumentException|RandomException
      */
     private function viaClosure(Closure $fn, array $args): mixed
     {
         static $i = 0;
-        $alias = 'λ' . ($i++);
+        if (!is_int($i)) {
+            $i = 0;
+        }
+        $alias = 'λ' . $i;
+        $i++;
+
         return $this->container
             ->registration()->registerClosure($alias, $fn, $args)
             ->invocation()->getReturn($alias);

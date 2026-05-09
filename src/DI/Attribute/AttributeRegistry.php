@@ -40,8 +40,18 @@ final class AttributeRegistry
     public function register(string $attributeFqcn, string $resolverFqcn): void
     {
         if (!class_exists($attributeFqcn) || !class_exists($resolverFqcn)) {
-            throw new ContainerException("Attribute or resolver class missing");
+            throw new ContainerException('Attribute or resolver class missing');
         }
+        if (!is_a($resolverFqcn, AttributeResolverInterface::class, true)) {
+            throw new ContainerException(
+                sprintf(
+                    'Resolver "%s" must implement %s.',
+                    $resolverFqcn,
+                    AttributeResolverInterface::class,
+                ),
+            );
+        }
+
         $this->map[$attributeFqcn] = new $resolverFqcn();
     }
 

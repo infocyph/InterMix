@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Infocyph\InterMix\Remix;
 
 class ConditionalProxy
@@ -22,15 +24,18 @@ class ConditionalProxy
      *
      * If no condition has been set yet, calls the target method and captures its return value as the condition (optionally negated).
      * If a condition is already set, calls the method only if the condition is truthy; otherwise returns the original target.
-     *
-     * @return mixed
      */
-    public function __call(string $method, array $parameters)
+    /**
+     * @param array<int, mixed> $parameters
+     */
+    public function __call(string $method, array $parameters): mixed
     {
         if (!$this->hasCondition) {
             $condition = $this->target->{$method}(...$parameters);
+
             return $this->condition($this->negateConditionOnCapture ? !$condition : (bool) $condition);
         }
+
         return $this->condition ? $this->target->{$method}(...$parameters) : $this->target;
     }
 
@@ -39,15 +44,15 @@ class ConditionalProxy
      *
      * If no condition has been set yet, captures the target's property value as the condition (optionally negated).
      * If a condition is already set, returns either the property value or the original target based on the condition.
-     *
-     * @return mixed
      */
-    public function __get(string $key)
+    public function __get(string $key): mixed
     {
         if (!$this->hasCondition) {
             $condition = $this->target->{$key};
+
             return $this->condition($this->negateConditionOnCapture ? !$condition : (bool) $condition);
         }
+
         return $this->condition ? $this->target->{$key} : $this->target;
     }
 
@@ -69,7 +74,6 @@ class ConditionalProxy
         }
     }
 
-
     /**
      * No-op to prevent dynamic deletes.
      *
@@ -89,6 +93,7 @@ class ConditionalProxy
     {
         $this->condition = $condition;
         $this->hasCondition = true;
+
         return $this;
     }
 
@@ -100,6 +105,7 @@ class ConditionalProxy
     public function negateConditionOnCapture(): static
     {
         $this->negateConditionOnCapture = true;
+
         return $this;
     }
 }

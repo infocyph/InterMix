@@ -11,21 +11,24 @@ use InvalidArgumentException;
 
 trait Fence
 {
+    /** @var array<int, string>|null */
     private static ?array $cachedClasses = null;
 
-    /** @var array{extensions?:string[],classes?:string[]}|null */
+    /** @var array<int, string>|null */
     private static ?array $cachedExtensions = null;
 
-    /** @var array<string,int>  dynamic overrides of limits per class */
+    /** @var array<string,int> dynamic overrides of limits per class */
     private static array $classLimits = [];
+
     private static int $instanceCount = 0;
-    /** @var array<string,object> */
+
+    /** @var array<string, object> */
     private static array $instances = [];
 
-    /** @var array<string,bool>  keyed flag cache */
+    /** @var array<string,bool> keyed flag cache */
     private static array $keyedCache = [];
 
-    /** @var array<string,int>   default limits (before setLimit()) */
+    /** @var array<string,int> default limits (before setLimit()) */
     private static array $limitCache = [];
 
     /**
@@ -53,7 +56,7 @@ trait Fence
      * The keys of the returned array are the keys used to store the instances,
      * and the values are the instances themselves.
      *
-     * @return array<string, Fence>
+     * @return array<string, object>
      */
     final public static function getInstances(): array
     {
@@ -66,6 +69,9 @@ trait Fence
      * If the class using this trait has `FENCE_KEYED = false`, this will be
      * an array with a single element `__single`.  Otherwise, this will be an
      * array of the strings used as the first argument to `instance()`.
+     */
+    /**
+     * @return array<int, string>
      */
     final public static function getKeys(): array
     {
@@ -100,7 +106,7 @@ trait Fence
      *
      * those values are honoured.  Otherwise defaults are keyed=true, limit=∞.
      *
-     * @param array|null $constraints ['extensions'=>[], 'classes'=>[]]
+     * @param array{extensions?: array<int, string>, classes?: array<int, string>}|null $constraints ['extensions'=>[], 'classes'=>[]]
      */
     final public static function instance(
         ?string $key = 'default',
@@ -113,7 +119,7 @@ trait Fence
             : '__single';
 
         // Fast path – instance already exists
-        if (isset(self::$instances[$slot])) {
+        if (isset(self::$instances[$slot]) && self::$instances[$slot] instanceof static) {
             return self::$instances[$slot];
         }
 
@@ -124,8 +130,11 @@ trait Fence
         }
 
         self::$instanceCount++;
-        return self::$instances[$slot]
-            ??= new static();
+
+        $created = new static();
+        self::$instances[$slot] = $created;
+
+        return $created;
     }
 
     /**
@@ -144,8 +153,8 @@ trait Fence
     /**
      * Verifies that the class instance can be created given the requirements.
      *
-     * @param array<string,array<string>> $c An array with 'extensions' and/or 'classes' keys.
-     *   The values are arrays of names of extensions and classes that must be present.
+     * @param array{extensions?: array<int, string>, classes?: array<int, string>}|null $c
+     *                                                                                     The values are arrays of names of extensions and classes that must be present.
      */
     private static function checkRequirements(?array $c): void
     {
@@ -167,16 +176,28 @@ trait Fence
         );
     }
 
+    /**
+     * @param array<int, string> $required
+     * @return array<int, string>
+     */
     private static function findMissingClasses(array $required): array
     {
         return array_diff($required, self::$cachedClasses ?? []);
     }
 
+    /**
+     * @param array<int, string> $required
+     * @return array<int, string>
+     */
     private static function findMissingExtensions(array $required): array
     {
         return array_diff($required, self::$cachedExtensions ?? []);
     }
 
+    /**
+     * @param array<int, string> $missingE
+     * @param array<int, string> $missingC
+     */
     private static function formatMissingRequirements(array $missingE, array $missingC): string
     {
         $parts = [];
@@ -199,12 +220,31 @@ trait Fence
      */
     private static function getLimit(string $cls): int
     {
-        return self::$classLimits[$cls]
-            ??= defined("$cls::FENCE_LIMIT")
-            ? (int) constant("$cls::FENCE_LIMIT")
-            : PHP_INT_MAX;
+        if (isset(self::$classLimits[$cls])) {
+            return self::$classLimits[$cls];
+        }
+
+        if (!defined("$cls::FENCE_LIMIT")) {
+            self::$classLimits[$cls] = PHP_INT_MAX;
+
+            return PHP_INT_MAX;
+        }
+
+        $rawLimit = constant("$cls::FENCE_LIMIT");
+        $limit = match (true) {
+            is_int($rawLimit) => $rawLimit,
+            is_string($rawLimit) && is_numeric($rawLimit) => (int) $rawLimit,
+            is_float($rawLimit) => (int) $rawLimit,
+            default => PHP_INT_MAX,
+        };
+        self::$classLimits[$cls] = $limit;
+
+        return $limit;
     }
 
+    /**
+     * @param array{extensions?: array<int, string>, classes?: array<int, string>}|null $c
+     */
     private static function hasNoRequirements(?array $c): bool
     {
         if (!$c) {

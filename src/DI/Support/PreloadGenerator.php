@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Infocyph\InterMix\DI\Support;
 
 use Infocyph\InterMix\DI\Container;

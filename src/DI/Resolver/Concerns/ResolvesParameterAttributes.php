@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Resolver\Concerns;
 
 use Infocyph\InterMix\DI\Attribute\IMStdClass;
-use Infocyph\InterMix\DI\Attribute\Infuse;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\InvalidArgumentException;
 use ReflectionException;
@@ -23,10 +22,10 @@ trait ResolvesParameterAttributes
     private function resolveParameterAttribute(ReflectionParameter $param): array
     {
         $plan = $this->getParameterAttributePlan($param);
-        $infuse = $plan['infuse'] ?? [];
-        if ($infuse && !empty($infuse[0]->getArguments())) {
-            /** @var Infuse $infuse */
-            $resolved = $this->classResolver->resolveInfuse($infuse[0]->newInstance());
+        $infuse = $plan['infuse'];
+        $firstInfuse = $infuse[0] ?? null;
+        if ($firstInfuse !== null && $firstInfuse->getArguments() !== []) {
+            $resolved = $this->classResolver->resolveInfuse($firstInfuse->newInstance());
 
             return [
                 'isResolved' => true,
@@ -39,7 +38,7 @@ trait ResolvesParameterAttributes
         $injectVal = null;
         $handled = false;
 
-        foreach (($plan['all'] ?? []) as $raw) {
+        foreach ($plan['all'] as $raw) {
             $attrObj = $raw->newInstance();
 
             if (!$registry->has($attrObj::class)) {

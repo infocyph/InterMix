@@ -24,14 +24,16 @@ use Attribute;
 #[Attribute(Attribute::TARGET_METHOD | Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class Infuse
 {
+    /** @var array<int|string, mixed> */
     private array $data = [];
+
     private string|int|null $firstKey = null;
 
     /**
      * Constructs a new instance of the Infuse attribute.
      *
-     * @param  mixed  ...$parameters  The parameters declared in the attribute usage.
-     *                                For example: #[Infuse('SomeType', ...otherData)]
+     * @param mixed ...$parameters The parameters declared in the attribute usage.
+     *                             For example: #[Infuse('SomeType', ...otherData)]
      */
     public function __construct(mixed ...$parameters)
     {
@@ -50,7 +52,7 @@ class Infuse
     /**
      * Retrieves data used for a method injection scenario.
      *
-     * @param  int|string|null  $key  If provided, returns just the sub-value from the array.
+     * @param int|string|null $key If provided, returns just the sub-value from the array.
      */
     public function getMethodArguments(int|string|null $key = null): mixed
     {
@@ -63,17 +65,25 @@ class Infuse
      * Retrieves data used for property or parameter injection.
      * The attribute stores the "firstKey" as a "type" and the corresponding value as "data".
      *
-     * @param  int|string|null  $key  If provided, returns just the sub-value from the array.
+     * @param int|string|null $key If provided, returns just the sub-value from the array.
      */
     public function getParameterData(int|string|null $key = null): mixed
     {
-        if (is_int($this->firstKey)) {
-            [$this->firstKey, $this->data[$this->firstKey]] = [$this->data[$this->firstKey], $this->firstKey];
+        $firstKey = $this->firstKey;
+
+        if (is_int($firstKey) && array_key_exists($firstKey, $this->data)) {
+            $firstValue = $this->data[$firstKey];
+            $firstKey = is_int($firstValue) || is_string($firstValue) ? $firstValue : null;
+            if (is_int($firstKey) || is_string($firstKey)) {
+                $this->data[$firstKey] = $this->firstKey;
+            }
         }
 
         $returnable = [
-            'type' => $this->firstKey,
-            'data' => $this->data[$this->firstKey] ?? null,
+            'type' => $firstKey,
+            'data' => is_int($firstKey) || is_string($firstKey)
+                ? ($this->data[$firstKey] ?? null)
+                : null,
         ];
 
         return $key ? ($returnable[$key] ?? null) : $returnable;

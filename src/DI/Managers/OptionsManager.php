@@ -17,6 +17,8 @@ use Infocyph\InterMix\Exceptions\ContainerException;
 /**
  * Handles toggling injection, method attributes, property attributes, etc.
  * Optionally environment / debug toggles if you want them all in one place.
+ *
+ * @implements ArrayAccess<string, mixed>
  */
 class OptionsManager implements ArrayAccess
 {
@@ -49,6 +51,7 @@ class OptionsManager implements ArrayAccess
     public function bindInterfaceForEnv(string $env, string $interface, string $concrete): self
     {
         $this->repository->bindInterfaceForEnv($env, $interface, $concrete);
+
         return $this;
     }
 
@@ -83,6 +86,7 @@ class OptionsManager implements ArrayAccess
     public function enableDebugTracing(bool $enable = true, TraceLevelEnum $level = TraceLevelEnum::Node): self
     {
         $this->repository->tracer()->setLevel($enable ? $level : TraceLevelEnum::Off);
+
         return $this;
     }
 
@@ -102,6 +106,7 @@ class OptionsManager implements ArrayAccess
     public function enableLazyLoading(bool $lazy = true): self
     {
         $this->repository->enableLazyLoading($lazy);
+
         return $this;
     }
 
@@ -120,6 +125,7 @@ class OptionsManager implements ArrayAccess
     public function generatePreload(string $path): self
     {
         (new PreloadGenerator())->generate($this->container, $path);
+
         return $this;
     }
 
@@ -194,6 +200,7 @@ class OptionsManager implements ArrayAccess
         }
 
         $this->repository->setDefinitionMetaForEnv($env, $id, $meta);
+
         return $this;
     }
 
@@ -210,9 +217,9 @@ class OptionsManager implements ArrayAccess
     public function setEnvironment(string $env): self
     {
         $this->repository->setEnvironment($env);
+
         return $this;
     }
-
 
     /**
      * Set container options, such as enabling/disabling injection, method
@@ -243,6 +250,7 @@ class OptionsManager implements ArrayAccess
         $this->container->setResolverClass(
             $injection ? InjectedCall::class : GenericCall::class,
         );
+
         return $this;
     }
 }

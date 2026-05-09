@@ -16,9 +16,6 @@ use Psr\Cache\InvalidArgumentException;
  *  container instance while maintaining a fluent interface. It's designed to be used by manager
  *  classes that need to expose container functionality with a clean, object-oriented API.
  *
- * @template T of object
- * @implements \ArrayAccess<string,mixed>
- *
  * @property-read Container $container The underlying container instance
  *
  * Every class that ➊ declares `protected Container $container`
@@ -125,6 +122,10 @@ trait ManagerProxy
      */
     public function offsetExists(mixed $offset): bool
     {
+        if (!is_int($offset) && !is_string($offset)) {
+            return false;
+        }
+
         return $this->__isset((string) $offset);
     }
 
@@ -137,6 +138,10 @@ trait ManagerProxy
      */
     public function offsetGet(mixed $offset): mixed
     {
+        if (!is_int($offset) && !is_string($offset)) {
+            throw new \InvalidArgumentException('Offset must be an int or string.');
+        }
+
         return $this->__get((string) $offset);
     }
 
@@ -149,6 +154,10 @@ trait ManagerProxy
      */
     public function offsetSet(mixed $offset, mixed $value): void
     {
+        if (!is_int($offset) && !is_string($offset)) {
+            throw new ContainerException('Offset must be an int or string.');
+        }
+
         $this->__set((string) $offset, $value);
     }
 

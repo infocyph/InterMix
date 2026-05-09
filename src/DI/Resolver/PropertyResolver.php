@@ -21,7 +21,13 @@ class PropertyResolver
     private const int PROPERTY_PLAN_CACHE_LIMIT = 1024;
 
     private ClassResolver $classResolver;
-    /** @var array<string, array> */
+
+    /** @var array<string, array{
+     *   classProperties: array<int, ReflectionProperty>,
+     *   parentClass: ReflectionClass<object>|null,
+     *   parentPrivateProperties: array<int, ReflectionProperty>
+     * }>
+     */
     private array $propertyPlanCache = [];
 
     /**
@@ -33,7 +39,6 @@ class PropertyResolver
         private readonly Repository $repository,
     ) {}
 
-
     /**
      * Resolve any properties for the given class (if instance is already resolved).
      * If no instance, does nothing.
@@ -42,7 +47,7 @@ class PropertyResolver
      * Then, resolve any private properties of the parent class.
      * Finally, mark the property resolution as complete in the repository.
      *
-     * @param ReflectionClass $class The class to resolve properties for.
+     * @param ReflectionClass<object> $class The class to resolve properties for.
      * @throws ContainerException|ReflectionException
      * @throws InvalidArgumentException
      */
@@ -55,6 +60,9 @@ class PropertyResolver
         }
 
         $instance = $allResolved['instance'];
+        if (!is_object($instance)) {
+            return;
+        }
         $plan = $this->getPropertyPlan($class);
 
         $this->processProperties($class, $plan['classProperties'], $instance);
@@ -78,7 +86,10 @@ class PropertyResolver
         $this->classResolver = $classResolver;
     }
 
-
+    /**
+     * @param ReflectionClass<object> $class
+     * @param array<int, mixed>|null $values
+     */
     private function applyPropertyValue(
         ReflectionClass $class,
         ReflectionProperty $property,
@@ -90,10 +101,16 @@ class PropertyResolver
 
         if ($property->isStatic()) {
             $class->setStaticPropertyValue($property->getName(), $values[0]);
+
             return;
         }
 
-        $property->setValue($values[0], $values[1]);
+        $target = $values[0] ?? null;
+        if (!is_object($target)) {
+            return;
+        }
+
+        $property->setValue($target, $values[1] ?? null);
     }
 
     /**
@@ -101,7 +118,7 @@ class PropertyResolver
      *
      * @param ReflectionProperty $property The property to resolve a value for.
      * @param object $classInstance The instance of the class to set the property on.
-     * @return ?array An array of two items: the instance and the resolved value. Or null if not possible to resolve.
+     * @return array<int, mixed>|null An array of two items: the instance and the resolved value. Or null if not possible to resolve.
      * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
     private function attemptBuiltInInfuse(
@@ -123,6 +140,7 @@ class PropertyResolver
         // (a)  #[Infuse]   – no args  ➜  infer by type-hint
         if (empty($attrs[0]->getArguments())) {
             $val = $this->resolveWithoutArgument($property, $property->getType());
+
             return [$classInstance, $val];
         }
 
@@ -150,7 +168,7 @@ class PropertyResolver
      *
      * @param ReflectionProperty $property The property to resolve attributes for.
      * @param object $classInstance The instance of the class to set the property on.
-     * @return ?array An array of two items: the instance (if non-static) and the resolved value, or null if not resolved.
+     * @return array<int, mixed>|null An array of two items: the instance (if non-static) and the resolved value, or null if not resolved.
      */
     private function attemptCustomAttributes(
         ReflectionProperty $property,
@@ -195,9 +213,9 @@ class PropertyResolver
      * is not present, returns null.
      *
      * @param ReflectionProperty $property The property to resolve a value for.
-     * @param array $classPropertyValues The user-supplied values for the class.
+     * @param array<string, mixed> $classPropertyValues The user-supplied values for the class.
      * @param object $classInstance The instance of the class to set the property on.
-     * @return ?array An array of two items: the instance and the resolved value. Or null if not possible to resolve.
+     * @return array<int, mixed>|null An array of two items: the instance and the resolved value. Or null if not possible to resolve.
      */
     private function attemptUserOverride(
         ReflectionProperty $property,
@@ -215,6 +233,14 @@ class PropertyResolver
             : [$classInstance, $classPropertyValues[$name]];
     }
 
+    /**
+     * @param ReflectionClass<object> $class
+     * @return array{
+     *   classProperties: array<int, ReflectionProperty>,
+     *   parentClass: ReflectionClass<object>|null,
+     *   parentPrivateProperties: array<int, ReflectionProperty>
+     * }
+     */
     private function getPropertyPlan(ReflectionClass $class): array
     {
         $className = $class->getName();
@@ -223,6 +249,7 @@ class PropertyResolver
         }
 
         $parent = $class->getParentClass();
+
         return $this->rememberPropertyPlan($className, [
             'classProperties' => $class->getProperties(),
             'parentClass' => $parent ?: null,
@@ -238,15 +265,27 @@ class PropertyResolver
     private function getRegisteredProperties(string $className): ?array
     {
         $classResource = $this->repository->getClassResourceFor($className);
-        return $classResource['property'] ?? null;
+        $properties = $classResource['property'] ?? null;
+        if (!is_array($properties)) {
+            return null;
+        }
+
+        $normalized = [];
+        foreach ($properties as $key => $value) {
+            if (is_string($key)) {
+                $normalized[$key] = $value;
+            }
+        }
+
+        return $normalized;
     }
 
     /**
      * Resolves any properties for the given class and instance.
      * Skips properties already set.
      *
-     * @param ReflectionClass $class The class to resolve properties for.
-     * @param array $properties The properties to resolve.
+     * @param ReflectionClass<object> $class The class to resolve properties for.
+     * @param array<int, ReflectionProperty> $properties The properties to resolve.
      * @param object $classInstance The instance of the class to set properties on.
      * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
@@ -277,18 +316,28 @@ class PropertyResolver
         }
     }
 
+    /**
+     * @param array{
+     *   classProperties: array<int, ReflectionProperty>,
+     *   parentClass: ReflectionClass<object>|null,
+     *   parentPrivateProperties: array<int, ReflectionProperty>
+     * } $plan
+     * @return array{
+     *   classProperties: array<int, ReflectionProperty>,
+     *   parentClass: ReflectionClass<object>|null,
+     *   parentPrivateProperties: array<int, ReflectionProperty>
+     * }
+     */
     private function rememberPropertyPlan(string $key, array $plan): array
     {
         if (!array_key_exists($key, $this->propertyPlanCache)
             && count($this->propertyPlanCache) >= self::PROPERTY_PLAN_CACHE_LIMIT
         ) {
-            $oldest = array_key_first($this->propertyPlanCache);
-            if ($oldest !== null) {
-                unset($this->propertyPlanCache[$oldest]);
-            }
+            unset($this->propertyPlanCache[array_key_first($this->propertyPlanCache)]);
         }
 
         $this->propertyPlanCache[$key] = $plan;
+
         return $plan;
     }
 
@@ -300,9 +349,9 @@ class PropertyResolver
      * 3) If no attribute, then return an empty array.
      *
      * @param ReflectionProperty $property The property to resolve a value for.
-     * @param array $classPropertyValues The user-supplied values for the class.
+     * @param array<string, mixed> $classPropertyValues The user-supplied values for the class.
      * @param object $classInstance The instance of the class to set the property on.
-     * @return mixed[] An array of two items: the instance and the resolved value. Or null if not possible to resolve.
+     * @return array<int, mixed> An array of two items: the instance and the resolved value. Or null if not possible to resolve.
      * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
     private function resolveValue(
@@ -370,9 +419,15 @@ class PropertyResolver
             );
         }
 
-        return $this->classResolver->resolve($refClass)['instance'];
+        return $this->classResolver->resolveClassInstance(
+            $refClass,
+            "Failed to resolve {$parameterType->getName()} for property injection.",
+        );
     }
 
+    /**
+     * @param array<string, mixed>|null $registeredProps
+     */
     private function shouldSkipProperty(ReflectionProperty $property, ?array $registeredProps): bool
     {
         return $property->isPromoted()
@@ -380,6 +435,9 @@ class PropertyResolver
             && empty($property->getAttributes(Infuse::class));
     }
 
+    /**
+     * @param array<string, mixed>|null $registeredProps
+     */
     private function shouldSkipPropertyResolution(?array $registeredProps): bool
     {
         return $registeredProps === null && !$this->repository->isPropertyAttributeEnabled();

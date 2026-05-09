@@ -24,28 +24,64 @@ use Psr\Cache\CacheItemPoolInterface;
 class Repository
 {
     private readonly AttributeRegistry $attributeRegistry;
+
     private readonly DebugTracer $tracer;
+
     private string $alias = 'default';
+
     private ?DefinitionCachePoolInterface $cacheAdapter = null;
+
+    /** @var array<string, array<string, mixed>> */
     private array $classResource = [];
+
+    /** @var array<string, array{on: callable, params: array<int|string, mixed>}> */
     private array $closureResource = [];
+
+    /** @var array<string, array<string, string>> */
     private array $conditionalBindings = [];
+
     private string $currentScope = 'root';
+
     private ?string $defaultMethod = null;
+
+    /** @var array<string, array{lifetime: LifetimeEnum, tags: array<int, string>}> */
     private array $definitionMeta = [];
+
+    /** @var array<string, array<string, array{lifetime?: LifetimeEnum, tags?: array<int, string>}>> */
     private array $definitionMetaByEnv = [];
+
     private bool $enableMethodAttribute = false;
+
     private bool $enablePropertyAttribute = false;
+
     private ?string $environment = null;
+
+    /** @var array<string, mixed> */
     private array $functionReference = [];
+
     private bool $isLocked = false;
+
     private bool $lazyLoading = true;
+
+    /** @var array<string, mixed> */
     private array $resolved = [];
+
+    /** @var array<string, mixed> */
     private array $resolvedDefinition = [];
+
+    /** @var array<string, array<string, bool>> */
     private array $resolvedKeysByScope = [];
+
+    /** @var array<string, array<string, mixed>> */
     private array $resolvedResource = [];
+
+    /** @var array<int, string> */
     private array $scopeStack = [];
+
+    /** @var array<string, array<string, bool>> */
     private array $tagIndex = [];
+
+    /** @var array<string, array<string, array<string, bool>>> */
     private array $tagIndexByEnv = [];
 
     /**
@@ -72,7 +108,7 @@ class Repository
      *
      * @param string $class The class name.
      * @param string $key The key for the class resource.
-     * @param array $data The data for the class resource.
+     * @param array<string, mixed> $data The data for the class resource.
      *
      * @throws ContainerException if the container is locked.
      */
@@ -92,7 +128,7 @@ class Repository
      *
      * @param string $alias The alias for the closure.
      * @param callable $function The closure function to store.
-     * @param array $params Optional parameters for the closure.
+     * @param array<int|string, mixed> $params Optional parameters for the closure.
      *
      * @throws ContainerException if the container is locked.
      */
@@ -141,7 +177,6 @@ class Repository
      * can be "lazy" and not resolved until explicitly requested the first time.
      *
      * @param bool $lazy whether to enable lazy loading
-     *
      *
      * @throws ContainerException if the container is locked
      */
@@ -205,7 +240,6 @@ class Repository
      * This method is used to extract the instance from a parameter definition.
      *
      * @param mixed $value The value to extract the instance from.
-     *
      * @return mixed The instance or the original value.
      */
     public function fetchInstanceOrValue(mixed $value): mixed
@@ -240,7 +274,7 @@ class Repository
      * - lifetime: The lifetime of the definition. Defaults to Lifetime::Singleton.
      * - tags: An array of tags to associate with the definition. Defaults to an empty array.
      *
-     * @return array An array of all the definition meta data.
+     * @return array<string, array{lifetime: LifetimeEnum, tags: array<int, string>}> An array of all the definition meta data.
      */
     public function getAllDefinitionMeta(): array
     {
@@ -264,13 +298,16 @@ class Repository
      * class name and the value is an array containing constructor and method
      * data.
      *
-     * @return array the array of class resources
+     * @return array<string, array<string, mixed>> the array of class resources
      */
     public function getClassResource(): array
     {
         return $this->classResource;
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public function getClassResourceFor(string $class): array
     {
         return $this->classResource[$class] ?? [];
@@ -283,13 +320,16 @@ class Repository
      * alias of the closure and the value is an array containing the closure
      * function and its parameters.
      *
-     * @return array the array of closure resources
+     * @return array<string, array{on: callable, params: array<int|string, mixed>}> the array of closure resources
      */
     public function getClosureResource(): array
     {
         return $this->closureResource;
     }
 
+    /**
+     * @return array{on: callable, params: array<int|string, mixed>}|null
+     */
     public function getClosureResourceEntry(string $alias): ?array
     {
         return $this->closureResource[$alias] ?? null;
@@ -315,7 +355,6 @@ class Repository
 
         if ($env !== null
             && isset($this->definitionMetaByEnv[$env][$id]['lifetime'])
-            && $this->definitionMetaByEnv[$env][$id]['lifetime'] instanceof LifetimeEnum
         ) {
             $lifetime = $this->definitionMetaByEnv[$env][$id]['lifetime'];
         }
@@ -327,9 +366,9 @@ class Repository
      * Returns the meta data for the given definition.
      *
      * @param string $id The id of the definition to retrieve meta data for.
-     * @return array The meta data associated with the definition.
-     *   - lifetime: The lifetime of the definition. Defaults to Lifetime::Singleton.
-     *   - tags: An array of tags to associate with the definition. Defaults to an empty array.
+     * @return array{lifetime: LifetimeEnum, tags: array<int, string>} The meta data associated with the definition.
+     *                                                                 - lifetime: The lifetime of the definition. Defaults to Lifetime::Singleton.
+     *                                                                 - tags: An array of tags to associate with the definition. Defaults to an empty array.
      */
     public function getDefinitionMeta(string $id): array
     {
@@ -365,6 +404,7 @@ class Repository
         if (!$this->environment || !$interface) {
             return null;
         }
+
         return $this->conditionalBindings[$this->environment][$interface] ?? null;
     }
 
@@ -392,11 +432,17 @@ class Repository
      *
      * @return array the array of function references
      */
+    /**
+     * @return array<string, mixed>
+     */
     public function getFunctionReference(): array
     {
         return $this->functionReference;
     }
 
+    /**
+     * @return array<int, string>
+     */
     public function getIdsByTag(string $tag): array
     {
         $ids = $this->tagIndex[$tag] ?? [];
@@ -416,7 +462,7 @@ class Repository
                 continue;
             }
 
-            if (!in_array($tag, (array) $override['tags'], true)) {
+            if (!in_array($tag, $override['tags'], true)) {
                 unset($ids[$id]);
             }
         }
@@ -432,6 +478,9 @@ class Repository
      *
      * @return array the array of resolved resources
      */
+    /**
+     * @return array<string, mixed>
+     */
     public function getResolved(): array
     {
         return $this->resolved;
@@ -444,6 +493,9 @@ class Repository
      * definition name and the value is the resolved value of that definition.
      *
      * @return array the array of resolved definitions
+     */
+    /**
+     * @return array<string, mixed>
      */
     public function getResolvedDefinition(): array
     {
@@ -467,13 +519,16 @@ class Repository
      * class name and the value is an array containing the resolved values for
      * that class, such as the instance, constructor, properties, and methods.
      *
-     * @return array the array of resolved resources for class-based resources
+     * @return array<string, array<string, mixed>> the array of resolved resources for class-based resources
      */
     public function getResolvedResource(): array
     {
         return $this->resolvedResource;
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public function getResolvedResourceFor(string $class): array
     {
         return $this->resolvedResource[$class] ?? [];
@@ -562,7 +617,8 @@ class Repository
     public function leaveScope(): void
     {
         $this->clearScopeResolvedEntries($this->currentScope);
-        $this->currentScope = array_pop($this->scopeStack) ?? 'root';
+        $previous = array_pop($this->scopeStack);
+        $this->currentScope = is_string($previous) ? $previous : 'root';
     }
 
     /**
@@ -577,7 +633,6 @@ class Repository
         $this->isLocked = true;
     }
 
-
     /**
      * Creates a cache key with the given suffix.
      *
@@ -585,7 +640,6 @@ class Repository
      * with the given suffix.
      *
      * @param string $suffix The suffix to use for the cache key.
-     *
      * @return string The cache key.
      */
     public function makeCacheKey(string $suffix): string
@@ -663,20 +717,25 @@ class Repository
 
     /**
      * @param string $id The id of the definition to set the meta for.
-     * @param array $meta The meta data to set for the definition.
-     *   - lifetime: The lifetime of the definition. Defaults to Lifetime::Singleton.
-     *   - tags: An array of tags to associate with the definition. Defaults to an empty array.
+     * @param array{lifetime?: LifetimeEnum, tags?: array<int, scalar|null>} $meta The meta data to set for the definition.
+     *                                                                             - lifetime: The lifetime of the definition. Defaults to Lifetime::Singleton.
+     *                                                                             - tags: An array of tags to associate with the definition. Defaults to an empty array.
+     *
      * @throws ContainerException
      */
     public function setDefinitionMeta(string $id, array $meta): void
     {
         $this->checkIfLocked();
         $normalized = $meta + ['lifetime' => LifetimeEnum::Singleton, 'tags' => []];
-        $normalized['tags'] = array_values(array_map(strval(...), (array) ($normalized['tags'] ?? [])));
+        $normalizedTags = [];
+        foreach ($normalized['tags'] as $tag) {
+            $normalizedTags[] = (string) $tag;
+        }
+        $normalized['tags'] = $normalizedTags;
         $oldTags = $this->definitionMeta[$id]['tags'] ?? [];
 
         $this->definitionMeta[$id] = $normalized;
-        $this->refreshBaseTagIndex($id, $oldTags, $normalized['tags']);
+        $this->refreshBaseTagIndex($id, $oldTags, $normalizedTags);
     }
 
     /**
@@ -686,19 +745,28 @@ class Repository
      *  - lifetime: LifetimeEnum
      *  - tags: array<int, string>
      *
+     * @param array{lifetime?: LifetimeEnum, tags?: array<int, scalar|null>} $meta
+     *
      * @throws ContainerException
      */
-    public function setDefinitionMetaForEnv(string $env, string $id, array $meta): void
-    {
+    public function setDefinitionMetaForEnv(
+        string $env,
+        string $id,
+        array $meta,
+    ): void {
         $this->checkIfLocked();
         $existing = $this->definitionMetaByEnv[$env][$id] ?? [];
 
         $normalized = [];
-        if (array_key_exists('lifetime', $meta) && $meta['lifetime'] instanceof LifetimeEnum) {
+        if (array_key_exists('lifetime', $meta)) {
             $normalized['lifetime'] = $meta['lifetime'];
         }
-        if (array_key_exists('tags', $meta) && is_array($meta['tags'])) {
-            $normalized['tags'] = array_values(array_map(strval(...), $meta['tags']));
+        if (array_key_exists('tags', $meta)) {
+            $tags = [];
+            foreach ($meta['tags'] as $tag) {
+                $tags[] = (string) $tag;
+            }
+            $normalized['tags'] = $tags;
         }
 
         if ($normalized === []) {
@@ -707,7 +775,7 @@ class Repository
 
         $this->definitionMetaByEnv[$env][$id] = $normalized + $existing;
         if (array_key_exists('tags', $normalized)) {
-            $oldTags = (array) ($existing['tags'] ?? []);
+            $oldTags = $existing['tags'] ?? [];
             $this->refreshEnvTagIndex($env, $id, $oldTags, $normalized['tags']);
         }
     }
@@ -720,7 +788,6 @@ class Repository
      * a matching environment-based mapping for a given interface.
      *
      * @param string $env environment name
-     *
      *
      * @throws ContainerException if the container is locked
      */
@@ -799,7 +866,7 @@ class Repository
      * as the key.
      *
      * @param string $className The class name of the resource.
-     * @param array $data The array of resolved values for the class.
+     * @param array<string, mixed> $data The array of resolved values for the class.
      */
     public function setResolvedResource(string $className, array $data): void
     {
@@ -857,6 +924,7 @@ class Repository
                 unset($this->resolved[$key]);
             }
             unset($this->resolvedKeysByScope[$scope]);
+
             return;
         }
 

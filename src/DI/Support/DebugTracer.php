@@ -10,23 +10,25 @@ use DateTimeImmutable;
 final class DebugTracer
 {
     /**
-     * span-id ⇒ [
-     *   'startNs'  => int,             // hrtime(true)
-     *   'memStart' => int,             // bytes
-     *   'name'     => string,
-     *   'level'    => TraceLevel,
-     *   'context'  => array,
-     *   'depth'    => int
-     * ]
-     * @var array<string,array>
+     * @var array<string, array{
+     *   startNs: int,
+     *   memStart: int,
+     *   name: string,
+     *   level: TraceLevelEnum,
+     *   context: array<int|string, mixed>,
+     *   depth: int
+     * }>
      */
     private array $activeSpans = [];
 
     private bool $enabled;
+
     /** @var TraceEntry[] */
     private array $entries = [];
+
     /** @var array<string, array{from:string,to:string,type:string,count:int}> */
     private array $graphEdges = [];
+
     private int $seq = 0;
 
     public function __construct(
@@ -38,6 +40,9 @@ final class DebugTracer
 
     /* ----------  spans  -------------------------------------------------- */
 
+    /**
+     * @param array<int|string, mixed> $context
+     */
     public function beginSpan(
         string $name,
         TraceLevelEnum $lvl = TraceLevelEnum::Node,
@@ -50,7 +55,7 @@ final class DebugTracer
         $depth = \count($this->activeSpans);
 
         $this->activeSpans[$id] = [
-            'startNs' => hrtime(true),
+            'startNs' => (int) hrtime(true),
             'memStart' => memory_get_usage(),
             'name' => $name,
             'level' => $lvl,
@@ -76,6 +81,7 @@ final class DebugTracer
         $this->entries = [];
         $this->activeSpans = [];
         $this->graphEdges = [];
+
         return $this;
     }
 
@@ -98,7 +104,7 @@ final class DebugTracer
         }
 
         $graph = [
-            'nodes' => array_values(array_keys($nodes)),
+            'nodes' => array_keys($nodes),
             'edges' => $edges,
         ];
 
@@ -109,6 +115,9 @@ final class DebugTracer
         return $graph;
     }
 
+    /**
+     * @param array<int|string, mixed> $context
+     */
     public function endSpan(?string $spanId, array $context = []): void
     {
         if ($spanId === null) {
@@ -120,6 +129,7 @@ final class DebugTracer
                 TraceLevelEnum::Node,
                 ['span_id' => $spanId] + $context,
             );
+
             return;
         }
 
@@ -156,6 +166,7 @@ final class DebugTracer
     {
         $out = $formatter($this->entries);
         $this->clear();
+
         return $out;
     }
 
@@ -166,9 +177,11 @@ final class DebugTracer
         return $this->level;
     }
 
-
     /* --------------------------------------------------------------------- */
 
+    /**
+     * @param array<int|string, mixed> $context
+     */
     public function push(
         string $message,
         TraceLevelEnum $lvl = TraceLevelEnum::Node,
@@ -181,7 +194,10 @@ final class DebugTracer
         [$file, $line] = $this->captureLocation
             ? (function (): array {
                 $bt = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2)[1] ?? [];
-                return [$bt['file'] ?? null, $bt['line'] ?? 0];
+                $file = $bt['file'] ?? null;
+                $line = $bt['line'] ?? 0;
+
+                return [$file, $line];
             })()
             : [null, 0];
 
@@ -220,6 +236,7 @@ final class DebugTracer
     public function setCaptureLocation(bool $enabled): self
     {
         $this->captureLocation = $enabled;
+
         return $this;
     }
 
@@ -227,33 +244,45 @@ final class DebugTracer
     {
         $this->level = $level;
         $this->enabled = $level !== TraceLevelEnum::Off;
+
         return $this;
     }
 
     /* ----- built-in formatters ------------------------------------------ */
 
+    /**
+     * @return array<int, array{
+     *   ts: string,
+     *   level: string,
+     *   msg: string,
+     *   ctx: array<int|string, mixed>,
+     *   file: ?string,
+     *   line: int,
+     *   Δus: int
+     * }>
+     */
     public function toArray(): array
     {
-        return $this->getFormatted(function (array $entries): array {
-            $out = [];
-            $prev = null;
-            foreach ($entries as $e) {
-                $out[] = [
-                    'ts' => $e->timestamp->format('c'),
-                    'level' => $e->level->name,
-                    'msg' => $e->message,
-                    'ctx' => $e->context,
-                    'file' => $e->file,
-                    'line' => $e->line,
-                    'Δus' => $prev ? intdiv(
-                        $e->timestamp->format('Uu') - $prev->timestamp->format('Uu'),
-                        1,
-                    ) : 0,
-                ];
-                $prev = $e;
-            }
-            return $out;
-        });
+        $out = [];
+        $prevMicros = null;
+
+        foreach ($this->entries as $entry) {
+            $currentMicros = (int) $entry->timestamp->format('Uu');
+            $out[] = [
+                'ts' => $entry->timestamp->format('c'),
+                'level' => $entry->level->name,
+                'msg' => $entry->message,
+                'ctx' => $entry->context,
+                'file' => $entry->file,
+                'line' => $entry->line,
+                'Δus' => $prevMicros === null ? 0 : ($currentMicros - $prevMicros),
+            ];
+            $prevMicros = $currentMicros;
+        }
+
+        $this->clear();
+
+        return $out;
     }
 
     /**
@@ -261,27 +290,28 @@ final class DebugTracer
      */
     public function toCli(): string
     {
-        return $this->getFormatted(function (array $entries): string {
-            $palette = [
-                TraceLevelEnum::Verbose->value => "\033[2m",   // dim
-                TraceLevelEnum::Node->value => "\033[36m",  // cyan
-                TraceLevelEnum::Info->value => "\033[32m",  // green
-                TraceLevelEnum::Warn->value => "\033[33m",  // yellow
-                TraceLevelEnum::Error->value => "\033[31m",  // red
-            ];
-            $out = '';
-            foreach ($entries as $e) {
-                $c = $palette[$e->level->value] ?? '';
-                $ts = $e->timestamp->format('H:i:s.v');
-                $out .= sprintf(
-                    "%s[%s] %-7s %s\033[0m\n",
-                    $c,
-                    $ts,
-                    $e->level->name,
-                    $e->message,
-                );
-            }
-            return $out;
-        });
+        $palette = [
+            TraceLevelEnum::Verbose->value => "\033[2m",
+            TraceLevelEnum::Node->value => "\033[36m",
+            TraceLevelEnum::Info->value => "\033[32m",
+            TraceLevelEnum::Warn->value => "\033[33m",
+            TraceLevelEnum::Error->value => "\033[31m",
+        ];
+        $out = '';
+        foreach ($this->entries as $entry) {
+            $color = $palette[$entry->level->value] ?? '';
+            $timestamp = $entry->timestamp->format('H:i:s.v');
+            $out .= sprintf(
+                "%s[%s] %-7s %s\033[0m\n",
+                $color,
+                $timestamp,
+                $entry->level->name,
+                $entry->message,
+            );
+        }
+
+        $this->clear();
+
+        return $out;
     }
 }
