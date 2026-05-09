@@ -227,3 +227,19 @@ it('does not reuse non-constructor method parameter resolution values across cal
 
     expect($first)->not->toBe($second);
 });
+
+it('does not reuse closure parameter resolution across different closures', function () {
+    $c = Container::instance(uniqid('closure_args_'));
+    $c->definitions()->bind(
+        RegressionTokenSource::class,
+        fn () => new RegressionTransientTokenSource(),
+        LifetimeEnum::Transient,
+    );
+
+    $noArgResult = $c->call(static fn (): string => 'ok');
+    $token = $c->call(static fn (RegressionTokenSource $tokenSource): string => $tokenSource->token());
+
+    expect($noArgResult)->toBe('ok')
+        ->and($token)->toBeString()
+        ->and(strlen($token))->toBeGreaterThan(0);
+});
