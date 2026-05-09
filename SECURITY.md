@@ -1,35 +1,55 @@
 # Security Policy
 
-![Libraries.io dependency status for GitHub repo](https://img.shields.io/librariesio/github/infocyph/InterMix)
+Thank you for helping keep InterMix and its users safe.
 
 ## Supported Versions
 
-| InterMix Version | PHP Version | Security Updates |
-| ---------------- | ----------- | ---------------- |
-| 2.x              | 8.3+        | :white_check_mark: |
-| 1.x              | 8.0 - 8.2   | :x: |
-| < 1.0            | < 8.0       | :x: |
+Security fixes are provided for the current major release line.
+
+| Version | Supported |
+|---------| --- |
+| `7.x`   | ✅ |
+| `< 7.0` | ❌ |
 
 ## Reporting a Vulnerability
 
-Please report security vulnerabilities privately.
+Please report vulnerabilities privately. Do not open a public issue.
 
-- Subject: `SECURITY: infocyph/intermix - <short title>`
-- Include:
-  - affected version
-  - impact summary
-  - reproduction steps or PoC
-  - suggested fix (if available)
+Preferred channels:
 
-Please do not open a public GitHub issue for unpatched vulnerabilities.
+1. GitHub private vulnerability reporting:
+   `Security` -> `Advisories` -> `Report a vulnerability`
+2. Email fallback: `infocyph@gmail.com`
 
-## Security Notes
+Please include:
 
-- `ValueSerializer::decode()` / `ValueSerializer::unserialize()` should only process trusted payloads.
-- For untrusted transport channels, enable payload signing:
+- Affected package version(s)
+- PHP version and runtime environment
+- Reproduction steps or proof-of-concept
+- Impact assessment (confidentiality, integrity, availability)
+- Known mitigations or workarounds
 
-```php
-use Infocyph\InterMix\Serializer\ValueSerializer;
+## Response Targets
 
-ValueSerializer::setPayloadSigningKey($_ENV['INTERMIX_SIGNING_KEY']);
-```
+- Initial acknowledgment: within 3 business days
+- Triage decision: within 7 business days
+- Remediation timeline: severity and exploitability dependent
+
+If a report is accepted, we will prepare a patched release and publish an advisory. Reporter credit will be included unless you request to remain anonymous.
+
+## Coordinated Disclosure
+
+Please keep details private until a fix is released. After remediation, advisory details and release notes will be published. CVE assignment may be requested when appropriate.
+
+## Scope
+
+In scope:
+
+- Vulnerabilities in maintained code under `src/`
+- Security-impacting dependency risks in direct dependencies
+
+Out of scope:
+
+- Issues affecting unsupported versions only
+- Local-only misconfiguration without a library defect
+- Non-security bugs or feature requests

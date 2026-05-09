@@ -1,12 +1,12 @@
 # InterMix
 
-[![Security & Standards](https://github.com/infocyph/InterMix/actions/workflows/build.yml/badge.svg)](https://github.com/infocyph/InterMix/actions/workflows/build.yml)
-[![Documentation](https://img.shields.io/badge/Documentation-InterMix-blue?logo=readthedocs&logoColor=white)](https://docs.infocyph.com/projects/intermix/)
+[![Security & Standards](https://github.com/infocyph/InterMix/actions/workflows/security-standards.yml/badge.svg)](https://github.com/infocyph/InterMix/actions/workflows/security-standards.yml)
 ![Packagist Downloads](https://img.shields.io/packagist/dt/infocyph/intermix?color=green&link=https%3A%2F%2Fpackagist.org%2Fpackages%2Finfocyph%2Fintermix)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 ![Packagist Version](https://img.shields.io/packagist/v/infocyph/intermix)
 ![Packagist PHP Version](https://img.shields.io/packagist/dependency-v/infocyph/intermix/php)
 ![GitHub Code Size](https://img.shields.io/github/languages/code-size/infocyph/intermix)
+[![Documentation](https://img.shields.io/badge/Documentation-InterMix-blue?logo=readthedocs&logoColor=white)](https://docs.infocyph.com/projects/intermix/)
 
 `InterMix` is a modern, lightweight PHP toolkit for developers who value class-oriented design, clean architecture, and fast execution. It combines dependency injection, serialization, macro-style extensibility, and helper utilities with minimal config and maximum control.
 
