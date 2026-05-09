@@ -573,6 +573,7 @@ class ParameterResolver
     private function shouldUseValueCache(ReflectionFunctionAbstract $reflector, string $type): bool
     {
         return $type === 'constructor'
-            && (!($reflector instanceof ReflectionMethod) || $reflector->getName() === '__construct');
+            && $reflector instanceof ReflectionMethod
+            && $reflector->getName() === '__construct';
     }
 }
