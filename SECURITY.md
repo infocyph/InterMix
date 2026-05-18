@@ -1,55 +1,49 @@
 # Security Policy
 
-Thank you for helping keep InterMix and its users safe.
-
 ## Supported Versions
 
-Security fixes are provided for the current major release line.
-
-| Version | Supported |
-|---------| --- |
-| `7.x`   | ✅ |
-| `< 7.0` | ❌ |
+The project currently supports security updates for the latest release.
 
 ## Reporting a Vulnerability
 
-Please report vulnerabilities privately. Do not open a public issue.
+Please report vulnerabilities privately.
 
-Preferred channels:
-
-1. GitHub private vulnerability reporting:
-   `Security` -> `Advisories` -> `Report a vulnerability`
-2. Email fallback: `infocyph@gmail.com`
+1. Use GitHub private vulnerability reporting for this repository (`Security` -> `Advisories` -> `Report a vulnerability`).
+2. If private reporting is unavailable, contact maintainers through a private channel.
+3. Do not open a public issue for security vulnerabilities.
 
 Please include:
 
 - Affected package version(s)
 - PHP version and runtime environment
-- Reproduction steps or proof-of-concept
-- Impact assessment (confidentiality, integrity, availability)
-- Known mitigations or workarounds
+- Reproduction steps or proof of concept
+- Impact assessment (confidentiality/integrity/availability)
+- Any known workaround
 
-## Response Targets
+## Response Process
 
-- Initial acknowledgment: within 3 business days
-- Triage decision: within 7 business days
-- Remediation timeline: severity and exploitability dependent
+- Initial acknowledgment: best effort, typically within a few days
+- Triage: best effort, based on maintainer availability
+- Fix and release timeline depends on severity and exploitability
 
-If a report is accepted, we will prepare a patched release and publish an advisory. Reporter credit will be included unless you request to remain anonymous.
+If a report is accepted, a patched release will be prepared and published. Credit will be provided unless you request otherwise.
 
-## Coordinated Disclosure
+## Protected by PHPForge
 
-Please keep details private until a fix is released. After remediation, advisory details and release notes will be published. CVE assignment may be requested when appropriate.
+This project is protected by [PHPForge](https://github.com/infocyph/PHPForge), an automated quality and security tooling layer for Infocyph PHP projects.
 
-## Scope
+PHPForge helps keep the project reliable by running checks for:
 
-In scope:
+- Code style and standards
+- Tests and syntax validation
+- Static analysis and type safety
+- Security and taint analysis
+- Dependency vulnerability audit
+- Architecture boundary validation
+- Duplicate-code detection
+- API snapshot and comment-policy checks
+- Refactor safety checks
+- Benchmark and release-readiness checks
+- Git hooks and CI workflow protection
 
-- Vulnerabilities in maintained code under `src/`
-- Security-impacting dependency risks in direct dependencies
-
-Out of scope:
-
-- Issues affecting unsupported versions only
-- Local-only misconfiguration without a library defect
-- Non-security bugs or feature requests
+These automated gates strengthen code quality, reduce security risk and help prevent regressions before merge or release.

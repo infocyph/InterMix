@@ -46,7 +46,7 @@ final class ReflectionResource
     }
 
     /**
-     * @param callable|array{0: object|string, 1: string}|string|object $callable
+     * @param callable|array<array-key, mixed>|string|object $callable
      *
      * @throws InvalidArgumentException|ReflectionException
      */

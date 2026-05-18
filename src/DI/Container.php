@@ -425,7 +425,7 @@ final class Container implements ContainerInterface, ArrayAccess
      * - callable object (e.g. closure, invokable class)
      * - array of class and method name
      *
-     * @param string|array{0:string,1:string}|Closure|callable $spec The callable string/array to parse.
+     * @param string|array<array-key, mixed>|Closure|callable $spec The callable string/array to parse.
      * @return array{kind:'closure',closure:callable}
      *                                                |array{kind:'class',class:string}
      *                                                |array{kind:'method',class:string,method:string}

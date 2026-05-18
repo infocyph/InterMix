@@ -10,9 +10,7 @@
 
 `InterMix` is a modern, lightweight PHP toolkit for developers who value class-oriented design, clean architecture, and fast execution. It combines dependency injection, serialization, macro-style extensibility, and helper utilities with minimal config and maximum control.
 
----
-
-## 🚀 Key Features
+## Key Features
 
 - **Dependency Injection (DI)** — PSR-11 compliant container with:
   - attribute-based injection
@@ -26,9 +24,7 @@
 - **MacroMix** — Dynamically extend objects or classes with macros
 - **Global Utilities** — Like `pipe()`, `retry()`, `measure()` and more
 
----
-
-## 📦 Installation
+## Installation
 
 ```bash
 composer require infocyph/intermix
@@ -41,11 +37,9 @@ Supported PHP versions:
 | 2.x.x and above  | 8.3 or newer       |
 | 1.x.x            | 8.0-8.2 compatible |
 
----
+## Quick Examples
 
-## ⚡ Quick Examples
-
-### 🧱 Dependency Injection
+### Dependency Injection
 
 ```php
 use function Infocyph\InterMix\container;
@@ -77,12 +71,9 @@ foreach ($c->findByTag('service') as $svc) {
 }
 ```
 
-See full container guide at:
-📖 [https://docs.infocyph.com/projects/intermix/di/overview.html](https://docs.infocyph.com/projects/intermix/di/overview.html)
+See full container guide at: [https://docs.infocyph.com/projects/intermix/di/overview.html](https://docs.infocyph.com/projects/intermix/di/overview.html)
 
----
-
-### 🧬 Dynamic Macros
+### Dynamic Macros
 
 ```php
 MacroTest::mix(new class {
@@ -94,9 +85,7 @@ MacroTest::mix(new class {
 echo (new MacroTest)->hello('Ali'); // Hey, Ali!
 ```
 
----
-
-### 🧠 Definition Cache (Injectable)
+### Definition Cache (Injectable)
 
 ```php
 use Psr\Cache\CacheItemPoolInterface;
@@ -105,44 +94,28 @@ $pool = /* any PSR-6 pool, e.g. from infocyph/cachelayer */;
 $c->definitions()->enableDefinitionCache($pool);
 ```
 
----
-
-## 📚 Documentation
-
-Full documentation available at:
-
-🔗 [https://docs.infocyph.com/projects/intermix/](https://docs.infocyph.com/projects/intermix/)
-
-Includes:
-
-* ✅ Getting Started & Quickstart
-* 📦 DI Container Guide (bindings, scopes, attributes, lifetimes)
-* 🧩 Modules: DI, Serializer, Remix, Fence, MacroMix
-* 🧪 Testing & Caching Tips
-* 📘 PDF/ePub formats
-
----
-
-## ✅ Testing
+## Testing
 
 ```bash
 composer install
 composer test
 ```
 
----
 
-## 🤝 Contributing
+## Security
 
-Got ideas or improvements? Join us!
-
-📂 [Open issues](https://github.com/infocyph/InterMix/issues)
-📬 Submit a PR — we welcome quality contributions
+Protected by [PHPForge](https://github.com/infocyph/PHPForge) — an automated quality and security gate for PHP projects.
 
 ---
 
-## 🛡 License
+<div align="center">
+  <sub><strong>Made with ❤️ for the PHP community</strong></sub><br />
+  <sub><a href="LICENSE">MIT Licensed</a></sub><br />
+  <a href="https://docs.infocyph.com/projects/Epicrypt">Documentation</a> •
+  <a href="SECURITY.md">Security</a> •
+  <a href="CODE_OF_CONDUCT.md">Code of Conduct</a> •
+  <a href="CONTRIBUTING.md">Contributing</a> •
+  <a href="https://github.com/infocyph/Epicrypt/issues">Report | Request | Suggest</a>
+</div>
 
-MIT Licensed — use it freely, modify it openly.
 
-🔗 [opensource.org/licenses/MIT](https://opensource.org/licenses/MIT)
