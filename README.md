@@ -10,6 +10,8 @@
 
 `InterMix` is a modern, lightweight PHP toolkit for developers who value class-oriented design, clean architecture, and fast execution. It combines dependency injection, serialization, macro-style extensibility, and helper utilities with minimal config and maximum control.
 
+> Global helper functions are optional in `v2`: core APIs are namespaced and helper loading is opt-in.
+
 ## Key Features
 
 - **Dependency Injection (DI)** — PSR-11 compliant container with:
@@ -28,6 +30,12 @@
 
 ```bash
 composer require infocyph/intermix
+```
+
+Optional global helpers:
+
+```php
+require_once __DIR__ . '/vendor/infocyph/intermix/src/functions.php';
 ```
 
 Supported PHP versions:
@@ -91,7 +99,30 @@ echo (new MacroTest)->hello('Ali'); // Hey, Ali!
 use Psr\Cache\CacheItemPoolInterface;
 
 $pool = /* any PSR-6 pool, e.g. from infocyph/cachelayer */;
-$c->definitions()->enableDefinitionCache($pool);
+$c->definitions()->enableDefinitionCache($pool, cacheRuntimeObjects: false);
+```
+
+### Compiled Resolvers
+
+```php
+$path = __DIR__ . '/var/intermix.compiled.php';
+
+// build-time: generate compiled resolver map
+$c->compileTo($path);
+
+// runtime: activate compiled resolver map explicitly
+$c->useCompiled($path);
+
+// optional one-step build + activate
+$c->compileTo($path, load: true);
+```
+
+### Signed Serialization
+
+```php
+$signed = \Infocyph\InterMix\Serializer\ValueSerializer::signed($_ENV['APP_KEY']);
+$token = $signed->encode(['user_id' => 1]);
+$payload = $signed->decode($token);
 ```
 
 ## Testing
@@ -117,5 +148,3 @@ Protected by [PHPForge](https://github.com/infocyph/PHPForge) — an automated q
   <a href="CONTRIBUTING.md">Contributing</a> •
   <a href="https://github.com/infocyph/Epicrypt/issues">Report | Request | Suggest</a>
 </div>
-
-

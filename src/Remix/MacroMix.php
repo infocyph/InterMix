@@ -13,6 +13,9 @@ use ReflectionMethod;
 
 trait MacroMix
 {
+    /** @var array<string, bool> */
+    protected static array $macroIsStaticClosure = [];
+
     /**
      * @var array<string, callable|object>
      */
@@ -146,6 +149,13 @@ trait MacroMix
     public static function macro(string $name, callable|object $macro): void
     {
         static::$macros[$name] = $macro;
+        if ($macro instanceof Closure) {
+            static::$macroIsStaticClosure[$name] = (new ReflectionFunction($macro))->isStatic();
+
+            return;
+        }
+
+        unset(static::$macroIsStaticClosure[$name]);
     }
 
     /**
@@ -193,6 +203,7 @@ trait MacroMix
     public static function removeMacro(string $name): void
     {
         unset(static::$macros[$name]);
+        unset(static::$macroIsStaticClosure[$name]);
     }
 
     /**
@@ -260,7 +271,10 @@ trait MacroMix
             $result = null;
             $closure = $macro;
 
-            if ($bind !== null && !(new ReflectionFunction($macro))->isStatic()) {
+            $isStaticClosure = static::$macroIsStaticClosure[$method]
+                ??= (new ReflectionFunction($macro))->isStatic();
+
+            if ($bind !== null && !$isStaticClosure) {
                 $bound = $macro->bindTo($bind, static::class);
                 $closure = $bound instanceof Closure ? $bound : $macro;
             }

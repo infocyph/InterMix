@@ -31,14 +31,22 @@ class Repository
 
     private ?DefinitionCachePoolInterface $cacheAdapter = null;
 
+    private bool $cacheRuntimeObjects = false;
+
     /** @var array<string, array<string, mixed>> */
     private array $classResource = [];
 
     /** @var array<string, array{on: callable, params: array<int|string, mixed>}> */
     private array $closureResource = [];
 
+    /** @var array<string, array<string, mixed>> */
+    private array $compiledResolvers = [];
+
     /** @var array<string, array<string, string>> */
     private array $conditionalBindings = [];
+
+    /** @var array<string, array<string, mixed>> */
+    private array $contextualBindings = [];
 
     private string $currentScope = 'root';
 
@@ -59,9 +67,20 @@ class Repository
     /** @var array<string, mixed> */
     private array $functionReference = [];
 
+    private bool $hasHooks = false;
+
     private bool $isLocked = false;
 
     private bool $lazyLoading = true;
+
+    /** @var array<string, array<int, callable(string,mixed): void>> */
+    private array $onResolvedHooks = [];
+
+    /** @var array<string, array<int, callable(string): void>> */
+    private array $onResolvingHooks = [];
+
+    /** @var array<string, array<int, callable(string,Container): void>> */
+    private array $onScopeLeaveHooks = [];
 
     /** @var array<string, mixed> */
     private array $resolved = [];
@@ -84,6 +103,9 @@ class Repository
     /** @var array<string, array<string, array<string, bool>>> */
     private array $tagIndexByEnv = [];
 
+    /** @var array<string, array<string, bool>> */
+    private array $tagOverrideIdsByEnv = [];
+
     /**
      * Constructs a Repository instance.
      *
@@ -91,7 +113,7 @@ class Repository
      * and interactions within the container. This aids in debugging and
      * tracing the service resolution process.
      */
-    public function __construct(Container $container)
+    public function __construct(private readonly Container $container)
     {
         $this->tracer = new DebugTracer();
         $this->attributeRegistry = new AttributeRegistry($container);
@@ -168,6 +190,33 @@ class Repository
     {
         $this->checkIfLocked();
         $this->conditionalBindings[$env][$interface] = $concrete;
+    }
+
+    public function container(): Container
+    {
+        return $this->container;
+    }
+
+    public function dispatchResolvedHooks(string $id, mixed $value): void
+    {
+        if (!$this->hasHooks) {
+            return;
+        }
+
+        foreach ($this->onResolvedHooks[$id] ?? [] as $hook) {
+            $hook($id, $value);
+        }
+    }
+
+    public function dispatchResolvingHooks(string $id): void
+    {
+        if (!$this->hasHooks) {
+            return;
+        }
+
+        foreach ($this->onResolvingHooks[$id] ?? [] as $hook) {
+            $hook($id);
+        }
     }
 
     /**
@@ -335,6 +384,16 @@ class Repository
         return $this->closureResource[$alias] ?? null;
     }
 
+    public function getCompiledResolver(string $id): mixed
+    {
+        return $this->compiledResolvers[$id]['factory'] ?? null;
+    }
+
+    public function getContextualBinding(string $consumer, string $dependency): mixed
+    {
+        return $this->contextualBindings[$consumer][$dependency] ?? null;
+    }
+
     /**
      * Retrieves the default method to be called when resolving a class.
      *
@@ -456,9 +515,9 @@ class Repository
             $ids[$id] = true;
         }
 
-        $overrides = $this->definitionMetaByEnv[$env] ?? [];
-        foreach ($overrides as $id => $override) {
-            if (!array_key_exists('tags', $override)) {
+        foreach ($this->tagOverrideIdsByEnv[$env] ?? [] as $id => $_) {
+            $override = $this->definitionMetaByEnv[$env][$id] ?? null;
+            if (!is_array($override) || !array_key_exists('tags', $override)) {
                 continue;
             }
 
@@ -614,8 +673,19 @@ class Repository
         return $this->enablePropertyAttribute;
     }
 
+    public function isTracingEnabled(): bool
+    {
+        return $this->tracer->isEnabled();
+    }
+
     public function leaveScope(): void
     {
+        if ($this->hasHooks) {
+            foreach ($this->onScopeLeaveHooks[$this->currentScope] ?? [] as $hook) {
+                $hook($this->currentScope, $this->container);
+            }
+        }
+
         $this->clearScopeResolvedEntries($this->currentScope);
         $previous = array_pop($this->scopeStack);
         $this->currentScope = is_string($previous) ? $previous : 'root';
@@ -645,6 +715,24 @@ class Repository
     public function makeCacheKey(string $suffix): string
     {
         return $this->alias . '-' . $suffix;
+    }
+
+    public function onResolved(string $id, callable $hook): void
+    {
+        $this->hasHooks = true;
+        $this->onResolvedHooks[$id][] = $hook;
+    }
+
+    public function onResolving(string $id, callable $hook): void
+    {
+        $this->hasHooks = true;
+        $this->onResolvingHooks[$id][] = $hook;
+    }
+
+    public function onScopeLeave(string $scope, callable $hook): void
+    {
+        $this->hasHooks = true;
+        $this->onScopeLeaveHooks[$scope][] = $hook;
     }
 
     /**
@@ -697,6 +785,34 @@ class Repository
         $this->cacheAdapter = $adapter instanceof DefinitionCachePoolInterface
             ? $adapter
             : new Psr6DefinitionCachePoolAdapter($adapter);
+    }
+
+    public function setCacheRuntimeObjects(bool $cacheRuntimeObjects): void
+    {
+        $this->checkIfLocked();
+        $this->cacheRuntimeObjects = $cacheRuntimeObjects;
+    }
+
+    /**
+     * @param array<array-key, mixed> $resolvers
+     */
+    public function setCompiledResolvers(array $resolvers): void
+    {
+        $this->checkIfLocked();
+        $normalized = [];
+        foreach ($resolvers as $id => $resolver) {
+            if (!is_string($id) || !is_callable($resolver)) {
+                continue;
+            }
+            $normalized[$id] = ['factory' => $resolver];
+        }
+        $this->compiledResolvers = $normalized;
+    }
+
+    public function setContextualBinding(string $consumer, string $dependency, mixed $give): void
+    {
+        $this->checkIfLocked();
+        $this->contextualBindings[$consumer][$dependency] = $give;
     }
 
     /**
@@ -777,6 +893,7 @@ class Repository
         if (array_key_exists('tags', $normalized)) {
             $oldTags = $existing['tags'] ?? [];
             $this->refreshEnvTagIndex($env, $id, $oldTags, $normalized['tags']);
+            $this->tagOverrideIdsByEnv[$env][$id] = true;
         }
     }
 
@@ -892,6 +1009,20 @@ class Repository
         $this->currentScope = $scope;
     }
 
+    public function shouldCacheRuntimeObjects(): bool
+    {
+        return $this->cacheRuntimeObjects;
+    }
+
+    public function shouldPersistDefinitionValue(mixed $value): bool
+    {
+        if ($this->cacheRuntimeObjects) {
+            return !is_resource($value) && !$value instanceof \Closure;
+        }
+
+        return $this->isSafeCachedDefinitionValue($value);
+    }
+
     /**
      * @return DebugTracer The debug tracer associated with this repository.
      *
@@ -902,6 +1033,11 @@ class Repository
     public function tracer(): DebugTracer
     {
         return $this->tracer;
+    }
+
+    public function unsetResolvedResource(string $className): void
+    {
+        unset($this->resolvedResource[$className]);
     }
 
     /**
@@ -935,6 +1071,25 @@ class Repository
                 unset($this->resolved[$key]);
             }
         }
+    }
+
+    private function isSafeCachedDefinitionValue(mixed $value): bool
+    {
+        if (is_scalar($value) || $value === null) {
+            return true;
+        }
+
+        if (!is_array($value)) {
+            return false;
+        }
+
+        foreach ($value as $item) {
+            if (!$this->isSafeCachedDefinitionValue($item)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

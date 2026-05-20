@@ -47,8 +47,6 @@ class ParameterResolver
 
     private const int PARAM_ATTRIBUTE_PLAN_CACHE_LIMIT = 4096;
 
-    private const int RESOLUTION_CACHE_LIMIT = 4096;
-
     private const int RESOLUTION_PLAN_CACHE_LIMIT = 2048;
 
     private readonly IMStdClass $stdClass;
@@ -73,9 +71,6 @@ class ParameterResolver
      */
     private array $resolutionPlanCache = [];
 
-    /** @var array<string, array<int|string, mixed>> */
-    private array $resolvedCache = [];
-
     public function __construct(
         private readonly Repository $repository,
         private readonly DefinitionResolver $definitionResolver,
@@ -96,16 +91,6 @@ class ParameterResolver
         array $suppliedParameters,
         string $type,
     ): array {
-        $useValueCache = $this->shouldUseValueCache($reflector, $type);
-        $cacheKey = null;
-
-        if ($useValueCache) {
-            $cacheKey = $this->makeResolutionCacheKey($reflector, $suppliedParameters, $type);
-            if (array_key_exists($cacheKey, $this->resolvedCache)) {
-                return $this->resolvedCache[$cacheKey];
-            }
-        }
-
         $this->repository->tracer()->push(
             "{$reflector->getShortName()}() params",
             TraceLevelEnum::Verbose,
@@ -114,7 +99,7 @@ class ParameterResolver
         $plan = $this->getResolutionPlan($reflector, $type);
         $availableParams = $plan['availableParams'];
         if (!$availableParams) {
-            return $useValueCache ? $this->rememberResolved((string) $cacheKey, []) : [];
+            return [];
         }
 
         $applyAttribute = $plan['applyAttribute'];
@@ -133,7 +118,7 @@ class ParameterResolver
             $attributeData,
         );
         if (!$paramsLeft) {
-            return $useValueCache ? $this->rememberResolved((string) $cacheKey, $processed) : $processed;
+            return $processed;
         }
 
         [
@@ -151,7 +136,7 @@ class ParameterResolver
             $processed = $this->processVariadic($processed, $variadic, $sort);
         }
 
-        return $useValueCache ? $this->rememberResolved((string) $cacheKey, $processed) : $processed;
+        return $processed;
     }
 
     /**
@@ -182,38 +167,53 @@ class ParameterResolver
             if ($this->repository->hasFunctionReference($typeName)) {
                 return $this->definitionResolver->resolve($typeName);
             }
-
-            if (class_exists($typeName) || interface_exists($typeName)) {
-                $ref = ReflectionResource::getClassReflection($typeName);
-
-                return $this->classResolver->resolve($ref)['instance'];
-            }
         }
 
         return $this->stdClass;
     }
 
+    /**
+     * @param ReflectionClass<object> $dependency
+     */
+    public function resolveContextualDependency(string $consumer, ReflectionClass $dependency): mixed
+    {
+        if ($consumer === '') {
+            return $this->stdClass;
+        }
+
+        $binding = $this->repository->getContextualBinding($consumer, $dependency->getName());
+        if ($binding === null) {
+            return $this->stdClass;
+        }
+
+        if (is_callable($binding)) {
+            return $binding($this->repository->container());
+        }
+
+        if (is_string($binding)) {
+            if ($this->repository->hasFunctionReference($binding)) {
+                return $this->definitionResolver->resolve($binding);
+            }
+
+            if (class_exists($binding) || interface_exists($binding)) {
+                $resolvedClass = $this->applyEnvOverride($binding);
+
+                return $this->classResolver->resolveClassInstance(
+                    ReflectionResource::getClassReflection($resolvedClass),
+                );
+            }
+        }
+
+        if (is_object($binding) && is_a($binding, $dependency->getName())) {
+            return $binding;
+        }
+
+        return $binding;
+    }
+
     public function setClassResolverInstance(ClassResolver $classResolver): void
     {
         $this->classResolver = $classResolver;
-    }
-
-    private static function normalise(mixed $value): mixed
-    {
-        return match (true) {
-            $value instanceof \Closure => 'closure#' . spl_object_id($value),
-            is_object($value) => 'obj#' . spl_object_id($value),
-            is_resource($value) => 'res#' . get_resource_type($value) . '#' . (int) $value,
-            is_array($value) => array_map([self::class, 'normalise'], $value),
-            default => $value,
-        };
-    }
-
-    private static function stableHash(string $value): string
-    {
-        $algorithm = in_array('xxh128', hash_algos(), true) ? 'xxh128' : 'xxh3';
-
-        return hash($algorithm, $value);
     }
 
     /**
@@ -384,33 +384,6 @@ class ParameterResolver
         return $reflection;
     }
 
-    /**
-     * @param array<int|string, mixed> $supplied
-     */
-    private function makeFastScalarFingerprint(array $supplied): ?string
-    {
-        if (count($supplied) > 16) {
-            return null;
-        }
-
-        $parts = [];
-        foreach ($supplied as $key => $value) {
-            if (is_array($value) || is_object($value) || is_resource($value)) {
-                return null;
-            }
-
-            $parts[] = $key . '=' . match (true) {
-                $value === null => 'n:null',
-                is_bool($value) => 'b:' . ($value ? '1' : '0'),
-                is_int($value) => 'i:' . $value,
-                is_float($value) => 'f:' . $value,
-                default => 's:' . base64_encode(is_string($value) ? $value : var_export($value, true)),
-            };
-        }
-
-        return 'f:' . implode('|', $parts);
-    }
-
     private function makeParameterAttributePlanKey(ReflectionParameter $parameter): string
     {
         $function = $parameter->getDeclaringFunction();
@@ -418,30 +391,6 @@ class ParameterResolver
         $signature = ReflectionResource::getSignature($function);
 
         return $owner . '::' . $function->getName() . '|p:' . $parameter->getPosition() . '|sig:' . $signature;
-    }
-
-    /**
-     * @param array<int|string, mixed> $supplied
-     */
-    private function makeResolutionCacheKey(
-        ReflectionFunctionAbstract $reflector,
-        array $supplied,
-        string $type,
-    ): string {
-        $owner = $this->ownerFor($reflector);
-        if ($supplied === []) {
-            return "$owner::{$reflector->getName()}|$type|empty";
-        }
-
-        $fast = $this->makeFastScalarFingerprint($supplied);
-        if ($fast !== null) {
-            return "$owner::{$reflector->getName()}|$type|$fast";
-        }
-
-        $norm = array_map([self::class, 'normalise'], $supplied);
-        $argsHash = self::stableHash(json_encode($norm, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
-
-        return "$owner::{$reflector->getName()}|$type|h:$argsHash";
     }
 
     private function makeResolutionPlanKey(ReflectionFunctionAbstract $reflector, string $type): string
@@ -556,24 +505,5 @@ class ParameterResolver
         $this->resolutionPlanCache[$key] = $value;
 
         return $value;
-    }
-
-    /**
-     * @param array<int|string, mixed> $value
-     * @return array<int|string, mixed>
-     */
-    private function rememberResolved(string $key, array $value): array
-    {
-        $this->evictCacheKeyIfNeeded($this->resolvedCache, $key, self::RESOLUTION_CACHE_LIMIT);
-        $this->resolvedCache[$key] = $value;
-
-        return $value;
-    }
-
-    private function shouldUseValueCache(ReflectionFunctionAbstract $reflector, string $type): bool
-    {
-        return $type === 'constructor'
-            && $reflector instanceof ReflectionMethod
-            && $reflector->getName() === '__construct';
     }
 }

@@ -8,7 +8,6 @@ use Closure;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Serializer\ValueSerializer;
 use InvalidArgumentException;
-use Random\RandomException;
 use ReflectionException;
 
 final class Invoker
@@ -37,7 +36,7 @@ final class Invoker
     public static function shared(): self
     {
         if (!self::$sharedInstance instanceof self) {
-            self::$sharedInstance = new self(Container::instance(__DIR__));
+            self::$sharedInstance = new self(Container::instance(Container::DI_ALIAS));
         }
 
         return self::$sharedInstance;
@@ -72,25 +71,32 @@ final class Invoker
      */
     public function callableFor(string|object $target): callable
     {
-        $key = \is_string($target) ? $target : $target::class;
+        if (\is_object($target)) {
+            if (!\is_callable($target)) {
+                throw new InvalidArgumentException(
+                    sprintf('%s is not invokable.', $target::class),
+                );
+            }
 
+            return $target(...);
+        }
+
+        $key = 'container:' . spl_object_id($this->container) . ':class:' . $target;
         if (isset(self::$callableCache[$key])) {
             return self::$callableCache[$key];
         }
 
-        $instance = \is_string($target) ? $this->make($target) : $target;
+        $instance = $this->make($target);
         if (!\is_object($instance) || !\is_callable($instance)) {
             throw new InvalidArgumentException(
                 sprintf(
                     '%s is not invokable.',
-                    \is_object($instance) ? $instance::class : $key,
+                    $target,
                 ),
             );
         }
 
-        self::$callableCache[$key] = $instance(...);
-
-        return self::$callableCache[$key];
+        return self::$callableCache[$key] = $instance(...);
     }
 
     /**
@@ -118,7 +124,7 @@ final class Invoker
      *
      * @throws ContainerException If the callable cannot be resolved.
      * @throws ReflectionException If the callable is a class without a default constructor.
-     * @throws InvalidArgumentException|RandomException If the callable is not a valid callable.
+     * @throws InvalidArgumentException If the callable is not a valid callable.
      */
     public function invoke(string|array|callable $target, array $args = []): mixed
     {
@@ -146,6 +152,19 @@ final class Invoker
                 ->registration()->registerMethod($desc['class'], $desc['method'], $args)
                 ->invocation()->getReturn($desc['class']),
         };
+    }
+
+    /**
+     * Invoke a closure directly through the active resolver without registering aliases.
+     *
+     * @param array<int|string, mixed> $args
+     * @throws ContainerException|ReflectionException|\Psr\Cache\InvalidArgumentException
+     */
+    public function invokeClosure(Closure $closure, array $args = []): mixed
+    {
+        return $this->container
+            ->getCurrentResolver()
+            ->closureSettler($closure, $args);
     }
 
     /**
@@ -245,7 +264,7 @@ final class Invoker
      * @param mixed $callable The callable to be routed and executed.
      * @param array<int|string, mixed> $args The arguments to pass to the callable.
      * @return mixed The result of executing the callable.
-     * @throws ContainerException|RandomException|ReflectionException|\Psr\Cache\InvalidArgumentException
+     * @throws ContainerException|ReflectionException|\Psr\Cache\InvalidArgumentException
      */
     private function routeCallable(mixed $callable, array $args): mixed
     {
@@ -278,19 +297,10 @@ final class Invoker
      * @param Closure $fn The closure to invoke.
      * @param array<int|string, mixed> $args The arguments to pass to the closure.
      * @return mixed The result of the closure invocation.
-     * @throws ContainerException|ReflectionException|\Psr\Cache\InvalidArgumentException|RandomException
+     * @throws ContainerException|ReflectionException|\Psr\Cache\InvalidArgumentException
      */
     private function viaClosure(Closure $fn, array $args): mixed
     {
-        static $i = 0;
-        if (!is_int($i)) {
-            $i = 0;
-        }
-        $alias = 'λ' . $i;
-        $i++;
-
-        return $this->container
-            ->registration()->registerClosure($alias, $fn, $args)
-            ->invocation()->getReturn($alias);
+        return $this->invokeClosure($fn, $args);
     }
 }

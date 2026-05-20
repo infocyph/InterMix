@@ -20,10 +20,12 @@ use UnitEnum;
  */
 final class ReflectionResource
 {
+    private static int $cacheLimit = 0;
+
     /**
      * @var array{
-     *   classes: array<class-string, ReflectionClass<object>>,
-     *   enums: array<class-string, ReflectionEnum<UnitEnum>>,
+     *   classes: array<string, ReflectionClass<object>>,
+     *   enums: array<string, ReflectionEnum<UnitEnum>>,
      *   functions: array<string, ReflectionFunction>,
      *   methods: array<string, ReflectionMethod>
      * }
@@ -34,6 +36,26 @@ final class ReflectionResource
         'functions' => [],
         'methods' => [],
     ];
+
+    /**
+     * @return array{limit:int,classes:int,enums:int,functions:int,methods:int,total:int}
+     */
+    public static function cacheStats(): array
+    {
+        $classes = count(self::$reflectionCache['classes']);
+        $enums = count(self::$reflectionCache['enums']);
+        $functions = count(self::$reflectionCache['functions']);
+        $methods = count(self::$reflectionCache['methods']);
+
+        return [
+            'limit' => self::$cacheLimit,
+            'classes' => $classes,
+            'enums' => $enums,
+            'functions' => $functions,
+            'methods' => $methods,
+            'total' => $classes + $enums + $functions + $methods,
+        ];
+    }
 
     public static function clearCache(): void
     {
@@ -92,7 +114,11 @@ final class ReflectionResource
         }
 
         if (!isset(self::$reflectionCache['classes'][$className])) {
-            self::$reflectionCache['classes'][$className] = new ReflectionClass($className);
+            self::rememberCachedEntry(
+                self::$reflectionCache['classes'],
+                $className,
+                new ReflectionClass($className),
+            );
         }
 
         return self::$reflectionCache['classes'][$className];
@@ -110,7 +136,11 @@ final class ReflectionResource
         }
 
         if (!isset(self::$reflectionCache['enums'][$enumName])) {
-            self::$reflectionCache['enums'][$enumName] = new ReflectionEnum($enumName);
+            self::rememberCachedEntry(
+                self::$reflectionCache['enums'],
+                $enumName,
+                new ReflectionEnum($enumName),
+            );
         }
 
         return self::$reflectionCache['enums'][$enumName];
@@ -120,7 +150,11 @@ final class ReflectionResource
     {
         $key = is_string($function) ? $function : spl_object_hash($function);
         if (!isset(self::$reflectionCache['functions'][$key])) {
-            self::$reflectionCache['functions'][$key] = new ReflectionFunction($function);
+            self::rememberCachedEntry(
+                self::$reflectionCache['functions'],
+                $key,
+                new ReflectionFunction($function),
+            );
         }
 
         return self::$reflectionCache['functions'][$key];
@@ -173,6 +207,40 @@ final class ReflectionResource
         return base64_encode("$fileName:$startLine");
     }
 
+    public static function setCacheLimit(int $limit): void
+    {
+        self::$cacheLimit = max(0, $limit);
+        self::trimAllCachesIfNeeded();
+    }
+
+    /**
+     * @template T
+     * @param array<string, T> $cache
+     */
+    private static function evictOldestIfNeeded(array &$cache): void
+    {
+        if (self::$cacheLimit <= 0 || count($cache) < self::$cacheLimit) {
+            return;
+        }
+
+        $oldestKey = array_key_first($cache);
+        unset($cache[$oldestKey]);
+    }
+
+    /**
+     * @template T
+     * @param array<string, T> $cache
+     * @param T $value
+     */
+    private static function rememberCachedEntry(array &$cache, string $key, mixed $value): void
+    {
+        if (!isset($cache[$key])) {
+            self::evictOldestIfNeeded($cache);
+        }
+
+        $cache[$key] = $value;
+    }
+
     /**
      * @param callable(): ReflectionMethod $resolver
      */
@@ -181,7 +249,7 @@ final class ReflectionResource
         if (!isset(self::$reflectionCache['methods'][$key])) {
             try {
                 $method = $resolver();
-                self::$reflectionCache['methods'][$key] = $method;
+                self::rememberCachedEntry(self::$reflectionCache['methods'], $key, $method);
             } catch (Throwable $exception) {
                 throw new InvalidArgumentException($exception->getMessage(), 0, $exception);
             }
@@ -252,5 +320,25 @@ final class ReflectionResource
         }
 
         throw new InvalidArgumentException("Function or method '$callable' does not exist.");
+    }
+
+    private static function trimAllCachesIfNeeded(): void
+    {
+        self::trimBucket(self::$reflectionCache['classes']);
+        self::trimBucket(self::$reflectionCache['enums']);
+        self::trimBucket(self::$reflectionCache['functions']);
+        self::trimBucket(self::$reflectionCache['methods']);
+    }
+
+    /**
+     * @template T
+     * @param array<string, T> $bucket
+     */
+    private static function trimBucket(array &$bucket): void
+    {
+        while (self::$cacheLimit > 0 && count($bucket) > self::$cacheLimit) {
+            $oldestKey = array_key_first($bucket);
+            unset($bucket[$oldestKey]);
+        }
     }
 }

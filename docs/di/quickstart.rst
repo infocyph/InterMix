@@ -19,14 +19,15 @@ Each alias is an *isolated* registry of services.
    use Infocyph\InterMix\DI\Container;
    use function Infocyph\InterMix\container;
 
-   $c1 = container();              // default alias is current source directory (__DIR__)
+   require_once __DIR__ . '/vendor/infocyph/intermix/src/functions.php';
+   $c1 = container();                // default alias: intermix.default
    $c2 = Container::instance('cli'); // a second, independent container
    // identical:
    $c3 = Container::instance('cli');
 
 Keep aliases short and memorable – tests often use a random alias to isolate state.
 For production/runtime stability, prefer explicit aliases instead of relying on the
-default ``__DIR__`` alias.
+default ``intermix.default`` alias.
 
 Configure behaviour (optional)
 ------------------------------

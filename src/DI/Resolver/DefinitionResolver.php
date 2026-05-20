@@ -114,26 +114,14 @@ class DefinitionResolver
             return $this->resolveDefinition($name);
         }
 
-        if (!$this->repository->hasResolvedDefinition($resolvedKey)) {
-            $resolverCallback = fn() => $this->resolveDefinition($name);
-            $cacheAdapter = $this->repository->getCacheAdapter();
-            if ($cacheAdapter) {
-                $cacheKey = $this->repository->makeCacheKey('def:' . self::stableHash($resolvedKey));
-                $item = $cacheAdapter->getItem($cacheKey);
-                if ($item->isHit()) {
-                    $value = $item->get();
-                } else {
-                    $value = $resolverCallback();
-                    $item->set($value);
-                    $cacheAdapter->save($item);
-                }
-            } else {
-                $value = $resolverCallback();
-            }
-            $this->repository->setResolvedDefinition($resolvedKey, $value);
+        if ($this->repository->hasResolvedDefinition($resolvedKey)) {
+            return $this->repository->getResolvedDefinitionEntry($resolvedKey);
         }
 
-        return $this->repository->getResolvedDefinitionEntry($resolvedKey);
+        $value = $this->resolveSingletonDefinition($name, $resolvedKey);
+        $this->repository->setResolvedDefinition($resolvedKey, $value);
+
+        return $value;
     }
 
     /**
@@ -181,6 +169,11 @@ class DefinitionResolver
      */
     private function resolveDefinition(string $name): mixed
     {
+        $compiled = $this->repository->getCompiledResolver($name);
+        if (is_callable($compiled)) {
+            return $compiled($this->repository->container());
+        }
+
         $definition = $this->repository->getFunctionDefinition($name);
         switch (true) {
             case $definition instanceof Closure:
@@ -205,5 +198,30 @@ class DefinitionResolver
             default:
                 return $definition;
         }
+    }
+
+    private function resolveSingletonDefinition(string $name, string $resolvedKey): mixed
+    {
+        $cacheAdapter = $this->repository->getCacheAdapter();
+        if ($cacheAdapter === null) {
+            return $this->resolveDefinition($name);
+        }
+
+        $cacheKey = $this->repository->makeCacheKey('def:' . self::stableHash($resolvedKey));
+        $item = $cacheAdapter->getItem($cacheKey);
+        if ($item->isHit()) {
+            $cachedValue = $item->get();
+            if ($this->repository->shouldPersistDefinitionValue($cachedValue)) {
+                return $cachedValue;
+            }
+        }
+
+        $value = $this->resolveDefinition($name);
+        if ($this->repository->shouldPersistDefinitionValue($value)) {
+            $item->set($value);
+            $cacheAdapter->save($item);
+        }
+
+        return $value;
     }
 }

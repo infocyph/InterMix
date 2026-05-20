@@ -170,6 +170,16 @@ final class DebugTracer
         return $out;
     }
 
+    public function isCaptureLocationEnabled(): bool
+    {
+        return $this->captureLocation;
+    }
+
+    public function isEnabled(): bool
+    {
+        return $this->enabled;
+    }
+
     /* --------------------------------------------------------------------- */
 
     public function level(): TraceLevelEnum

@@ -24,7 +24,7 @@ if (!function_exists('container')) {
      */
     function container(
         string|Closure|callable|array|null $closureOrClass = null,
-        string $alias = __DIR__,
+        string $alias = Container::DEFAULT_ALIAS,
     ): mixed {
         $instance = Container::instance($alias);
 
@@ -40,7 +40,7 @@ if (!function_exists('resolve')) {
      *
      * @param string|Closure|callable|array|null $spec Closure|function|Class|[Class,method]|"Class@method"|"Class::method"
      * @param array<int|string, mixed> $parameters Parameters for constructor/method/closure
-     * @param string $alias Optional container instance alias (default: __DIR__)
+     * @param string $alias Optional container instance alias (default: intermix.di)
      * @return mixed Container instance (when $spec is null) or resolved return value
      * @throws ContainerException|ReflectionException|InvalidArgumentException
      * @param array{0:string,1:string}|null|string|Closure|callable $spec
@@ -48,7 +48,7 @@ if (!function_exists('resolve')) {
     function resolve(
         string|Closure|callable|array|null $spec = null,
         array $parameters = [],
-        string $alias = __DIR__ . 'DI',
+        string $alias = Container::DI_ALIAS,
     ): mixed {
         $instance = Container::instance($alias); // DI is on by default
 
@@ -64,7 +64,7 @@ if (!function_exists('direct')) {
      *
      * @param string|Closure|callable|array|null $spec Closure|function|Class|[Class,method]|"Class@method"|"Class::method"
      * @param array<int|string, mixed> $parameters Parameters for constructor/method/closure
-     * @param string $alias Optional container instance alias (default: __DIR__)
+     * @param string $alias Optional container instance alias (default: intermix.direct)
      * @return mixed Container instance (when $spec is null) or resolved return value
      * @throws ContainerException|ReflectionException|InvalidArgumentException
      * @param array{0:string,1:string}|null|string|Closure|callable $spec
@@ -72,7 +72,7 @@ if (!function_exists('direct')) {
     function direct(
         string|Closure|callable|array|null $spec = null,
         array $parameters = [],
-        string $alias = __DIR__ . 'DR',
+        string $alias = Container::DIRECT_ALIAS,
     ): mixed {
         $instance = Container::instance($alias)
             ->options()

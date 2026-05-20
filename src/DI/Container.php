@@ -15,8 +15,13 @@ use Infocyph\InterMix\DI\Managers\InvocationManager;
 use Infocyph\InterMix\DI\Managers\OptionsManager;
 use Infocyph\InterMix\DI\Managers\RegistrationManager;
 use Infocyph\InterMix\DI\Resolver\Repository;
+use Infocyph\InterMix\DI\Support\CompiledResolverGenerator;
 use Infocyph\InterMix\DI\Support\ContainerProxy;
+use Infocyph\InterMix\DI\Support\ContextualBindingBuilder;
 use Infocyph\InterMix\DI\Support\DebugTracer;
+use Infocyph\InterMix\DI\Support\LifetimeEnum;
+use Infocyph\InterMix\DI\Support\PendingFactoryBinding;
+use Infocyph\InterMix\DI\Support\TaggedPipeline;
 use Infocyph\InterMix\DI\Support\TraceLevelEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Exceptions\NotFoundException;
@@ -32,8 +37,16 @@ final class Container implements ContainerInterface, ArrayAccess
 {
     use ContainerProxy;
 
+    public const string DEFAULT_ALIAS = 'intermix.default';
+
+    public const string DI_ALIAS = 'intermix.di';
+
+    public const string DIRECT_ALIAS = 'intermix.direct';
+
     /** @var array<string, self> */
     protected static array $instances = [];
+
+    private static int $generatedClosureSequence = 0;
 
     protected DefinitionManager $definitionManager;
 
@@ -54,7 +67,7 @@ final class Container implements ContainerInterface, ArrayAccess
      *                              Defaults to 'default'.
      * @throws ContainerException
      */
-    public function __construct(private readonly string $instanceAlias = __DIR__)
+    public function __construct(private readonly string $instanceAlias = self::DEFAULT_ALIAS)
     {
         self::$instances[$this->instanceAlias] ??= $this;
         $this->repository = new Repository($this);
@@ -82,9 +95,19 @@ final class Container implements ContainerInterface, ArrayAccess
      * @return static The container instance.
      * @throws ContainerException
      */
-    public static function instance(string $instanceAlias = __DIR__): self
+    public static function instance(string $instanceAlias = self::DEFAULT_ALIAS): self
     {
         return self::$instances[$instanceAlias] ??= new self($instanceAlias);
+    }
+
+    /**
+     * @throws ContainerException
+     */
+    public function alias(string $id, string $target, LifetimeEnum $lifetime = LifetimeEnum::Singleton): self
+    {
+        $this->definitions()->bind($id, $target, $lifetime);
+
+        return $this;
     }
 
     /**
@@ -99,6 +122,21 @@ final class Container implements ContainerInterface, ArrayAccess
     public function attributeRegistry(): AttributeRegistry
     {
         return $this->repository->attributeRegistry();
+    }
+
+    /**
+     * @param array<int, string> $tags
+     * @throws ContainerException
+     */
+    public function bind(
+        string $id,
+        mixed $definition,
+        LifetimeEnum $lifetime = LifetimeEnum::Singleton,
+        array $tags = [],
+    ): self {
+        $this->definitions()->bind($id, $definition, $lifetime, $tags);
+
+        return $this;
     }
 
     /**
@@ -118,6 +156,19 @@ final class Container implements ContainerInterface, ArrayAccess
     }
 
     /**
+     * @throws ReflectionException
+     */
+    public function compileTo(string $path, bool $load = false): self
+    {
+        $compiled = (new CompiledResolverGenerator())->generate($this, $path);
+        if ($load) {
+            $this->repository->setCompiledResolvers($compiled);
+        }
+
+        return $this;
+    }
+
+    /**
      * Debugs the service resolution process for a given ID.
      *
      * This method attempts to retrieve the service instance for the given ID,
@@ -130,16 +181,22 @@ final class Container implements ContainerInterface, ArrayAccess
      */
     public function debug(string $id): array
     {
+        $tracer = $this->repository->tracer();
+        $previousLevel = $tracer->level();
+        $previousCaptureLocation = $tracer->isCaptureLocationEnabled();
+
         try {
-            $tracer = $this->repository->tracer();
             $tracer->setCaptureLocation(true);
             $tracer->setLevel(TraceLevelEnum::Verbose);
             $this->get($id);
         } catch (Throwable) {
             // swallow; we still want trace
+        } finally {
+            $tracer->setCaptureLocation($previousCaptureLocation);
+            $tracer->setLevel($previousLevel);
         }
 
-        return $this->repository->tracer()->toArray();
+        return $tracer->toArray();
     }
 
     /**
@@ -217,6 +274,14 @@ final class Container implements ContainerInterface, ArrayAccess
     }
 
     /**
+     * @throws ContainerException
+     */
+    public function factory(string $id, Closure $factory): PendingFactoryBinding
+    {
+        return new PendingFactoryBinding($this, $id, $factory);
+    }
+
+    /**
      * Finds and retrieves all service definitions tagged with a specified tag.
      *
      * This method iterates over the repository's definition metadata,
@@ -236,6 +301,16 @@ final class Container implements ContainerInterface, ArrayAccess
         }
 
         return $matches;
+    }
+
+    /**
+     * @return iterable<string, callable(): mixed>
+     */
+    public function findByTagLazy(string $tag): iterable
+    {
+        foreach ($this->repository->getIdsByTag($tag) as $id) {
+            yield $id => fn() => $this->get($id);
+        }
     }
 
     /**
@@ -400,6 +475,36 @@ final class Container implements ContainerInterface, ArrayAccess
     }
 
     /**
+     * @throws ContainerException
+     */
+    public function onResolved(string $id, callable $callback): self
+    {
+        $this->repository->onResolved($id, $callback);
+
+        return $this;
+    }
+
+    /**
+     * @throws ContainerException
+     */
+    public function onResolving(string $id, callable $callback): self
+    {
+        $this->repository->onResolving($id, $callback);
+
+        return $this;
+    }
+
+    /**
+     * @throws ContainerException
+     */
+    public function onScopeLeave(string $scope, callable $callback): self
+    {
+        $this->repository->onScopeLeave($scope, $callback);
+
+        return $this;
+    }
+
+    /**
      * Retrieve the options manager.
      *
      * The options manager is responsible for setting toggles such as injection,
@@ -425,6 +530,9 @@ final class Container implements ContainerInterface, ArrayAccess
      * - callable object (e.g. closure, invokable class)
      * - array of class and method name
      *
+     * Class-method targets are validated eagerly, so referenced classes must be
+     * autoloadable and methods must exist at parse time.
+     *
      * @param string|array<array-key, mixed>|Closure|callable $spec The callable string/array to parse.
      * @return array{kind:'closure',closure:callable}
      *                                                |array{kind:'class',class:string}
@@ -444,22 +552,14 @@ final class Container implements ContainerInterface, ArrayAccess
             => ['kind' => 'closure', 'closure' => $spec],
 
             is_array($spec) && count($spec) === 2 && is_string($spec[0]) && is_string($spec[1])
-            => ['kind' => 'method', 'class' => $spec[0], 'method' => $spec[1]],
+            => $this->parseArrayMethodCallable($spec),
 
             is_string($spec) => match (true) {
                 str_contains($spec, '@')
-                => (static function () use ($spec) {
-                    [$cls, $m] = explode('@', $spec, 2);
-
-                    return ['kind' => 'method', 'class' => $cls, 'method' => $m];
-                })(),
+                => $this->parseClassMethodString($spec, '@'),
 
                 str_contains($spec, '::')
-                => (static function () use ($spec) {
-                    [$cls, $m] = explode('::', $spec, 2);
-
-                    return ['kind' => 'method', 'class' => $cls, 'method' => $m];
-                })(),
+                => $this->parseClassMethodString($spec, '::'),
 
                 class_exists($spec)
                 => ['kind' => 'class', 'class' => $spec],
@@ -488,6 +588,11 @@ final class Container implements ContainerInterface, ArrayAccess
                 ),
             ),
         };
+    }
+
+    public function pipeline(string $tag): TaggedPipeline
+    {
+        return new TaggedPipeline($this, $tag);
     }
 
     /**
@@ -533,6 +638,22 @@ final class Container implements ContainerInterface, ArrayAccess
     }
 
     /**
+     * @param array<int, string> $tags
+     * @throws ContainerException
+     */
+    public function scoped(string $id, mixed $definition = null, array $tags = []): self
+    {
+        $this->definitions()->bind(
+            $id,
+            $definition ?? $id,
+            LifetimeEnum::Scoped,
+            $tags,
+        );
+
+        return $this;
+    }
+
+    /**
      * Sets the environment for the container.
      *
      * This method allows setting the environment, which can be used
@@ -566,6 +687,31 @@ final class Container implements ContainerInterface, ArrayAccess
     }
 
     /**
+     * @param array<int, string> $tags
+     * @throws ContainerException
+     */
+    public function singleton(string $id, mixed $definition = null, array $tags = []): self
+    {
+        $this->definitions()->bind(
+            $id,
+            $definition ?? $id,
+            LifetimeEnum::Singleton,
+            $tags,
+        );
+
+        return $this;
+    }
+
+    /**
+     * @return iterable<string, callable(): mixed>
+     * @throws ContainerException
+     */
+    public function tagged(string $tag): iterable
+    {
+        return $this->findByTagLazy($tag);
+    }
+
+    /**
      * Retrieves the debug tracer instance.
      *
      * This method returns the debug tracer associated with the container.
@@ -581,6 +727,22 @@ final class Container implements ContainerInterface, ArrayAccess
     }
 
     /**
+     * @param array<int, string> $tags
+     * @throws ContainerException
+     */
+    public function transient(string $id, mixed $definition = null, array $tags = []): self
+    {
+        $this->definitions()->bind(
+            $id,
+            $definition ?? $id,
+            LifetimeEnum::Transient,
+            $tags,
+        );
+
+        return $this;
+    }
+
+    /**
      * Remove the container instance from the registry.
      *
      * This method removes the container instance from the internal registry
@@ -591,6 +753,54 @@ final class Container implements ContainerInterface, ArrayAccess
     public function unset(): void
     {
         unset(self::$instances[$this->instanceAlias]);
+    }
+
+    /**
+     * @throws ContainerException
+     */
+    public function useCompiled(string $path): self
+    {
+        $compiled = require $path;
+        if (!is_array($compiled)) {
+            throw new ContainerException('Compiled resolver file must return an array.');
+        }
+        /** @var array<array-key, mixed> $compiled */
+        $this->repository->setCompiledResolvers($compiled);
+
+        return $this;
+    }
+
+    /**
+     * @return array<int, string>
+     * @throws ContainerException
+     */
+    public function validate(bool $strict = false, bool $resolveFactories = false): array
+    {
+        $issues = $this->validateDefinitionTargets();
+        if ($resolveFactories) {
+            $issues = array_merge($issues, $this->validateResolvableDefinitions());
+        }
+
+        if ($strict && $issues !== []) {
+            throw new ContainerException("Container validation failed:\n- " . implode("\n- ", $issues));
+        }
+
+        return $issues;
+    }
+
+    /**
+     * @throws ContainerException
+     */
+    public function value(string $id, mixed $value): self
+    {
+        $this->definitions()->bind($id, $value, LifetimeEnum::Singleton);
+
+        return $this;
+    }
+
+    public function when(string $consumer): ContextualBindingBuilder
+    {
+        return new ContextualBindingBuilder($this, $consumer);
     }
 
     /**
@@ -621,6 +831,98 @@ final class Container implements ContainerInterface, ArrayAccess
     }
 
     /**
+     * @param array<array-key, mixed> $spec
+     * @return array{kind:'method',class:string,method:string}
+     */
+    private function parseArrayMethodCallable(array $spec): array
+    {
+        [$class, $method] = array_values($spec);
+
+        if (!is_string($class) || !is_string($method)) {
+            throw new ContainerException(
+                'Invalid callable array. Expected [class, method] with non-empty strings.',
+            );
+        }
+
+        return $this->parseClassMethodParts($class, $method, '[class, method]');
+    }
+
+    /**
+     * @return array{kind:'method',class:string,method:string}
+     */
+    private function parseClassMethodParts(
+        string $class,
+        string $method,
+        string $spec,
+        ?string $separator = null,
+    ): array {
+        $class = trim($class);
+        $method = trim($method);
+
+        if ($class === '' || $method === '') {
+            if ($separator === null) {
+                throw new ContainerException(
+                    'Invalid callable array. Expected [class, method] with non-empty strings.',
+                );
+            }
+
+            throw new ContainerException(
+                sprintf(
+                    'Invalid callable string "%s". Expected non-empty class and method around "%s".',
+                    $spec,
+                    $separator,
+                ),
+            );
+        }
+
+        if (!class_exists($class)) {
+            if ($separator === null) {
+                throw new ContainerException(
+                    sprintf('Invalid callable array. Class "%s" does not exist.', $class),
+                );
+            }
+
+            throw new ContainerException(
+                sprintf('Invalid callable string "%s". Class "%s" does not exist.', $spec, $class),
+            );
+        }
+
+        if (!method_exists($class, $method)) {
+            if ($separator === null) {
+                throw new ContainerException(
+                    sprintf('Invalid callable array. Method "%s::%s" does not exist.', $class, $method),
+                );
+            }
+
+            throw new ContainerException(
+                sprintf(
+                    'Invalid callable string "%s". Method "%s::%s" does not exist.',
+                    $spec,
+                    $class,
+                    $method,
+                ),
+            );
+        }
+
+        return [
+            'kind' => 'method',
+            'class' => $class,
+            'method' => $method,
+        ];
+    }
+
+    /**
+     * @param non-empty-string $separator
+     * @return array{kind:'method',class:string,method:string}
+     */
+    private function parseClassMethodString(string $spec, string $separator): array
+    {
+        [$class, $method] = explode($separator, $spec, 2);
+
+        return $this->parseClassMethodParts($class, $method, $spec, $separator);
+    }
+
+    /**
      * @param array{kind:'class',class:string}|array{kind:'method',class:string,method:string} $desc
      * @param array<int|string, mixed> $parameters
      */
@@ -648,13 +950,60 @@ final class Container implements ContainerInterface, ArrayAccess
             }
             $callback = $id(...);
         } else {
-            $id = random_bytes(5);
+            self::$generatedClosureSequence++;
+            $id = '__imx_closure_' . self::$generatedClosureSequence;
             $callback = $desc['closure'];
         }
 
         $this->registration()->registerClosure($id, $callback, $parameters);
 
         return $this->getReturn($id);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function validateDefinitionTargets(): array
+    {
+        $issues = [];
+        foreach ($this->repository->getFunctionReference() as $id => $definition) {
+            if ($id === '') {
+                $issues[] = 'Invalid definition id detected.';
+
+                continue;
+            }
+
+            if (is_string($definition)
+                && !class_exists($definition)
+                && !function_exists($definition)
+                && !$this->repository->hasFunctionReference($definition)
+            ) {
+                $issues[] = "Definition '{$id}' points to unknown string target '{$definition}'.";
+            }
+
+            if (is_array($definition) && isset($definition[0]) && is_string($definition[0]) && !class_exists($definition[0])) {
+                $issues[] = "Definition '{$id}' references missing class '{$definition[0]}'.";
+            }
+        }
+
+        return $issues;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function validateResolvableDefinitions(): array
+    {
+        $issues = [];
+        foreach (array_keys($this->repository->getFunctionReference()) as $id) {
+            try {
+                $this->get($id);
+            } catch (Throwable $e) {
+                $issues[] = "Resolution failure for '{$id}': {$e->getMessage()}";
+            }
+        }
+
+        return $issues;
     }
 
     /**

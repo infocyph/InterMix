@@ -36,6 +36,11 @@ final class ValueSerializer
         self::$serializedClosureMemo = [];
     }
 
+    public static function currentPayloadSigningKey(): ?string
+    {
+        return self::$payloadSigningKey;
+    }
+
     /**
      * Decode a payload produced by {@see encode()}.
      *
@@ -176,6 +181,11 @@ final class ValueSerializer
 
         self::$payloadSigningKey = $key;
         self::$serializedClosureMemo = [];
+    }
+
+    public static function signed(string $key): SignedValueSerializer
+    {
+        return new SignedValueSerializer($key);
     }
 
     /**

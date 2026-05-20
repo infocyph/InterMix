@@ -12,7 +12,7 @@ class MethodAttrResolver implements AttributeResolverInterface
         object $attributeInstance,
         Reflector $target,
         Container $container
-    ): mixed {
+    ): null {
         // Log, side-effect, or simply acknowledge
         fwrite(
             STDERR,

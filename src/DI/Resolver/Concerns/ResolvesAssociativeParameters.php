@@ -197,6 +197,14 @@ trait ResolvesAssociativeParameters
 
         $classReflection = $this->getResolvableReflection($reflector, $param, $type, $processed);
         if ($classReflection) {
+            $contextual = $this->resolveContextualDependency(
+                $this->ownerFor($reflector),
+                $classReflection,
+            );
+            if ($contextual !== $this->stdClass) {
+                return $contextual;
+            }
+
             $nameHint = $classReflection->isInterface()
                 ? $classReflection->getName()
                 : $paramName;
