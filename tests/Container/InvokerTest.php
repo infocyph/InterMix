@@ -164,6 +164,16 @@ class Request
     }
 }
 
+class CachedCallableService
+{
+    public function __construct(private readonly DateTimeZone $timezone) {}
+
+    public function __invoke(): string
+    {
+        return $this->timezone->getName();
+    }
+}
+
 /* 6. Invoker should autowire an argument-less class ----------------*/
 it('invokes a closure and autowires a Request instance', function () {
     $out = $this->inv->invoke(
@@ -172,4 +182,32 @@ it('invokes a closure and autowires a Request instance', function () {
 
     // just assert we got **some** non-empty UUID back
     expect($out)->toBeString()->not->toBe('')->toStartWith('req_');
+});
+
+it('isolates callableFor cache per container', function () {
+    $c1 = Container::instance(uniqid('invoker_cache_a_'));
+    $c1->definitions()->bind(DateTimeZone::class, fn () => new DateTimeZone('UTC'));
+
+    $c2 = Container::instance(uniqid('invoker_cache_b_'));
+    $c2->definitions()->bind(DateTimeZone::class, fn () => new DateTimeZone('Asia/Dhaka'));
+
+    $inv1 = Invoker::with($c1);
+    $inv2 = Invoker::with($c2);
+
+    $f1 = $inv1->callableFor(CachedCallableService::class);
+    $f2 = $inv2->callableFor(CachedCallableService::class);
+
+    expect($f1())->toBe('UTC')
+        ->and($f2())->toBe('Asia/Dhaka');
+});
+
+it('invokes closures directly without storing closure aliases', function () {
+    $before = count($this->c->getRepository()->getClosureResource());
+
+    for ($i = 0; $i < 5; $i++) {
+        expect($this->inv->invoke(fn () => 'ok'))->toBe('ok');
+    }
+
+    $after = count($this->c->getRepository()->getClosureResource());
+    expect($after)->toBe($before);
 });

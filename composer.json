@@ -1,14 +1,18 @@
 {
     "name": "infocyph/intermix",
-    "description": "A Collection of useful PHP class functions.",
+    "description": "A lightweight PHP DI container, invoker, serializer, and utility toolkit.",
     "license": "MIT",
     "type": "library",
     "keywords": [
         "intermix",
         "di",
         "container",
-        "dependency",
-        "injection",
+        "dependency-injection",
+        "psr-11",
+        "invoker",
+        "serializer",
+        "attributes",
+        "scoped-services",
         "macro",
         "mixin",
         "cache",
@@ -42,10 +46,7 @@
     "autoload": {
         "psr-4": {
             "Infocyph\\InterMix\\": "src/"
-        },
-        "files": [
-            "src/functions.php"
-        ]
+        }
     },
     "autoload-dev": {
         "psr-4": {

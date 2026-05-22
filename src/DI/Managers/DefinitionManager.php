@@ -75,8 +75,8 @@ class DefinitionManager implements ArrayAccess
         LifetimeEnum $lifetime = LifetimeEnum::Singleton,
         array $tags = [],
     ): self {
-        if ($id === $definition) {
-            throw new ContainerException("Id and definition cannot be the same ($id)");
+        if (is_string($definition) && $id === $definition && !class_exists($definition)) {
+            throw new ContainerException("Scalar/string alias cannot point to itself ($id).");
         }
         $this->repository->setFunctionReference($id, $definition);
         $this->repository->setDefinitionMeta($id, [
@@ -135,9 +135,12 @@ class DefinitionManager implements ArrayAccess
      * @return $this
      * @throws ContainerException
      */
-    public function enableDefinitionCache(CacheItemPoolInterface $adapter): self
-    {
+    public function enableDefinitionCache(
+        CacheItemPoolInterface $adapter,
+        bool $cacheRuntimeObjects = false,
+    ): self {
         $this->repository->setCacheAdapter($adapter);
+        $this->repository->setCacheRuntimeObjects($cacheRuntimeObjects);
 
         return $this;
     }

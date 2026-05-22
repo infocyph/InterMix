@@ -5,8 +5,14 @@ Global Helper Functions
 =========================
 
 In addition to :php:func:`tap`, Remix provides several *global functions* to make
-common tasks more fluent. They are declared in ``src/functions.php`` and are
-available as global helpers.
+common tasks more fluent. They are declared in ``src/functions.php``.
+
+Global helper loading is optional: the package does not autoload ``src/functions.php``.
+Load it manually when needed:
+
+.. code-block:: php
+
+   require_once __DIR__ . '/vendor/infocyph/intermix/src/functions.php';
 
 - **tap()**     – covered in :ref:`remix.tap-proxy`.
 - **when()**    – conditionally apply callbacks to values.

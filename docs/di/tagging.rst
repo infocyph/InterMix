@@ -32,16 +32,25 @@ Retrieve All by Tag 📬
 
 .. code-block:: php
 
-   foreach ($c->findByTag('event') as $id => $factory) {
-       $factory()->handle($event);
+   foreach ($c->findByTag('event') as $id => $listener) {
+       $listener->handle($event);
    }
 
 * :php:meth:`Infocyph\\InterMix\\DI\\Container::findByTag` returns an **array**:
-  ``[id => callable|object, …]``
-* Services are resolved **lazily** – if the definition was a class string the
-  container still honours lazy loading & lifetimes.
+  ``[id => resolved service, …]``
+* ``findByTag()`` is eager and resolves the tagged services immediately.
+* For lazy factories, use :php:meth:`Infocyph\\InterMix\\DI\\Container::tagged`
+  (or ``findByTagLazy()``).
 * Tag lookup is **environment-aware**. If you override tags with
   ``setDefinitionMetaForEnv(...)``, ``findByTag()`` uses the active environment.
+
+Lazy variant:
+
+.. code-block:: php
+
+   foreach ($c->tagged('event') as $id => $factory) {
+       $factory()->handle($event);
+   }
 
 -----------------------
 Multiple Tags per ID

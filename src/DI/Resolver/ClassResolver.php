@@ -420,20 +420,26 @@ class ClassResolver
         string $className,
         string|bool|null $callMethod,
     ): array {
-        $existing = $this->repository->getResolvedResourceFor($className);
+        $allExisting = $this->repository->getResolvedResource();
+        $hadExisting = array_key_exists($className, $allExisting);
+        $existing = $allExisting[$className] ?? [];
 
-        // build fresh
-        $this->resolveConstructor($class);
-        $this->propertyResolver->resolve($class);
-        $this->resolveMethod($class, $callMethod);
+        try {
+            // build fresh
+            $this->resolveConstructor($class);
+            $this->propertyResolver->resolve($class);
+            $this->resolveMethod($class, $callMethod);
 
-        $newlyBuilt = $this->normalizeResolvedResource(
-            $this->repository->getResolvedResourceFor($className),
-        );
-        // revert the old
-        $this->repository->setResolvedResource($className, $existing);
-
-        return $newlyBuilt;
+            return $this->normalizeResolvedResource(
+                $this->repository->getResolvedResourceFor($className),
+            );
+        } finally {
+            if ($hadExisting) {
+                $this->repository->setResolvedResource($className, $existing);
+            } else {
+                $this->repository->unsetResolvedResource($className);
+            }
+        }
     }
 
     /**

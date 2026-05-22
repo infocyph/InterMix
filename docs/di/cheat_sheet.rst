@@ -138,7 +138,7 @@ Scoped resolution:
 Advanced Helpers
 ---------------------------
 
-* ``$c->parseCallable($spec)``: normalize closure/function/class/method input.
+* ``$c->parseCallable($spec)``: normalize closure/function/class/method input (class-method targets must be autoloadable and exist).
 * ``$c->resolveNow(...)``: resolve with explicit runtime knobs.
 * ``$c->getRepository()``: inspect low-level runtime state.
 * ``$c->setResolverClass(FooResolver::class)``: swap resolver implementation.

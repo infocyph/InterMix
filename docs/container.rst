@@ -11,9 +11,9 @@ Dependency Injection (Container)
 
    .. code-block:: php
 
-      use function Infocyph\InterMix\container;
+      use Infocyph\InterMix\DI\Container;
 
-      $c = container();                       // ① create
+      $c = Container::instance();             // ① create
       $c->definitions()->bind('answer', 42);  // ② register
       echo $c->get('answer');                 // ③ resolve  → 42
 
@@ -54,7 +54,9 @@ environment-specific overrides and gives you sugar for 1-liners.
 
 .. code-block:: php
 
-   $c = container()
+   use Infocyph\InterMix\DI\Container;
+
+   $c = Container::instance()
        ->definitions()->bind(Clock::class, SystemClock::class)->end();
 
    echo $c->get(Greeter::class)->greet('Alice');
@@ -117,7 +119,7 @@ Common quick patterns (copy-paste as you learn the rest)
 
    $c->definitions()->bind('L1', fn()=>new ListenerA, tags:['event']);
    foreach ($c->findByTag('event') as $id => $listener) {
-       $listener()->handle();
+       $listener->handle();
    }
 
 *Scope isolation* ::

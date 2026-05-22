@@ -78,8 +78,8 @@ into internal lazy initialisers.
    $def->bind('L1', fn () => new ListenerA(), tags: ['event']);
    $def->bind('L2', fn () => new ListenerB(), tags: ['event']);
 
-   foreach ($c->findByTag('event') as $id => $factory) {
-       $factory()->handle();
+   foreach ($c->findByTag('event') as $id => $listener) {
+       $listener->handle();
    }
 
 Use tags for plug-in systems, domain events, command buses, etc.

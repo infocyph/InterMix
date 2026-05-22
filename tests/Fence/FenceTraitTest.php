@@ -43,6 +43,17 @@ test('requirements enforcement', function () {
         ->not->toThrow(RequirementException::class);  // 'json' is typically loaded
 });
 
+test('existing instance retrieval bypasses requirement checks', function () {
+    $first = DummyFence::instance('cached');
+
+    $second = DummyFence::instance('cached', [
+        'extensions' => ['nonexistent_ext'],
+        'classes' => ['NonExistentClass'],
+    ]);
+
+    expect($second)->toBe($first);
+});
+
 test('introspection methods work', function () {
     DummyFence::instance('one');
     DummyFence::instance('two');

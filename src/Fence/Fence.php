@@ -11,32 +11,24 @@ use InvalidArgumentException;
 
 trait Fence
 {
-    /** @var array<int, string>|null */
-    private static ?array $cachedClasses = null;
+    private const string SINGLE_SLOT = '__single';
 
-    /** @var array<int, string>|null */
-    private static ?array $cachedExtensions = null;
+    /** @var array<string, bool> */
+    private static array $classExistsCache = [];
 
-    /** @var array<string,int> dynamic overrides of limits per class */
-    private static array $classLimits = [];
-
-    private static int $instanceCount = 0;
+    /** @var array<string, bool> */
+    private static array $extensionExistsCache = [];
 
     /** @var array<string, object> */
     private static array $instances = [];
 
-    /** @var array<string,bool> keyed flag cache */
-    private static array $keyedCache = [];
-
-    /** @var array<string,int> default limits (before setLimit()) */
-    private static array $limitCache = [];
+    private static ?int $limitOverride = null;
 
     /**
      * Resets the internal cache of instances.  This is mostly useful for unit tests.
      */
     final public static function clearInstances(): void
     {
-        self::$instanceCount = 0;
         self::$instances = [];
     }
 
@@ -47,7 +39,7 @@ trait Fence
      */
     final public static function countInstances(): int
     {
-        return self::$instanceCount;
+        return count(self::$instances);
     }
 
     /**
@@ -89,11 +81,7 @@ trait Fence
      */
     final public static function hasInstance(?string $key = 'default'): bool
     {
-        $slot = self::isKeyed(static::class)
-            ? ($key ?? 'default')
-            : '__single';
-
-        return isset(self::$instances[$slot]);
+        return isset(self::$instances[self::slotFor($key)]);
     }
 
     /**
@@ -112,24 +100,24 @@ trait Fence
         ?string $key = 'default',
         ?array $constraints = null,
     ): static {
-        self::checkRequirements($constraints);
-
-        $slot = self::isKeyed(static::class)
-            ? ($key ?? 'default')
-            : '__single';
+        $slot = self::slotFor($key);
 
         // Fast path – instance already exists
-        if (isset(self::$instances[$slot]) && self::$instances[$slot] instanceof static) {
-            return self::$instances[$slot];
+        if (isset(self::$instances[$slot])) {
+            /** @var static $instance */
+            $instance = self::$instances[$slot];
+
+            return $instance;
         }
 
-        if (self::$instanceCount >= self::getLimit(static::class)) {
+        self::checkRequirements($constraints);
+
+        $limit = self::getLimit();
+        if (count(self::$instances) >= $limit) {
             throw new LimitExceededException(
-                'Instance limit of ' . self::getLimit(static::class) . ' exceeded for ' . static::class,
+                'Instance limit of ' . $limit . ' exceeded for ' . static::class,
             );
         }
-
-        self::$instanceCount++;
 
         $created = new static();
         self::$instances[$slot] = $created;
@@ -147,7 +135,7 @@ trait Fence
         if ($n < 1) {
             throw new InvalidArgumentException('Limit must be at least 1');
         }
-        self::$classLimits[static::class] = $n;
+        self::$limitOverride = $n;
     }
 
     /**
@@ -158,11 +146,9 @@ trait Fence
      */
     private static function checkRequirements(?array $c): void
     {
-        if (self::hasNoRequirements($c)) {
+        if ($c === null || (($c['extensions'] ?? []) === [] && ($c['classes'] ?? []) === [])) {
             return;
         }
-
-        self::warmRequirementCaches();
 
         $missingE = self::findMissingExtensions((array) ($c['extensions'] ?? []));
         $missingC = self::findMissingClasses((array) ($c['classes'] ?? []));
@@ -182,7 +168,20 @@ trait Fence
      */
     private static function findMissingClasses(array $required): array
     {
-        return array_diff($required, self::$cachedClasses ?? []);
+        $missing = [];
+
+        foreach ($required as $class) {
+            if ($class === '') {
+                continue;
+            }
+
+            self::$classExistsCache[$class] ??= class_exists($class);
+            if (!self::$classExistsCache[$class]) {
+                $missing[] = $class;
+            }
+        }
+
+        return $missing;
     }
 
     /**
@@ -191,7 +190,21 @@ trait Fence
      */
     private static function findMissingExtensions(array $required): array
     {
-        return array_diff($required, self::$cachedExtensions ?? []);
+        $missing = [];
+
+        foreach ($required as $extension) {
+            if ($extension === '') {
+                continue;
+            }
+
+            $cacheKey = strtolower($extension);
+            self::$extensionExistsCache[$cacheKey] ??= extension_loaded($extension);
+            if (!self::$extensionExistsCache[$cacheKey]) {
+                $missing[] = $extension;
+            }
+        }
+
+        return $missing;
     }
 
     /**
@@ -212,66 +225,36 @@ trait Fence
     }
 
     /**
-     * Returns the instance limit for the given class.
-     *
-     * If `$classLimits[$cls]` is set, it takes precedence. Otherwise, if
-     * the class defines `FENCE_LIMIT`, that value is used. Otherwise,
-     * the limit is infinite (`PHP_INT_MAX`).
+     * Returns the instance limit for the current class.
      */
-    private static function getLimit(string $cls): int
+    private static function getLimit(): int
     {
-        if (isset(self::$classLimits[$cls])) {
-            return self::$classLimits[$cls];
+        if (self::$limitOverride !== null) {
+            return self::$limitOverride;
         }
 
-        if (!defined("$cls::FENCE_LIMIT")) {
-            self::$classLimits[$cls] = PHP_INT_MAX;
-
+        $className = static::class;
+        if (!defined("$className::FENCE_LIMIT")) {
             return PHP_INT_MAX;
         }
 
-        $rawLimit = constant("$cls::FENCE_LIMIT");
-        $limit = match (true) {
-            is_int($rawLimit) => $rawLimit,
-            is_string($rawLimit) && is_numeric($rawLimit) => (int) $rawLimit,
-            is_float($rawLimit) => (int) $rawLimit,
-            default => PHP_INT_MAX,
-        };
-        self::$classLimits[$cls] = $limit;
-
-        return $limit;
+        return (int) constant("$className::FENCE_LIMIT");
     }
 
-    /**
-     * @param array{extensions?: array<int, string>, classes?: array<int, string>}|null $c
-     */
-    private static function hasNoRequirements(?array $c): bool
+    private static function isKeyed(): bool
     {
-        if (!$c) {
-            return true;
+        $className = static::class;
+        if (defined("$className::FENCE_KEYED")) {
+            return (bool) constant("$className::FENCE_KEYED");
         }
 
-        return ($c['extensions'] ?? []) === [] && ($c['classes'] ?? []) === [];
+        return true;
     }
 
-    /**
-     * Check if the given class is keyed.
-     *
-     * If the class defines a constant `FENCE_KEYED`, its value is used.
-     * Otherwise, the default is to be keyed (`true`).
-     *
-     * @param string $cls The class to check.
-     * @return bool Whether the class is keyed.
-     */
-    private static function isKeyed(string $cls): bool
+    private static function slotFor(?string $key): string
     {
-        return self::$keyedCache[$cls]
-            ??= !defined("$cls::FENCE_KEYED") || (bool) constant("$cls::FENCE_KEYED");
-    }
-
-    private static function warmRequirementCaches(): void
-    {
-        self::$cachedExtensions ??= get_loaded_extensions();
-        self::$cachedClasses ??= get_declared_classes();
+        return self::isKeyed()
+            ? ($key ?? 'default')
+            : self::SINGLE_SLOT;
     }
 }

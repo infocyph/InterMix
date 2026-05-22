@@ -10,9 +10,9 @@
 
 `InterMix` is a modern, lightweight PHP toolkit for developers who value class-oriented design, clean architecture, and fast execution. It combines dependency injection, serialization, macro-style extensibility, and helper utilities with minimal config and maximum control.
 
----
+> Global helper functions are optional in `v2`: core APIs are namespaced and helper loading is opt-in.
 
-## 🚀 Key Features
+## Key Features
 
 - **Dependency Injection (DI)** — PSR-11 compliant container with:
   - attribute-based injection
@@ -26,12 +26,16 @@
 - **MacroMix** — Dynamically extend objects or classes with macros
 - **Global Utilities** — Like `pipe()`, `retry()`, `measure()` and more
 
----
-
-## 📦 Installation
+## Installation
 
 ```bash
 composer require infocyph/intermix
+```
+
+Optional global helpers:
+
+```php
+require_once __DIR__ . '/vendor/infocyph/intermix/src/functions.php';
 ```
 
 Supported PHP versions:
@@ -41,11 +45,9 @@ Supported PHP versions:
 | 2.x.x and above  | 8.3 or newer       |
 | 1.x.x            | 8.0-8.2 compatible |
 
----
+## Quick Examples
 
-## ⚡ Quick Examples
-
-### 🧱 Dependency Injection
+### Dependency Injection
 
 ```php
 use function Infocyph\InterMix\container;
@@ -77,12 +79,9 @@ foreach ($c->findByTag('service') as $svc) {
 }
 ```
 
-See full container guide at:
-📖 [https://docs.infocyph.com/projects/intermix/di/overview.html](https://docs.infocyph.com/projects/intermix/di/overview.html)
+See full container guide at: [https://docs.infocyph.com/projects/intermix/di/overview.html](https://docs.infocyph.com/projects/intermix/di/overview.html)
 
----
-
-### 🧬 Dynamic Macros
+### Dynamic Macros
 
 ```php
 MacroTest::mix(new class {
@@ -94,55 +93,58 @@ MacroTest::mix(new class {
 echo (new MacroTest)->hello('Ali'); // Hey, Ali!
 ```
 
----
-
-### 🧠 Definition Cache (Injectable)
+### Definition Cache (Injectable)
 
 ```php
 use Psr\Cache\CacheItemPoolInterface;
 
 $pool = /* any PSR-6 pool, e.g. from infocyph/cachelayer */;
-$c->definitions()->enableDefinitionCache($pool);
+$c->definitions()->enableDefinitionCache($pool, cacheRuntimeObjects: false);
 ```
 
----
+### Compiled Resolvers
 
-## 📚 Documentation
+```php
+$path = __DIR__ . '/var/intermix.compiled.php';
 
-Full documentation available at:
+// build-time: generate compiled resolver map
+$c->compileTo($path);
 
-🔗 [https://docs.infocyph.com/projects/intermix/](https://docs.infocyph.com/projects/intermix/)
+// runtime: activate compiled resolver map explicitly
+$c->useCompiled($path);
 
-Includes:
+// optional one-step build + activate
+$c->compileTo($path, load: true);
+```
 
-* ✅ Getting Started & Quickstart
-* 📦 DI Container Guide (bindings, scopes, attributes, lifetimes)
-* 🧩 Modules: DI, Serializer, Remix, Fence, MacroMix
-* 🧪 Testing & Caching Tips
-* 📘 PDF/ePub formats
+### Signed Serialization
 
----
+```php
+$signed = \Infocyph\InterMix\Serializer\ValueSerializer::signed($_ENV['APP_KEY']);
+$token = $signed->encode(['user_id' => 1]);
+$payload = $signed->decode($token);
+```
 
-## ✅ Testing
+## Testing
 
 ```bash
 composer install
 composer test
 ```
 
----
 
-## 🤝 Contributing
+## Security
 
-Got ideas or improvements? Join us!
-
-📂 [Open issues](https://github.com/infocyph/InterMix/issues)
-📬 Submit a PR — we welcome quality contributions
+Protected by [PHPForge](https://github.com/infocyph/PHPForge) — an automated quality and security gate for PHP projects.
 
 ---
 
-## 🛡 License
-
-MIT Licensed — use it freely, modify it openly.
-
-🔗 [opensource.org/licenses/MIT](https://opensource.org/licenses/MIT)
+<div align="center">
+  <sub><strong>Made with ❤️ for the PHP community</strong></sub><br />
+  <sub><a href="LICENSE">MIT Licensed</a></sub><br />
+  <a href="https://docs.infocyph.com/projects/Epicrypt">Documentation</a> •
+  <a href="SECURITY.md">Security</a> •
+  <a href="CODE_OF_CONDUCT.md">Code of Conduct</a> •
+  <a href="CONTRIBUTING.md">Contributing</a> •
+  <a href="https://github.com/infocyph/Epicrypt/issues">Report | Request | Suggest</a>
+</div>

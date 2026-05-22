@@ -21,23 +21,24 @@ Key Concepts
 
 Implements all logic for requirement checks, keyed vs. singleton behavior,
 and instance‐count limits. You do **not** use ``Fence`` directly; one of the three
-wrapper traits sets two class‐constants and the core logic runs on every
-``::instance()`` call.
+wrapper traits sets two class‐constants and the core logic resolves/retrieves
+instances through ``::instance()``.
 
 **Singleton (Single)**
 
-Classes define ``FENCE_KEYED = true``. Only one instance can exist.
-Key is optional; defaults to ``'__single'``.
+Classes define ``FENCE_KEYED = false``. Only one instance can exist.
+Key is ignored and stored in the internal ``'__single'`` slot.
 
 **Multiton (Multi)**
 
-Classes define ``FENCE_KEYED = false``. Multiple instances allowed, keyed by first argument.
-Key is required; defaults to ``'default'``.
+Classes define ``FENCE_KEYED = true``. Multiple instances allowed, keyed by first argument.
+If omitted, key defaults to ``'default'``.
 
 **Limited Multiton (Limit)**
 
 Extends Multi with configurable instance limits.
-Classes define ``FENCE_LIMIT = <int>``.
+Classes define ``FENCE_KEYED = true`` and ``FENCE_LIMIT = <int>``.
+Caller-provided keys are used until the configured limit is reached.
 ``setLimit(int)`` changes the limit at runtime.
 
 **Constants Available**
@@ -49,7 +50,7 @@ Classes define ``FENCE_LIMIT = <int>``.
 
 ``::instance()`` accepts optional constraints array with ``extensions`` and/or
 ``classes``. If any extension or class is missing, a ``RequirementException`` is thrown
-before any instance is created.
+before a **new** instance is created.
 
 **New Features Added**
 
@@ -125,7 +126,7 @@ before any instance is created.
 
 ``::instance()`` accepts an optional constraints array with ``extensions`` and/or
 ``classes``. If any extension or class is missing, a ``RequirementException`` is thrown
-before any instance is created.
+before any new instance is created.
 
 **Limit Enforcement**
 
@@ -234,3 +235,4 @@ Best Practices
 * If you need per‐key instances, use ``Multi``.
 * If you want to cap how many objects can coexist, use ``Limit``.
 * To enforce startup requirements, pass a constraints array to ``::instance()`` and catch ``RequirementException``.
+* Prefer ``countInstances()``, ``hasInstance()`` and ``getKeys()`` for runtime inspection; use ``getInstances()`` mainly for debug/tests.
