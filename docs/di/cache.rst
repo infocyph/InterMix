@@ -4,13 +4,14 @@
 Definition-level Caching
 ========================
 
-InterMix supports caching of resolved singleton definitions through an assigned
-PHP-FIG PSR-6 cache pool.
+InterMix supports PSR-6 backed definition/cache warmup for safe cacheable definition data.
+By default, live runtime objects are not persisted to PSR-6.
+Singleton/scoped object reuse remains in the in-memory container lifetime store.
 
 Why care?
 
-* **Speed** – skip repeated reflection and factory execution.
-* **Predictability** – warm and reuse resolved singleton entries.
+* **Speed** – skip repeated reflection and definition work for cache-safe values.
+* **Predictability** – warm and reuse cacheable definition data.
 * **Flexibility** – use any PSR-6 implementation (for example from ``infocyph/cachelayer``).
 
 ---------------
@@ -33,11 +34,14 @@ Quick Example 🚀
    // ② bind as usual
    $c->definitions()->bind('answer', 42);
 
-   // ③ first call resolves + saves
+   // ③ first call resolves + saves when the value is cache-safe
    $val = $c->get('answer');
 
-   // ④ next calls are read from cache
+   // ④ scalar/array-safe definitions may be loaded from PSR-6
    echo $c->get('answer');
+
+Scalar/array-safe definitions may be persisted.
+Runtime service objects are kept in container memory unless ``cacheRuntimeObjects`` is explicitly enabled.
 
 Eager warm-up:
 

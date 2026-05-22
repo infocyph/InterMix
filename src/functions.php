@@ -40,7 +40,7 @@ if (!function_exists('resolve')) {
      *
      * @param string|Closure|callable|array|null $spec Closure|function|Class|[Class,method]|"Class@method"|"Class::method"
      * @param array<int|string, mixed> $parameters Parameters for constructor/method/closure
-     * @param string $alias Optional container instance alias (default: intermix.di)
+     * @param string $alias Optional container instance alias (default: Container::DI_ALIAS)
      * @return mixed Container instance (when $spec is null) or resolved return value
      * @throws ContainerException|ReflectionException|InvalidArgumentException
      * @param array{0:string,1:string}|null|string|Closure|callable $spec
@@ -64,7 +64,7 @@ if (!function_exists('direct')) {
      *
      * @param string|Closure|callable|array|null $spec Closure|function|Class|[Class,method]|"Class@method"|"Class::method"
      * @param array<int|string, mixed> $parameters Parameters for constructor/method/closure
-     * @param string $alias Optional container instance alias (default: intermix.direct)
+     * @param string $alias Optional container instance alias (default: Container::DIRECT_ALIAS)
      * @return mixed Container instance (when $spec is null) or resolved return value
      * @throws ContainerException|ReflectionException|InvalidArgumentException
      * @param array{0:string,1:string}|null|string|Closure|callable $spec

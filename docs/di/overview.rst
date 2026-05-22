@@ -159,10 +159,9 @@ synchronise that cache manually.
 Parameter resolution cache note
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-InterMix caches **resolution plans** (reflector metadata such as parameters and
-attribute presence) across constructor/method/property paths.
-Resolved argument **values** are only memoised for constructor paths, so
-non-constructor method calls keep per-invocation behavior.
+InterMix caches parameter resolution plans, attribute metadata and reflection-derived lookup data.
+It does not cache resolved runtime argument values inside ParameterResolver.
+Runtime object reuse is controlled by the container lifetime layer: Singleton, Scoped or Transient.
 
 Typical lifecycle
 -----------------

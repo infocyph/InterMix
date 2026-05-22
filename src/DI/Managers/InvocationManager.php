@@ -42,7 +42,8 @@ class InvocationManager implements ArrayAccess
      * does the following:
      *
      * 1. If $classOrClosure is a string and exists in the function references,
-     *    the definition is resolved using the RepositoryResolver.
+     *    the definition is resolved through get() so lifetime/scope caches and
+     *    lifecycle hooks are preserved.
      *
      * 2. If $classOrClosure is a closure or callable, the closure is invoked
      *    with resolved parameters using the RepositoryResolver.
@@ -67,7 +68,7 @@ class InvocationManager implements ArrayAccess
 
         // 1) If string & in functionReference
         if (is_string($classOrClosure) && $this->repository->hasFunctionReference($classOrClosure)) {
-            return $resolver->resolveByDefinition($classOrClosure);
+            return $this->get($classOrClosure);
         }
 
         // 2) If a closure/callable

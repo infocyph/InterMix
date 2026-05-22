@@ -10,8 +10,6 @@ use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Tests\Fixture\DemoProvider;
 use Infocyph\InterMix\Tests\Fixture\DummyLogger;
 use Infocyph\InterMix\Tests\Fixture\FooService;
-use Infocyph\InterMix\Tests\Fixture\ListenerA;
-use Infocyph\InterMix\Tests\Fixture\ListenerB;
 use Infocyph\InterMix\Tests\Fixture\PaymentGateway;
 use Infocyph\InterMix\Tests\Fixture\PaypalGateway;
 use Infocyph\InterMix\Tests\Fixture\StripeGateway;
@@ -60,6 +58,18 @@ class BillingService
 class LazyTaggedProbe
 {
     public function __construct(public int $id) {}
+}
+
+class TagEvent {}
+
+class TaggedListener
+{
+    public function __construct(public string $name) {}
+
+    public function handle(object $event): string
+    {
+        return $this->name . ':' . $event::class;
+    }
 }
 
 class CompiledDep {}
@@ -289,6 +299,23 @@ it('reads scoped getReturn values from the current scope key', function () {
         ->and($second)->toBe('scope-2');
 });
 
+it('routes call() definition IDs through lifetime-aware get()', function () {
+    $c = Container::instance(uniqid('call_lifetime_'));
+    $c->definitions()->bind('svc.scoped', fn () => new stdClass(), LifetimeEnum::Scoped);
+    $c->definitions()->bind('svc.transient', fn () => new stdClass(), LifetimeEnum::Transient);
+
+    $c->enterScope('request-a');
+    $firstScoped = $c->call('svc.scoped');
+    $secondScoped = $c->call('svc.scoped');
+    $firstTransient = $c->call('svc.transient');
+    $secondTransient = $c->call('svc.transient');
+
+    expect($firstScoped)->toBe($secondScoped)
+        ->and($firstTransient)->not->toBe($secondTransient)
+        ->and($c->getRepository()->hasResolved('svc.scoped@request-a'))->toBeTrue()
+        ->and($c->getRepository()->hasResolved('svc.transient@request-a'))->toBeFalse();
+});
+
 it('factory binding is deferred until lifetime selection', function () {
     $c = Container::instance(uniqid('factory_deferred_'));
     $repo = $c->getRepository();
@@ -390,16 +417,38 @@ it('supports property / array / callable sugar on the container', function () {
         ->and($c->cfg)->toBe($c('cfg'));
 });
 
-it('collects services by tag', function () {
-    $c = Container::instance('intermix');
+it('resolves findByTag() eagerly and tagged() lazily', function () {
+    $c = Container::instance(uniqid('tag_modes_'));
+    $eagerBuilt = 0;
+    $lazyBuilt = 0;
+    $event = new TagEvent();
 
-    $c->definitions()->bind('A', fn () => new ListenerA(), tags: ['event']);
-    $c->definitions()->bind('B', fn () => new ListenerB(), tags: ['event']);
+    $c->definitions()->bind('event.eager', function () use (&$eagerBuilt) {
+        $eagerBuilt++;
 
-    $all = $c->findByTag('event');   // method defined in Container :contentReference[oaicite:0]{index=0}
-    expect($all)->toHaveCount(2)
-        ->and($all['A']())->toBe('A')
-        ->and($all['B']())->toBe('B');
+        return new TaggedListener('eager');
+    }, tags: ['event.eager']);
+    $c->definitions()->bind('event.lazy', function () use (&$lazyBuilt) {
+        $lazyBuilt++;
+
+        return new TaggedListener('lazy');
+    }, tags: ['event.lazy']);
+
+    $resolved = $c->findByTag('event.eager');
+    expect($eagerBuilt)->toBe(1)
+        ->and($resolved['event.eager'])->toBeInstanceOf(TaggedListener::class)
+        ->and($resolved['event.eager']->handle($event))->toBe('eager:' . TagEvent::class);
+
+    $lazyResolvers = $c->tagged('event.lazy');
+    expect($lazyBuilt)->toBe(0);
+
+    foreach ($lazyResolvers as $factory) {
+        $listener = $factory();
+        expect($listener)->toBeInstanceOf(TaggedListener::class)
+            ->and($listener->handle($event))->toBe('lazy:' . TagEvent::class);
+    }
+
+    expect($lazyBuilt)->toBe(1);
 });
 
 it('lets me wire and use services in one-liners', function () {
