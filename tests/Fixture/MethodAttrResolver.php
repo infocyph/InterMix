@@ -13,10 +13,15 @@ class MethodAttrResolver implements AttributeResolverInterface
         Reflector $target,
         Container $container
     ): null {
-        // Log, side-effect, or simply acknowledge
         fwrite(
             STDERR,
-            "[TEST] {$attributeInstance->message} on {$target->getName()} in {$container::class}\n"
+            '[TEST] '
+            . $attributeInstance->message
+            . ' on '
+            . $target->getName()
+            . ' in '
+            . $container::class
+            . "\n"
         );
 
         return null;

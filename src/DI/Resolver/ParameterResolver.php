@@ -221,13 +221,7 @@ class ParameterResolver
      */
     private function alreadyExist(string $className, array $parameters): bool
     {
-        foreach ($parameters as $value) {
-            if ($value instanceof $className) {
-                return true;
-            }
-        }
-
-        return false;
+        return array_any($parameters, fn($value) => $value instanceof $className);
     }
 
     private function applyEnvOverride(string $fqcn): string

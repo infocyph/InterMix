@@ -1083,13 +1083,7 @@ class Repository
             return false;
         }
 
-        foreach ($value as $item) {
-            if (!$this->isSafeCachedDefinitionValue($item)) {
-                return false;
-            }
-        }
-
-        return true;
+        return array_all($value, fn($item) => $this->isSafeCachedDefinitionValue($item));
     }
 
     /**

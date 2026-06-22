@@ -129,7 +129,7 @@ $payload = $signed->decode($token);
 
 ```bash
 composer install
-composer test
+composer ic:tests
 ```
 
 

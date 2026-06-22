@@ -12,14 +12,14 @@ Run via Composer:
 
 .. code-block:: bash
 
-   composer benchmark
+   composer ic:benchmark
 
 Other useful variants:
 
 .. code-block:: bash
 
-   composer bench:quick
-   composer bench:chart
+   composer ic:bench:quick
+   composer ic:bench:chart
 
 What it measures
 ----------------
