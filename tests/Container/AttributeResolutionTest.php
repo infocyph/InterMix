@@ -6,6 +6,8 @@ use Infocyph\InterMix\Tests\Fixture\ExampleAttrResolver;
 use Infocyph\InterMix\Tests\Fixture\LogicOnlyAttr;
 use Infocyph\InterMix\Tests\Fixture\LogicOnlyAttrResolver;
 use Infocyph\InterMix\Tests\Fixture\LogicOnlyTarget;
+use Infocyph\InterMix\Tests\Fixture\MethodAttr;
+use Infocyph\InterMix\Tests\Fixture\MethodAttrResolver;
 use Infocyph\InterMix\Tests\Fixture\MethodTarget;
 use Infocyph\InterMix\Tests\Fixture\MixedAttributeExample;
 
@@ -52,6 +54,10 @@ it('supports method parameter attribute injection', function () {
     $c->attributeRegistry()->register(
         ExampleAttr::class,
         ExampleAttrResolver::class,
+    );
+    $c->attributeRegistry()->register(
+        MethodAttr::class,
+        MethodAttrResolver::class,
     );
 
     /* 3️⃣  Bind a container definition that Infuse will pick up */

@@ -6,6 +6,7 @@ class MethodTarget
 {
     public array $result;
 
+    #[MethodAttr('send')]
     #[ExampleAttr]
     public function send(
         #[Inject('api_key')] string $override,
