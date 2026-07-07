@@ -86,8 +86,6 @@ class ConditionalProxy
 
     /**
      * Set the condition on the proxy.
-     *
-     * @return $this
      */
     public function condition(bool $condition): static
     {
@@ -99,8 +97,6 @@ class ConditionalProxy
 
     /**
      * Invert the next condition captured from the target.
-     *
-     * @return $this
      */
     public function negateConditionOnCapture(): static
     {

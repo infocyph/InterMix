@@ -45,7 +45,6 @@ class OptionsManager implements ArrayAccess
      * @param string $interface the interface to bind
      * @param string $concrete the concrete implementation to bind to
      *
-     * @return $this
      * @throws ContainerException if the container is locked
      */
     public function bindInterfaceForEnv(string $env, string $interface, string $concrete): self
@@ -80,8 +79,6 @@ class OptionsManager implements ArrayAccess
      *
      * @param bool $enable Whether to enable debug tracing. Defaults to true.
      * @param TraceLevelEnum $level The trace level to use. Defaults to `TraceLevelEnum::Node`.
-     *
-     * @return $this
      */
     public function enableDebugTracing(bool $enable = true, TraceLevelEnum $level = TraceLevelEnum::Node): self
     {
@@ -100,7 +97,6 @@ class OptionsManager implements ArrayAccess
      *
      * @param bool $lazy Whether to enable lazy loading. Defaults to true.
      *
-     * @return $this
      * @throws ContainerException
      */
     public function enableLazyLoading(bool $lazy = true): self
@@ -119,7 +115,6 @@ class OptionsManager implements ArrayAccess
      *
      * @param string $path The path to the preload file.
      *
-     * @return $this
      * @throws \ReflectionException
      */
     public function generatePreload(string $path): self
@@ -150,7 +145,6 @@ class OptionsManager implements ArrayAccess
      * @param string $attributeFqcn The fully qualified class name of the attribute.
      * @param string $resolverFqcn The fully qualified class name of the resolver.
      *
-     * @return $this
      * @throws ContainerException
      */
     public function registerAttributeResolver(
@@ -211,7 +205,6 @@ class OptionsManager implements ArrayAccess
      * used for environment-specific configurations or bindings.
      *
      * @param string $env The name of the environment to set.
-     * @return $this
      * @throws ContainerException
      */
     public function setEnvironment(string $env): self
@@ -232,7 +225,6 @@ class OptionsManager implements ArrayAccess
      * @param bool $propertyAttributes Whether to enable property attributes. Defaults to false.
      * @param string|null $defaultMethod The default method to call if none is specified. Defaults to null.
      *
-     * @return $this
      * @throws ContainerException
      */
     public function setOptions(

@@ -41,7 +41,6 @@ class DefinitionManager implements ArrayAccess
      *
      * @param array<string, mixed> $definitions The array of definitions.
      *
-     * @return $this
      * @throws ContainerException
      */
     public function addDefinitions(array $definitions): self
@@ -66,7 +65,6 @@ class DefinitionManager implements ArrayAccess
      * @param LifetimeEnum $lifetime The lifetime of the definition.
      * @param array<int, string> $tags An array of tags to associate with the definition.
      *
-     * @return $this
      * @throws ContainerException if the container is locked or if the id is the same as the definition.
      */
     public function bind(
@@ -96,7 +94,6 @@ class DefinitionManager implements ArrayAccess
      *
      * @param bool $forceClearFirst Whether to clear the cache before caching all definitions.
      *
-     * @return $this
      * @throws ContainerException|InvalidArgumentException
      * @throws ReflectionException
      */
@@ -132,7 +129,6 @@ class DefinitionManager implements ArrayAccess
      *
      * The given adapter can be any PHP-FIG PSR-6 pool implementation.
      *
-     * @return $this
      * @throws ContainerException
      */
     public function enableDefinitionCache(
