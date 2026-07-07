@@ -108,7 +108,6 @@ class RegistrationManager implements ArrayAccess
      * @param string $class The name of the class to register.
      * @param array<int|string, mixed> $parameters An array of parameters to be passed to the class constructor.
      *
-     * @return $this
      * @throws ContainerException
      */
     public function registerClass(string $class, array $parameters = []): self
@@ -128,7 +127,6 @@ class RegistrationManager implements ArrayAccess
      * @param callable|Closure $function The closure to be registered.
      * @param array<int|string, mixed> $parameters Any parameters to be passed to the closure.
      *
-     * @return $this
      * @throws ContainerException
      */
     public function registerClosure(
@@ -152,7 +150,6 @@ class RegistrationManager implements ArrayAccess
      * @param string $method The name of the method to register.
      * @param array<int|string, mixed> $parameters An array of parameters to be passed to the method.
      *
-     * @return $this
      * @throws ContainerException
      */
     public function registerMethod(
@@ -178,7 +175,6 @@ class RegistrationManager implements ArrayAccess
      * @param string $class The name of the class whose property is being registered.
      * @param array<string, mixed> $property An array of property names as keys and their associated values as values.
      *
-     * @return $this
      * @throws ContainerException
      */
     public function registerProperty(string $class, array $property): self
