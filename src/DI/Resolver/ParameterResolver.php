@@ -242,7 +242,7 @@ class ParameterResolver
      */
     private function evictCacheKeyIfNeeded(array &$cache, string $key, int $limit): void
     {
-        if (!array_key_exists($key, $cache) && count($cache) >= $limit) {
+        if (!isset($cache[$key]) && count($cache) >= $limit) {
             $firstKey = array_key_first($cache);
             if (is_string($firstKey)) {
                 unset($cache[$firstKey]);
@@ -279,11 +279,8 @@ class ParameterResolver
     private function getInfuseAttributes(ReflectionFunctionAbstract $reflector): array
     {
         $key = $this->ownerFor($reflector) . '::' . $reflector->getName();
-        if (array_key_exists($key, $this->infuseCache)) {
-            return $this->infuseCache[$key];
-        }
 
-        return $this->rememberInfuse(
+        return $this->infuseCache[$key] ?? $this->rememberInfuse(
             $key,
             $reflector->getAttributes(Infuse::class),
         );
@@ -298,11 +295,8 @@ class ParameterResolver
     private function getParameterAttributePlan(ReflectionParameter $parameter): array
     {
         $key = $this->makeParameterAttributePlanKey($parameter);
-        if (array_key_exists($key, $this->parameterAttributePlanCache)) {
-            return $this->parameterAttributePlanCache[$key];
-        }
 
-        return $this->rememberParameterAttributePlan($key, [
+        return $this->parameterAttributePlanCache[$key] ?? $this->rememberParameterAttributePlan($key, [
             'infuse' => $parameter->getAttributes(Infuse::class),
             'all' => $parameter->getAttributes(),
         ]);
@@ -318,7 +312,7 @@ class ParameterResolver
     private function getResolutionPlan(ReflectionFunctionAbstract $reflector, string $type): array
     {
         $key = $this->makeResolutionPlanKey($reflector, $type);
-        if (array_key_exists($key, $this->resolutionPlanCache)) {
+        if (isset($this->resolutionPlanCache[$key])) {
             return $this->resolutionPlanCache[$key];
         }
 

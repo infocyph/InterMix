@@ -118,7 +118,7 @@ final readonly class GenericCall
     {
         $value = $source;
         foreach ($keys as $key) {
-            if (!is_array($value) || !array_key_exists($key, $value)) {
+            if (!is_array($value) || !isset($value[$key])) {
                 return [];
             }
             $value = $value[$key];
@@ -135,7 +135,7 @@ final readonly class GenericCall
     {
         $value = $source;
         foreach ($keys as $key) {
-            if (!is_array($value) || !array_key_exists($key, $value)) {
+            if (!is_array($value) || !isset($value[$key])) {
                 return null;
             }
             $value = $value[$key];

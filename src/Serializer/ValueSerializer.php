@@ -101,7 +101,7 @@ final class ValueSerializer
             }
         }
 
-        if (array_key_exists($str, self::$serializedClosureMemo)) {
+        if (isset(self::$serializedClosureMemo[$str])) {
             return self::$serializedClosureMemo[$str];
         }
 
@@ -273,7 +273,7 @@ final class ValueSerializer
 
     private static function rememberSerializedClosureMemo(string $key, bool $value): bool
     {
-        if (!array_key_exists($key, self::$serializedClosureMemo)
+        if (!isset(self::$serializedClosureMemo[$key])
             && count(self::$serializedClosureMemo) >= self::SERIALIZED_CLOSURE_MEMO_LIMIT) {
             unset(self::$serializedClosureMemo[array_key_first(self::$serializedClosureMemo)]);
         }

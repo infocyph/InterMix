@@ -37,7 +37,7 @@ class Infuse
      */
     public function __construct(mixed ...$parameters)
     {
-        if (!empty($parameters)) {
+        if ($parameters !== []) {
             $this->firstKey = array_key_first($parameters);
             foreach ($parameters as $key => $value) {
                 if (is_int($key)) {
@@ -56,7 +56,7 @@ class Infuse
      */
     public function getMethodArguments(int|string|null $key = null): mixed
     {
-        return $key
+        return $key !== null
             ? ($this->data[$key] ?? null)
             : $this->data;
     }
@@ -86,6 +86,6 @@ class Infuse
                 : null,
         ];
 
-        return $key ? ($returnable[$key] ?? null) : $returnable;
+        return $key !== null ? ($returnable[$key] ?? null) : $returnable;
     }
 }

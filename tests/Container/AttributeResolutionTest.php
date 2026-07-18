@@ -1,6 +1,9 @@
 <?php
 
+declare(strict_types=1);
+
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Attribute\Infuse;
 use Infocyph\InterMix\Tests\Fixture\ExampleAttr;
 use Infocyph\InterMix\Tests\Fixture\ExampleAttrResolver;
 use Infocyph\InterMix\Tests\Fixture\LogicOnlyAttr;
@@ -98,4 +101,10 @@ it('supports logic-only custom attribute', function () {
     // Expect no failure (resolved, no injection)
     $instance = $c->get(LogicOnlyTarget::class);
     expect($instance)->toBeInstanceOf(LogicOnlyTarget::class);
+});
+
+it('returns the first positional Infuse method argument when requested explicitly', function () {
+    $infuse = new Infuse('first', 'second');
+
+    expect($infuse->getMethodArguments(0))->toBe('first');
 });

@@ -1,4 +1,6 @@
 <?php
+
+declare(strict_types=1);
 /**
  * @covers \Infocyph\InterMix\DI\Invoker
  */
@@ -63,7 +65,7 @@ it('invokes a [class,method] pair', function () {
 });
 
 it('throws a ContainerException on unsupported target', function () {
-    $this->inv->invoke(123);
+    $this->inv->invoke('not-a-callable');
 })->throws(ContainerException::class);
 
 /* Opis-packed closure ------------------------------------------------------ */

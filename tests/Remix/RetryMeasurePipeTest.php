@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 it('retry() eventually succeeds', function () {
     $tries = 0;
     $val   = retry(

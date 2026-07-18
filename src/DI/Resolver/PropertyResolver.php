@@ -244,7 +244,7 @@ class PropertyResolver
     private function getPropertyPlan(ReflectionClass $class): array
     {
         $className = $class->getName();
-        if (array_key_exists($className, $this->propertyPlanCache)) {
+        if (isset($this->propertyPlanCache[$className])) {
             return $this->propertyPlanCache[$className];
         }
 
@@ -330,7 +330,7 @@ class PropertyResolver
      */
     private function rememberPropertyPlan(string $key, array $plan): array
     {
-        if (!array_key_exists($key, $this->propertyPlanCache)
+        if (!isset($this->propertyPlanCache[$key])
             && count($this->propertyPlanCache) >= self::PROPERTY_PLAN_CACHE_LIMIT
         ) {
             unset($this->propertyPlanCache[array_key_first($this->propertyPlanCache)]);
