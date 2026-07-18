@@ -1,4 +1,6 @@
 <?php
+
+declare(strict_types=1);
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\Tests\Fixture\BarService;
 use Infocyph\InterMix\Tests\Fixture\FooService;

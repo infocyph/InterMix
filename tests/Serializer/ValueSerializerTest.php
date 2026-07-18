@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 // tests/Serializer/ValueSerializerTest.php
 
 use Infocyph\InterMix\Serializer\ValueSerializer;

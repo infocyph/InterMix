@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\Tests\Fixture\EmailService;
 use Infocyph\InterMix\Tests\Fixture\InjectionLessClass;

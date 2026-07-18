@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use Infocyph\InterMix\Exceptions\LimitExceededException;
 use Infocyph\InterMix\Exceptions\RequirementException;
 use Infocyph\InterMix\Fence\Fence;
