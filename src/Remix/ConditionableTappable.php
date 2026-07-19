@@ -6,6 +6,8 @@ namespace Infocyph\InterMix\Remix;
 
 use Closure;
 
+// Public trait consumers live in downstream projects and the excluded test suite.
+// @phpstan-ignore trait.unused
 trait ConditionableTappable
 {
     /**
@@ -38,19 +40,23 @@ trait ConditionableTappable
     public function unless(mixed $value = null, ?callable $callback = null, ?callable $default = null)
     {
         $value = $value instanceof Closure ? $value($this) : $value;
-        if (func_num_args() === 0) {
-            return (new ConditionalProxy($this))->negateConditionOnCapture();
-        }
-        if (func_num_args() === 1) {
-            return (new ConditionalProxy($this))->condition(!$value);
-        }
-        if (!$value && $callback !== null) {
-            return $callback($this, $value) ?? $this;
-        } elseif ($default) {
-            return $default($this, $value) ?? $this;
-        }
+        $argumentCount = func_num_args();
 
-        return $this;
+        return match (true) {
+            $argumentCount === 0
+            => (new ConditionalProxy($this))->negateConditionOnCapture(),
+
+            $argumentCount === 1
+            => (new ConditionalProxy($this))->condition(!$value),
+
+            !$value && $callback !== null
+                => $callback($this, $value) ?? $this,
+
+            $default !== null
+                => $default($this, $value) ?? $this,
+
+            default => $this,
+        };
     }
 
     /**

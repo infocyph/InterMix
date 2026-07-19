@@ -9,6 +9,8 @@ use Infocyph\InterMix\Exceptions\LimitExceededException;
 use Infocyph\InterMix\Exceptions\RequirementException;
 use InvalidArgumentException;
 
+// Public trait consumers live in downstream projects and the excluded test suite.
+// @phpstan-ignore trait.unused
 trait Fence
 {
     private const int REQUIREMENT_CACHE_LIMIT = 256;

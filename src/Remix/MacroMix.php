@@ -11,6 +11,8 @@ use ReflectionException;
 use ReflectionFunction;
 use ReflectionMethod;
 
+// Public trait consumers live in downstream projects and the excluded test suite.
+// @phpstan-ignore trait.unused
 trait MacroMix
 {
     /** @var array<string, bool> */
