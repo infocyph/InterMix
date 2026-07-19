@@ -66,12 +66,8 @@ You should regenerate the preload file when:
 
 Automate it as part of your deployment pipeline or cache warm-up.
 
---------------------------
-Advanced Customization 🛠️
---------------------------
-
-You may extend or modify the preload generation behavior by subclassing
-:php:class:`Infocyph\\InterMix\\DI\\Support\\PreloadGenerator`.
+The generator is intentionally final. Configure the container definitions
+before calling ``generate()`` to control which known class files are emitted.
 
 
 Next stop » :doc:`debug_tracing`

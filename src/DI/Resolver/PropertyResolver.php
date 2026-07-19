@@ -138,7 +138,7 @@ class PropertyResolver
         $infuse = $attrs[0]->newInstance();
 
         // (a)  #[Infuse]   – no args  ➜  infer by type-hint
-        if (empty($attrs[0]->getArguments())) {
+        if ($attrs[0]->getArguments() === []) {
             $val = $this->resolveWithoutArgument($property, $property->getType());
 
             return [$classInstance, $val];
@@ -432,7 +432,7 @@ class PropertyResolver
     {
         return $property->isPromoted()
             && !isset(($registeredProps ?? [])[$property->getName()])
-            && empty($property->getAttributes(Infuse::class));
+            && $property->getAttributes(Infuse::class) === [];
     }
 
     /**

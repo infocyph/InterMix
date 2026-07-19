@@ -99,7 +99,7 @@ class DefinitionManager implements ArrayAccess
      */
     public function cacheAllDefinitions(bool $forceClearFirst = false): self
     {
-        if (empty($this->repository->getFunctionReference())) {
+        if ($this->repository->getFunctionReference() === []) {
             throw new ContainerException('No definitions added.');
         }
         $cacheAdapter = $this->repository->getCacheAdapter();

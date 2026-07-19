@@ -75,7 +75,7 @@ final class DebugTracer
      */
     public function clear(): self
     {
-        foreach (array_keys($this->activeSpans) as $openId) {
+        foreach ($this->activeSpans as $openId => $_) {
             $this->endSpan($openId, ['auto_close' => true]);
         }
         $this->entries = [];

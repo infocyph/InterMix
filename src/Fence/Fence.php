@@ -11,6 +11,8 @@ use InvalidArgumentException;
 
 trait Fence
 {
+    private const int REQUIREMENT_CACHE_LIMIT = 256;
+
     private const string SINGLE_SLOT = '__single';
 
     /** @var array<string, bool> */
@@ -163,6 +165,16 @@ trait Fence
     }
 
     /**
+     * @param array<string, bool> $cache
+     */
+    private static function evictRequirementCacheEntryIfNeeded(array &$cache): void
+    {
+        if (count($cache) >= self::REQUIREMENT_CACHE_LIMIT) {
+            unset($cache[array_key_first($cache)]);
+        }
+    }
+
+    /**
      * @param array<int, string> $required
      * @return array<int, string>
      */
@@ -175,8 +187,11 @@ trait Fence
                 continue;
             }
 
-            self::$classExistsCache[$class] ??= class_exists($class);
-            if (!self::$classExistsCache[$class]) {
+            if (!isset(self::$classExistsCache[$class]) && class_exists($class)) {
+                self::evictRequirementCacheEntryIfNeeded(self::$classExistsCache);
+                self::$classExistsCache[$class] = true;
+            }
+            if (!isset(self::$classExistsCache[$class])) {
                 $missing[] = $class;
             }
         }
@@ -198,8 +213,11 @@ trait Fence
             }
 
             $cacheKey = strtolower($extension);
-            self::$extensionExistsCache[$cacheKey] ??= extension_loaded($extension);
-            if (!self::$extensionExistsCache[$cacheKey]) {
+            if (!isset(self::$extensionExistsCache[$cacheKey]) && extension_loaded($extension)) {
+                self::evictRequirementCacheEntryIfNeeded(self::$extensionExistsCache);
+                self::$extensionExistsCache[$cacheKey] = true;
+            }
+            if (!isset(self::$extensionExistsCache[$cacheKey])) {
                 $missing[] = $extension;
             }
         }

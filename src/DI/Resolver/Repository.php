@@ -460,7 +460,7 @@ class Repository
      */
     public function getEnvConcrete(?string $interface): ?string
     {
-        if (!$this->environment || !$interface) {
+        if ($this->environment === null || $interface === null) {
             return null;
         }
 
@@ -1056,7 +1056,7 @@ class Repository
     {
         $keys = $this->resolvedKeysByScope[$scope] ?? null;
         if (is_array($keys)) {
-            foreach (array_keys($keys) as $key) {
+            foreach ($keys as $key => $_) {
                 unset($this->resolved[$key]);
             }
             unset($this->resolvedKeysByScope[$scope]);
@@ -1066,7 +1066,7 @@ class Repository
 
         // Fallback for entries created before scope-indexing was introduced.
         $suffix = '@' . $scope;
-        foreach (array_keys($this->resolved) as $key) {
+        foreach ($this->resolved as $key => $_) {
             if (str_ends_with((string) $key, $suffix)) {
                 unset($this->resolved[$key]);
             }

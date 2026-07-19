@@ -88,9 +88,7 @@ class DefinitionResolver
 
     private static function stableHash(string $value): string
     {
-        $algorithm = in_array('xxh128', hash_algos(), true) ? 'xxh128' : 'sha256';
-
-        return hash($algorithm, $value);
+        return hash('xxh128', $value);
     }
 
     /**

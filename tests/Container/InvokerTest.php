@@ -203,6 +203,24 @@ it('isolates callableFor cache per container', function () {
         ->and($f2())->toBe('Asia/Dhaka');
 });
 
+it('releases cached invokable instances with their invoker lifecycle', function () {
+    $container = Container::instance(uniqid('invoker_cache_lifecycle_'));
+    $container->definitions()->bind(DateTimeZone::class, fn () => new DateTimeZone('UTC'));
+    $invoker = Invoker::with($container);
+    $callable = $invoker->callableFor(CachedCallableService::class);
+
+    $reflection = new ReflectionFunction($callable);
+    $service = $reflection->getClosureThis();
+    expect($service)->toBeInstanceOf(CachedCallableService::class);
+    $weakService = WeakReference::create($service);
+
+    $container->unset();
+    unset($reflection, $service, $callable, $invoker, $container);
+    gc_collect_cycles();
+
+    expect($weakService->get())->toBeNull();
+});
+
 it('invokes closures directly without storing closure aliases', function () {
     $before = count($this->c->getRepository()->getClosureResource());
 
@@ -212,4 +230,14 @@ it('invokes closures directly without storing closure aliases', function () {
 
     $after = count($this->c->getRepository()->getClosureResource());
     expect($after)->toBe($before);
+});
+
+it('resolves one-off closures without storing closure aliases', function () {
+    $before = count($this->c->getRepository()->getClosureResource());
+
+    for ($i = 0; $i < 5; $i++) {
+        expect($this->c->resolveNow(fn () => 'ok'))->toBe('ok');
+    }
+
+    expect($this->c->getRepository()->getClosureResource())->toHaveCount($before);
 });
