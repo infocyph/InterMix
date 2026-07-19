@@ -373,7 +373,19 @@ it('generates a preload list', function () {
     (new PreloadGenerator())->generate($c, $file);
 
     expect(is_file($file))->toBeTrue()
-        ->and(file_get_contents($file))->toContain('require_once');
+        ->and(file_get_contents($file))
+        ->toContain('declare(strict_types=1);')
+        ->not->toContain('opcache_compile_file');
+});
+
+it('fails safely when a generated file directory does not exist', function () {
+    $c = Container::instance(uniqid('missing_generated_directory_'));
+    $directory = sys_get_temp_dir() . '/intermix-missing-' . uniqid();
+
+    expect(fn () => $c->compileTo($directory . '/compiled.php'))
+        ->toThrow(RuntimeException::class)
+        ->and(fn () => (new PreloadGenerator())->generate($c, $directory . '/preload.php'))
+        ->toThrow(RuntimeException::class);
 });
 
 it('isolates resolved instances per scope', function () {

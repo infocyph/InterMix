@@ -14,6 +14,8 @@ final class ValueSerializer
 
     private const int SERIALIZED_CLOSURE_MEMO_LIMIT = 2048;
 
+    private const int SERIALIZED_CLOSURE_MEMO_MAX_KEY_BYTES = 4096;
+
     private const string SIGNED_PAYLOAD_PREFIX = 'imxv1.';
 
     private static ?string $payloadSigningKey = null;
@@ -51,13 +53,14 @@ final class ValueSerializer
      */
     public static function decode(string $payload, bool $base64 = true): mixed
     {
-        $blob = $base64 ? base64_decode($payload, true) : $payload;
+        return self::decodeWithKey($payload, $base64, self::$payloadSigningKey);
+    }
 
-        if ($blob === false) {
-            throw new InvalidArgumentException('Invalid base64 payload supplied to ValueSerializer::decode().');
-        }
+    public static function decodeSigned(string $payload, string $key, bool $base64 = true): mixed
+    {
+        self::validateSigningKey($key);
 
-        return self::unserialize($blob);
+        return self::decodeWithKey($payload, $base64, $key);
     }
 
     /**
@@ -75,9 +78,14 @@ final class ValueSerializer
      */
     public static function encode(mixed $value, bool $base64 = true): string
     {
-        $blob = self::serialize($value);
+        return self::encodeWithKey($value, $base64, self::$payloadSigningKey);
+    }
 
-        return $base64 ? base64_encode($blob) : $blob;
+    public static function encodeSigned(mixed $value, string $key, bool $base64 = true): string
+    {
+        self::validateSigningKey($key);
+
+        return self::encodeWithKey($value, $base64, $key);
     }
 
     /**
@@ -154,14 +162,7 @@ final class ValueSerializer
      */
     public static function serialize(mixed $value): string
     {
-        $blob = match (true) {
-            is_scalar($value), $value === null => serialize($value),
-            default => oc_serialize(self::wrapRecursive($value)),
-        };
-
-        return self::$payloadSigningKey === null
-            ? $blob
-            : self::signBlob($blob, self::$payloadSigningKey);
+        return self::serializeWithKey($value, self::$payloadSigningKey);
     }
 
     /**
@@ -175,8 +176,8 @@ final class ValueSerializer
      */
     public static function setPayloadSigningKey(?string $key): void
     {
-        if ($key === '') {
-            throw new InvalidArgumentException('Payload signing key cannot be empty.');
+        if ($key !== null) {
+            self::validateSigningKey($key);
         }
 
         self::$payloadSigningKey = $key;
@@ -202,15 +203,7 @@ final class ValueSerializer
      */
     public static function unserialize(string $blob): mixed
     {
-        if (self::$payloadSigningKey !== null) {
-            $blob = self::extractSignedBlob($blob, self::$payloadSigningKey);
-        }
-
-        if (!ValueSerializer::isSerializedClosure($blob) && str_starts_with($blob, 's:')) {
-            return unserialize($blob, ['allowed_classes' => true]);
-        }
-
-        return self::unwrapRecursive(oc_unserialize($blob));
+        return self::unserializeWithKey($blob, self::$payloadSigningKey);
     }
 
     /**
@@ -243,6 +236,24 @@ final class ValueSerializer
         return self::wrapRecursive($value);
     }
 
+    private static function decodeWithKey(string $payload, bool $base64, ?string $key): mixed
+    {
+        $blob = $base64 ? base64_decode($payload, true) : $payload;
+
+        if ($blob === false) {
+            throw new InvalidArgumentException('Invalid base64 payload supplied to ValueSerializer::decode().');
+        }
+
+        return self::unserializeWithKey($blob, $key);
+    }
+
+    private static function encodeWithKey(mixed $value, bool $base64, ?string $key): string
+    {
+        $blob = self::serializeWithKey($value, $key);
+
+        return $base64 ? base64_encode($blob) : $blob;
+    }
+
     private static function extractSignedBlob(string $payload, string $key): string
     {
         if (!str_starts_with($payload, self::SIGNED_PAYLOAD_PREFIX)) {
@@ -273,6 +284,10 @@ final class ValueSerializer
 
     private static function rememberSerializedClosureMemo(string $key, bool $value): bool
     {
+        if (strlen($key) > self::SERIALIZED_CLOSURE_MEMO_MAX_KEY_BYTES) {
+            return $value;
+        }
+
         if (!isset(self::$serializedClosureMemo[$key])
             && count(self::$serializedClosureMemo) >= self::SERIALIZED_CLOSURE_MEMO_LIMIT) {
             unset(self::$serializedClosureMemo[array_key_first(self::$serializedClosureMemo)]);
@@ -283,11 +298,36 @@ final class ValueSerializer
         return $value;
     }
 
+    private static function serializeWithKey(mixed $value, ?string $key): string
+    {
+        $blob = match (true) {
+            is_scalar($value), $value === null => serialize($value),
+            default => oc_serialize(self::wrapRecursive($value)),
+        };
+
+        return $key === null
+            ? $blob
+            : self::signBlob($blob, $key);
+    }
+
     private static function signBlob(string $blob, string $key): string
     {
         $signature = hash_hmac(self::PAYLOAD_HMAC_ALGO, $blob, $key);
 
         return self::SIGNED_PAYLOAD_PREFIX . $signature . '.' . base64_encode($blob);
+    }
+
+    private static function unserializeWithKey(string $blob, ?string $key): mixed
+    {
+        if ($key !== null) {
+            $blob = self::extractSignedBlob($blob, $key);
+        }
+
+        if (!ValueSerializer::isSerializedClosure($blob) && str_starts_with($blob, 's:')) {
+            return unserialize($blob, ['allowed_classes' => true]);
+        }
+
+        return self::unwrapRecursive(oc_unserialize($blob));
     }
 
     /**
@@ -302,7 +342,7 @@ final class ValueSerializer
     {
         if (
             is_array($resource)
-            && ($resource['__wrapped_resource'] ?? false)
+            && ($resource['__wrapped_resource'] ?? null) === true
             && is_string($resource['type'] ?? null)
             && isset(self::$resourceHandlers[$resource['type']])
         ) {
@@ -316,6 +356,13 @@ final class ValueSerializer
         }
 
         return $resource;
+    }
+
+    private static function validateSigningKey(string $key): void
+    {
+        if ($key === '') {
+            throw new InvalidArgumentException('Payload signing key cannot be empty.');
+        }
     }
 
     /**

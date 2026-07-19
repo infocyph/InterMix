@@ -5,6 +5,8 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\Fence;
 
+// Public trait consumers live in downstream projects and the excluded test suite.
+// @phpstan-ignore trait.unused
 trait Single
 {
     use Fence;

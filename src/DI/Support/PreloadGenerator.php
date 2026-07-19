@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Support;
 
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\Internal\AtomicFileWriter;
 use ReflectionException;
 
 final class PreloadGenerator
@@ -21,7 +22,6 @@ final class PreloadGenerator
     {
         $repo = $container->getRepository();
 
-        /* -------- gather class names --------------------------------- */
         $classes = array_keys($repo->getClassResource());
 
         foreach ($repo->getFunctionReference() as $def) {
@@ -32,29 +32,25 @@ final class PreloadGenerator
             }
         }
 
-        /* -------- convert to file paths ------------------------------ */
         $paths = [];
         foreach (array_unique($classes) as $fqcn) {
-            class_exists($fqcn);
             $f = (ReflectionResource::getClassReflection($fqcn))->getFileName();
             if ($f) {
-                $paths[] = $f;
+                $paths[$f] = true;
             }
         }
 
-        /* -------- emit preload file ---------------------------------- */
-        $list = var_export($paths, true);
+        $list = var_export(array_keys($paths), true);
         $code = <<<PHP
             <?php
+
+            declare(strict_types=1);
+
             foreach ($list as \$file) {
-                if (function_exists('opcache_is_script_cached') && opcache_is_script_cached(\$file)) {
-                    continue;
-                }
                 require_once \$file;
-                opcache_compile_file(\$file);
             }
             PHP;
 
-        file_put_contents($filePath, $code);
+        AtomicFileWriter::write($filePath, $code);
     }
 }

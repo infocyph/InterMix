@@ -53,6 +53,14 @@ Public API
    – Rebuild a value produced by ``encode()``.
    Decodes base64 (when enabled) and forwards to ``unserialize()``.
 
+.. php:function:: string ValueSerializer::encodeSigned(mixed $value, string $key, bool $base64 = true)
+
+   Encode with an operation-scoped HMAC key without changing global serializer state.
+
+.. php:function:: mixed ValueSerializer::decodeSigned(string $payload, string $key, bool $base64 = true)
+
+   Verify and decode with an operation-scoped HMAC key.
+
 .. php:function:: void ValueSerializer::setPayloadSigningKey(?string $key)
 
    Configure HMAC payload signing/verification for ``serialize()``/``unserialize()``
@@ -64,7 +72,7 @@ Public API
 .. php:function:: bool ValueSerializer::isSerializedClosure(string $str)
 
    Cheap Opis payload detector used by *Invoker*.
-   Internally memo-cached for the lifetime of the request.
+   Internally uses a bounded process-local memo.
 
 .. php:function:: mixed ValueSerializer::wrap(mixed $value)
 

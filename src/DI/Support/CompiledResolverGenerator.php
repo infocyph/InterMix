@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Support;
 
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\Internal\AtomicFileWriter;
 use ReflectionException;
 use ReflectionNamedType;
 
@@ -35,7 +36,7 @@ final class CompiledResolverGenerator
         }
         $code .= "];\n";
 
-        file_put_contents($filePath, $code);
+        AtomicFileWriter::write($filePath, $code);
 
         /** @var array<string, callable(Container): mixed> $result */
         $result = require $filePath;

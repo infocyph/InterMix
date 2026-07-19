@@ -46,8 +46,6 @@ final class Container implements ContainerInterface, ArrayAccess
     /** @var array<string, self> */
     protected static array $instances = [];
 
-    private static int $generatedClosureSequence = 0;
-
     protected DefinitionManager $definitionManager;
 
     protected InvocationManager $invocationManager;
@@ -543,7 +541,7 @@ final class Container implements ContainerInterface, ArrayAccess
      */
     public function parseCallable(string|array|Closure|callable $spec): array
     {
-        if (empty($spec)) {
+        if ($spec === '' || $spec === []) {
             throw new InvalidArgumentException('No argument provided!');
         }
 
@@ -612,7 +610,6 @@ final class Container implements ContainerInterface, ArrayAccess
      * Register the spec and immediately resolve/return the result.
      *
      * Mirrors RegistrationManager signatures exactly:
-     * - registerClosure(string $alias, callable $fn, array $params = [])
      * - registerClass(string $class, array $params = [])
      * - registerMethod(string $class, string $method, array $params = [])
      *
@@ -944,20 +941,15 @@ final class Container implements ContainerInterface, ArrayAccess
     private function resolveRegisteredClosureCallable(array $desc, array $parameters): mixed
     {
         if ($desc['kind'] === 'function') {
-            $id = $desc['function'];
-            if (!function_exists($id)) {
-                throw new ContainerException("Unknown callable function '$id'.");
+            $callback = $desc['function'];
+            if (!function_exists($callback)) {
+                throw new ContainerException("Unknown callable function '$callback'.");
             }
-            $callback = $id(...);
         } else {
-            self::$generatedClosureSequence++;
-            $id = '__imx_closure_' . self::$generatedClosureSequence;
             $callback = $desc['closure'];
         }
 
-        $this->registration()->registerClosure($id, $callback, $parameters);
-
-        return $this->getReturn($id);
+        return $this->getCurrentResolver()->closureSettler($callback, $parameters);
     }
 
     /**
@@ -995,7 +987,7 @@ final class Container implements ContainerInterface, ArrayAccess
     private function validateResolvableDefinitions(): array
     {
         $issues = [];
-        foreach (array_keys($this->repository->getFunctionReference()) as $id) {
+        foreach ($this->repository->getFunctionReference() as $id => $_) {
             try {
                 $this->get($id);
             } catch (Throwable $e) {

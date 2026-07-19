@@ -76,3 +76,37 @@ it('rejects tampered payloads when signing key is configured', function () {
     expect(fn () => ValueSerializer::unserialize($tampered))
         ->toThrow(InvalidArgumentException::class);
 });
+
+it('rejects an empty signing key at the signed serializer boundary', function () {
+    expect(fn () => ValueSerializer::signed(''))
+        ->toThrow(InvalidArgumentException::class);
+});
+
+it('keeps signed serializer instances isolated from global key state', function () {
+    ValueSerializer::setPayloadSigningKey('global-key');
+    $signed = ValueSerializer::signed('scoped-key');
+
+    $payload = $signed->encode(['scope' => 'local']);
+
+    expect(ValueSerializer::currentPayloadSigningKey())->toBe('global-key')
+        ->and($signed->decode($payload))->toBe(['scope' => 'local'])
+        ->and(ValueSerializer::currentPayloadSigningKey())->toBe('global-key')
+        ->and(fn () => ValueSerializer::decode($payload))
+        ->toThrow(InvalidArgumentException::class);
+});
+
+it('requires the exact wrapped-resource marker before restoring', function () {
+    ValueSerializer::registerResourceHandler(
+        'test-resource',
+        static fn(mixed $value): mixed => $value,
+        static fn(mixed $value): string => "restored:$value",
+    );
+
+    $lookalike = [
+        '__wrapped_resource' => 1,
+        'type' => 'test-resource',
+        'data' => 'payload',
+    ];
+
+    expect(ValueSerializer::unwrap($lookalike))->toBe($lookalike);
+});

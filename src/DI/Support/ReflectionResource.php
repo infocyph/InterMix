@@ -20,7 +20,9 @@ use UnitEnum;
  */
 final class ReflectionResource
 {
-    private static int $cacheLimit = 0;
+    private const int DEFAULT_CACHE_LIMIT = 2048;
+
+    private static int $cacheLimit = self::DEFAULT_CACHE_LIMIT;
 
     /**
      * @var array{

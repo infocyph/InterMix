@@ -12,10 +12,12 @@ use ReflectionException;
 
 final class Invoker
 {
-    /** @var array<string, callable(): mixed> */
-    private static array $callableCache = [];
+    private const int CALLABLE_CACHE_LIMIT = 256;
 
     private static ?self $sharedInstance = null;
+
+    /** @var array<string, callable(): mixed> */
+    private array $callableCache = [];
 
     /**
      * Construct an instance of the invoker.
@@ -81,9 +83,8 @@ final class Invoker
             return $target(...);
         }
 
-        $key = 'container:' . spl_object_id($this->container) . ':class:' . $target;
-        if (isset(self::$callableCache[$key])) {
-            return self::$callableCache[$key];
+        if (isset($this->callableCache[$target])) {
+            return $this->callableCache[$target];
         }
 
         $instance = $this->make($target);
@@ -96,7 +97,11 @@ final class Invoker
             );
         }
 
-        return self::$callableCache[$key] = $instance(...);
+        if (count($this->callableCache) >= self::CALLABLE_CACHE_LIMIT) {
+            unset($this->callableCache[array_key_first($this->callableCache)]);
+        }
+
+        return $this->callableCache[$target] = $instance(...);
     }
 
     /**
