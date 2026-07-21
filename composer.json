@@ -35,7 +35,7 @@
         "psr/container": "^2.0"
     },
     "require-dev": {
-        "infocyph/phpforge": "dev-main"
+        "infocyph/phpforge": "dev-main@dev"
     },
     "suggest": {
         "ext-mbstring": "Recommended for development tools output formatting (Pest/Termwind)",
