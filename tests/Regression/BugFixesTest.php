@@ -8,6 +8,7 @@ use Infocyph\InterMix\DI\Support\PreloadGenerator;
 use Infocyph\InterMix\DI\Support\TraceLevelEnum;
 use Infocyph\InterMix\Serializer\ResourceHandlers;
 use Infocyph\InterMix\Serializer\ValueSerializer;
+use Infocyph\InterMix\Tests\Fixture\NamespacedClosureFactory;
 use Psr\Cache\CacheItemInterface;
 use Psr\Cache\CacheItemPoolInterface;
 
@@ -244,4 +245,13 @@ it('does not reuse closure parameter resolution across different closures', func
     expect($noArgResult)->toBe('ok')
         ->and($token)->toBeString()
         ->and(strlen($token))->toBeGreaterThan(0);
+});
+
+it('distinguishes namespaced method closures on PHP 8.3', function () {
+    $container = Container::instance(uniqid('namespaced_closure_args_'));
+
+    [$withoutArguments, $withArgument] = NamespacedClosureFactory::invoke($container);
+
+    expect($withoutArguments)->toBe('ok')
+        ->and($withArgument)->toBeInstanceOf(stdClass::class);
 });

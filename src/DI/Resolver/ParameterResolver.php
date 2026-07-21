@@ -286,7 +286,7 @@ class ParameterResolver
      */
     private function getInfuseAttributes(ReflectionFunctionAbstract $reflector): array
     {
-        $key = $this->ownerFor($reflector) . '::' . $reflector->getName();
+        $key = $this->reflectorCacheKey($reflector);
 
         return $this->infuseCache[$key] ?? $this->rememberInfuse(
             $key,
@@ -451,7 +451,7 @@ class ParameterResolver
             return $reflector->getDeclaringClass()->getName() . '::' . $reflector->getName();
         }
 
-        if ($reflector->getName() !== '{closure}') {
+        if (!$reflector->isClosure()) {
             return $reflector->getName();
         }
 
