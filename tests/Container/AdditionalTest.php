@@ -89,14 +89,24 @@ class SpyCacheItem implements CacheItemInterface
         private bool $hit = false,
     ) {}
 
-    public function getKey(): string
+    public function expiresAfter(int|\DateInterval|null $time): static
     {
-        return $this->key;
+        return $this;
+    }
+
+    public function expiresAt(?\DateTimeInterface $expiration): static
+    {
+        return $this;
     }
 
     public function get(): mixed
     {
         return $this->value;
+    }
+
+    public function getKey(): string
+    {
+        return $this->key;
     }
 
     public function isHit(): bool
@@ -110,16 +120,6 @@ class SpyCacheItem implements CacheItemInterface
 
         return $this;
     }
-
-    public function expiresAfter(int|\DateInterval|null $time): static
-    {
-        return $this;
-    }
-
-    public function expiresAt(?\DateTimeInterface $expiration): static
-    {
-        return $this;
-    }
 }
 
 class SpyCachePool implements CacheItemPoolInterface
@@ -129,6 +129,37 @@ class SpyCachePool implements CacheItemPoolInterface
 
     /** @var array<int, mixed> */
     public array $savedValues = [];
+
+    public function clear(): bool
+    {
+        $this->items = [];
+        $this->savedValues = [];
+
+        return true;
+    }
+
+    public function commit(): bool
+    {
+        return true;
+    }
+
+    public function deleteItem(string $key): bool
+    {
+        unset($this->items[$key]);
+
+        return true;
+    }
+
+    public function deleteItems(array $keys): bool
+    {
+        foreach ($keys as $key) {
+            if (is_string($key)) {
+                unset($this->items[$key]);
+            }
+        }
+
+        return true;
+    }
 
     public function getItem(string $key): CacheItemInterface
     {
@@ -156,32 +187,6 @@ class SpyCachePool implements CacheItemPoolInterface
         return isset($this->items[$key]) && $this->items[$key]->isHit();
     }
 
-    public function clear(): bool
-    {
-        $this->items = [];
-        $this->savedValues = [];
-
-        return true;
-    }
-
-    public function deleteItem(string $key): bool
-    {
-        unset($this->items[$key]);
-
-        return true;
-    }
-
-    public function deleteItems(array $keys): bool
-    {
-        foreach ($keys as $key) {
-            if (is_string($key)) {
-                unset($this->items[$key]);
-            }
-        }
-
-        return true;
-    }
-
     public function save(CacheItemInterface $item): bool
     {
         $stored = new SpyCacheItem($item->getKey(), $item->get(), true);
@@ -195,16 +200,11 @@ class SpyCachePool implements CacheItemPoolInterface
     {
         return $this->save($item);
     }
-
-    public function commit(): bool
-    {
-        return true;
-    }
 }
 
 it('collects a readable trace', function () {
     $c = Container::instance('intermix')->options()->enableDebugTracing();
-    $c->definitions()->bind(FooService::class, fn () => new FooService());
+    $c->definitions()->bind(FooService::class, fn() => new FooService());
 
     $trace = $c->end()->debug(FooService::class);
 
@@ -232,6 +232,7 @@ it('defers initialisation when lazy-loading is enabled', function () {
 
     $c->definitions()->bind('heavy', function () use (&$flag) {
         $flag = true;
+
         return 123;
     });
 
@@ -244,15 +245,15 @@ it('honours singleton vs transient vs scoped lifetimes', function () {
     $c = Container::instance('intermix');
 
     // singleton
-    $c->definitions()->bind('uniq', fn () => new stdClass(), LifetimeEnum::Singleton);
+    $c->definitions()->bind('uniq', fn() => new stdClass(), LifetimeEnum::Singleton);
     expect($c->get('uniq'))->toBe($c->get('uniq'));
 
     // transient
-    $c->definitions()->bind('trans', fn () => new stdClass(), LifetimeEnum::Transient);
+    $c->definitions()->bind('trans', fn() => new stdClass(), LifetimeEnum::Transient);
     expect($c->get('trans'))->not->toBe($c->get('trans'));
 
     // scoped
-    $c->definitions()->bind('scoped', fn () => new stdClass(), LifetimeEnum::Scoped);
+    $c->definitions()->bind('scoped', fn() => new stdClass(), LifetimeEnum::Scoped);
     $first = $c->get('scoped');
 
     $c->getRepository()->setScope('next-request');
@@ -265,9 +266,9 @@ it('stores resolved entries only through lifetime-aware keys', function () {
     $c = Container::instance(uniqid('lifetime_keys_'));
     $repo = $c->getRepository();
 
-    $c->definitions()->bind('svc.singleton', fn () => new stdClass(), LifetimeEnum::Singleton);
-    $c->definitions()->bind('svc.scoped', fn () => new stdClass(), LifetimeEnum::Scoped);
-    $c->definitions()->bind('svc.transient', fn () => new stdClass(), LifetimeEnum::Transient);
+    $c->definitions()->bind('svc.singleton', fn() => new stdClass(), LifetimeEnum::Singleton);
+    $c->definitions()->bind('svc.scoped', fn() => new stdClass(), LifetimeEnum::Scoped);
+    $c->definitions()->bind('svc.transient', fn() => new stdClass(), LifetimeEnum::Transient);
 
     $c->enterScope('request-a');
     $c->get('svc.singleton');
@@ -283,10 +284,27 @@ it('stores resolved entries only through lifetime-aware keys', function () {
     $c->leaveScope();
 });
 
+it('honours transient and scoped lifetimes for class-string definitions', function () {
+    $c = Container::instance(uniqid('class_string_lifetimes_'));
+    $c->definitions()->bind('class.transient', stdClass::class, LifetimeEnum::Transient);
+    $c->definitions()->bind('class.scoped', stdClass::class, LifetimeEnum::Scoped);
+
+    expect($c->get('class.transient'))->not->toBe($c->get('class.transient'));
+
+    $c->enterScope('request-a');
+    $firstScoped = $c->get('class.scoped');
+    expect($firstScoped)->toBe($c->get('class.scoped'));
+    $c->leaveScope();
+
+    $c->enterScope('request-b');
+    expect($c->get('class.scoped'))->not->toBe($firstScoped);
+    $c->leaveScope();
+});
+
 it('reads scoped getReturn values from the current scope key', function () {
     $c = Container::instance(uniqid('scope_return_'));
     $repo = $c->getRepository();
-    $c->definitions()->bind('scope.return', fn () => new stdClass(), LifetimeEnum::Scoped);
+    $c->definitions()->bind('scope.return', fn() => new stdClass(), LifetimeEnum::Scoped);
     $repo->setResolved('scope.return', ['instance' => new stdClass(), 'returned' => 'stale-base']);
 
     $repo->setScope('request-1');
@@ -303,8 +321,8 @@ it('reads scoped getReturn values from the current scope key', function () {
 
 it('routes call() definition IDs through lifetime-aware get()', function () {
     $c = Container::instance(uniqid('call_lifetime_'));
-    $c->definitions()->bind('svc.scoped', fn () => new stdClass(), LifetimeEnum::Scoped);
-    $c->definitions()->bind('svc.transient', fn () => new stdClass(), LifetimeEnum::Transient);
+    $c->definitions()->bind('svc.scoped', fn() => new stdClass(), LifetimeEnum::Scoped);
+    $c->definitions()->bind('svc.transient', fn() => new stdClass(), LifetimeEnum::Transient);
 
     $c->enterScope('request-a');
     $firstScoped = $c->call('svc.scoped');
@@ -336,14 +354,14 @@ it('factory binding is deferred until lifetime selection', function () {
 });
 
 it('offers the same sugar directly on DefinitionManager', function () {
-    $c   = Container::instance(uniqid('mp_'));
+    $c = Container::instance(uniqid('mp_'));
     $def = $c->definitions();
 
     // (1) property assignment on the manager
-    $def->fooSvc = fn () => new stdClass();
+    $def->fooSvc = fn() => new stdClass();
 
     // (2) array assignment
-    $def['barSvc'] = fn () =>  'BAR';
+    $def['barSvc'] = fn() => 'BAR';
 
     // ------------- resolve through *container* -------------
     expect($c->fooSvc)
@@ -358,7 +376,7 @@ it('offers the same sugar directly on DefinitionManager', function () {
 
     // (3) fluent chain keeps working and ends back on Container
     $result = $def
-        ->bind('answer', fn () => 42)
+        ->bind('answer', fn() => 42)
         ->options()
         ->enableLazyLoading()
         ->end();
@@ -382,15 +400,15 @@ it('fails safely when a generated file directory does not exist', function () {
     $c = Container::instance(uniqid('missing_generated_directory_'));
     $directory = sys_get_temp_dir() . '/intermix-missing-' . uniqid();
 
-    expect(fn () => $c->compileTo($directory . '/compiled.php'))
+    expect(fn() => $c->compileTo($directory . '/compiled.php'))
         ->toThrow(RuntimeException::class)
-        ->and(fn () => (new PreloadGenerator())->generate($c, $directory . '/preload.php'))
+        ->and(fn() => (new PreloadGenerator())->generate($c, $directory . '/preload.php'))
         ->toThrow(RuntimeException::class);
 });
 
 it('isolates resolved instances per scope', function () {
     $c = Container::instance('intermix');
-    $c->definitions()->bind('obj', fn () => new stdClass(), lifetime: Infocyph\InterMix\DI\Support\LifetimeEnum::Scoped);
+    $c->definitions()->bind('obj', fn() => new stdClass(), lifetime: Infocyph\InterMix\DI\Support\LifetimeEnum::Scoped);
 
     $a = $c->get('obj');
     $c->getRepository()->setScope('child');
@@ -411,15 +429,15 @@ it('supports property / array / callable sugar on the container', function () {
     $c = Container::instance(uniqid('cs_'));
 
     // (1) property assignment → definition
-    $c->logger = fn () => new DummyLogger();
+    $c->logger = fn() => new DummyLogger();
 
     // (2) array assignment → definition
-    $c['cfg'] = fn () => ['debug' => true, 'dsn' => 'mysql://dummy'];
+    $c['cfg'] = fn() => ['debug' => true, 'dsn' => 'mysql://dummy'];
 
     // ---------- retrieval paths ----------
-    $viaCallObject   = $c('logger');   // __invoke
-    $viaMagicGet     = $c->logger;     // __get
-    $viaArrayGet     = $c['logger'];   // ArrayAccess
+    $viaCallObject = $c('logger');   // __invoke
+    $viaMagicGet = $c->logger;     // __get
+    $viaArrayGet = $c['logger'];   // ArrayAccess
 
     expect($viaCallObject)
         ->toBeInstanceOf(DummyLogger::class)
@@ -468,13 +486,14 @@ it('resolves findByTag() eagerly and tagged() lazily', function () {
 it('lets me wire and use services in one-liners', function () {
     $c = Container::instance(uniqid('e2e_'));
 
-    $c->logger = fn () => new DummyLogger();
-    $c['now'] = fn () => new DateTimeImmutable();
+    $c->logger = fn() => new DummyLogger();
+    $c['now'] = fn() => new DateTimeImmutable();
 
     // the manager can re-use them transparently
     $def = $c->definitions();
     $def->greeter = function () use ($c) {
         $c->logger->log('greeted');
+
         return 'Hello @ ' . $c->now->format('c');
     };
 
@@ -488,7 +507,7 @@ it('lets me wire and use services in one-liners', function () {
 it('applies environment-scoped lifetime/tag overrides', function () {
     $c = Container::instance(uniqid('env_meta_'));
 
-    $c->definitions()->bind('svc', fn () => new stdClass(), LifetimeEnum::Singleton, ['base']);
+    $c->definitions()->bind('svc', fn() => new stdClass(), LifetimeEnum::Singleton, ['base']);
     $c->options()
         ->setDefinitionMetaForEnv('test', 'svc', LifetimeEnum::Transient, ['env-only'])
         ->setEnvironment('test')
@@ -504,7 +523,7 @@ it('applies environment-scoped lifetime/tag overrides', function () {
 
 it('supports first-class scope lifecycle API', function () {
     $c = Container::instance(uniqid('scope_api_'));
-    $c->definitions()->bind('scoped_obj', fn () => new stdClass(), LifetimeEnum::Scoped);
+    $c->definitions()->bind('scoped_obj', fn() => new stdClass(), LifetimeEnum::Scoped);
 
     $first = $c->enterScope('req-1')->get('scoped_obj');
     $same = $c->get('scoped_obj');
@@ -518,10 +537,10 @@ it('supports first-class scope lifecycle API', function () {
 
 it('restores parent scope after nested withinScope', function () {
     $c = Container::instance(uniqid('nested_scope_'));
-    $c->definitions()->bind('scoped_obj', fn () => new stdClass(), LifetimeEnum::Scoped);
+    $c->definitions()->bind('scoped_obj', fn() => new stdClass(), LifetimeEnum::Scoped);
 
     $outerFirst = $c->enterScope('outer')->get('scoped_obj');
-    $inner = $c->withinScope('inner', fn (Container $scoped) => $scoped->get('scoped_obj'));
+    $inner = $c->withinScope('inner', fn(Container $scoped) => $scoped->get('scoped_obj'));
     $outerAgain = $c->get('scoped_obj');
 
     expect($inner)->not->toBe($outerFirst)
@@ -536,7 +555,7 @@ it('isolates singleton definition resolution cache per environment', function ()
         ->bindInterfaceForEnv('test', PaymentGateway::class, PaypalGateway::class)
         ->setEnvironment('prod')
         ->end();
-    $c->definitions()->bind('gateway', fn () => $c->make(PaymentGateway::class), LifetimeEnum::Singleton);
+    $c->definitions()->bind('gateway', fn() => $c->make(PaymentGateway::class), LifetimeEnum::Singleton);
 
     $prodA = $c->get('gateway');
     $prodB = $c->get('gateway');
@@ -561,8 +580,8 @@ it('exports a dependency graph from tracer instrumentation', function () {
     $c = Container::instance(uniqid('graph_'));
     $c->options()->enableDebugTracing(true, TraceLevelEnum::Verbose)->end();
 
-    $c->definitions()->bind('dep', fn () => new stdClass());
-    $c->definitions()->bind('root', fn () => $c->get('dep'));
+    $c->definitions()->bind('dep', fn() => new stdClass());
+    $c->definitions()->bind('root', fn() => $c->get('dep'));
 
     $c->get('root');
     $graph = $c->exportGraph(clear: true);
@@ -571,6 +590,7 @@ it('exports a dependency graph from tracer instrumentation', function () {
     foreach ($graph['edges'] as $edge) {
         if ($edge['from'] === 'root' && $edge['to'] === 'dep') {
             $hasEdge = true;
+
             break;
         }
     }
@@ -583,8 +603,8 @@ it('accumulates dependency edge counts and clears graph state', function () {
     $c = Container::instance(uniqid('graph_counts_'));
     $c->options()->enableDebugTracing(true, TraceLevelEnum::Verbose)->end();
 
-    $c->definitions()->bind('dep', fn () => new stdClass(), LifetimeEnum::Transient);
-    $c->definitions()->bind('root', fn () => $c->get('dep'), LifetimeEnum::Transient);
+    $c->definitions()->bind('dep', fn() => new stdClass(), LifetimeEnum::Transient);
+    $c->definitions()->bind('root', fn() => $c->get('dep'), LifetimeEnum::Transient);
 
     $c->get('root');
     $c->get('root');
@@ -594,6 +614,7 @@ it('accumulates dependency edge counts and clears graph state', function () {
     foreach ($graph['edges'] as $edge) {
         if ($edge['from'] === 'root' && $edge['to'] === 'dep') {
             $edgeCount = $edge['count'];
+
             break;
         }
     }
@@ -621,7 +642,7 @@ it('restores tracer configuration after debug inspection', function () {
 it('does not leak resolved-resource state when make() fails', function () {
     $c = Container::instance(uniqid('make_leak_'));
 
-    expect(fn () => $c->make(FailingMakeTarget::class, 'required'))
+    expect(fn() => $c->make(FailingMakeTarget::class, 'required'))
         ->toThrow(ContainerException::class);
 
     $resolved = $c->getRepository()->getResolvedResource();
@@ -636,7 +657,7 @@ it('allows class-string self binding and rejects scalar self aliases', function 
 
     expect($c->get(CompiledDep::class))->toBeInstanceOf(CompiledDep::class);
 
-    expect(fn () => $c->definitions()->bind('foo', 'foo'))
+    expect(fn() => $c->definitions()->bind('foo', 'foo'))
         ->toThrow(ContainerException::class);
 });
 
@@ -644,7 +665,7 @@ it('does not persist runtime objects to PSR-6 definition cache by default', func
     $pool = new SpyCachePool();
     $c = Container::instance(uniqid('cache_safe_'));
     $c->definitions()->enableDefinitionCache($pool);
-    $c->definitions()->bind('unsafe.obj', fn () => new stdClass());
+    $c->definitions()->bind('unsafe.obj', fn() => new stdClass());
     $c->definitions()->bind('safe.cfg', ['a' => 1, 'b' => ['c' => 2]]);
 
     $c->get('unsafe.obj');
@@ -657,19 +678,19 @@ it('does not persist runtime objects to PSR-6 definition cache by default', func
 it('validates callable parsing for malformed method strings', function () {
     $c = Container::instance(uniqid('callable_parse_'));
 
-    expect(fn () => $c->parseCallable('Foo@'))->toThrow(ContainerException::class);
-    expect(fn () => $c->parseCallable('@bar'))->toThrow(ContainerException::class);
-    expect(fn () => $c->parseCallable('Foo::'))->toThrow(ContainerException::class);
-    expect(fn () => $c->parseCallable('::bar'))->toThrow(ContainerException::class);
+    expect(fn() => $c->parseCallable('Foo@'))->toThrow(ContainerException::class);
+    expect(fn() => $c->parseCallable('@bar'))->toThrow(ContainerException::class);
+    expect(fn() => $c->parseCallable('Foo::'))->toThrow(ContainerException::class);
+    expect(fn() => $c->parseCallable('::bar'))->toThrow(ContainerException::class);
 });
 
 it('validates class and method existence in callable parsing', function () {
     $c = Container::instance(uniqid('callable_exists_'));
 
-    expect(fn () => $c->parseCallable('Missing\\CallableClass@handle'))
+    expect(fn() => $c->parseCallable('Missing\\CallableClass@handle'))
         ->toThrow(ContainerException::class, 'does not exist');
 
-    expect(fn () => $c->parseCallable(CompiledSvc::class . '::missingMethod'))
+    expect(fn() => $c->parseCallable(CompiledSvc::class . '::missingMethod'))
         ->toThrow(ContainerException::class, 'does not exist');
 });
 
@@ -695,7 +716,7 @@ it('runs lifecycle hooks for resolving and resolved services', function () {
     $c->onResolved('hook.svc', function (string $id) use (&$events): void {
         $events[] = "resolved:$id";
     });
-    $c->definitions()->bind('hook.svc', fn () => new stdClass(), LifetimeEnum::Transient);
+    $c->definitions()->bind('hook.svc', fn() => new stdClass(), LifetimeEnum::Transient);
 
     $c->get('hook.svc');
 
@@ -778,7 +799,7 @@ it('provides explicit container validation output', function () {
     $issues = $c->validate();
 
     expect($issues)->not()->toBeEmpty();
-    expect(fn () => $c->validate(strict: true))->toThrow(ContainerException::class);
+    expect(fn() => $c->validate(strict: true))->toThrow(ContainerException::class);
 });
 
 function newTracer(

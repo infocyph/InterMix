@@ -63,6 +63,17 @@ class PropertyResolver
         if (!is_object($instance)) {
             return;
         }
+
+        if (!$this->repository->isPropertyAttributeEnabled()) {
+            $classResource = $this->repository->getClassResourceFor($className);
+            if (!isset($classResource['property']) || !is_array($classResource['property'])) {
+                $allResolved['property'] = true;
+                $this->repository->setResolvedResource($className, $allResolved);
+
+                return;
+            }
+        }
+
         $plan = $this->getPropertyPlan($class);
 
         $this->processProperties($class, $plan['classProperties'], $instance);
@@ -445,6 +456,10 @@ class PropertyResolver
 
     private function tracePropertyResolution(ReflectionProperty $property, string $className): void
     {
+        if (!$this->repository->isTracingEnabled()) {
+            return;
+        }
+
         $this->repository->tracer()->push(
             "prop {$property->getName()} of $className",
             TraceLevelEnum::Verbose,

@@ -111,17 +111,19 @@ final class ReflectionResource
     public static function getClassReflection(string|object $class): ReflectionClass
     {
         $className = is_object($class) ? $class::class : $class;
+        if (isset(self::$reflectionCache['classes'][$className])) {
+            return self::$reflectionCache['classes'][$className];
+        }
+
         if (!class_exists($className) && !interface_exists($className)) {
             throw new ReflectionException("Class '$className' not found.");
         }
 
-        if (!isset(self::$reflectionCache['classes'][$className])) {
-            self::rememberCachedEntry(
-                self::$reflectionCache['classes'],
-                $className,
-                new ReflectionClass($className),
-            );
-        }
+        self::rememberCachedEntry(
+            self::$reflectionCache['classes'],
+            $className,
+            new ReflectionClass($className),
+        );
 
         return self::$reflectionCache['classes'][$className];
     }
@@ -133,24 +135,30 @@ final class ReflectionResource
      */
     public static function getEnumReflection(string $enumName): ReflectionEnum
     {
+        if (isset(self::$reflectionCache['enums'][$enumName])) {
+            return self::$reflectionCache['enums'][$enumName];
+        }
+
         if (!enum_exists($enumName)) {
             throw new ReflectionException("Enum '$enumName' not found.");
         }
 
-        if (!isset(self::$reflectionCache['enums'][$enumName])) {
-            self::rememberCachedEntry(
-                self::$reflectionCache['enums'],
-                $enumName,
-                new ReflectionEnum($enumName),
-            );
-        }
+        self::rememberCachedEntry(
+            self::$reflectionCache['enums'],
+            $enumName,
+            new ReflectionEnum($enumName),
+        );
 
         return self::$reflectionCache['enums'][$enumName];
     }
 
     public static function getFunctionReflection(string|Closure $function): ReflectionFunction
     {
-        $key = is_string($function) ? $function : spl_object_hash($function);
+        if ($function instanceof Closure) {
+            return new ReflectionFunction($function);
+        }
+
+        $key = $function;
         if (!isset(self::$reflectionCache['functions'][$key])) {
             self::rememberCachedEntry(
                 self::$reflectionCache['functions'],
@@ -243,15 +251,18 @@ final class ReflectionResource
         $cache[$key] = $value;
     }
 
-    /**
-     * @param callable(): ReflectionMethod $resolver
-     */
-    private static function rememberMethod(string $key, callable $resolver): ReflectionMethod
-    {
+    private static function rememberMethod(
+        string $key,
+        object|string $class,
+        string $method,
+    ): ReflectionMethod {
         if (!isset(self::$reflectionCache['methods'][$key])) {
             try {
-                $method = $resolver();
-                self::rememberCachedEntry(self::$reflectionCache['methods'], $key, $method);
+                self::rememberCachedEntry(
+                    self::$reflectionCache['methods'],
+                    $key,
+                    new ReflectionMethod($class, $method),
+                );
             } catch (Throwable $exception) {
                 throw new InvalidArgumentException($exception->getMessage(), 0, $exception);
             }
@@ -269,13 +280,16 @@ final class ReflectionResource
     {
         [$class, $method] = $callable;
         $className = is_object($class) ? $class::class : $class;
+        $key = "$className::$method";
+        if (isset(self::$reflectionCache['methods'][$key])) {
+            return self::$reflectionCache['methods'][$key];
+        }
+
         if (!method_exists($class, $method)) {
             throw new InvalidArgumentException("Method '$method' does not exist in class '$className'.");
         }
 
-        $key = "$className::$method";
-
-        return self::rememberMethod($key, static fn(): ReflectionMethod => new ReflectionMethod($class, $method));
+        return self::rememberMethod($key, $class, $method);
     }
 
     /**
@@ -283,14 +297,17 @@ final class ReflectionResource
      */
     private static function resolveObjectCallable(object $callable): ReflectionMethod
     {
+        $className = $callable::class;
+        $key = "$className::__invoke";
+        if (isset(self::$reflectionCache['methods'][$key])) {
+            return self::$reflectionCache['methods'][$key];
+        }
+
         if (!method_exists($callable, '__invoke')) {
             throw new InvalidArgumentException('Object does not have an __invoke method.');
         }
 
-        $className = $callable::class;
-        $key = "$className::__invoke";
-
-        return self::rememberMethod($key, static fn(): ReflectionMethod => new ReflectionMethod($callable, '__invoke'));
+        return self::rememberMethod($key, $callable, '__invoke');
     }
 
     /**
@@ -299,13 +316,16 @@ final class ReflectionResource
     private static function resolveStaticMethodCallable(string $callable): ReflectionMethod
     {
         [$className, $method] = explode('::', $callable, 2);
+        $key = "$className::$method";
+        if (isset(self::$reflectionCache['methods'][$key])) {
+            return self::$reflectionCache['methods'][$key];
+        }
+
         if (!method_exists($className, $method)) {
             throw new InvalidArgumentException("Method '$method' does not exist in class '$className'.");
         }
 
-        $key = "$className::$method";
-
-        return self::rememberMethod($key, static fn(): ReflectionMethod => new ReflectionMethod($className, $method));
+        return self::rememberMethod($key, $className, $method);
     }
 
     /**

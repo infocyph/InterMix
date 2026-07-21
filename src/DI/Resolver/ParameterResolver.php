@@ -91,10 +91,12 @@ class ParameterResolver
         array $suppliedParameters,
         string $type,
     ): array {
-        $this->repository->tracer()->push(
-            "{$reflector->getShortName()}() params",
-            TraceLevelEnum::Verbose,
-        );
+        if ($this->repository->isTracingEnabled()) {
+            $this->repository->tracer()->push(
+                "{$reflector->getShortName()}() params",
+                TraceLevelEnum::Verbose,
+            );
+        }
 
         $plan = $this->getResolutionPlan($reflector, $type);
         $availableParams = $plan['availableParams'];
@@ -226,11 +228,9 @@ class ParameterResolver
 
     private function applyEnvOverride(string $fqcn): string
     {
-        if (interface_exists($fqcn)) {
-            $concrete = $this->repository->getEnvConcrete($fqcn);
-            if ($concrete && class_exists($concrete)) {
-                return $concrete;
-            }
+        $concrete = $this->repository->getEnvConcrete($fqcn);
+        if ($concrete !== null && class_exists($concrete)) {
+            return $concrete;
         }
 
         return $fqcn;
@@ -375,19 +375,15 @@ class ParameterResolver
     private function makeParameterAttributePlanKey(ReflectionParameter $parameter): string
     {
         $function = $parameter->getDeclaringFunction();
-        $owner = $this->ownerFor($function);
-        $signature = ReflectionResource::getSignature($function);
 
-        return $owner . '::' . $function->getName() . '|p:' . $parameter->getPosition() . '|sig:' . $signature;
+        return $this->reflectorCacheKey($function) . '|p:' . $parameter->getPosition();
     }
 
     private function makeResolutionPlanKey(ReflectionFunctionAbstract $reflector, string $type): string
     {
-        $owner = $this->ownerFor($reflector);
-        $signature = ReflectionResource::getSignature($reflector);
         $methodAttrEnabled = $this->repository->isMethodAttributeEnabled() ? '1' : '0';
 
-        return $owner . '::' . $reflector->getName() . "|$type|ma:$methodAttrEnabled|sig:$signature";
+        return $this->reflectorCacheKey($reflector) . "|$type|ma:$methodAttrEnabled";
     }
 
     /**
@@ -433,16 +429,27 @@ class ParameterResolver
             }
             $name = $namedType->getName();
 
-            if ($this->repository->hasFunctionReference($name)) {
-                return $name;
-            }
-
             if (class_exists($name) || interface_exists($name)) {
                 return $name;
             }
         }
 
         return null;
+    }
+
+    private function reflectorCacheKey(ReflectionFunctionAbstract $reflector): string
+    {
+        if ($reflector instanceof ReflectionMethod) {
+            return $reflector->getDeclaringClass()->getName() . '::' . $reflector->getName();
+        }
+
+        if ($reflector->getName() !== '{closure}') {
+            return $reflector->getName();
+        }
+
+        return ($reflector->getFileName() ?: 'unknown')
+            . ':' . ($reflector->getStartLine() ?: 0)
+            . ':' . ($reflector->getEndLine() ?: 0);
     }
 
     /**

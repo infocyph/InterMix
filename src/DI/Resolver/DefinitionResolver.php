@@ -52,13 +52,15 @@ class DefinitionResolver
         }
 
         $parent = end($this->definitionStack);
-        if (is_string($parent) && $parent !== $name) {
+        if (is_string($parent) && $parent !== $name && $this->repository->isTracingEnabled()) {
             $this->repository->tracer()->recordDependency($parent, $name, 'definition');
         }
 
         $this->entriesResolving[$name] = true;
         $this->definitionStack[] = $name;
-        $this->repository->tracer()->push("def:$name");
+        if ($this->repository->isTracingEnabled()) {
+            $this->repository->tracer()->push("def:$name");
+        }
 
         try {
             return $this->getFromCacheOrResolve($name);
@@ -103,7 +105,7 @@ class DefinitionResolver
      */
     private function getFromCacheOrResolve(string $name): mixed
     {
-        $lifetime = $this->repository->getDefinitionMeta($name)['lifetime'];
+        $lifetime = $this->repository->getDefinitionLifetime($name);
         $environment = $this->repository->getEnvironment() ?? 'default';
         $resolvedKey = $name . '@env:' . $environment;
 
@@ -146,6 +148,7 @@ class DefinitionResolver
             ReflectionResource::getClassReflection($class),
             null,
             $method,
+            true,
         );
 
         return $method !== null ? $resolved['returned'] : $resolved['instance'];
@@ -182,14 +185,18 @@ class DefinitionResolver
                 return $definition(...$args);
 
             case is_array($definition) && isset($definition[0]) && is_string($definition[0]) && class_exists($definition[0]):
-                $this->repository->tracer()->recordDependency($name, $definition[0], 'definition-class');
+                if ($this->repository->isTracingEnabled()) {
+                    $this->repository->tracer()->recordDependency($name, $definition[0], 'definition-class');
+                }
 
                 return $this->resolveArrayDefinition(array_values($definition));
 
             case is_string($definition) && class_exists($definition):
-                $this->repository->tracer()->recordDependency($name, $definition, 'definition-class');
+                if ($this->repository->isTracingEnabled()) {
+                    $this->repository->tracer()->recordDependency($name, $definition, 'definition-class');
+                }
                 $refClass = ReflectionResource::getClassReflection($definition);
-                $res = $this->classResolver->resolve($refClass);
+                $res = $this->classResolver->resolve($refClass, make: true);
 
                 return $res['instance'];
 

@@ -43,16 +43,18 @@ final class Container implements ContainerInterface, ArrayAccess
 
     public const string DIRECT_ALIAS = 'intermix.direct';
 
+    private const int CALLABLE_DESCRIPTOR_CACHE_LIMIT = 512;
+
     /** @var array<string, self> */
     protected static array $instances = [];
 
-    protected DefinitionManager $definitionManager;
+    protected ?DefinitionManager $definitionManager = null;
 
     protected InvocationManager $invocationManager;
 
-    protected OptionsManager $optionsManager;
+    protected ?OptionsManager $optionsManager = null;
 
-    protected RegistrationManager $registrationManager;
+    protected ?RegistrationManager $registrationManager = null;
 
     protected Repository $repository;
 
@@ -75,9 +77,6 @@ final class Container implements ContainerInterface, ArrayAccess
             $this,
         );
         $this->resolver = fn() => new InjectedCall($this->repository);
-        $this->definitionManager = new DefinitionManager($this->repository, $this);
-        $this->registrationManager = new RegistrationManager($this->repository, $this);
-        $this->optionsManager = new OptionsManager($this->repository, $this);
         $this->invocationManager = new InvocationManager($this->repository, $this);
     }
 
@@ -206,7 +205,7 @@ final class Container implements ContainerInterface, ArrayAccess
      */
     public function definitions(): DefinitionManager
     {
-        return $this->definitionManager;
+        return $this->definitionManager ??= new DefinitionManager($this->repository, $this);
     }
 
     /**
@@ -513,7 +512,7 @@ final class Container implements ContainerInterface, ArrayAccess
      */
     public function options(): OptionsManager
     {
-        return $this->optionsManager;
+        return $this->optionsManager ??= new OptionsManager($this->repository, $this);
     }
 
     /**
@@ -545,47 +544,32 @@ final class Container implements ContainerInterface, ArrayAccess
             throw new InvalidArgumentException('No argument provided!');
         }
 
-        return match (true) {
-            $spec instanceof Closure
-            => ['kind' => 'closure', 'closure' => $spec],
+        /** @var array<string, array{kind:'class',class:string}|array{kind:'method',class:string,method:string}|array{kind:'function',function:string}> $descriptorCache */
+        static $descriptorCache = [];
 
-            is_array($spec) && count($spec) === 2 && is_string($spec[0]) && is_string($spec[1])
-            => $this->parseArrayMethodCallable($spec),
-
-            is_string($spec) => match (true) {
-                str_contains($spec, '@')
-                => $this->parseClassMethodString($spec, '@'),
-
-                str_contains($spec, '::')
-                => $this->parseClassMethodString($spec, '::'),
-
-                class_exists($spec)
-                => ['kind' => 'class', 'class' => $spec],
-
-                function_exists($spec)
-                => ['kind' => 'function', 'function' => $spec],
-
-                default
-                => throw new ContainerException(
-                    sprintf(
-                        "Unknown callable string '%s'. Expected 'class@method', 'class::method', class, or function.",
-                        $spec,
-                    ),
-                ),
-            },
-
-            // objects with __invoke, static callables, etc.
-            is_callable($spec)
-            => ['kind' => 'closure', 'closure' => $spec],
-
-            default
-            => throw new ContainerException(
-                sprintf(
-                    "Unknown callable spec for '%s'. Expected closure/callable, 'class@method', 'class::method', [class,method], class, or function.",
-                    gettype($spec),
-                ),
-            ),
+        $cacheKey = match (true) {
+            is_string($spec) => "s\0$spec",
+            is_array($spec)
+                && count($spec) === 2
+                && isset($spec[0], $spec[1])
+                && is_string($spec[0])
+                && is_string($spec[1]) => "m\0{$spec[0]}\0{$spec[1]}",
+            default => null,
         };
+        if ($cacheKey !== null && isset($descriptorCache[$cacheKey])) {
+            return $descriptorCache[$cacheKey];
+        }
+
+        $descriptor = $this->parseCallableDescriptor($spec);
+
+        if ($cacheKey !== null && $descriptor['kind'] !== 'closure') {
+            if (count($descriptorCache) >= self::CALLABLE_DESCRIPTOR_CACHE_LIMIT) {
+                unset($descriptorCache[array_key_first($descriptorCache)]);
+            }
+            $descriptorCache[$cacheKey] = $descriptor;
+        }
+
+        return $descriptor;
     }
 
     public function pipeline(string $tag): TaggedPipeline
@@ -603,7 +587,7 @@ final class Container implements ContainerInterface, ArrayAccess
      */
     public function registration(): RegistrationManager
     {
-        return $this->registrationManager;
+        return $this->registrationManager ??= new RegistrationManager($this->repository, $this);
     }
 
     /**
@@ -842,6 +826,59 @@ final class Container implements ContainerInterface, ArrayAccess
         }
 
         return $this->parseClassMethodParts($class, $method, '[class, method]');
+    }
+
+    /**
+     * @param string|array<array-key, mixed>|Closure|callable $spec
+     * @return array{kind:'closure',closure:callable}
+     *                                                |array{kind:'class',class:string}
+     *                                                |array{kind:'method',class:string,method:string}
+     *                                                |array{kind:'function',function:string}
+     * @throws ContainerException
+     */
+    private function parseCallableDescriptor(string|array|Closure|callable $spec): array
+    {
+        return match (true) {
+            $spec instanceof Closure
+            => ['kind' => 'closure', 'closure' => $spec],
+
+            is_array($spec) && count($spec) === 2 && is_string($spec[0]) && is_string($spec[1])
+            => $this->parseArrayMethodCallable($spec),
+
+            is_string($spec) => match (true) {
+                str_contains($spec, '@')
+                => $this->parseClassMethodString($spec, '@'),
+
+                str_contains($spec, '::')
+                => $this->parseClassMethodString($spec, '::'),
+
+                class_exists($spec)
+                => ['kind' => 'class', 'class' => $spec],
+
+                function_exists($spec)
+                => ['kind' => 'function', 'function' => $spec],
+
+                default
+                => throw new ContainerException(
+                    sprintf(
+                        "Unknown callable string '%s'. Expected 'class@method', 'class::method', class, or function.",
+                        $spec,
+                    ),
+                ),
+            },
+
+            // objects with __invoke, static callables, etc.
+            is_callable($spec)
+            => ['kind' => 'closure', 'closure' => $spec],
+
+            default
+            => throw new ContainerException(
+                sprintf(
+                    "Unknown callable spec for '%s'. Expected closure/callable, 'class@method', 'class::method', [class,method], class, or function.",
+                    gettype($spec),
+                ),
+            ),
+        };
     }
 
     /**
