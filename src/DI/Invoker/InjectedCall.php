@@ -49,17 +49,12 @@ final class InjectedCall
         ?string $method = null,
         bool $make = false,
     ): array {
-        $resolved = $this->classResolver->resolve(
+        return $this->classResolver->resolve(
             ReflectionResource::getClassReflection($class),
             null,
             $method,
             $make,
         );
-
-        return [
-            'instance' => $resolved['instance'] ?? null,
-            'returned' => $resolved['returned'] ?? null,
-        ];
     }
 
     /**

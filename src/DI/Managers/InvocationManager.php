@@ -64,12 +64,12 @@ class InvocationManager implements ArrayAccess
      */
     public function call(string|Closure|callable $classOrClosure, string|bool|null $method = null): mixed
     {
-        $resolver = $this->container->getCurrentResolver();
-
         // 1) If string & in functionReference
         if (is_string($classOrClosure) && $this->repository->hasFunctionReference($classOrClosure)) {
             return $this->get($classOrClosure);
         }
+
+        $resolver = $this->container->getCurrentResolver();
 
         // 2) If a closure/callable
         if ($classOrClosure instanceof Closure || is_callable($classOrClosure)) {
@@ -120,40 +120,33 @@ class InvocationManager implements ArrayAccess
      */
     public function get(string $id): mixed
     {
-        $lifetime = null;
-        $resolved = $this->repository->getResolvedEntry($id);
-        if ($resolved !== null || $this->repository->hasResolved($id)) {
-            $lifetime = $this->repository->getDefinitionLifetime($id);
-        }
-
-        if ($lifetime === LifetimeEnum::Singleton) {
+        $resolved = $this->repository->getResolvedSingletonEntry($id);
+        if ($resolved !== null || $this->repository->hasResolvedSingleton($id)) {
             if ($resolved instanceof DeferredInitializer) {
                 $resolved = $resolved();
                 $this->repository->setResolved($id, $resolved);
             }
 
-            return $this->repository->fetchInstanceOrValue($resolved);
+            return $resolved;
         }
 
         if ($this->repository->isTracingEnabled()) {
             $this->repository->tracer()->push("return:$id", TraceLevelEnum::Verbose);
         }
 
-        $lifetime ??= $this->repository->getDefinitionLifetime($id);
+        $lifetime = $this->repository->getDefinitionLifetime($id);
         if ($lifetime === LifetimeEnum::Singleton) {
-            return $this->resolveAndCache($id, $id, true, false);
+            return $this->resolveAndCache($id, $id, true, null);
         }
 
-        $scopeKey = $this->scopeKeyFor($id, $lifetime);
-        $isScoped = $lifetime === LifetimeEnum::Scoped;
-        $cacheable = $lifetime !== LifetimeEnum::Transient;
-
-        [$hasCached, $cached] = $this->resolveCachedEntry($scopeKey, $cacheable, $isScoped);
-        if ($hasCached) {
-            return $cached;
+        if ($lifetime === LifetimeEnum::Transient) {
+            return $this->resolveAndCache($id, $id, false, null);
         }
 
-        return $this->resolveAndCache($id, $scopeKey, $cacheable, $isScoped);
+        $scope = $this->repository->getScope();
+        $scopeKey = $id . '@' . $scope;
+
+        return $this->resolveScoped($id, $scopeKey, $scope);
     }
 
     /**
@@ -258,18 +251,13 @@ class InvocationManager implements ArrayAccess
     protected function resolveDefinition(string $id): mixed
     {
         $resolver = $this->container->getCurrentResolver();
-        $definition = $this->repository->getFunctionDefinition($id);
-
-        if ($this->repository->isLazyLoading() && !($definition instanceof Closure)) {
-            return new DeferredInitializer(fn() => $resolver->resolveByDefinition($id), $this->container);
-        }
 
         $value = $resolver->resolveByDefinition($id);
 
         return $this->repository->fetchInstanceOrValue($value);
     }
 
-    private function resolveAndCache(string $id, string $scopeKey, bool $cacheable, bool $isScoped): mixed
+    private function resolveAndCache(string $id, string $scopeKey, bool $cacheable, ?string $scope): mixed
     {
         $this->repository->dispatchResolvingHooks($id);
 
@@ -278,7 +266,7 @@ class InvocationManager implements ArrayAccess
             $resolved = $resolved instanceof DeferredInitializer ? $resolved() : $resolved;
 
             if ($cacheable) {
-                $this->storeResolvedByLifetime($scopeKey, $resolved, $isScoped);
+                $this->storeResolvedByLifetime($scopeKey, $resolved, $scope);
             }
 
             $this->repository->dispatchResolvedHooks($id, $resolved);
@@ -288,7 +276,7 @@ class InvocationManager implements ArrayAccess
 
         $resolved = $this->call($id);
         if ($cacheable) {
-            $this->storeResolvedByLifetime($scopeKey, $resolved, $isScoped);
+            $this->storeResolvedByLifetime($scopeKey, $resolved, $scope);
         }
 
         $this->repository->dispatchResolvedHooks($id, $resolved);
@@ -296,26 +284,19 @@ class InvocationManager implements ArrayAccess
         return $this->repository->fetchInstanceOrValue($resolved);
     }
 
-    /**
-     * @return array{0:bool,1:mixed}
-     */
-    private function resolveCachedEntry(string $scopeKey, bool $cacheable, bool $isScoped): array
+    private function resolveScoped(string $id, string $scopeKey, string $scope): mixed
     {
-        if (!$cacheable) {
-            return [false, null];
+        $cached = $this->repository->getResolvedEntry($scopeKey);
+        if ($cached === null && !$this->repository->hasResolved($scopeKey)) {
+            return $this->resolveAndCache($id, $scopeKey, true, $scope);
         }
 
-        $resolved = $this->repository->getResolvedEntry($scopeKey);
-        if ($resolved === null && !$this->repository->hasResolved($scopeKey)) {
-            return [false, null];
+        if ($cached instanceof DeferredInitializer) {
+            $cached = $cached();
+            $this->storeResolvedByLifetime($scopeKey, $cached, $scope);
         }
 
-        if ($resolved instanceof DeferredInitializer) {
-            $resolved = $resolved();
-            $this->storeResolvedByLifetime($scopeKey, $resolved, $isScoped);
-        }
-
-        return [true, $this->repository->fetchInstanceOrValue($resolved)];
+        return $this->repository->fetchInstanceOrValue($cached);
     }
 
     private function scopeKeyFor(string $id, LifetimeEnum $lifetime): string
@@ -325,10 +306,9 @@ class InvocationManager implements ArrayAccess
             : $id;
     }
 
-    private function storeResolvedByLifetime(string $scopeKey, mixed $resolved, bool $isScoped): void
+    private function storeResolvedByLifetime(string $scopeKey, mixed $resolved, ?string $scope): void
     {
-        if ($isScoped) {
-            $scope = substr($scopeKey, strrpos($scopeKey, '@') + 1);
+        if ($scope !== null) {
             $this->repository->setResolvedScoped($scope, $scopeKey, $resolved);
 
             return;

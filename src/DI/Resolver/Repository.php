@@ -23,11 +23,9 @@ use Psr\Cache\CacheItemPoolInterface;
  */
 class Repository
 {
-    private readonly AttributeRegistry $attributeRegistry;
-
-    private readonly DebugTracer $tracer;
-
     private string $alias = 'default';
+
+    private ?AttributeRegistry $attributeRegistry = null;
 
     private ?DefinitionCachePoolInterface $cacheAdapter = null;
 
@@ -39,7 +37,7 @@ class Repository
     /** @var array<string, array{on: callable, params: array<int|string, mixed>}> */
     private array $closureResource = [];
 
-    /** @var array<string, array<string, mixed>> */
+    /** @var array<string, callable(Container): mixed> */
     private array $compiledResolvers = [];
 
     /** @var array<string, array<string, string>> */
@@ -94,6 +92,9 @@ class Repository
     /** @var array<string, array<string, mixed>> */
     private array $resolvedResource = [];
 
+    /** @var array<string, mixed> */
+    private array $resolvedSingleton = [];
+
     /** @var array<int, string> */
     private array $scopeStack = [];
 
@@ -106,6 +107,8 @@ class Repository
     /** @var array<string, array<string, bool>> */
     private array $tagOverrideIdsByEnv = [];
 
+    private ?DebugTracer $tracer = null;
+
     /**
      * Constructs a Repository instance.
      *
@@ -113,11 +116,7 @@ class Repository
      * and interactions within the container. This aids in debugging and
      * tracing the service resolution process.
      */
-    public function __construct(private readonly Container $container)
-    {
-        $this->tracer = new DebugTracer();
-        $this->attributeRegistry = new AttributeRegistry($container);
-    }
+    public function __construct(private readonly Container $container) {}
 
     /**
      * Stores a class resource, with a key that can be 'constructor', 'method', 'property'.
@@ -171,7 +170,7 @@ class Repository
      */
     public function attributeRegistry(): AttributeRegistry
     {
-        return $this->attributeRegistry;
+        return $this->attributeRegistry ??= new AttributeRegistry($this->container);
     }
 
     /**
@@ -293,10 +292,11 @@ class Repository
      */
     public function fetchInstanceOrValue(mixed $value): mixed
     {
-        return match (true) {
-            is_array($value) && isset($value['instance']) => $value['instance'],
-            default => $value,
-        };
+        if (is_array($value) && isset($value['instance'])) {
+            return $value['instance'];
+        }
+
+        return $value;
     }
 
     /**
@@ -386,7 +386,7 @@ class Repository
 
     public function getCompiledResolver(string $id): mixed
     {
-        return $this->compiledResolvers[$id]['factory'] ?? null;
+        return $this->compiledResolvers[$id] ?? null;
     }
 
     public function getContextualBinding(string $consumer, string $dependency): mixed
@@ -593,6 +593,12 @@ class Repository
         return $this->resolvedResource[$class] ?? [];
     }
 
+    /** @internal */
+    public function getResolvedSingletonEntry(string $key): mixed
+    {
+        return $this->resolvedSingleton[$key] ?? null;
+    }
+
     /**
      * Gets the current scope of the container.
      *
@@ -635,6 +641,18 @@ class Repository
         return array_key_exists($key, $this->resolvedDefinition);
     }
 
+    /** @internal */
+    public function hasResolvedResource(string $class): bool
+    {
+        return array_key_exists($class, $this->resolvedResource);
+    }
+
+    /** @internal */
+    public function hasResolvedSingleton(string $key): bool
+    {
+        return array_key_exists($key, $this->resolvedSingleton);
+    }
+
     /**
      * Checks if lazy loading is enabled for the repository.
      *
@@ -675,7 +693,7 @@ class Repository
 
     public function isTracingEnabled(): bool
     {
-        return $this->tracer->isEnabled();
+        return $this->tracer?->isEnabled() ?? false;
     }
 
     public function leaveScope(): void
@@ -804,7 +822,7 @@ class Repository
             if (!is_string($id) || !is_callable($resolver)) {
                 continue;
             }
-            $normalized[$id] = ['factory' => $resolver];
+            $normalized[$id] = $resolver;
         }
         $this->compiledResolvers = $normalized;
     }
@@ -851,6 +869,7 @@ class Repository
         $oldTags = $this->definitionMeta[$id]['tags'] ?? [];
 
         $this->definitionMeta[$id] = $normalized;
+        $this->refreshResolvedSingletonIndex($id);
         $this->refreshBaseTagIndex($id, $oldTags, $normalizedTags);
     }
 
@@ -890,6 +909,9 @@ class Repository
         }
 
         $this->definitionMetaByEnv[$env][$id] = $normalized + $existing;
+        if ($this->environment === $env && array_key_exists('lifetime', $normalized)) {
+            $this->refreshResolvedSingletonIndex($id);
+        }
         if (array_key_exists('tags', $normalized)) {
             $oldTags = $existing['tags'] ?? [];
             $this->refreshEnvTagIndex($env, $id, $oldTags, $normalized['tags']);
@@ -917,6 +939,7 @@ class Repository
 
         $this->environment = $env;
         $this->resolved = [];
+        $this->resolvedSingleton = [];
         $this->resolvedDefinition = [];
         $this->resolvedResource = [];
         $this->resolvedKeysByScope = [];
@@ -957,6 +980,13 @@ class Repository
     {
         // no lock check needed typically, but you can do it if you want
         $this->resolved[$id] = $value;
+        if ($this->getDefinitionLifetime($id) === LifetimeEnum::Singleton) {
+            $this->resolvedSingleton[$id] = $this->fetchInstanceOrValue($value);
+
+            return;
+        }
+
+        unset($this->resolvedSingleton[$id]);
     }
 
     /**
@@ -1032,7 +1062,7 @@ class Repository
      */
     public function tracer(): DebugTracer
     {
-        return $this->tracer;
+        return $this->tracer ??= new DebugTracer();
     }
 
     public function unsetResolvedResource(string $className): void
@@ -1120,5 +1150,18 @@ class Repository
         foreach ($newTags as $tag) {
             $this->tagIndexByEnv[$env][$tag][$id] = true;
         }
+    }
+
+    private function refreshResolvedSingletonIndex(string $id): void
+    {
+        if ($this->getDefinitionLifetime($id) === LifetimeEnum::Singleton
+            && array_key_exists($id, $this->resolved)
+        ) {
+            $this->resolvedSingleton[$id] = $this->fetchInstanceOrValue($this->resolved[$id]);
+
+            return;
+        }
+
+        unset($this->resolvedSingleton[$id]);
     }
 }

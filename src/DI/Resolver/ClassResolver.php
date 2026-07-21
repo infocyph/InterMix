@@ -75,12 +75,14 @@ class ClassResolver
         $class = $this->getConcreteClassForInterface($class, $supplied);
         $className = $class->getName();
         $parent = end($this->classStack);
-        if (is_string($parent) && $parent !== $className) {
+        if (is_string($parent) && $parent !== $className && $this->repository->isTracingEnabled()) {
             $this->repository->tracer()->recordDependency($parent, $className, 'class');
         }
 
         $this->classStack[] = $className;
-        $this->repository->tracer()->push("class:$className");
+        if ($this->repository->isTracingEnabled()) {
+            $this->repository->tracer()->push("class:$className");
+        }
 
         try {
             return $make
@@ -195,19 +197,6 @@ class ClassResolver
         return $reflect;
     }
 
-    /**
-     * @return array<string, mixed>
-     */
-    private function initializeMethodResolutionState(string $className): array
-    {
-        $resolvedResource = $this->normalizeResolvedResource(
-            $this->repository->getResolvedResourceFor($className),
-        );
-        $resolvedResource['returned'] = null;
-
-        return $resolvedResource;
-    }
-
     private function invokeResolvedMethod(string $className, string $method, object $instance): mixed
     {
         /** @var ReflectionMethod $refMethod */
@@ -215,22 +204,6 @@ class ClassResolver
         $args = $this->resolveMethodArguments($className, $refMethod);
 
         return $refMethod->invokeArgs($instance, $args);
-    }
-
-    /**
-     * @param array<mixed> $resource
-     * @return array<string, mixed>
-     */
-    private function normalizeResolvedResource(array $resource): array
-    {
-        $normalized = [];
-        foreach ($resource as $key => $value) {
-            if (is_string($key)) {
-                $normalized[$key] = $value;
-            }
-        }
-
-        return $normalized;
     }
 
     private function readConfiguredMethod(string $className): ?string
@@ -313,12 +286,31 @@ class ClassResolver
             }
             $this->resolveMethod($class, $callMethod);
 
-            return $this->normalizeResolvedResource(
-                $this->repository->getResolvedResourceFor($className),
-            );
+            return $this->repository->getResolvedResourceFor($className);
         } finally {
             unset($this->entriesResolving[$className]);
         }
+    }
+
+    /**
+     * @param ReflectionClass<object> $class
+     */
+    private function resolveConfiguredTargetMethod(
+        ReflectionClass $class,
+        string $className,
+        string|bool|null $callMethod,
+    ): ?string {
+        $callOn = $class->hasConstant('callOn') ? $class->getConstant('callOn') : null;
+        $configuredMethod = $this->readConfiguredMethod($className);
+        $method = $callMethod
+            ?: $configuredMethod
+                ?: ($callOn ?: $this->repository->getDefaultMethod());
+
+        if (!$method && $class->hasMethod('__invoke')) {
+            $method = '__invoke';
+        }
+
+        return is_string($method) && $class->hasMethod($method) ? $method : null;
     }
 
     /**
@@ -390,7 +382,7 @@ class ClassResolver
             return null;
         }
 
-        $reflectionFn = new \ReflectionFunction($type);
+        $reflectionFn = ReflectionResource::getFunctionReflection($type);
         $args = $this->parameterResolver->resolve($reflectionFn, $data, 'constructor');
 
         return $type(...$args);
@@ -420,9 +412,10 @@ class ClassResolver
         string $className,
         string|bool|null $callMethod,
     ): array {
-        $allExisting = $this->repository->getResolvedResource();
-        $hadExisting = array_key_exists($className, $allExisting);
-        $existing = $allExisting[$className] ?? [];
+        $hadExisting = $this->repository->hasResolvedResource($className);
+        $existing = $hadExisting
+            ? $this->repository->getResolvedResourceFor($className)
+            : [];
 
         try {
             // build fresh
@@ -430,9 +423,7 @@ class ClassResolver
             $this->propertyResolver->resolve($class);
             $this->resolveMethod($class, $callMethod);
 
-            return $this->normalizeResolvedResource(
-                $this->repository->getResolvedResourceFor($className),
-            );
+            return $this->repository->getResolvedResourceFor($className);
         } finally {
             if ($hadExisting) {
                 $this->repository->setResolvedResource($className, $existing);
@@ -467,7 +458,8 @@ class ClassResolver
         string|bool|null $callMethod,
     ): void {
         $className = $class->getName();
-        $resolvedResource = $this->initializeMethodResolutionState($className);
+        $resolvedResource = $this->repository->getResolvedResourceFor($className);
+        $resolvedResource['returned'] = null;
         if ($callMethod === false) {
             $this->repository->setResolvedResource($className, $resolvedResource);
 
@@ -507,16 +499,10 @@ class ClassResolver
         string $className,
         string|bool|null $callMethod,
     ): ?string {
-        $callOn = $class->hasConstant('callOn') ? $class->getConstant('callOn') : null;
-        $configuredMethod = $this->readConfiguredMethod($className);
-        $method = $callMethod
-            ?: $configuredMethod
-                ?: ($callOn ?: $this->repository->getDefaultMethod());
-
-        if (!$method && $class->hasMethod('__invoke')) {
-            $method = '__invoke';
+        if (is_string($callMethod) && $callMethod !== '') {
+            return $class->hasMethod($callMethod) ? $callMethod : null;
         }
 
-        return is_string($method) && $class->hasMethod($method) ? $method : null;
+        return $this->resolveConfiguredTargetMethod($class, $className, $callMethod);
     }
 }

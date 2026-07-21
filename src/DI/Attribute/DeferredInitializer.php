@@ -32,7 +32,9 @@ final class DeferredInitializer
         if ($this->done) {
             return $this->value;
         }
-        $this->container->tracer()->push('lazy-init', TraceLevelEnum::Verbose);
+        if ($this->container->getRepository()->isTracingEnabled()) {
+            $this->container->tracer()->push('lazy-init', TraceLevelEnum::Verbose);
+        }
         $this->value = ($this->factory)();
         $this->done = true;
 
