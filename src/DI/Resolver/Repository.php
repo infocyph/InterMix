@@ -95,6 +95,9 @@ class Repository
     /** @var array<string, mixed> */
     private array $resolvedSingleton = [];
 
+    /** @var array<string, array<string, mixed>> */
+    private array $scopeSeeds = [];
+
     /** @var array<int, string> */
     private array $scopeStack = [];
 
@@ -108,6 +111,8 @@ class Repository
     private array $tagOverrideIdsByEnv = [];
 
     private ?DebugTracer $tracer = null;
+
+    private bool $tracingEnabled = false;
 
     /**
      * Constructs a Repository instance.
@@ -273,12 +278,16 @@ class Repository
     /**
      * Enter a named logical scope.
      *
+     * @param array<string, mixed> $instances
      * @throws ContainerException
      */
-    public function enterScope(string $scope): void
+    public function enterScope(string $scope, array $instances = []): void
     {
         $this->scopeStack[] = $this->currentScope;
         $this->currentScope = $scope;
+        if ($instances !== []) {
+            $this->scopeSeeds[$scope] = $instances;
+        }
     }
 
     /**
@@ -297,6 +306,28 @@ class Repository
         }
 
         return $value;
+    }
+
+    /**
+     * Read an instance seeded into the active scope without consulting global
+     * definitions or lifetime metadata.
+     *
+     * @internal
+     */
+    public function findScopeSeed(string $id, mixed &$value): bool
+    {
+        if ($this->scopeSeeds === []) {
+            return false;
+        }
+
+        $seeds = $this->scopeSeeds[$this->currentScope] ?? null;
+        if (!is_array($seeds) || !array_key_exists($id, $seeds)) {
+            return false;
+        }
+
+        $value = $seeds[$id];
+
+        return true;
     }
 
     /**
@@ -653,6 +684,12 @@ class Repository
         return array_key_exists($key, $this->resolvedSingleton);
     }
 
+    /** @internal */
+    public function hasScopeSeeds(): bool
+    {
+        return $this->scopeSeeds !== [];
+    }
+
     /**
      * Checks if lazy loading is enabled for the repository.
      *
@@ -693,18 +730,20 @@ class Repository
 
     public function isTracingEnabled(): bool
     {
-        return $this->tracer?->isEnabled() ?? false;
+        return $this->tracingEnabled;
     }
 
     public function leaveScope(): void
     {
+        $scope = $this->currentScope;
         if ($this->hasHooks) {
-            foreach ($this->onScopeLeaveHooks[$this->currentScope] ?? [] as $hook) {
-                $hook($this->currentScope, $this->container);
+            foreach ($this->onScopeLeaveHooks[$scope] ?? [] as $hook) {
+                $hook($scope, $this->container);
             }
         }
 
-        $this->clearScopeResolvedEntries($this->currentScope);
+        $this->clearScopeResolvedEntries($scope);
+        unset($this->scopeSeeds[$scope]);
         $previous = array_pop($this->scopeStack);
         $this->currentScope = is_string($previous) ? $previous : 'root';
     }
@@ -767,6 +806,7 @@ class Repository
         $this->scopeStack = [];
         $this->currentScope = 'root';
         $this->resolvedKeysByScope = [];
+        $this->scopeSeeds = [];
     }
 
     /**
@@ -944,6 +984,7 @@ class Repository
         $this->resolvedResource = [];
         $this->resolvedKeysByScope = [];
         $this->scopeStack = [];
+        $this->scopeSeeds = [];
         $this->currentScope = 'root';
     }
 
@@ -1062,7 +1103,11 @@ class Repository
      */
     public function tracer(): DebugTracer
     {
-        return $this->tracer ??= new DebugTracer();
+        return $this->tracer ??= new DebugTracer(
+            stateListener: function (bool $enabled): void {
+                $this->tracingEnabled = $enabled;
+            },
+        );
     }
 
     public function unsetResolvedResource(string $className): void

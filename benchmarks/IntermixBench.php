@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\Benchmarks;
 
+use Closure;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Invoker;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
@@ -20,16 +21,18 @@ final class IntermixBench
 {
     private Container $container;
 
+    private Closure $diHandler;
+
     private Invoker $invoker;
 
     private int $scopeCounter = 0;
 
+    private Closure $zeroArgumentHandler;
+
     #[BeforeMethods('setUpContainer')]
     public function benchClosureCallWithDi(): void
     {
-        $this->container->call(
-            static fn(BenchService $service): int => $service->handle(1),
-        );
+        $this->container->call($this->diHandler);
     }
 
     #[BeforeMethods('setUpContainer')]
@@ -54,6 +57,12 @@ final class IntermixBench
     public function benchInvokerStaticMethodInvoke(): void
     {
         $this->invoker->invoke([BenchStaticMethodConsumer::class, 'handle'], ['value' => 1]);
+    }
+
+    #[BeforeMethods('setUpContainer')]
+    public function benchInvokerZeroArgumentClosure(): void
+    {
+        $this->invoker->invoke($this->zeroArgumentHandler);
     }
 
     public function benchManualObjectGraph(): void
@@ -102,6 +111,18 @@ final class IntermixBench
         $this->container->get('bench.scoped');
         $this->container->get('bench.scoped');
         $this->container->leaveScope();
+    }
+
+    #[BeforeMethods('setUpContainer')]
+    public function benchSeededScopeWithinScope(): void
+    {
+        $scope = 'seeded-scope-' . (++$this->scopeCounter);
+        $seeded = new BenchScopedToken();
+        $this->container->withinScope(
+            $scope,
+            static fn(Container $container): BenchScopedToken => $container->get(BenchScopedToken::class),
+            [BenchScopedToken::class => $seeded],
+        );
     }
 
     #[BeforeMethods('setUpContainer')]
@@ -181,15 +202,15 @@ final class IntermixBench
         );
         $this->container->setEnvironment('bench');
         $this->invoker = Invoker::with($this->container);
+        $this->diHandler = static fn(BenchService $service): int => $service->handle(1);
+        $this->zeroArgumentHandler = static fn(): int => 1;
 
         // Warm paths so benchmark focuses on steady-state invocation overhead.
         $this->container->get('bench.config');
         $this->container->get('bench.factory.direct');
         $this->container->get('bench.factory.reflected');
         $this->container->make(BenchService::class);
-        $this->container->call(
-            static fn(BenchService $service): int => $service->handle(1),
-        );
+        $this->container->call($this->diHandler);
         $this->container->make(BenchMethodConsumer::class, 'handle');
         $this->container->make(BenchPropertyConsumer::class)->value();
         $this->container->findByTag('bench.pipeline.pre');

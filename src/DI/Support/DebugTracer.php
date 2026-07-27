@@ -34,6 +34,7 @@ final class DebugTracer
     public function __construct(
         private TraceLevelEnum $level = TraceLevelEnum::Off,
         private bool $captureLocation = false,
+        private readonly ?Closure $stateListener = null,
     ) {
         $this->enabled = $this->level !== TraceLevelEnum::Off;
     }
@@ -254,6 +255,9 @@ final class DebugTracer
     {
         $this->level = $level;
         $this->enabled = $level !== TraceLevelEnum::Off;
+        if ($this->stateListener instanceof Closure) {
+            ($this->stateListener)($this->enabled);
+        }
 
         return $this;
     }

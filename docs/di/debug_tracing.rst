@@ -28,6 +28,11 @@ Disable tracing completely:
 
    $c->options()->enableDebugTracing(false); // sets level to TraceLevelEnum::Off
 
+Tracing is off by default. The normal resolution path checks one cached
+repository flag; the tracer and its entry/graph arrays are created only when
+tracing is explicitly requested. Dependency edges reuse the resolver's existing
+cycle-detection stacks rather than maintaining another resolution stack.
+
 ---------------------
 See the Trace Output 👀
 ---------------------

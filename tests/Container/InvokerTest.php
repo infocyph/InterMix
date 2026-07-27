@@ -9,7 +9,6 @@ use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Invoker;
 use Infocyph\InterMix\Exceptions\ContainerException;
 
-
 /* -----------------------------------------------------------------
  |  Fixtures
  |-----------------------------------------------------------------*/
@@ -23,9 +22,7 @@ class InvokableFoo
 
 class MyService
 {
-    public function __construct(public string $id = '')
-    {
-    }
+    public function __construct(public string $id = '') {}
 
     public function run(string $p): string
     {
@@ -38,6 +35,11 @@ class StaticController
     public static function clock(DateTimeZone $timezone): string
     {
         return $timezone->getName();
+    }
+
+    public static function fresh(): stdClass
+    {
+        return new stdClass();
     }
 
     public static function health(): array
@@ -55,18 +57,17 @@ class StaticController
  |  Shared test setup
  |-----------------------------------------------------------------*/
 beforeEach(function () {
-    $this->c  = Container::instance(uniqid('invoker_'));
+    $this->c = Container::instance(uniqid('invoker_'));
     $this->c->definitions()
-        ->bind(DateTimeZone::class, fn () => new DateTimeZone('UTC'));
+        ->bind(DateTimeZone::class, fn() => new DateTimeZone('UTC'));
     $this->inv = Invoker::with($this->c);
 });
-
 
 /* -----------------------------------------------------------------
  |  1. invoke() happy-paths
  |-----------------------------------------------------------------*/
 it('invokes a native closure', function () {
-    expect($this->inv->invoke(fn () => 'hi'))->toBe('hi');
+    expect($this->inv->invoke(fn() => 'hi'))->toBe('hi');
 });
 
 it('invokes a function string', function () {
@@ -89,6 +90,20 @@ it('keeps static methods on the same class independently invokable', function ()
         ->toBe(['memory' => 1]);
 });
 
+it('returns a fresh result from every static method invocation', function () {
+    $first = $this->inv->invoke([StaticController::class, 'fresh']);
+    $second = $this->inv->invoke([StaticController::class, 'fresh']);
+
+    expect($first)->toBeInstanceOf(stdClass::class)
+        ->and($second)->toBeInstanceOf(stdClass::class)
+        ->and($first)->not->toBe($second);
+});
+
+it('ignores surplus supplied arguments for zero-parameter static methods', function () {
+    expect($this->inv->invoke([StaticController::class, 'health'], ['unused']))
+        ->toBe(['status' => 'ok']);
+});
+
 it('autowires missing static method parameters', function () {
     expect($this->inv->invoke([StaticController::class, 'clock']))
         ->toBe('UTC');
@@ -100,10 +115,9 @@ it('throws a ContainerException on unsupported target', function () {
 
 /* Opis-packed closure ------------------------------------------------------ */
 it('executes a serialized-closure string', function () {
-    $packed = $this->inv->serialize(fn () => 'packed');
+    $packed = $this->inv->serialize(fn() => 'packed');
     expect($this->inv->invoke($packed))->toBe('packed');
 });
-
 
 /* -----------------------------------------------------------------
  |  2. resolve()
@@ -112,7 +126,6 @@ it('resolves a bound scalar service', function () {
     $this->c->definitions()->bind('foo', 99);
     expect($this->inv->resolve('foo'))->toBe(99);
 });
-
 
 /* -----------------------------------------------------------------
  |  3. make()
@@ -130,19 +143,17 @@ it('make() can call a method', function () {
     expect($out)->toBe('X processed');
 });
 
-
 /* -----------------------------------------------------------------
  |  4. Serializer round-trip
  |-----------------------------------------------------------------*/
 it('serialises and restores closures', function () {
-    $packed   = $this->inv->serialize(fn () => 42);
+    $packed = $this->inv->serialize(fn() => 42);
     $restored = $this->inv->unserialize($packed);
 
     expect($restored)
         ->toBeInstanceOf(Closure::class)
         ->and($restored())->toBe(42);
 });
-
 
 /* -----------------------------------------------------------------
  |  5. NEW — pure callable + DI-injected parameters
@@ -209,7 +220,7 @@ class CachedCallableService
 /* 6. Invoker should autowire an argument-less class ----------------*/
 it('invokes a closure and autowires a Request instance', function () {
     $out = $this->inv->invoke(
-        fn (Request $request) => $request->uuid
+        fn(Request $request) => $request->uuid,
     );
 
     // just assert we got **some** non-empty UUID back
@@ -218,10 +229,10 @@ it('invokes a closure and autowires a Request instance', function () {
 
 it('isolates callableFor cache per container', function () {
     $c1 = Container::instance(uniqid('invoker_cache_a_'));
-    $c1->definitions()->bind(DateTimeZone::class, fn () => new DateTimeZone('UTC'));
+    $c1->definitions()->bind(DateTimeZone::class, fn() => new DateTimeZone('UTC'));
 
     $c2 = Container::instance(uniqid('invoker_cache_b_'));
-    $c2->definitions()->bind(DateTimeZone::class, fn () => new DateTimeZone('Asia/Dhaka'));
+    $c2->definitions()->bind(DateTimeZone::class, fn() => new DateTimeZone('Asia/Dhaka'));
 
     $inv1 = Invoker::with($c1);
     $inv2 = Invoker::with($c2);
@@ -235,7 +246,7 @@ it('isolates callableFor cache per container', function () {
 
 it('releases cached invokable instances with their invoker lifecycle', function () {
     $container = Container::instance(uniqid('invoker_cache_lifecycle_'));
-    $container->definitions()->bind(DateTimeZone::class, fn () => new DateTimeZone('UTC'));
+    $container->definitions()->bind(DateTimeZone::class, fn() => new DateTimeZone('UTC'));
     $invoker = Invoker::with($container);
     $callable = $invoker->callableFor(CachedCallableService::class);
 
@@ -255,18 +266,30 @@ it('invokes closures directly without storing closure aliases', function () {
     $before = count($this->c->getRepository()->getClosureResource());
 
     for ($i = 0; $i < 5; $i++) {
-        expect($this->inv->invoke(fn () => 'ok'))->toBe('ok');
+        expect($this->inv->invoke(fn() => 'ok'))->toBe('ok');
     }
 
     $after = count($this->c->getRepository()->getClosureResource());
     expect($after)->toBe($before);
 });
 
+it('does not retain prepared closures after their caller releases them', function () {
+    $closure = static fn(): string => 'ok';
+    $weak = WeakReference::create($closure);
+
+    expect($this->inv->invoke($closure))->toBe('ok');
+
+    unset($closure);
+    gc_collect_cycles();
+
+    expect($weak->get())->toBeNull();
+});
+
 it('resolves one-off closures without storing closure aliases', function () {
     $before = count($this->c->getRepository()->getClosureResource());
 
     for ($i = 0; $i < 5; $i++) {
-        expect($this->c->resolveNow(fn () => 'ok'))->toBe('ok');
+        expect($this->c->resolveNow(fn() => 'ok'))->toBe('ok');
     }
 
     expect($this->c->getRepository()->getClosureResource())->toHaveCount($before);

@@ -37,6 +37,8 @@ The suite covers DI paths end-to-end:
 - Tagged service lookup via ``findByTag()``
 - ``Invoker`` wrapper method invocation path
 - ``Invoker`` static-method callable fast path
+- ``Invoker`` zero-argument closure fast path
+- Definition-free scope seeding for ready request/job instances
 - Service-provider registration path
 - Environment-conditional interface binding path
 - Manual object graph baseline (non-container)
