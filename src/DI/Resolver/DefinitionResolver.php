@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Resolver;
 
 use Closure;
+use Infocyph\InterMix\DI\Support\DirectFactory;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\DI\Support\ReflectionResource;
 use Infocyph\InterMix\Exceptions\ContainerException;
@@ -13,7 +14,7 @@ use ReflectionException;
 
 class DefinitionResolver
 {
-    private ClassResolver $classResolver;
+    private ?ClassResolver $classResolver = null;
 
     /** @var array<int, string> */
     private array $definitionStack = [];
@@ -21,7 +22,9 @@ class DefinitionResolver
     /** @var array<string, bool> */
     private array $entriesResolving = [];
 
-    private ParameterResolver $parameterResolver;
+    private ?ParameterResolver $parameterResolver = null;
+
+    private ?Closure $resolverInitializer = null;
 
     /**
      * Constructs a DefinitionResolver instance.
@@ -68,6 +71,14 @@ class DefinitionResolver
             unset($this->entriesResolving[$name]);
             array_pop($this->definitionStack);
         }
+    }
+
+    /**
+     * Defer the reflection resolver graph until a definition actually needs it.
+     */
+    public function setResolverInitializer(Closure $initializer): void
+    {
+        $this->resolverInitializer = $initializer;
     }
 
     /**
@@ -139,12 +150,14 @@ class DefinitionResolver
      */
     private function resolveArrayDefinition(array $definition): mixed
     {
+        [$classResolver] = $this->resolvers();
+
         $class = $definition[0] ?? null;
         if (!is_string($class)) {
             return $definition;
         }
         $method = isset($definition[1]) && is_string($definition[1]) ? $definition[1] : null;
-        $resolved = $this->classResolver->resolve(
+        $resolved = $classResolver->resolve(
             ReflectionResource::getClassReflection($class),
             null,
             $method,
@@ -177,10 +190,15 @@ class DefinitionResolver
 
         $definition = $this->repository->getFunctionDefinition($name);
         switch (true) {
+            case $definition instanceof DirectFactory:
+                return $definition->resolve();
+
             case $definition instanceof Closure:
+                [, $parameterResolver] = $this->resolvers();
+
                 // reflect closure
                 $reflectionFn = ReflectionResource::getFunctionReflection($definition);
-                $args = $this->parameterResolver->resolve($reflectionFn, [], 'constructor');
+                $args = $parameterResolver->resolve($reflectionFn, [], 'constructor');
 
                 return $definition(...$args);
 
@@ -192,17 +210,36 @@ class DefinitionResolver
                 return $this->resolveArrayDefinition(array_values($definition));
 
             case is_string($definition) && class_exists($definition):
+                [$classResolver] = $this->resolvers();
+
                 if ($this->repository->isTracingEnabled()) {
                     $this->repository->tracer()->recordDependency($name, $definition, 'definition-class');
                 }
                 $refClass = ReflectionResource::getClassReflection($definition);
-                $res = $this->classResolver->resolve($refClass, make: true);
+                $res = $classResolver->resolve($refClass, make: true);
 
                 return $res['instance'];
 
             default:
                 return $definition;
         }
+    }
+
+    /**
+     * @return array{ClassResolver, ParameterResolver}
+     */
+    private function resolvers(): array
+    {
+        if ($this->classResolver instanceof ClassResolver && $this->parameterResolver instanceof ParameterResolver) {
+            return [$this->classResolver, $this->parameterResolver];
+        }
+
+        ($this->resolverInitializer ?? throw new ContainerException('Definition resolver graph is not initialized.'))();
+
+        return [
+            $this->classResolver ?? throw new ContainerException('Class resolver is unavailable.'),
+            $this->parameterResolver ?? throw new ContainerException('Parameter resolver is unavailable.'),
+        ];
     }
 
     private function resolveSingletonDefinition(string $name, string $resolvedKey): mixed

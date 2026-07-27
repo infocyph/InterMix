@@ -137,6 +137,9 @@ final class Invoker
         if (is_string($target) && ValueSerializer::isSerializedClosure($target)) {
             return $this->routeCallable($target, $args);
         }
+        if (is_array($target) && is_callable($target)) {
+            return $this->invokeClosure(Closure::fromCallable($target), $args);
+        }
 
         $desc = $this->container->parseCallable($target);
 

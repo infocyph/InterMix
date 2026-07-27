@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Invoker;
 
 use Infocyph\InterMix\DI\Resolver\Repository;
+use Infocyph\InterMix\DI\Support\DirectFactory;
 use Infocyph\InterMix\DI\Support\ReflectionResource;
 use InvalidArgumentException;
 use ReflectionException;
@@ -75,6 +76,10 @@ final readonly class GenericCall
     public function resolveByDefinition(string $name): mixed
     {
         $definition = $this->repository->getFunctionDefinition($name);
+
+        if ($definition instanceof DirectFactory) {
+            return $definition->resolve();
+        }
 
         if ($definition instanceof \Closure) {
             return $definition();

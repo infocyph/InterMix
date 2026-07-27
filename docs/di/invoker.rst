@@ -55,6 +55,10 @@ Usage Examples
 
    $result = $invoker->invoke([MyService::class, 'boot']);
 
+Callable static methods are executed directly without constructing the
+declaring class. Non-static ``[ClassName::class, 'method']`` targets still use
+the container so constructor and method dependencies can be resolved.
+
 **3. Serialize and restore a closure**
 
 .. code-block:: php
@@ -76,6 +80,7 @@ Internals
 
 The invoker uses:
 
+- a direct callable path for static ``[class, method]`` targets
 - ``routeCallable()`` — detects callable types: closures, invokable classes, strings, or serialized closures
 - ``viaClosure()`` — injects closures into the container for contextual execution
 - Integration with ``ValueSerializer`` for full closure support

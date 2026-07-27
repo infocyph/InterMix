@@ -33,6 +33,24 @@ class MyService
     }
 }
 
+class StaticController
+{
+    public static function clock(DateTimeZone $timezone): string
+    {
+        return $timezone->getName();
+    }
+
+    public static function health(): array
+    {
+        return ['status' => 'ok'];
+    }
+
+    public static function json(): array
+    {
+        return ['memory' => 1];
+    }
+}
+
 /* -----------------------------------------------------------------
  |  Shared test setup
  |-----------------------------------------------------------------*/
@@ -62,6 +80,18 @@ it('invokes an invokable object', function () {
 it('invokes a [class,method] pair', function () {
     $out = $this->inv->invoke([MyService::class, 'run'], ['go']);
     expect($out)->toBe('go processed');
+});
+
+it('keeps static methods on the same class independently invokable', function () {
+    expect($this->inv->invoke([StaticController::class, 'health']))
+        ->toBe(['status' => 'ok'])
+        ->and($this->inv->invoke([StaticController::class, 'json']))
+        ->toBe(['memory' => 1]);
+});
+
+it('autowires missing static method parameters', function () {
+    expect($this->inv->invoke([StaticController::class, 'clock']))
+        ->toBe('UTC');
 });
 
 it('throws a ContainerException on unsupported target', function () {

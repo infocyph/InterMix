@@ -22,6 +22,8 @@ Container Entry Points
      - ``$c->definitions()`` / ``$c->registration()`` / ``$c->options()`` / ``$c->invocation()``
    * - Resolve by ID/class
      - ``$c->get($id)``
+   * - Bind direct factory
+     - ``$c->bindFactory($id, $factory, LifetimeEnum::Singleton)`` / ``$c->factory($id, $factory)->scoped()``
    * - Resolve + execute default/registered method
      - ``$c->getReturn(Foo::class)``
    * - Build class (optional method)
@@ -70,6 +72,9 @@ Task Matrix (Fluent vs Shortcut)
    * - Bind definition
      - ``$c->definitions()->bind('answer', 42)``
      - -
+   * - Bind reflection-free factory
+     - ``$c->factory('service', $factory)->transient()``
+     - ``$c->bindFactory('service', $factory, LifetimeEnum::Transient)``
    * - Register constructor map
      - ``$c->registration()->registerClass(Foo::class)``
      - -

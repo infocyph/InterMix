@@ -10,7 +10,7 @@
 
 `InterMix` is a modern, lightweight PHP toolkit for developers who value class-oriented design, clean architecture, and fast execution. It combines dependency injection, serialization, macro-style extensibility, and helper utilities with minimal config and maximum control.
 
-> Global helper functions are optional in `v2`: core APIs are namespaced and helper loading is opt-in.
+> Global helper functions are optional: core APIs are namespaced and helper loading is opt-in.
 
 ## Key Features
 
@@ -38,12 +38,7 @@ Optional global helpers:
 require_once __DIR__ . '/vendor/infocyph/intermix/src/functions.php';
 ```
 
-Supported PHP versions:
-
-| InterMix Version | PHP Version        |
-| ---------------- | ------------------ |
-| 2.x.x and above  | 8.3 or newer       |
-| 1.x.x            | 8.0-8.2 compatible |
+Current InterMix releases require PHP 8.3 or newer, as declared by `composer.json`.
 
 ## Quick Examples
 
@@ -75,9 +70,38 @@ $c->definitions()->bind('a', A::class, tags: ['service']);
 $c->definitions()->bind('b', B::class, tags: ['service']);
 
 foreach ($c->findByTag('service') as $svc) {
-    $svc()->handle();
+    $svc->handle();
 }
 ```
+
+Reflection-free factories:
+
+```php
+use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Support\LifetimeEnum;
+
+$c->bindFactory(
+    Database::class,
+    static fn (Container $container): Database => new Database(
+        $container->get(DatabaseConfig::class),
+    ),
+    LifetimeEnum::Singleton,
+    tags: ['infrastructure'],
+);
+
+// Equivalent fluent lifetime selection:
+$c->factory(
+    RequestContext::class,
+    static fn (Container $container): RequestContext => new RequestContext(
+        $container->get('request.id'),
+    ),
+)->scoped();
+```
+
+Use a regular closure definition when its parameters should be autowired. Use
+`bindFactory()` or `factory()` when dependencies are explicit and request-time
+reflection should be avoided. Direct factories behave identically whether
+container injection is enabled or disabled.
 
 See full container guide at: [https://docs.infocyph.com/projects/intermix/di/overview.html](https://docs.infocyph.com/projects/intermix/di/overview.html)
 
@@ -142,9 +166,9 @@ Protected by [PHPForge](https://github.com/infocyph/PHPForge) — an automated q
 <div align="center">
   <sub><strong>Made with ❤️ for the PHP community</strong></sub><br />
   <sub><a href="LICENSE">MIT Licensed</a></sub><br />
-  <a href="https://docs.infocyph.com/projects/Epicrypt">Documentation</a> •
+  <a href="https://docs.infocyph.com/projects/intermix/">Documentation</a> •
   <a href="SECURITY.md">Security</a> •
   <a href="CODE_OF_CONDUCT.md">Code of Conduct</a> •
   <a href="CONTRIBUTING.md">Contributing</a> •
-  <a href="https://github.com/infocyph/Epicrypt/issues">Report | Request | Suggest</a>
+  <a href="https://github.com/infocyph/InterMix/issues">Report | Request | Suggest</a>
 </div>
