@@ -24,8 +24,6 @@ class DefinitionResolver
 
     private ?ParameterResolver $parameterResolver = null;
 
-    private ?Closure $resolverInitializer = null;
-
     /**
      * Constructs a DefinitionResolver instance.
      *
@@ -71,14 +69,6 @@ class DefinitionResolver
             unset($this->entriesResolving[$name]);
             array_pop($this->definitionStack);
         }
-    }
-
-    /**
-     * Defer the reflection resolver graph until a definition actually needs it.
-     */
-    public function setResolverInitializer(Closure $initializer): void
-    {
-        $this->resolverInitializer = $initializer;
     }
 
     /**
@@ -230,12 +220,6 @@ class DefinitionResolver
      */
     private function resolvers(): array
     {
-        if ($this->classResolver instanceof ClassResolver && $this->parameterResolver instanceof ParameterResolver) {
-            return [$this->classResolver, $this->parameterResolver];
-        }
-
-        ($this->resolverInitializer ?? throw new ContainerException('Definition resolver graph is not initialized.'))();
-
         return [
             $this->classResolver ?? throw new ContainerException('Class resolver is unavailable.'),
             $this->parameterResolver ?? throw new ContainerException('Parameter resolver is unavailable.'),

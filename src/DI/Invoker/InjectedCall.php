@@ -14,14 +14,18 @@ use Infocyph\InterMix\DI\Support\ReflectionResource;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\InvalidArgumentException;
 use ReflectionException;
+use WeakMap;
 
-final class InjectedCall
+final readonly class InjectedCall
 {
-    private readonly DefinitionResolver $definitionResolver;
+    private ClassResolver $classResolver;
 
-    private ?ClassResolver $classResolver = null;
+    private DefinitionResolver $definitionResolver;
 
-    private ?ParameterResolver $parameterResolver = null;
+    /** @var WeakMap<Closure, int> */
+    private WeakMap $parameterCountCache;
+
+    private ParameterResolver $parameterResolver;
 
     /**
      * InjectedCall constructor.
@@ -29,10 +33,24 @@ final class InjectedCall
      * @param Repository $repository The DI repository which contains definitions, classes, functions, and parameters.
      */
     public function __construct(
-        private readonly Repository $repository,
+        private Repository $repository,
     ) {
+        $this->parameterCountCache = new WeakMap();
         $this->definitionResolver = new DefinitionResolver($this->repository);
-        $this->definitionResolver->setResolverInitializer($this->initializeSupportingResolvers(...));
+        $this->parameterResolver = new ParameterResolver($this->repository, $this->definitionResolver);
+
+        $propertyResolver = new PropertyResolver($this->repository);
+
+        $this->classResolver = new ClassResolver(
+            $this->repository,
+            $this->parameterResolver,
+            $propertyResolver,
+            $this->definitionResolver,
+        );
+
+        $this->definitionResolver->setResolverInstance($this->classResolver, $this->parameterResolver);
+        $this->parameterResolver->setClassResolverInstance($this->classResolver);
+        $propertyResolver->setClassResolverInstance($this->classResolver);
     }
 
     /**
@@ -50,9 +68,7 @@ final class InjectedCall
         ?string $method = null,
         bool $make = false,
     ): array {
-        [$classResolver] = $this->supportingResolvers();
-
-        return $classResolver->resolve(
+        return $this->classResolver->resolve(
             ReflectionResource::getClassReflection($class),
             null,
             $method,
@@ -63,27 +79,32 @@ final class InjectedCall
     /**
      * Executes a closure (or function) with the given parameters and returns its result.
      *
-     * @param string|Closure $closure The closure or function name to be executed.
+     * @param callable $closure The callable to execute.
      * @param array<int|string, mixed> $params Additional parameters to be passed.
      * @return mixed The result of executing the closure/function.
      *
      * @throws ReflectionException|ContainerException|InvalidArgumentException
      */
-    public function closureSettler(string|Closure $closure, array $params = []): mixed
+    public function closureSettler(callable $closure, array $params = []): mixed
     {
-        [, $parameterResolver] = $this->supportingResolvers();
-
-        if (is_string($closure)) {
-            if (!function_exists($closure)) {
-                throw new ContainerException("Function '$closure' is not defined.");
-            }
-            $closure = $closure(...);
+        if ($closure instanceof Closure
+            && ($this->parameterCountCache[$closure] ?? null) === 0
+            && !$this->repository->isTracingEnabled()
+        ) {
+            return $closure();
         }
 
-        // Invoke the closure with resolved arguments
+        $reflection = ReflectionResource::getCallableReflection($closure);
+        if ($closure instanceof Closure) {
+            $this->parameterCountCache[$closure] = $reflection->getNumberOfParameters();
+        }
+        if ($reflection->getNumberOfParameters() === 0 && !$this->repository->isTracingEnabled()) {
+            return $closure();
+        }
+
         return $closure(
-            ...$parameterResolver->resolve(
-                ReflectionResource::getFunctionReflection($closure),
+            ...$this->parameterResolver->resolve(
+                $reflection,
                 $params,
                 'constructor',
             ),
@@ -101,47 +122,5 @@ final class InjectedCall
     public function resolveByDefinition(string $name): mixed
     {
         return $this->definitionResolver->resolve($name);
-    }
-
-    /**
-     * Initialize resolvers required for injected method calls.
-     *
-     * Creates instances for DefinitionResolver, ParameterResolver, PropertyResolver, and ClassResolver.
-     * Then, injects references back to each other for cross-communication.
-     */
-    private function initializeSupportingResolvers(): void
-    {
-        if ($this->classResolver instanceof ClassResolver && $this->parameterResolver instanceof ParameterResolver) {
-            return;
-        }
-
-        $this->parameterResolver = new ParameterResolver($this->repository, $this->definitionResolver);
-
-        $propertyResolver = new PropertyResolver($this->repository);
-
-        $this->classResolver = new ClassResolver(
-            $this->repository,
-            $this->parameterResolver,
-            $propertyResolver,
-            $this->definitionResolver,
-        );
-
-        // Inject references back for cross-communication
-        $this->definitionResolver->setResolverInstance($this->classResolver, $this->parameterResolver);
-        $this->parameterResolver->setClassResolverInstance($this->classResolver);
-        $propertyResolver->setClassResolverInstance($this->classResolver);
-    }
-
-    /**
-     * @return array{ClassResolver, ParameterResolver}
-     */
-    private function supportingResolvers(): array
-    {
-        $this->initializeSupportingResolvers();
-
-        return [
-            $this->classResolver ?? throw new ContainerException('Class resolver is unavailable.'),
-            $this->parameterResolver ?? throw new ContainerException('Parameter resolver is unavailable.'),
-        ];
     }
 }

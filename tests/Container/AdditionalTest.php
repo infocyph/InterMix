@@ -81,6 +81,8 @@ class CompiledSvc
     public function __construct(public CompiledDep $dep) {}
 }
 
+class ScopeSeedDependency {}
+
 class SpyCacheItem implements CacheItemInterface
 {
     public function __construct(
@@ -547,6 +549,60 @@ it('restores parent scope after nested withinScope', function () {
         ->and($outerAgain)->toBe($outerFirst);
 });
 
+it('exposes seeded instances only inside their scope', function () {
+    $c = Container::instance(uniqid('seeded_scope_'));
+    $global = new stdClass();
+    $scoped = new stdClass();
+    $c->definitions()->bind('runtime.value', $global);
+
+    $inside = $c->withinScope(
+        'request',
+        static fn(Container $container): object => $container->get('runtime.value'),
+        ['runtime.value' => $scoped],
+    );
+
+    expect($inside)->toBe($scoped)
+        ->and($c->get('runtime.value'))->toBe($global);
+});
+
+it('injects seeded instances by type without registering definitions', function () {
+    $c = Container::instance(uniqid('seeded_injection_'));
+    $seeded = new ScopeSeedDependency();
+
+    $resolved = $c->withinScope(
+        'request',
+        static fn(Container $container): ScopeSeedDependency => $container->call(
+            static fn(ScopeSeedDependency $dependency): ScopeSeedDependency => $dependency,
+        ),
+        [ScopeSeedDependency::class => $seeded],
+    );
+    $outside = $c->call(
+        static fn(ScopeSeedDependency $dependency): ScopeSeedDependency => $dependency,
+    );
+
+    expect($resolved)->toBe($seeded)
+        ->and($outside)->not->toBe($seeded);
+});
+
+it('supports null scope seeds and restores outer seeds after nesting', function () {
+    $c = Container::instance(uniqid('nested_seeded_scope_'));
+    $outer = new stdClass();
+    $inner = new stdClass();
+
+    $c->enterScope('outer', ['value' => $outer, 'nullable' => null]);
+    $innerResolved = $c->withinScope(
+        'inner',
+        static fn(Container $container): object => $container->get('value'),
+        ['value' => $inner],
+    );
+
+    expect($innerResolved)->toBe($inner)
+        ->and($c->get('value'))->toBe($outer)
+        ->and($c->get('nullable'))->toBeNull();
+
+    $c->leaveScope();
+});
+
 it('isolates singleton definition resolution cache per environment', function () {
     $c = Container::instance(uniqid('env_isolation_'));
 
@@ -637,6 +693,20 @@ it('restores tracer configuration after debug inspection', function () {
 
     expect($tracer->level())->toBe(TraceLevelEnum::Off)
         ->and($tracer->isCaptureLocationEnabled())->toBeFalse();
+});
+
+it('keeps the repository tracing gate synchronized with direct tracer changes', function () {
+    $c = Container::instance(uniqid('tracing_gate_'));
+    $repository = $c->getRepository();
+    $tracer = $c->tracer();
+
+    expect($repository->isTracingEnabled())->toBeFalse();
+
+    $tracer->setLevel(TraceLevelEnum::Node);
+    expect($repository->isTracingEnabled())->toBeTrue();
+
+    $tracer->setLevel(TraceLevelEnum::Off);
+    expect($repository->isTracingEnabled())->toBeFalse();
 });
 
 it('does not leak resolved-resource state when make() fails', function () {

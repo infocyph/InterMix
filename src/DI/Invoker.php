@@ -138,7 +138,9 @@ final class Invoker
             return $this->routeCallable($target, $args);
         }
         if (is_array($target) && is_callable($target)) {
-            return $this->invokeClosure(Closure::fromCallable($target), $args);
+            return $this->container
+                ->getCurrentResolver()
+                ->closureSettler($target, $args);
         }
 
         $desc = $this->container->parseCallable($target);

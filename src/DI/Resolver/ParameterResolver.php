@@ -148,6 +148,12 @@ class ParameterResolver
      */
     public function resolveByDefinitionType(string $name, ReflectionParameter $parameter): mixed
     {
+        $hasScopeSeeds = $this->repository->hasScopeSeeds();
+        $seeded = null;
+        if ($hasScopeSeeds && $this->repository->findScopeSeed($name, $seeded)) {
+            return $seeded;
+        }
+
         $parameterType = $parameter->getType();
 
         if ($this->repository->hasFunctionReference($name)) {
@@ -165,6 +171,10 @@ class ParameterResolver
                 continue;
             }
             $typeName = $named->getName();
+
+            if ($hasScopeSeeds && $this->repository->findScopeSeed($typeName, $seeded)) {
+                return $seeded;
+            }
 
             if ($this->repository->hasFunctionReference($typeName)) {
                 return $this->definitionResolver->resolve($typeName);

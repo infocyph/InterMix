@@ -139,6 +139,16 @@ Scoped resolution:
        return $c->get(RequestContext::class);
    });
 
+Seed an existing request/job object without rebinding a definition:
+
+.. code-block:: php
+
+   $result = $c->withinScope(
+       'request-42',
+       fn (Container $scoped) => $scoped->call($handler),
+       [RequestContext::class => $requestContext],
+   );
+
 ---------------------------
 Advanced Helpers
 ---------------------------

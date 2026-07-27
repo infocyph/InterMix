@@ -24,6 +24,12 @@ class InvocationManager implements ArrayAccess
 {
     use ManagerProxy;
 
+    /** @var array<string, mixed>|null */
+    private ?array $activeScopeSeeds = null;
+
+    /** @var array<int, array<string, mixed>|null> */
+    private array $scopeSeedStack = [];
+
     /**
      * Constructs an InvocationManager.
      *
@@ -105,6 +111,16 @@ class InvocationManager implements ArrayAccess
     }
 
     /**
+     * @param array<string, mixed> $instances
+     * @internal
+     */
+    public function enterScope(array $instances): void
+    {
+        $this->scopeSeedStack[] = $this->activeScopeSeeds;
+        $this->activeScopeSeeds = $instances !== [] ? $instances : null;
+    }
+
+    /**
      * Retrieves a value associated with a given ID from the container.
      *
      * The method first checks if the value is already resolved and cached based on
@@ -120,6 +136,11 @@ class InvocationManager implements ArrayAccess
      */
     public function get(string $id): mixed
     {
+        $seeds = $this->activeScopeSeeds;
+        if ($seeds !== null && array_key_exists($id, $seeds)) {
+            return $seeds[$id];
+        }
+
         $resolved = $this->repository->getResolvedSingletonEntry($id);
         if ($resolved !== null || $this->repository->hasResolvedSingleton($id)) {
             if ($resolved instanceof DeferredInitializer) {
@@ -188,6 +209,13 @@ class InvocationManager implements ArrayAccess
             || $this->repository->hasResolved($id);
     }
 
+    /** @internal */
+    public function leaveScope(): void
+    {
+        $previous = array_pop($this->scopeSeedStack);
+        $this->activeScopeSeeds = is_array($previous) ? $previous : null;
+    }
+
     /**
      * Creates a new instance of the given class with dependency injection,
      * without caching the result.
@@ -232,6 +260,13 @@ class InvocationManager implements ArrayAccess
     public function registration(): RegistrationManager
     {
         return $this->container->registration();
+    }
+
+    /** @internal */
+    public function resetScopeSeeds(): void
+    {
+        $this->activeScopeSeeds = null;
+        $this->scopeSeedStack = [];
     }
 
     /**

@@ -259,12 +259,14 @@ final class Container implements ContainerInterface, ArrayAccess
      * but shared across multiple requests within the same scope.
      *
      * @param string $scope The name of the scope to enter.
+     * @param array<string, mixed> $instances Ready instances exposed only inside this scope.
      * @return self The container instance for method chaining.
      * @throws ContainerException If the scope cannot be entered.
      */
-    public function enterScope(string $scope): self
+    public function enterScope(string $scope, array $instances = []): self
     {
-        $this->repository->enterScope($scope);
+        $this->repository->enterScope($scope, $instances);
+        $this->invocationManager->enterScope($instances);
 
         return $this;
     }
@@ -463,6 +465,7 @@ final class Container implements ContainerInterface, ArrayAccess
     public function leaveScope(): self
     {
         $this->repository->leaveScope();
+        $this->invocationManager->leaveScope();
 
         return $this;
     }
@@ -680,6 +683,7 @@ final class Container implements ContainerInterface, ArrayAccess
     public function setEnvironment(string $env): self
     {
         $this->repository->setEnvironment($env);
+        $this->invocationManager->resetScopeSeeds();
 
         return $this;
     }
@@ -828,13 +832,14 @@ final class Container implements ContainerInterface, ArrayAccess
      *
      * @param string $scope The name of the scope to enter for the callback execution.
      * @param callable $callback The callback to execute within the scope.
+     * @param array<string, mixed> $instances Ready instances exposed only inside this scope.
      * @return mixed The return value of the callback.
      * @throws ContainerException If the scope cannot be managed properly.
      * @throws Throwable Any exception thrown by the callback will be rethrown after scope cleanup.
      */
-    public function withinScope(string $scope, callable $callback): mixed
+    public function withinScope(string $scope, callable $callback, array $instances = []): mixed
     {
-        $this->enterScope($scope);
+        $this->enterScope($scope, $instances);
 
         try {
             return $callback($this);

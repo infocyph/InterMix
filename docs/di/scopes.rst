@@ -66,6 +66,33 @@ If you need a *temporary* scope:
 
 ( ``withinScope`` enters the scope, runs your callback, then always restores. )
 
+Seed ready instances
+--------------------
+
+Request and worker runtimes can expose already-created contextual objects
+without registering or rewriting definitions:
+
+.. code-block:: php
+
+   $response = $c->withinScope(
+       'request-42',
+       function (Container $scoped) {
+           return $scoped->call(
+               static fn (Request $request) => handle($request),
+           );
+       },
+       [Request::class => $request],
+   );
+
+The third argument to ``withinScope()``—and the second argument to
+``enterScope()``—is an ``ID => instance`` map. Seeds:
+
+* take precedence over global definitions only while their scope is active;
+* participate in ``get()`` and type-based parameter injection;
+* may contain ``null`` values;
+* are removed automatically by ``leaveScope()``; and
+* do not modify definition metadata or lifetime caches.
+
 Best practices 💡
 ----------------
 
@@ -74,6 +101,8 @@ Best practices 💡
   scoped objects themselves.
 * **Combine with Lazy-Loading** – scoped services are still initialised on first
   access unless eager-loaded.
+* **Seed runtime context** – pass request/job objects as scope seeds instead of
+  rebinding their definitions for every operation.
 
 Related pages
 -------------
