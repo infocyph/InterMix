@@ -17,11 +17,11 @@ use ReflectionException;
 
 final class InjectedCall
 {
-    private ClassResolver $classResolver;
+    private readonly DefinitionResolver $definitionResolver;
 
-    private DefinitionResolver $definitionResolver;
+    private ?ClassResolver $classResolver = null;
 
-    private ParameterResolver $parameterResolver;
+    private ?ParameterResolver $parameterResolver = null;
 
     /**
      * InjectedCall constructor.
@@ -31,7 +31,8 @@ final class InjectedCall
     public function __construct(
         private readonly Repository $repository,
     ) {
-        $this->initializeResolvers();
+        $this->definitionResolver = new DefinitionResolver($this->repository);
+        $this->definitionResolver->setResolverInitializer($this->initializeSupportingResolvers(...));
     }
 
     /**
@@ -49,7 +50,9 @@ final class InjectedCall
         ?string $method = null,
         bool $make = false,
     ): array {
-        return $this->classResolver->resolve(
+        [$classResolver] = $this->supportingResolvers();
+
+        return $classResolver->resolve(
             ReflectionResource::getClassReflection($class),
             null,
             $method,
@@ -68,6 +71,8 @@ final class InjectedCall
      */
     public function closureSettler(string|Closure $closure, array $params = []): mixed
     {
+        [, $parameterResolver] = $this->supportingResolvers();
+
         if (is_string($closure)) {
             if (!function_exists($closure)) {
                 throw new ContainerException("Function '$closure' is not defined.");
@@ -77,7 +82,7 @@ final class InjectedCall
 
         // Invoke the closure with resolved arguments
         return $closure(
-            ...$this->parameterResolver->resolve(
+            ...$parameterResolver->resolve(
                 ReflectionResource::getFunctionReflection($closure),
                 $params,
                 'constructor',
@@ -104,9 +109,12 @@ final class InjectedCall
      * Creates instances for DefinitionResolver, ParameterResolver, PropertyResolver, and ClassResolver.
      * Then, injects references back to each other for cross-communication.
      */
-    private function initializeResolvers(): void
+    private function initializeSupportingResolvers(): void
     {
-        $this->definitionResolver = new DefinitionResolver($this->repository);
+        if ($this->classResolver instanceof ClassResolver && $this->parameterResolver instanceof ParameterResolver) {
+            return;
+        }
+
         $this->parameterResolver = new ParameterResolver($this->repository, $this->definitionResolver);
 
         $propertyResolver = new PropertyResolver($this->repository);
@@ -122,5 +130,18 @@ final class InjectedCall
         $this->definitionResolver->setResolverInstance($this->classResolver, $this->parameterResolver);
         $this->parameterResolver->setClassResolverInstance($this->classResolver);
         $propertyResolver->setClassResolverInstance($this->classResolver);
+    }
+
+    /**
+     * @return array{ClassResolver, ParameterResolver}
+     */
+    private function supportingResolvers(): array
+    {
+        $this->initializeSupportingResolvers();
+
+        return [
+            $this->classResolver ?? throw new ContainerException('Class resolver is unavailable.'),
+            $this->parameterResolver ?? throw new ContainerException('Parameter resolver is unavailable.'),
+        ];
     }
 }

@@ -24,7 +24,7 @@ ultimately lives in this registry.
    // 💠 class-string → auto–resolve on first get()
    $def->bind('clock', DateTimeImmutable::class);
 
-   // 💠 factory closure
+   // 💠 autowired factory closure
    $def->bind('uuid', fn () => bin2hex(random_bytes(16)));
 
 You may chain calls – the manager is **fluent** and ``->end()`` brings you back to
@@ -44,8 +44,48 @@ the container:
    $service = $def['baz'];  // Same as get()
    $hasBaz = isset($def['baz']);  // Same as has()
 
+---------------------------------------------------
+2.  Direct factories — no reflection or autowiring
+---------------------------------------------------
+
+Regular closure definitions are parameter-autowired when injection is enabled.
+When dependencies are already explicit, use a direct factory to avoid closure
+reflection on every uncached resolution:
+
+.. code-block:: php
+
+   use Infocyph\InterMix\DI\Container;
+   use Infocyph\InterMix\DI\Support\LifetimeEnum;
+
+   $c->bindFactory(
+       'mailer',
+       static fn (Container $container): Mailer => new Mailer(
+           $container->get(MailerConfig::class),
+       ),
+       LifetimeEnum::Singleton,
+       tags: ['infrastructure'],
+   );
+
+The factory always receives its owning ``Container`` as the first argument. Its
+parameters are never inspected or autowired. This contract is the same when
+``injection`` is ``true`` or ``false``.
+
+For fluent lifetime selection:
+
+.. code-block:: php
+
+   $c->factory(
+       RequestContext::class,
+       static fn (Container $container): RequestContext => new RequestContext(
+           $container->get('request.id'),
+       ),
+   )->scoped();
+
+Finish the pending binding with exactly one of ``singleton()``, ``scoped()``, or
+``transient()``. Each accepts an optional array of tags.
+
 -----------------------------------------------
-2.  Lifetimes (Singleton ⇢ Scoped ⇢ Transient)
+3.  Lifetimes (Singleton ⇢ Scoped ⇢ Transient)
 -----------------------------------------------
 
 .. code-block:: php
@@ -70,7 +110,7 @@ Lifetimes apply **equally** to class-string bindings – InterMix transparently 
 into internal lazy initialisers.
 
 -----------------------------------------------
-3.  Tags – collect related services
+4.  Tags – collect related services
 -----------------------------------------------
 
 .. code-block:: php
@@ -85,7 +125,7 @@ into internal lazy initialisers.
 Use tags for plug-in systems, domain events, command buses, etc.
 
 ----------------------------------------------------
-4.  Bulk import & sugar syntax
+5.  Bulk import & sugar syntax
 ----------------------------------------------------
 
 **Array import**
@@ -111,7 +151,7 @@ container *and* all manager classes (DefinitionManager, OptionsManager, Invocati
 The same trait also proxies container methods via ``__call()`` (for example ``$def->get('foo')`` or ``$def->has('foo')``), while preserving fluent manager chaining.
 
 ----------------------------------------------------
-5.  Lazy loading — opt-in or opt-out
+6.  Lazy loading — opt-in or opt-out
 ----------------------------------------------------
 
 Definitions default to **lazy placeholders** *(cheap objects holding a closure)*,
@@ -128,7 +168,7 @@ execute when the ID is resolved (for example on first ``get()`` for singleton/sc
 or every ``get()`` for transient), not at bind-time.
 
 ----------------------------------------------------
-6.  Environment-aware bindings  (quick reminder)
+7.  Environment-aware bindings  (quick reminder)
 ----------------------------------------------------
 
 Although technically part of :ref:`di.options`, the Definition Manager plays nice with

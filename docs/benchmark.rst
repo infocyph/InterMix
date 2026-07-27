@@ -29,12 +29,14 @@ The suite covers DI paths end-to-end:
 - Singleton ``get()`` hot-path throughput
 - Transient object graph creation via ``make()``
 - Closure invocation through container DI
+- Reflected and direct transient factory resolution
 - Class-method invocation via ``registerMethod()`` + ``make(..., method)``
 - Property wiring via ``registerProperty()`` + ``make()``
 - Immediate resolution via ``resolveNow()`` (class and method paths)
 - Scoped lifetime behavior with ``enterScope()`` / ``leaveScope()``
 - Tagged service lookup via ``findByTag()``
 - ``Invoker`` wrapper method invocation path
+- ``Invoker`` static-method callable fast path
 - Service-provider registration path
 - Environment-conditional interface binding path
 - Manual object graph baseline (non-container)

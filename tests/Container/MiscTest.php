@@ -109,13 +109,19 @@ test('direct(null) returns a container (DI off)', function () {
     expect($c)->toBeInstanceOf(Container::class);
 });
 test('Static Property', function () {
-    $get4 = container(null, 'injection_less_with_prop')
+    $get4 = container(null, 'injection_less_with_static_prop')
+        ->options()
+        ->setOptions(injection: false)
+        ->registration()
+        ->registerClass(InjectionLessClass::class, [123])
+        ->registerMethod(InjectionLessClass::class, 'ilc', [456])
         ->registerProperty(InjectionLessClass::class, [
-            'staticProperty' => 'propSetStatic'
+            'staticProperty' => 'propSetStatic',
         ])
         ->getReturn(InjectionLessClass::class);
+
     expect($get4)
         ->toBeArray()
         ->and($get4['staticProperty'])
         ->toBe('propSetStatic');
-})->skip('Static property generating error in test but working as expected in live');
+});

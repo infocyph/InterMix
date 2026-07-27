@@ -58,12 +58,9 @@ final readonly class PendingFactoryBinding
      */
     private function apply(LifetimeEnum $lifetime, array $tags = []): Container
     {
-        $factory = $this->factory;
-        $container = $this->container;
-
         return $this->container->bind(
             $this->id,
-            static fn() => $factory($container),
+            new DirectFactory($this->factory, $this->container),
             $lifetime,
             $tags,
         );

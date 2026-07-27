@@ -33,6 +33,12 @@ final class IntermixBench
     }
 
     #[BeforeMethods('setUpContainer')]
+    public function benchDirectFactoryTransientResolution(): void
+    {
+        $this->container->get('bench.factory.direct');
+    }
+
+    #[BeforeMethods('setUpContainer')]
     public function benchEnvConditionalBindingPath(): void
     {
         $this->container->make(BenchEnvConsumer::class)->tick();
@@ -42,6 +48,12 @@ final class IntermixBench
     public function benchInvokerMethodInvoke(): void
     {
         $this->invoker->invoke([BenchMethodConsumer::class, 'handle'], ['value' => 1]);
+    }
+
+    #[BeforeMethods('setUpContainer')]
+    public function benchInvokerStaticMethodInvoke(): void
+    {
+        $this->invoker->invoke([BenchStaticMethodConsumer::class, 'handle'], ['value' => 1]);
     }
 
     public function benchManualObjectGraph(): void
@@ -59,6 +71,12 @@ final class IntermixBench
     public function benchPropertyWiringViaRegisterProperty(): void
     {
         $this->container->make(BenchPropertyConsumer::class)->value();
+    }
+
+    #[BeforeMethods('setUpContainer')]
+    public function benchReflectedFactoryTransientResolution(): void
+    {
+        $this->container->get('bench.factory.reflected');
     }
 
     #[BeforeMethods('setUpContainer')]
@@ -118,6 +136,17 @@ final class IntermixBench
             'bench.config',
             static fn(): BenchConfig => new BenchConfig(),
         );
+        $container = $this->container;
+        $this->container->bindFactory(
+            'bench.factory.direct',
+            static fn(): BenchFactoryProduct => new BenchFactoryProduct($container),
+            LifetimeEnum::Transient,
+        );
+        $this->container->bind(
+            'bench.factory.reflected',
+            static fn(): BenchFactoryProduct => new BenchFactoryProduct($container),
+            LifetimeEnum::Transient,
+        );
         $this->container->definitions()->bind(
             'bench.scoped',
             static fn(): BenchScopedToken => new BenchScopedToken(),
@@ -155,6 +184,8 @@ final class IntermixBench
 
         // Warm paths so benchmark focuses on steady-state invocation overhead.
         $this->container->get('bench.config');
+        $this->container->get('bench.factory.direct');
+        $this->container->get('bench.factory.reflected');
         $this->container->make(BenchService::class);
         $this->container->call(
             static fn(BenchService $service): int => $service->handle(1),
@@ -171,6 +202,13 @@ final readonly class BenchConfig
 {
     public function __construct(
         public string $env = 'benchmark',
+    ) {}
+}
+
+final readonly class BenchFactoryProduct
+{
+    public function __construct(
+        public Container $container,
     ) {}
 }
 
@@ -208,6 +246,14 @@ final readonly class BenchMethodConsumer
     public function handle(int $value = 1): int
     {
         return $this->service->handle($value);
+    }
+}
+
+final class BenchStaticMethodConsumer
+{
+    public static function handle(int $value = 1): int
+    {
+        return $value + 1;
     }
 }
 

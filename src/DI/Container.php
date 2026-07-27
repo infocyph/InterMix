@@ -19,6 +19,7 @@ use Infocyph\InterMix\DI\Support\CompiledResolverGenerator;
 use Infocyph\InterMix\DI\Support\ContainerProxy;
 use Infocyph\InterMix\DI\Support\ContextualBindingBuilder;
 use Infocyph\InterMix\DI\Support\DebugTracer;
+use Infocyph\InterMix\DI\Support\DirectFactory;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\DI\Support\PendingFactoryBinding;
 use Infocyph\InterMix\DI\Support\TaggedPipeline;
@@ -134,6 +135,29 @@ final class Container implements ContainerInterface, ArrayAccess
         $this->definitions()->bind($id, $definition, $lifetime, $tags);
 
         return $this;
+    }
+
+    /**
+     * Bind a factory whose dependencies are captured explicitly.
+     *
+     * Unlike a regular Closure definition, a direct factory is invoked without
+     * reflection or parameter autowiring. The container is supplied as the
+     * first argument. Resolution follows the selected lifetime in both injected
+     * and non-injected container modes.
+     *
+     * @param string $id Service identifier.
+     * @param Closure $factory Factory called as ``$factory($this)``.
+     * @param LifetimeEnum $lifetime Singleton, Scoped, or Transient.
+     * @param array<int, string> $tags Optional lookup tags.
+     * @throws ContainerException
+     */
+    public function bindFactory(
+        string $id,
+        Closure $factory,
+        LifetimeEnum $lifetime = LifetimeEnum::Singleton,
+        array $tags = [],
+    ): self {
+        return $this->bind($id, new DirectFactory($factory, $this), $lifetime, $tags);
     }
 
     /**
@@ -271,6 +295,14 @@ final class Container implements ContainerInterface, ArrayAccess
     }
 
     /**
+     * Begin a reflection-free factory binding.
+     *
+     * Call singleton(), scoped(), or transient() on the returned pending
+     * binding to register the factory. The factory receives this container as
+     * its first argument and is never parameter-autowired.
+     *
+     * @param string $id Service identifier.
+     * @param Closure $factory Factory called as ``$factory($this)``.
      * @throws ContainerException
      */
     public function factory(string $id, Closure $factory): PendingFactoryBinding

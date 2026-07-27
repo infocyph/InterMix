@@ -33,7 +33,7 @@ Flag                    Default    What it does
 ``injection``           ``true``   Turn the **reflection autowiring engine** on / off.
                                   When *false* the container switches to ``GenericCall``
                                   and **every** dependency must be supplied via
-                                  :ref:`di.registration`.
+                                  :ref:`di.registration` or an explicit direct factory.
 ``methodAttributes``    ``false``  Honour ``#[Infuse]`` on **method parameters**.
 ``propertyAttributes``  ``false``  Honour ``#[Infuse]`` on **class properties**.
 ``defaultMethod``       ``null``   If you call ``getReturn(Foo::class)`` **without** a
@@ -50,6 +50,10 @@ Flag                    Default    What it does
        bool        $propertyAttributes = false,
        ?string     $defaultMethod      = null
    ): self
+
+Direct factories registered with ``bindFactory()`` or ``factory()`` have the
+same behavior in both modes: InterMix calls the factory with its owning
+container and never reflects or autowires the factory parameters.
 
 ----------------------------------------------------
 2 · Convenience helpers (chainable)
