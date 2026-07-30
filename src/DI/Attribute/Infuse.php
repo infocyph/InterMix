@@ -25,7 +25,7 @@ use Attribute;
 class Infuse
 {
     /** @var array<int|string, mixed> */
-    private array $data = [];
+    private array $data;
 
     private string|int|null $firstKey = null;
 
@@ -37,6 +37,8 @@ class Infuse
      */
     public function __construct(mixed ...$parameters)
     {
+        $this->data = [];
+
         if ($parameters !== []) {
             $this->firstKey = array_key_first($parameters);
             foreach ($parameters as $key => $value) {
