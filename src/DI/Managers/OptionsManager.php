@@ -71,11 +71,8 @@ class OptionsManager implements ArrayAccess
     /**
      * Enables or disables debug tracing for the container.
      *
-     * If enabled, the container will generate a detailed trace of all
-     * resolutions, including the definitions and services that are being
-     * resolved. The trace level can be set to either `TraceLevelEnum::Node` (default)
-     * to only log the top-most nodes, or `TraceLevelEnum::Verbose` to log
-     * everything.
+     * Node tracing records the outer graph; verbose tracing records every
+     * resolution event.
      *
      * @param bool $enable Whether to enable debug tracing. Defaults to true.
      * @param TraceLevelEnum $level The trace level to use. Defaults to `TraceLevelEnum::Node`.

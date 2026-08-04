@@ -129,17 +129,35 @@ $c->definitions()->enableDefinitionCache($pool, cacheRuntimeObjects: false);
 ### Compiled Resolvers
 
 ```php
+use Infocyph\InterMix\DI\Support\FactoryDefinition;
+use Infocyph\InterMix\DI\Support\ServiceReference;
+
 $path = __DIR__ . '/var/intermix.compiled.php';
 
-// build-time: generate compiled resolver map
+// Explicit recipes can be executed dynamically and compiled safely.
+$c->bind('mailer', FactoryDefinition::construct(Mailer::class, [
+    new ServiceReference(Logger::class),
+    'transactional',
+]));
+
+// Build time, after every definition and option is registered.
 $c->compileTo($path);
+$report = $c->compilationReport();
 
-// runtime: activate compiled resolver map explicitly
+// Runtime, after performing the same registration.
 $c->useCompiled($path);
-
-// optional one-step build + activate
-$c->compileTo($path, load: true);
 ```
+
+Artifacts include PHP, InterMix, environment, definition, resolution
+configuration, lifetime, tag, and compiled-recipe fingerprints. Incompatible
+artifacts fail closed. Automatic class recipes pass conservative cache-time
+eligibility checks; contextual, attributed, resource-configured, implicit-method,
+and otherwise dynamic definitions remain on the normal resolver with an exact
+reason in the compilation report. A later container configuration mutation
+disables the active map until it is rebuilt. Ordinary closures and
+`bindFactory()` definitions deliberately remain dynamic.
+
+See the [compiled resolver guide](https://docs.infocyph.com/projects/InterMix/en/latest/di/compiled-resolvers.html).
 
 ### Signed Serialization
 

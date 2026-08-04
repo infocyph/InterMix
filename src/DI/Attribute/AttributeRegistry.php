@@ -52,6 +52,7 @@ final class AttributeRegistry
             );
         }
 
+        $this->container->getRepository()->invalidateCompiledResolvers();
         $this->map[$attributeFqcn] = new $resolverFqcn();
     }
 
@@ -72,5 +73,17 @@ final class AttributeRegistry
         $resolver = $this->map[$attributeInstance::class] ?? null;
 
         return $resolver?->resolve($attributeInstance, $target, $this->container);
+    }
+
+    /**
+     * @return array<int, class-string> Registered attribute classes.
+     * @internal
+     */
+    public function types(): array
+    {
+        $types = array_keys($this->map);
+        sort($types, SORT_STRING);
+
+        return $types;
     }
 }

@@ -36,6 +36,8 @@ Container Entry Points
      - ``$c->findByTag('event')``, ``$c->debug($id)``, ``$c->tracer()->toArray()``, ``$c->exportGraph()``
    * - Freeze config
      - ``$c->lock()``
+   * - Compile construction recipes
+     - ``$c->compileTo($path)`` / ``$c->useCompiled($path)`` / ``$c->compilationReport()``
 
 -----------------------------
 Managers At A Glance

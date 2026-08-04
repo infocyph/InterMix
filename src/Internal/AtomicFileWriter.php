@@ -11,7 +11,12 @@ use RuntimeException;
  */
 final class AtomicFileWriter
 {
-    public static function write(string $filePath, string $contents): void
+    /**
+     * @param string $filePath Final artifact destination.
+     * @param string $contents Complete generated contents.
+     * @param null|callable(string): void $validate Receives the staged path before activation.
+     */
+    public static function write(string $filePath, string $contents, ?callable $validate = null): void
     {
         $directory = realpath(dirname($filePath));
         if ($directory === false || !is_dir($directory)) {
@@ -27,6 +32,10 @@ final class AtomicFileWriter
             $written = file_put_contents($temporaryPath, $contents, LOCK_EX);
             if ($written !== strlen($contents)) {
                 throw new RuntimeException("Unable to write complete generated file '$filePath'.");
+            }
+
+            if ($validate !== null) {
+                $validate($temporaryPath);
             }
 
             if (!rename($temporaryPath, $filePath)) {

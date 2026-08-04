@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Resolver;
 
+use Closure;
 use Infocyph\InterMix\DI\Attribute\AttributeRegistry;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Support\DebugTracer;
@@ -37,8 +38,11 @@ class Repository
     /** @var array<string, array{on: callable, params: array<int|string, mixed>}> */
     private array $closureResource = [];
 
-    /** @var array<string, callable(Container): mixed> */
-    private array $compiledResolvers = [];
+    /** @var (Closure(Container, string): mixed)|null */
+    private ?Closure $compiledResolver = null;
+
+    /** @var array<string, mixed> */
+    private array $compiledResolverIds = [];
 
     /** @var array<string, array<string, string>> */
     private array $conditionalBindings = [];
@@ -345,14 +349,7 @@ class Repository
     }
 
     /**
-     * Returns an array of all the definition meta data.
-     *
-     * The returned array has the definition IDs as the keys and the
-     * corresponding meta data as the values. The meta data array
-     * contains the following information:
-     *
-     * - lifetime: The lifetime of the definition. Defaults to Lifetime::Singleton.
-     * - tags: An array of tags to associate with the definition. Defaults to an empty array.
+     * Return lifetime and tag metadata keyed by definition ID.
      *
      * @return array<string, array{lifetime: LifetimeEnum, tags: array<int, string>}> An array of all the definition meta data.
      */
@@ -372,11 +369,7 @@ class Repository
     }
 
     /**
-     * Retrieves the array of class resources.
-     *
-     * This method returns the array of class resources, where each key is the
-     * class name and the value is an array containing constructor and method
-     * data.
+     * Return registered constructor and method resources keyed by class.
      *
      * @return array<string, array<string, mixed>> the array of class resources
      */
@@ -394,11 +387,7 @@ class Repository
     }
 
     /**
-     * Retrieves the array of closure resources.
-     *
-     * This method returns the array of closure resources, where each key is the
-     * alias of the closure and the value is an array containing the closure
-     * function and its parameters.
+     * Return registered callables and arguments keyed by alias.
      *
      * @return array<string, array{on: callable, params: array<int|string, mixed>}> the array of closure resources
      */
@@ -415,14 +404,31 @@ class Repository
         return $this->closureResource[$alias] ?? null;
     }
 
-    public function getCompiledResolver(string $id): mixed
+    public function getCompiledResolver(string $id): ?Closure
     {
-        return $this->compiledResolvers[$id] ?? null;
+        return isset($this->compiledResolverIds[$id]) ? $this->compiledResolver : null;
     }
 
     public function getContextualBinding(string $consumer, string $dependency): mixed
     {
         return $this->contextualBindings[$consumer][$dependency] ?? null;
+    }
+
+    /**
+     * @return array<string, array<int, string>> Contextual binding coordinates.
+     * @internal
+     */
+    public function getContextualBindingShape(): array
+    {
+        $shape = [];
+        foreach ($this->contextualBindings as $consumer => $bindings) {
+            $dependencies = array_keys($bindings);
+            sort($dependencies, SORT_STRING);
+            $shape[$consumer] = $dependencies;
+        }
+        ksort($shape, SORT_STRING);
+
+        return $shape;
     }
 
     /**
@@ -481,10 +487,7 @@ class Repository
     /**
      * Get the concrete implementation bound to an interface for the current environment.
      *
-     * This method will return the concrete implementation for the given interface
-     * if the current environment matches the one set using `setEnvironment()`.
-     * If there is no bound implementation for the current environment, or if the
-     * environment is not set, this method will return null.
+     * Return the environment-specific implementation when one is registered.
      *
      * @param string|null $interface the interface to get the concrete implementation for
      * @return string|null the concrete implementation for the given interface in the current environment
@@ -513,15 +516,6 @@ class Repository
         return $this->functionReference[$id] ?? null;
     }
 
-    /**
-     * Returns the array of function references.
-     *
-     * This method returns the array of function references, where each key is the
-     * identifier of the function reference and the value is the definition of the
-     * function reference.
-     *
-     * @return array the array of function references
-     */
     /**
      * @return array<string, mixed>
      */
@@ -558,6 +552,15 @@ class Repository
         }
 
         return array_keys($ids);
+    }
+
+    /**
+     * @return array<int, class-string> Registered attribute classes.
+     * @internal
+     */
+    public function getRegisteredAttributeTypes(): array
+    {
+        return $this->attributeRegistry?->types() ?? [];
     }
 
     /**
@@ -603,11 +606,7 @@ class Repository
     }
 
     /**
-     * Returns the array of resolved resources for class-based resources.
-     *
-     * This method returns the array of resolved resources, where each key is the
-     * class name and the value is an array containing the resolved values for
-     * that class, such as the instance, constructor, properties, and methods.
+     * Return class resolution state keyed by class name.
      *
      * @return array<string, array<string, mixed>> the array of resolved resources for class-based resources
      */
@@ -646,6 +645,22 @@ class Repository
     public function hasClosureResource(string $alias): bool
     {
         return array_key_exists($alias, $this->closureResource);
+    }
+
+    /** @internal */
+    public function hasCompiledResolvers(): bool
+    {
+        return $this->compiledResolver instanceof Closure;
+    }
+
+    /**
+     * @param string $consumer Consumer class name.
+     * @param string $dependency Dependency class name.
+     * @internal
+     */
+    public function hasContextualBinding(string $consumer, string $dependency): bool
+    {
+        return array_key_exists($dependency, $this->contextualBindings[$consumer] ?? []);
     }
 
     /**
@@ -688,6 +703,17 @@ class Repository
     public function hasScopeSeeds(): bool
     {
         return $this->scopeSeeds !== [];
+    }
+
+    /**
+     * Invalidate generated construction recipes after a configuration mutation.
+     *
+     * @internal
+     */
+    public function invalidateCompiledResolvers(): void
+    {
+        $this->compiledResolver = null;
+        $this->compiledResolverIds = [];
     }
 
     /**
@@ -852,19 +878,15 @@ class Repository
     }
 
     /**
-     * @param array<array-key, mixed> $resolvers
+     * @param Closure $resolver Generated dispatcher accepting the container and service ID.
+     * @param array<string, mixed> $ids Validated compiled identifiers and fingerprints.
+     * @internal
      */
-    public function setCompiledResolvers(array $resolvers): void
+    public function setCompiledResolver(Closure $resolver, array $ids): void
     {
-        $this->checkIfLocked();
-        $normalized = [];
-        foreach ($resolvers as $id => $resolver) {
-            if (!is_string($id) || !is_callable($resolver)) {
-                continue;
-            }
-            $normalized[$id] = $resolver;
-        }
-        $this->compiledResolvers = $normalized;
+        $this->checkIfLocked(invalidateCompiled: false);
+        $this->compiledResolver = $resolver;
+        $this->compiledResolverIds = $ids;
     }
 
     public function setContextualBinding(string $consumer, string $dependency, mixed $give): void
@@ -876,8 +898,7 @@ class Repository
     /**
      * Sets the default method to be called when resolving a class.
      *
-     * This method assigns a new default method name to be used when resolving
-     * class resources. If the container is locked, an exception will be thrown.
+     * The selected name applies when class resources provide no explicit method.
      *
      * @param string|null $method The default method name, or null to unset.
      *
@@ -1007,19 +1028,13 @@ class Repository
     }
 
     /**
-     * Stores a resolved resource with its ID in the "resolved" array.
-     *
-     * This method is used to store the resolved value of a resource in the
-     * repository. The resolved value is associated with the resource ID and
-     * can be later retrieved using the same ID. The container is not checked
-     * for locks before storing the value, so use with caution.
+     * Store a runtime resolution result without changing container definitions.
      *
      * @param string $id The ID of the resource.
      * @param mixed $value The resolved value of the resource.
      */
     public function setResolved(string $id, mixed $value): void
     {
-        // no lock check needed typically, but you can do it if you want
         $this->resolved[$id] = $value;
         if ($this->getDefinitionLifetime($id) === LifetimeEnum::Singleton) {
             $this->resolvedSingleton[$id] = $this->fetchInstanceOrValue($value);
@@ -1120,10 +1135,14 @@ class Repository
      *
      * @throws ContainerException
      */
-    private function checkIfLocked(): void
+    private function checkIfLocked(bool $invalidateCompiled = true): void
     {
         if ($this->isLocked) {
             throw new ContainerException('Container is locked! Unable to set/modify any value.');
+        }
+
+        if ($invalidateCompiled) {
+            $this->invalidateCompiledResolvers();
         }
     }
 

@@ -112,6 +112,15 @@ final readonly class InjectedCall
     }
 
     /**
+     * @return array{ClassResolver, ParameterResolver} Active reflection-backed resolvers.
+     * @internal
+     */
+    public function reflectionResolvers(): array
+    {
+        return [$this->classResolver, $this->parameterResolver];
+    }
+
+    /**
      * Resolve a definition by name (id).
      *
      * @param string $name The id of the definition to resolve.

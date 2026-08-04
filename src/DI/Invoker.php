@@ -49,7 +49,7 @@ final class Invoker
      *
      * @param Container $container The container to use for resolving callables.
      *
-     * @return static An instance of the invoker.
+     * @return self An instance of the invoker.
      */
     public static function with(Container $container): self
     {
@@ -182,9 +182,7 @@ final class Invoker
      *
      * This is a convenience wrapper for the container's `make` method.
      *
-     * The constructor parameters are passed as an array, and the same applies
-     * for the method parameters. If no method is specified, the constructed
-     * instance will be returned.
+     * Constructor and optional method arguments are supplied independently.
      *
      * @param string $class The fully-qualified class name to create an instance of.
      * @param array<int|string, mixed> $ctorArgs An array of constructor parameters.
@@ -263,13 +261,8 @@ final class Invoker
     /**
      * Routes a callable to the appropriate execution path based on its type.
      *
-     * This method handles various types of callables including closures, function strings,
-     * class strings, and invokable objects. It determines the appropriate execution path
-     * by checking the type and properties of the given callable. If the callable is a closure,
-     * it is executed directly. For function strings and invokable objects, it uses the
-     * `viaClosure` method to execute them. If the callable is a class string, an instance
-     * is created with optional `__invoke` execution. Additionally, serialized closures
-     * are detected and unserialized for execution.
+     * Closures, functions, class targets, invokable objects, and serialized
+     * closures retain their corresponding execution semantics.
      *
      * @param mixed $callable The callable to be routed and executed.
      * @param array<int|string, mixed> $args The arguments to pass to the callable.

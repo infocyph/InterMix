@@ -53,7 +53,7 @@ class RegistrationManager implements ArrayAccess
      *
      * @param string|ServiceProviderInterface $provider The service provider to import.
      *
-     * @return static The registration manager instance.
+     * @return self The registration manager instance.
      * @throws ContainerException
      */
     public function import(string|ServiceProviderInterface $provider): self
