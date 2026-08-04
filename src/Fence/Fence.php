@@ -91,12 +91,8 @@ trait Fence
     /**
      * Get or create an instance.
      *
-     * If the class using this trait defines:
-     *
-     *   public const FENCE_KEYED = true|false;
-     *   public const FENCE_LIMIT = <int>;
-     *
-     * those values are honoured.  Otherwise defaults are keyed=true, limit=∞.
+     * Consumer constants may select keyed instances and an instance limit;
+     * otherwise keyed storage and an unlimited count are used.
      *
      * @param array{extensions?: array<int, string>, classes?: array<int, string>}|null $constraints ['extensions'=>[], 'classes'=>[]]
      */

@@ -247,7 +247,7 @@ it('does not reuse closure parameter resolution across different closures', func
         ->and(strlen($token))->toBeGreaterThan(0);
 });
 
-it('distinguishes namespaced method closures on PHP 8.3', function () {
+it('distinguishes namespaced method closures on PHP 8.4', function () {
     $container = Container::instance(uniqid('namespaced_closure_args_'));
 
     [$withoutArguments, $withArgument] = NamespacedClosureFactory::invoke($container);

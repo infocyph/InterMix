@@ -29,7 +29,7 @@
         }
     ],
     "require": {
-        "php": ">=8.3",
+        "php": ">=8.4",
         "opis/closure": "^4.5",
         "psr/cache": "^3.0",
         "psr/container": "^2.0"

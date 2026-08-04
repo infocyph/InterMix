@@ -65,12 +65,6 @@ final class ValueSerializer
 
     /**
      * Encode any value into a transport-safe (optionally base64) string.
-     *
-     * ```php
-     * $token = ValueSerializer::encode($payload);        // base64 by default
-     * $same  = ValueSerializer::decode($token);
-     * ```
-     *
      * @param mixed $value Any PHP value
      * @param bool $base64 True ⇒ wrap with base64; false ⇒ raw
      * @return string Encoded payload

@@ -10,11 +10,8 @@ if (!function_exists('container')) {
     /**
      * Get a Container instance or directly call a method/closure.
      *
-     * If $closureOrClass is null, returns the Container (PSR-11).
-     * Otherwise, we interpret it as:
-     *   - A string/array describing a "class@method" or "class::method" => registerMethod, then getReturn()
-     *   - A closure/callable => call it (resolve via reflection if needed)
-     *   - A plain string => treat it as an ID/class => get it from container
+     * A null target returns the container. Supported callable targets are
+     * invoked, while plain identifiers are resolved from the container.
      *
      * @return Container|mixed
      *

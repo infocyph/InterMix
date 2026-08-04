@@ -18,7 +18,7 @@ Requirements
 
 infocyph/InterMix |version| requires the following:
 
-* PHP 8.3/+
+* PHP 8.4/+
 
 Installation
 ############

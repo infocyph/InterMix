@@ -12,11 +12,10 @@ trait ConditionableTappable
 {
     /**
      * Invoke the given callback with this instance and return the instance.
-     * If no callback is provided, returns a proxy that allows method chaining on this instance
-     * while ensuring the original instance is returned.
+     * Without a callback, a proxy preserves fluent calls and the original target.
      *
      * @param callable|null $callback Callback to invoke with this instance.
-     * @return $this|TapProxy The original instance ($this) or a tap proxy if no callback was given.
+     * @return TapProxy|static The original instance or a tap proxy.
      */
     public function tap(?callable $callback = null): TapProxy|static
     {
@@ -44,10 +43,10 @@ trait ConditionableTappable
 
         return match (true) {
             $argumentCount === 0
-            => (new ConditionalProxy($this))->negateConditionOnCapture(),
+            => new ConditionalProxy($this)->negateConditionOnCapture(),
 
             $argumentCount === 1
-            => (new ConditionalProxy($this))->condition(!$value),
+            => new ConditionalProxy($this)->condition(!$value),
 
             !$value && $callback !== null
                 => $callback($this, $value) ?? $this,
@@ -75,7 +74,7 @@ trait ConditionableTappable
             return new ConditionalProxy($this);
         }
         if (func_num_args() === 1) {
-            return (new ConditionalProxy($this))->condition((bool) $value);
+            return new ConditionalProxy($this)->condition((bool) $value);
         }
         if ($value && $callback !== null) {
             return $callback($this, $value) ?? $this;

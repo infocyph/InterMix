@@ -152,7 +152,7 @@ trait MacroMix
     {
         static::$macros[$name] = $macro;
         if ($macro instanceof Closure) {
-            static::$macroIsStaticClosure[$name] = (new ReflectionFunction($macro))->isStatic();
+            static::$macroIsStaticClosure[$name] = new ReflectionFunction($macro)->isStatic();
 
             return;
         }
@@ -274,7 +274,7 @@ trait MacroMix
             $closure = $macro;
 
             $isStaticClosure = static::$macroIsStaticClosure[$method]
-                ??= (new ReflectionFunction($macro))->isStatic();
+                ??= new ReflectionFunction($macro)->isStatic();
 
             if ($bind !== null && !$isStaticClosure) {
                 $bound = $macro->bindTo($bind, static::class);

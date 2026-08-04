@@ -8,6 +8,7 @@ use ArrayAccess;
 use Closure;
 use Exception;
 use Infocyph\InterMix\DI\Attribute\AttributeRegistry;
+use Infocyph\InterMix\DI\Invoker\CompiledCall;
 use Infocyph\InterMix\DI\Invoker\GenericCall;
 use Infocyph\InterMix\DI\Invoker\InjectedCall;
 use Infocyph\InterMix\DI\Managers\DefinitionManager;
@@ -59,7 +60,12 @@ final class Container implements ContainerInterface, ArrayAccess
 
     protected Repository $repository;
 
-    protected closure|InjectedCall|GenericCall $resolver;
+    protected closure|CompiledCall|InjectedCall|GenericCall $resolver;
+
+    /**
+     * @var null|array{path: string, fingerprint: string, compiled: array<int, string>, skipped: array<string, string>}
+     */
+    private ?array $compilationReport = null;
 
     /**
      * Container constructor.
@@ -77,7 +83,9 @@ final class Container implements ContainerInterface, ArrayAccess
             ContainerInterface::class,
             $this,
         );
-        $this->resolver = fn() => new InjectedCall($this->repository);
+        $this->resolver = fn() => $this->repository->hasCompiledResolvers()
+            ? new CompiledCall($this->repository)
+            : new InjectedCall($this->repository);
         $this->invocationManager = new InvocationManager($this->repository, $this);
     }
 
@@ -90,7 +98,7 @@ final class Container implements ContainerInterface, ArrayAccess
      * @param string $instanceAlias The alias of the container instance to get or create.
      *                              Defaults to 'default'.
      *
-     * @return static The container instance.
+     * @return self The container instance.
      * @throws ContainerException
      */
     public static function instance(string $instanceAlias = self::DEFAULT_ALIAS): self
@@ -177,13 +185,29 @@ final class Container implements ContainerInterface, ArrayAccess
     }
 
     /**
-     * @throws ReflectionException
+     * Return the result of the most recent successful resolver compilation.
+     *
+     * @return null|array{
+     *   path: string,
+     *   fingerprint: string,
+     *   compiled: array<int, string>,
+     *   skipped: array<string, string>
+     * }
+     */
+    public function compilationReport(): ?array
+    {
+        return $this->compilationReport;
+    }
+
+    /**
+     * @throws ContainerException|ReflectionException
      */
     public function compileTo(string $path, bool $load = false): self
     {
-        $compiled = (new CompiledResolverGenerator())->generate($this, $path);
+        $compiled = new CompiledResolverGenerator()->generate($this, $path);
+        $this->compilationReport = $compiled['report'];
         if ($load) {
-            $this->repository->setCompiledResolvers($compiled);
+            $this->repository->setCompiledResolver($compiled['resolver'], $compiled['ids']);
         }
 
         return $this;
@@ -370,16 +394,20 @@ final class Container implements ContainerInterface, ArrayAccess
     /**
      * Retrieves the class name of the current resolver being used by the repository.
      *
-     * @return InjectedCall|GenericCall The resolver currently active in the container.
+     * @return CompiledCall|InjectedCall|GenericCall The resolver currently active in the container.
      */
-    public function getCurrentResolver(): InjectedCall|GenericCall
+    public function getCurrentResolver(): CompiledCall|InjectedCall|GenericCall
     {
         if ($this->resolver instanceof Closure) {
             $resolved = ($this->resolver)();
-            if (!$resolved instanceof InjectedCall && !$resolved instanceof GenericCall) {
+            if (!$resolved instanceof CompiledCall
+                && !$resolved instanceof InjectedCall
+                && !$resolved instanceof GenericCall
+            ) {
                 throw new ContainerException(
                     sprintf(
-                        'Invalid resolver instance. Expected %s or %s.',
+                        'Invalid resolver instance. Expected %s, %s, or %s.',
+                        CompiledCall::class,
                         InjectedCall::class,
                         GenericCall::class,
                     ),
@@ -477,7 +505,7 @@ final class Container implements ContainerInterface, ArrayAccess
      * This method is useful for tests or other scenarios where you want to ensure that
      * the container does not change after it has been configured.
      *
-     * @return $this The container instance.
+     * @return self The container instance.
      */
     public function lock(): self
     {
@@ -551,16 +579,7 @@ final class Container implements ContainerInterface, ArrayAccess
     }
 
     /**
-     * Parse a callable string/array, returning an associative array with keys
-     * "kind" and one of "closure", "class", "method", or "function".
-     *
-     * The following syntaxes are supported:
-     * - "class@method"
-     * - "class::method"
-     * - class name as a string
-     * - function name as a string
-     * - callable object (e.g. closure, invokable class)
-     * - array of class and method name
+     * Parse a supported callable string, array, closure, function, or object.
      *
      * Class-method targets are validated eagerly, so referenced classes must be
      * autoloadable and methods must exist at parse time.
@@ -691,15 +710,13 @@ final class Container implements ContainerInterface, ArrayAccess
     /**
      * Sets the class name of the resolver to be used by the repository.
      *
-     * This method allows for dynamically changing the resolver class
-     * used in the container. The new resolver class should be a valid
-     * fully qualified class name that implements the required interface
-     * for resolvers.
+     * The supplied resolver must satisfy the supported dynamic-call contract.
      *
      * @param class-string<InjectedCall|GenericCall> $resolverClass The fully qualified class name of the new resolver.
      */
     public function setResolverClass(string $resolverClass): void
     {
+        $this->repository->invalidateCompiledResolvers();
         $this->resolver = fn() => new $resolverClass($this->repository);
     }
 
@@ -777,12 +794,23 @@ final class Container implements ContainerInterface, ArrayAccess
      */
     public function useCompiled(string $path): self
     {
-        $compiled = require $path;
-        if (!is_array($compiled)) {
-            throw new ContainerException('Compiled resolver file must return an array.');
-        }
-        /** @var array<array-key, mixed> $compiled */
-        $this->repository->setCompiledResolvers($compiled);
+        $compiled = new CompiledResolverGenerator()->load($this, $path);
+        $this->repository->setCompiledResolver($compiled['resolver'], $compiled['ids']);
+
+        return $this;
+    }
+
+    /**
+     * Load an artifact validated during immutable deployment preparation.
+     *
+     * @param string $path Application-owned compiled artifact path.
+     * @param string $fingerprint Fingerprint published in the same deployment manifest.
+     * @throws ContainerException
+     */
+    public function usePrevalidated(string $path, string $fingerprint): self
+    {
+        $compiled = new CompiledResolverGenerator()->loadPrevalidated($path, $fingerprint);
+        $this->repository->setCompiledResolver($compiled['resolver'], $compiled['ids']);
 
         return $this;
     }

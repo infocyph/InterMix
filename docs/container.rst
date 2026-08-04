@@ -153,6 +153,7 @@ Dive into the detailed sub-chapters. Happy mixing!  Questions?  Open an issue or
     di/tagging
     di/environment
     di/cache
+    di/compiled-resolvers
     di/preload
     di/debug_tracing
     di/cheat_sheet

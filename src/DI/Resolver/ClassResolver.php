@@ -71,7 +71,6 @@ class ClassResolver
         string|bool|null $callMethod = null,
         bool $make = false,
     ): array {
-        // Possibly environment-based interface => check if $class->isInterface(), then environment override
         $class = $this->getConcreteClassForInterface($class, $supplied);
         $className = $class->getName();
         $parent = end($this->classStack);
@@ -300,7 +299,8 @@ class ClassResolver
         string $className,
         string|bool|null $callMethod,
     ): ?string {
-        $callOn = $class->hasConstant('callOn') ? $class->getConstant('callOn') : null;
+        $constant = $class->hasConstant('CALL_ON') ? 'CALL_ON' : 'callOn';
+        $callOn = $class->hasConstant($constant) ? $class->getConstant($constant) : null;
         $configuredMethod = $this->readConfiguredMethod($className);
         $method = $callMethod
             ?: $configuredMethod
@@ -316,14 +316,9 @@ class ClassResolver
     /**
      * Resolve the constructor of a class.
      *
-     * If the class has no constructor, an instance is created with
-     * {@see ReflectionClass::newInstanceWithoutConstructor()}.
-     * If the class has a constructor, the constructor parameters are resolved
-     * using the {@see ParameterResolver} and an instance is created with
-     * {@see ReflectionClass::newInstanceArgs()}.
-     *
-     * The resolved instance is stored in the {@see Repository} under the
-     * key `resolvedResource[$className]['instance']`.
+     * Constructor parameters are resolved when present; otherwise an instance
+     * is created without constructor arguments. The repository retains the
+     * resulting instance for the active resolution lifecycle.
      *
      * @param ReflectionClass<object> $class The class to resolve the constructor for.
      *
@@ -436,17 +431,8 @@ class ClassResolver
     /**
      * Resolves a method to be called on the instance of the class.
      *
-     * The method to be called can be specified as a string, or as a boolean
-     * value to indicate whether to call the constructor or not.
-     *
-     * If the method is not specified, the method name will be looked up in the
-     * class resource, or in the class constant "callOn", or in the default
-     * method name stored in the repository.
-     *
-     * If the method does not exist, the returned value will be null.
-     *
-     * The resolved instance and the returned value are stored in the
-     * repository under the key "resolvedResource[$className]".
+     * Explicit selection takes precedence over registered class resources and
+     * the repository default. Missing methods produce a null return value.
      *
      * @param ReflectionClass<object> $class The class to resolve the method for.
      * @param string|bool|null $callMethod The name of the method to call, or a boolean value to indicate whether to call the constructor or not.
