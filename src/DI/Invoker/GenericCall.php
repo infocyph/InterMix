@@ -26,7 +26,7 @@ final readonly class GenericCall
      * sets properties, and optionally invokes a method.
      *
      * @param string $class Fully-qualified class name to instantiate.
-     * @param string|null $method Method to invoke, if any.
+     * @param string|false|null $method Method to call, false to construct only, or null for configured behavior.
      * @return array{
      *     instance: object,
      *     returned: mixed
@@ -34,7 +34,7 @@ final readonly class GenericCall
      *
      * @throws ReflectionException
      */
-    public function classSettler(string $class, ?string $method = null): array
+    public function classSettler(string $class, string|false|null $method = null): array
     {
         $classResource = $this->repository->getClassResourceFor($class);
 
@@ -47,8 +47,12 @@ final readonly class GenericCall
         $this->setProperties($instance, $props);
 
         // Determine method to invoke (method param, or classResource's configured "method", or defaultMethod)
-        $method ??= $this->readNestedString($classResource, ['method', 'on']) ?? $this->repository->getDefaultMethod();
-        $returned = $this->invokeMethod($instance, $method, $classResource);
+        if ($method === false) {
+            $returned = null;
+        } else {
+            $method ??= $this->readNestedString($classResource, ['method', 'on']) ?? $this->repository->getDefaultMethod();
+            $returned = $this->invokeMethod($instance, $method, $classResource);
+        }
 
         return [
             'instance' => $instance,

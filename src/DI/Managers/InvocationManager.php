@@ -95,7 +95,7 @@ class InvocationManager implements ArrayAccess
         }
 
         // 4) Otherwise assume class name
-        $targetMethod = is_string($method) ? $method : null;
+        $targetMethod = $method === false ? false : (\is_string($method) ? $method : null);
 
         return $resolver->classSettler($classOrClosure, $targetMethod);
     }
@@ -235,8 +235,7 @@ class InvocationManager implements ArrayAccess
     public function make(string $class, string|bool $method = false): mixed
     {
         $resolver = $this->container->getCurrentResolver();
-        $targetMethod = is_string($method) ? $method : null;
-
+        $targetMethod = $method === false ? false : (\is_string($method) ? $method : null);
         $fresh = $resolver->classSettler($class, $targetMethod, true);
 
         return $method === false ? $fresh['instance'] : $fresh['returned'];

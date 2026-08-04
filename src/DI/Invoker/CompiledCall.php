@@ -32,13 +32,13 @@ final class CompiledCall
 
     /**
      * @param string|object $class Class name or object to resolve dynamically.
-     * @param string|null $method Optional method to invoke.
+     * @param string|false|null $method Method to call, false to construct only, or null for configured behavior.
      * @param bool $make Whether to bypass resolved-instance reuse.
      * @return array<string, mixed> Resolved instance and optional method result.
      */
     public function classSettler(
         string|object $class,
-        ?string $method = null,
+        string|false|null $method = null,
         bool $make = false,
     ): array {
         return $this->dynamicResolver()->classSettler($class, $method, $make);
