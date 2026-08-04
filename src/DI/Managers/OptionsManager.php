@@ -116,7 +116,7 @@ class OptionsManager implements ArrayAccess
      */
     public function generatePreload(string $path): self
     {
-        (new PreloadGenerator())->generate($this->container, $path);
+        new PreloadGenerator()->generate($this->container, $path);
 
         return $this;
     }

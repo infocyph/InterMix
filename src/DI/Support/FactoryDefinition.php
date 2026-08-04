@@ -106,12 +106,7 @@ final readonly class FactoryDefinition
         if (!is_array($value)) {
             return false;
         }
-        foreach ($value as $item) {
-            if (!self::isExportable($item)) {
-                return false;
-            }
-        }
 
-        return true;
+        return array_all($value, fn($item) => self::isExportable($item));
     }
 }

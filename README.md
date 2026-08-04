@@ -38,7 +38,7 @@ Optional global helpers:
 require_once __DIR__ . '/vendor/infocyph/intermix/src/functions.php';
 ```
 
-Current InterMix releases require PHP 8.3 or newer, as declared by `composer.json`.
+Current InterMix releases require PHP 8.4 or newer, as declared by `composer.json`.
 
 ## Quick Examples
 

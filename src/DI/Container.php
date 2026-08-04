@@ -204,7 +204,7 @@ final class Container implements ContainerInterface, ArrayAccess
      */
     public function compileTo(string $path, bool $load = false): self
     {
-        $compiled = (new CompiledResolverGenerator())->generate($this, $path);
+        $compiled = new CompiledResolverGenerator()->generate($this, $path);
         $this->compilationReport = $compiled['report'];
         if ($load) {
             $this->repository->setCompiledResolver($compiled['resolver'], $compiled['ids']);
@@ -794,7 +794,7 @@ final class Container implements ContainerInterface, ArrayAccess
      */
     public function useCompiled(string $path): self
     {
-        $compiled = (new CompiledResolverGenerator())->load($this, $path);
+        $compiled = new CompiledResolverGenerator()->load($this, $path);
         $this->repository->setCompiledResolver($compiled['resolver'], $compiled['ids']);
 
         return $this;
@@ -809,7 +809,7 @@ final class Container implements ContainerInterface, ArrayAccess
      */
     public function usePrevalidated(string $path, string $fingerprint): self
     {
-        $compiled = (new CompiledResolverGenerator())->loadPrevalidated($path, $fingerprint);
+        $compiled = new CompiledResolverGenerator()->loadPrevalidated($path, $fingerprint);
         $this->repository->setCompiledResolver($compiled['resolver'], $compiled['ids']);
 
         return $this;

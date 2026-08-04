@@ -266,7 +266,7 @@ final class CompiledResolverGenerator
      */
     private function compileClassDefinition(Container $container, string $definition): array
     {
-        return (new AutomaticClassCompiler())->compile($container, $definition);
+        return new AutomaticClassCompiler()->compile($container, $definition);
     }
 
     /**

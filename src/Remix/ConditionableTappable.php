@@ -43,10 +43,10 @@ trait ConditionableTappable
 
         return match (true) {
             $argumentCount === 0
-            => (new ConditionalProxy($this))->negateConditionOnCapture(),
+            => new ConditionalProxy($this)->negateConditionOnCapture(),
 
             $argumentCount === 1
-            => (new ConditionalProxy($this))->condition(!$value),
+            => new ConditionalProxy($this)->condition(!$value),
 
             !$value && $callback !== null
                 => $callback($this, $value) ?? $this,
@@ -74,7 +74,7 @@ trait ConditionableTappable
             return new ConditionalProxy($this);
         }
         if (func_num_args() === 1) {
-            return (new ConditionalProxy($this))->condition((bool) $value);
+            return new ConditionalProxy($this)->condition((bool) $value);
         }
         if ($value && $callback !== null) {
             return $callback($this, $value) ?? $this;

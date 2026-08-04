@@ -222,13 +222,8 @@ final class AutomaticClassCompiler
         if (!is_array($value)) {
             return false;
         }
-        foreach ($value as $item) {
-            if (!$this->isExportable($item)) {
-                return false;
-            }
-        }
 
-        return true;
+        return array_all($value, fn($item) => $this->isExportable($item));
     }
 
     /**
@@ -255,15 +250,8 @@ final class AutomaticClassCompiler
      */
     private function propertyHasRegisteredAttribute(Container $container, ReflectionProperty $property): bool
     {
-        foreach ($property->getAttributes() as $attribute) {
-            if ($attribute->getName() === Infuse::class
-                || $container->attributeRegistry()->has($attribute->getName())
-            ) {
-                return true;
-            }
-        }
-
-        return false;
+        return array_any($property->getAttributes(), fn($attribute) => $attribute->getName() === Infuse::class
+            || $container->attributeRegistry()->has($attribute->getName()));
     }
 
     /**
