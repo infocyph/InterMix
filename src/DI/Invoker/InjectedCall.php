@@ -57,7 +57,7 @@ final readonly class InjectedCall
      * Settles (resolves) a class with dependency injection.
      *
      * @param string|object $class The class name or object to settle.
-     * @param string|null $method The method to call after construction (or null).
+     * @param string|false|null $method Method to call, false to construct only, or null for configured behavior.
      * @param bool $make Whether to create a new instance (bypassing any cached instance).
      * @return array<string, mixed> An associative array with keys 'instance' and possibly 'returned'.
      *
@@ -65,7 +65,7 @@ final readonly class InjectedCall
      */
     public function classSettler(
         string|object $class,
-        ?string $method = null,
+        string|false|null $method = null,
         bool $make = false,
     ): array {
         return $this->classResolver->resolve(

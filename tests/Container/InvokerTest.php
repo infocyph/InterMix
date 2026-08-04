@@ -20,6 +20,19 @@ class InvokableFoo
     }
 }
 
+class ConstructOnlyInvokable
+{
+    public int $calls = 0;
+
+    public ?string $lastArgument = null;
+
+    public function __invoke(string $required): void
+    {
+        ++$this->calls;
+        $this->lastArgument = $required;
+    }
+}
+
 class MyService
 {
     public function __construct(public string $id = '') {}
@@ -141,6 +154,15 @@ it('make() returns fresh instances', function () {
 it('make() can call a method', function () {
     $out = $this->inv->make(MyService::class, [], 'run', ['X']);
     expect($out)->toBe('X processed');
+});
+
+it('make() constructs invokable classes without invoking them', function () {
+    $instance = $this->inv->make(ConstructOnlyInvokable::class);
+
+    expect($instance)
+        ->toBeInstanceOf(ConstructOnlyInvokable::class)
+        ->and($instance->calls)->toBe(0)
+        ->and($instance->lastArgument)->toBeNull();
 });
 
 /* -----------------------------------------------------------------
