@@ -60,7 +60,7 @@ body:
     id: local_details
     attributes:
       label: Local reproduction details
-      description: Include the command, result, and any differences from CI.
+      description: Include the command, result and any differences from CI.
       placeholder: composer ic:ci fails locally with the same error...
 
   - type: input
@@ -83,7 +83,7 @@ body:
     id: environment
     attributes:
       label: Runner and dependency environment
-      description: Include the runner OS, dependency mode, relevant extensions, matrix values, and PHPForge version when known.
+      description: Include the runner OS, dependency mode, relevant extensions, matrix values and PHPForge version when known.
       placeholder: ubuntu-latest, prefer-lowest, PHPForge 1.x, ext-json enabled...
     validations:
       required: true
@@ -92,10 +92,10 @@ body:
     id: recent_changes
     attributes:
       label: Relevant recent changes
-      description: Mention dependency, configuration, workflow, or source changes that may be related.
+      description: Mention dependency, configuration, workflow or source changes that may be related.
 
   - type: textarea
     id: additional
     attributes:
       label: Additional context
-      description: Add related issues, screenshots, logs, or other useful context.
+      description: Add related issues, screenshots, logs or other useful context.
