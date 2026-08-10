@@ -1,5 +1,5 @@
 name: Question
-description: Ask about usage, behavior, integration, or configuration
+description: Ask about usage, behavior, integration or configuration
 labels:
   - question
 body:
@@ -23,7 +23,7 @@ body:
     id: attempted
     attributes:
       label: What have you tried?
-      description: Include relevant code, commands, configuration, documentation, or approaches already checked.
+      description: Include relevant code, commands, configuration, documentation or approaches already checked.
       placeholder: I tried...
     validations:
       required: true
@@ -46,11 +46,11 @@ body:
     id: environment
     attributes:
       label: Environment
-      description: Include package, PHP, Composer, OS, extensions, or CI details only when relevant.
+      description: Include package, PHP, Composer, OS, extensions or CI details only when relevant.
       placeholder: Package 2.4.1, PHP 8.4, Composer 2.9, Ubuntu 24.04...
 
   - type: textarea
     id: additional
     attributes:
       label: Additional context
-      description: Add related links, screenshots, or prior discussions.
+      description: Add related links, screenshots or prior discussions.

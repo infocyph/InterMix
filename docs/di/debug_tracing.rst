@@ -33,9 +33,9 @@ repository flag; the tracer and its entry/graph arrays are created only when
 tracing is explicitly requested. Dependency edges reuse the resolver's existing
 cycle-detection stacks rather than maintaining another resolution stack.
 
----------------------
+--------------------------
 See the Trace Output 👀
----------------------
+--------------------------
 
 .. code-block:: php
 

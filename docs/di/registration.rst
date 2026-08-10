@@ -49,7 +49,7 @@ Hints
 ^^^^^
 
 * Un-listed parameters fall back to **autowiring** (if enabled) or
-  ``#[Infuse]`` attributes.
+  ``#[Inject]`` attributes.
 * The registration **overrides** anything the attribute would set for the
   same parameter.
 
@@ -76,11 +76,11 @@ When you later do:
 the container:
 
 1. Builds ``EmailService``
-2. Injects the supplied parameters (plus Infuse fallbacks)
+2. Injects the supplied parameters (plus Inject fallbacks)
 3. Executes ``setConfig()``
 4. Stores/returns the **configured instance**
 
-**Tip** | You can omit ``$args`` to rely solely on ``#[Infuse]`` in the
+**Tip** | You can omit ``$args`` to rely solely on ``#[Inject]`` in the
 method signature.
 
 ------------------------------------------------------------------
@@ -101,7 +101,7 @@ gymnastics.
 Precedence (highest → lowest):
 
 1. **registerProperty()**
-2. ``#[Infuse]`` on the property (if propertyAttributes = true)
+2. ``#[Inject]`` on the property (if propertyAttributes = true)
 3. Do nothing (property remains untouched)
 
 ------------------------------------------------------------------

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Infocyph\InterMix\DI\Attribute\Infuse;
+use Infocyph\InterMix\DI\Attribute\Inject;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Invoker\CompiledCall;
 use Infocyph\InterMix\DI\Invoker\InjectedCall;
@@ -56,7 +56,7 @@ final class CompiledResolverAttributedConstructor
 {
     public CompiledResolverDependency $annotated;
 
-    public function __construct(#[Infuse] CompiledResolverDependency $annotated)
+    public function __construct(#[Inject] CompiledResolverDependency $annotated)
     {
         $this->annotated = $annotated;
     }
@@ -64,7 +64,7 @@ final class CompiledResolverAttributedConstructor
 
 final class CompiledResolverAttributedProperty
 {
-    #[Infuse(CompiledResolverDependency::class)]
+    #[Inject(CompiledResolverDependency::class)]
     public mixed $injected = null;
 }
 

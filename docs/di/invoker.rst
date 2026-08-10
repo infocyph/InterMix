@@ -34,10 +34,8 @@ Key Features
      - Build object plus optionally call a method
    * - ``resolve()``
      - Retrieve from container by key
-   * - ``serialize()``
-     - Serialize closures and values
-   * - ``unserialize()``
-     - Restore serialized closures or data
+   * - ``callableFor()``
+     - Resolve and cache an invokable class for this Invoker instance
 
 ---------------
 Usage Examples
@@ -63,8 +61,10 @@ the container so constructor and method dependencies can be resolved.
 
 .. code-block:: php
 
-   $packed = $invoker->serialize(fn () => 42);
-   $fn = $invoker->unserialize($packed);
+   use Infocyph\InterMix\Serializer\ClosureSerializer;
+
+   $packed = ClosureSerializer::serialize(fn () => 42);
+   $fn = ClosureSerializer::unserialize($packed);
    echo $fn(); // 42
 
 **4. Shared global instance**
@@ -78,12 +78,18 @@ the container so constructor and method dependencies can be resolved.
 Internals
 ---------
 
-The invoker uses:
+The invoker routes common callables in this order:
 
-- a direct callable path for static ``[class, method]`` targets
-- ``routeCallable()`` — detects callable types: closures, invokable classes, strings, or serialized closures
-- ``viaClosure()`` — injects closures into the container for contextual execution
-- Integration with ``ValueSerializer`` for full closure support
+- native closures
+- invokable objects
+- callable arrays
+- function strings
+- static ``Class::method`` strings
+- class strings
+- unsigned InterMix Closure envelopes as a cold fallback
+
+Normal callable routing performs no Opis, payload decoding, signing, or HMAC
+work. Serialization remains the responsibility of ``ClosureSerializer``.
 
 --------
 

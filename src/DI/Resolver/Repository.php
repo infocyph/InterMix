@@ -130,9 +130,7 @@ class Repository
     /**
      * Stores a class resource, with a key that can be 'constructor', 'method', 'property'.
      *
-     * The given data is stored in the class resources array as
-     * $classResource[$class][$key] = $data.
-     *
+     * The given data is stored under its class and resource-type keys.
      *
      * This method ensures that the container is not locked before making modifications.
      *

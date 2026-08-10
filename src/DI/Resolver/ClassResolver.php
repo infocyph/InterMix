@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Resolver;
 
-use Infocyph\InterMix\DI\Attribute\IMStdClass;
-use Infocyph\InterMix\DI\Attribute\Infuse;
-use Infocyph\InterMix\DI\Support\ReflectionResource;
+use Infocyph\InterMix\DI\Attribute\AttributeResolution;
+use Infocyph\InterMix\DI\Attribute\Inject;
 use Infocyph\InterMix\Exceptions\ContainerException;
+use Infocyph\InterMix\Internal\ReflectionResource;
 use Psr\Cache\InvalidArgumentException;
 use ReflectionClass;
 use ReflectionException;
@@ -110,7 +110,7 @@ class ClassResolver
     }
 
     /**
-     * Resolve an Infuse attribute by first extracting the "type" (class name, function name, definition ID, etc.)
+     * Resolve an Inject attribute by first extracting the "type" (class name, function name, definition ID, etc.)
      * and then trying to resolve it in the following order:
      * 1. If $type is in functionReference => let definitionResolver handle it
      * 2. If $type is a global function name => reflect the function and use parameterResolver to handle injection or data
@@ -118,35 +118,35 @@ class ClassResolver
      *    (optional) environment-based override if it's an interface
      * 4. Otherwise, we have no way to resolve it
      *
-     * @param Infuse $infuse The Infuse attribute to resolve
-     * @return mixed The resolved value or null if not possible
+     * @param Inject $inject The Inject attribute to resolve
+     * @return mixed The resolved value or the unresolved sentinel
      *
      * @throws ContainerException
      * @throws ReflectionException|InvalidArgumentException
      */
-    public function resolveInfuse(Infuse $infuse): mixed
+    public function resolveInject(Inject $inject): mixed
     {
-        $typeData = $infuse->getParameterData();
+        $typeData = $inject->getParameterData();
         if (!is_array($typeData)) {
-            return new IMStdClass();
+            return AttributeResolution::Unresolved;
         }
         $type = $typeData['type'] ?? null;
         $data = $typeData['data'] ?? [];
         if (!is_string($type) || $type === '') {
-            return new IMStdClass();
+            return AttributeResolution::Unresolved;
         }
 
-        $fromDefinition = $this->resolveInfuseFromDefinition($type);
-        if ($fromDefinition !== null) {
+        $fromDefinition = $this->resolveInjectFromDefinition($type);
+        if ($fromDefinition !== AttributeResolution::Unresolved) {
             return $fromDefinition;
         }
 
-        $fromFunction = $this->resolveInfuseFromFunction($type, (array) $data);
-        if ($fromFunction !== null) {
+        $fromFunction = $this->resolveInjectFromFunction($type, (array) $data);
+        if ($fromFunction !== AttributeResolution::Unresolved) {
             return $fromFunction;
         }
 
-        return $this->resolveInfuseFromClassOrInterface($type);
+        return $this->resolveInjectFromClassOrInterface($type);
     }
 
     /**
@@ -343,10 +343,10 @@ class ClassResolver
         $this->repository->setResolvedResource($className, $resolvedResource);
     }
 
-    private function resolveInfuseFromClassOrInterface(string $type): mixed
+    private function resolveInjectFromClassOrInterface(string $type): mixed
     {
         if (!class_exists($type) && !interface_exists($type)) {
-            return null;
+            return AttributeResolution::Unresolved;
         }
 
         if (interface_exists($type)) {
@@ -361,20 +361,20 @@ class ClassResolver
         );
     }
 
-    private function resolveInfuseFromDefinition(string $type): mixed
+    private function resolveInjectFromDefinition(string $type): mixed
     {
         return $this->repository->hasFunctionReference($type)
             ? $this->definitionResolver->resolve($type)
-            : null;
+            : AttributeResolution::Unresolved;
     }
 
     /**
      * @param array<int|string, mixed> $data
      */
-    private function resolveInfuseFromFunction(string $type, array $data): mixed
+    private function resolveInjectFromFunction(string $type, array $data): mixed
     {
         if (!function_exists($type)) {
-            return null;
+            return AttributeResolution::Unresolved;
         }
 
         $reflectionFn = ReflectionResource::getFunctionReflection($type);

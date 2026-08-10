@@ -1,44 +1,38 @@
-## Summary
+## Motivation
 
-Describe what changed, why it was needed and the expected behavior.
+Describe the problem, use case or capability this feature addresses.
 
 <!--
 Link relevant issues, discussions, pull requests or documentation when available.
 Use `Closes #...`, `Fixes #...` or `Relates #...` where applicable.
 -->
 
-## Change
+## Solution
 
-### Type
+Describe the proposed behavior and how consumers are expected to use it.
 
-* [ ] Bug fix
-* [ ] New feature
-* [ ] Refactor
-* [ ] Performance
-* [ ] Security or reliability
-* [ ] Documentation or examples
-* [ ] Dependency, CI or tooling
-* [ ] Other
+## API and Compatibility
 
-### Behavior and Compatibility
-
-* [ ] No observable behavior changed
-* [ ] Existing behavior was corrected
-* [ ] New behavior was introduced
-* [ ] Public API or documented behavior changed
+* [ ] No new public API
+* [ ] New backward-compatible public API
+* [ ] Existing public API or documented behavior changed
 * [ ] Backward compatibility may be affected
 * [ ] PHP, extension, platform or dependency requirements changed
 
 <!--
-Remove the compatibility notes below when no explanation is required.
+Remove the API notes below when no explanation is required.
 
-Describe relevant behavior changes, deprecations, compatibility concerns
-or upgrade requirements.
+Describe signatures, contracts, configuration, deprecations, migration needs
+or intentionally excluded scope.
 -->
 
 ## Validation
 
 * [ ] `composer ic:ci`
+* [ ] Expected behavior is covered
+* [ ] Boundary and edge cases are covered
+* [ ] Failure and exception paths are covered
+* [ ] Public API usage is covered
 
 <!-- When `composer ic:ci` passes, do not select focused checks. -->
 
@@ -65,11 +59,10 @@ Select every command that passed and explain the limitation below.
 </details>
 
 <!--
-Remove the validation notes below when `composer ic:ci` passed without
-relevant limitations.
+Remove the validation notes below when complete validation passed without
+limitations.
 
-Explain skipped or failed checks, environment limitations, manual validation
-or other relevant results.
+Explain skipped checks, environment limitations or manual verification.
 -->
 
 ## Performance
@@ -93,29 +86,21 @@ After:
 Difference:
 -->
 
-## Implementation Notes
-
-<!--
-Remove this section when the implementation is straightforward.
-
-Describe important decisions, trade-offs, limitations or intentionally
-excluded work.
--->
-
 ## Review Focus
 
 <!--
 Remove this section when no special review focus is required.
 
-Highlight areas that deserve additional reviewer attention.
+Highlight API design, behavior, compatibility, edge cases or trade-offs that
+deserve additional attention.
 -->
 
 ## Checklist
 
-* [ ] The change is focused and excludes unrelated modifications.
-* [ ] Tests cover new, corrected and regression-prone behavior.
+* [ ] The feature is focused and excludes unrelated changes.
+* [ ] Tests cover the public contract and failure behavior.
 * [ ] Public API and backward-compatibility implications were considered.
-* [ ] Documentation, examples and type information were updated where required.
+* [ ] Documentation, examples and type information were updated.
 * [ ] Performance claims are supported by reproducible benchmarks.
 * [ ] No credentials, secrets, personal data or sensitive debug output are included.
 * [ ] I followed `CONTRIBUTING.md` and the engineering principles.

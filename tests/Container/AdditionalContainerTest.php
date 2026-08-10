@@ -192,12 +192,12 @@ test('Method injection with leftover parameters that are not variadic', function
 
 /*
 |--------------------------------------------------------------------------
-| 9) Infuse attribute referencing an unknown definition
+| 9) Inject attribute referencing an unknown definition
 |--------------------------------------------------------------------------
 */
-class InfuseUnknownParam
+class InjectUnknownParam
 {
-    #[\Infocyph\InterMix\DI\Attribute\Infuse('unknown.ref')]
+    #[\Infocyph\InterMix\DI\Attribute\Inject('unknown.ref')]
     public function doSomething(BasicClass $basic, string $another): array
     {
         return [
@@ -207,12 +207,12 @@ class InfuseUnknownParam
     }
 }
 
-test('Infuse attribute with unknown reference', function () {
-    $container = container(null, 'infuse_unknown')
+test('Inject attribute with unknown reference', function () {
+    $container = container(null, 'inject_unknown')
         ->options()
         ->setOptions(true, true)
         ->end();
-    $container->call(InfuseUnknownParam::class, 'doSomething');
+    $container->call(InjectUnknownParam::class, 'doSomething');
 })->throws(ContainerException::class);
 
 test('helper default aliases are readable and isolated', function () {

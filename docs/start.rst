@@ -4,21 +4,22 @@
 Getting Started
 ===============
 
-infocyph/InterMix is a PHP library to provide with some class oriented tools that we need frequently.
+InterMix is a lightweight, high-performance PHP dependency injection and runtime
+utility toolkit. DI and invocation are its primary capabilities; Closure
+serialization, Fence, and Remix provide focused supporting utilities.
 
 What Is this?
 ##############
 
-Lots of class oriented functionality that we need like; Dependency Injection, Mixins, Class barrier etc.
-are simply put together. As my other projects, it focuses on being lightweight, updated, least complex
-and balanced within Speed & Scalability!.
+InterMix combines explicit dependency resolution, invocation, scoped lifetimes,
+compiled resolvers, and direct factories in one framework-agnostic package.
 
 Requirements
 ############
 
 infocyph/InterMix |version| requires the following:
 
-* PHP 8.4/+
+* PHP >= 8.4
 
 Installation
 ############

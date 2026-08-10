@@ -1,6 +1,6 @@
 {
     "name": "infocyph/intermix",
-    "description": "A lightweight PHP DI container, invoker, serializer, and utility toolkit.",
+    "description": "A lightweight, high-performance PHP dependency injection and runtime utility toolkit with invocation, scoped services, compiled resolution, Closure serialization, Fence and fluent helpers.",
     "license": "MIT",
     "type": "library",
     "keywords": [
@@ -10,7 +10,7 @@
         "dependency-injection",
         "psr-11",
         "invoker",
-        "serializer",
+        "closure-serialization",
         "attributes",
         "scoped-services",
         "macro",

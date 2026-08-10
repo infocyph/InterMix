@@ -15,8 +15,12 @@ Typical use-cases
 * **HTTP request** ID – isolate per-request state or caches.
 * **CLI job** / **queue worker** – reuse expensive objects during the job but
   not across jobs.
-* **Fiber / coroutine** – give each fiber its own contextual dependencies.
 * **Multi-tenant apps** – tag each tenant with their customer ID.
+
+Scopes are logical container scopes for synchronous request/job execution and
+explicitly isolated container instances. InterMix does not provide automatic
+Fiber- or coroutine-local storage; concurrent contexts must use isolated
+container instances or application-managed execution-context storage.
 
 API
 ---
@@ -31,7 +35,7 @@ Switching scope *never* clears non-scoped singletons; only services bound with
 ``LifetimeEnum::Scoped`` are affected.
 
 Example 🍰
----------
+--------------------
 
 .. code-block:: php
 
@@ -94,7 +98,7 @@ The third argument to ``withinScope()``—and the second argument to
 * do not modify definition metadata or lifetime caches.
 
 Best practices 💡
-----------------
+--------------------
 
 * **Keep scopes short-lived** – usually the lifetime of a single request or job.
 * **Avoid cross-scope leakage** – pass *IDs* or *DTOs* between scopes, not the

@@ -28,9 +28,7 @@ trait Fence
 
     private static ?int $limitOverride = null;
 
-    /**
-     * Resets the internal cache of instances.  This is mostly useful for unit tests.
-     */
+    /** Clear created instances without changing the runtime limit override. */
     final public static function clearInstances(): void
     {
         self::$instances = [];
@@ -123,6 +121,13 @@ trait Fence
         self::$instances[$slot] = $created;
 
         return $created;
+    }
+
+    /** Reset created instances and restore the class-declared limit. */
+    final public static function reset(): void
+    {
+        self::$instances = [];
+        self::$limitOverride = null;
     }
 
     /**

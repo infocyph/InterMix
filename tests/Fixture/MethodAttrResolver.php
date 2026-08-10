@@ -6,6 +6,7 @@ namespace Infocyph\InterMix\Tests\Fixture;
 
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Attribute\AttributeResolverInterface;
+use Infocyph\InterMix\DI\Attribute\AttributeResolution;
 use Reflector;
 
 class MethodAttrResolver implements AttributeResolverInterface
@@ -14,7 +15,7 @@ class MethodAttrResolver implements AttributeResolverInterface
         object $attributeInstance,
         Reflector $target,
         Container $container
-    ): null {
+    ): AttributeResolution {
         fwrite(
             STDERR,
             '[TEST] '
@@ -26,6 +27,6 @@ class MethodAttrResolver implements AttributeResolverInterface
             . "\n"
         );
 
-        return null;
+        return AttributeResolution::Unresolved;
     }
 }

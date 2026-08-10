@@ -6,7 +6,7 @@ Lazy Loading
 
 Lazy loading delays service construction until the **first time** you access it.
 Instead of creating the object right away, InterMix stores a lightweight
-:php:class:`DeferredInitializer`.
+internal deferred entry.
 
 When enabled (default), this reduces **startup cost** for services that might
 never be used in a request or command.
@@ -22,7 +22,7 @@ How It Works ⚙️
        BigService::class
    );
 
-With lazy loading **on**, the container stores a proxy (``DeferredInitializer``)
+With lazy loading **on**, the container stores an internal initializer
 for class/array-style definitions and resolves it when ``get()`` is first called.
 
 -----------------------------------------
@@ -48,7 +48,7 @@ Default Rules
    * - Array definition
      - Yes
    * - User closure plus Singleton/Scoped
-     - Resolved on first ``get()`` (no ``DeferredInitializer`` wrapper)
+     - Resolved on first ``get()``
    * - User closure plus Transient
      - No caching (runs each ``get()``)
 
@@ -56,7 +56,7 @@ Default Rules
 Why not all?
 ---------------
 
-User closures are not wrapped in ``DeferredInitializer``. They run when the
+User closures are not wrapped in an additional deferred object. They run when the
 service is resolved and their reuse depends on lifetime (singleton/scoped cache
 the resolved value; transient does not).
 

@@ -36,8 +36,8 @@ Configure behaviour (optional)
 
    $c1->options()->setOptions(
        injection: true,          // reflection autowiring engine
-       methodAttributes: true,   // honour #[Infuse] on parameters
-       propertyAttributes: true, // honour #[Infuse] on properties
+       methodAttributes: true,   // honour #[Inject] on parameters
+       propertyAttributes: true, // honour #[Inject] on properties
        defaultMethod: 'handle'   // fallback method name
    );
 
@@ -116,7 +116,7 @@ Resolve
    echo $c1->get('answer');                 // 42
    echo $c1->get('now')->format('c');       // 2025-06-18T12:34:56+00:00
 
-Autowire a class (constructor injection)::
+Resolve a class through constructor injection::
 
    class Greeter
    {
@@ -135,12 +135,12 @@ A taste of attributes
 
 .. code-block:: php
 
-   use Infocyph\InterMix\DI\Attribute\Infuse;
+   use Infocyph\InterMix\DI\Attribute\Inject;
 
    class Mailer
    {
-       #[Infuse] private LoggerInterface $logger;
-       public function __construct(#[Infuse('cfg.smtp')] string $dsn = 'smtp://localhost') {}
+       #[Inject] private LoggerInterface $logger;
+       public function __construct(#[Inject('cfg.smtp')] string $dsn = 'smtp://localhost') {}
    }
 
    $c1->definitions()

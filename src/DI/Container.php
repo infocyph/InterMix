@@ -395,6 +395,7 @@ final class Container implements ContainerInterface, ArrayAccess
      * Retrieves the class name of the current resolver being used by the repository.
      *
      * @return CompiledCall|InjectedCall|GenericCall The resolver currently active in the container.
+     * @internal
      */
     public function getCurrentResolver(): CompiledCall|InjectedCall|GenericCall
     {
@@ -450,21 +451,15 @@ final class Container implements ContainerInterface, ArrayAccess
     /**
      * Checks if a definition ID exists in the container.
      *
-     * This method attempts to verify the existence of a given ID
-     * within the container by delegating the check to the
-     * InvocationManager. If an exception occurs during the check,
-     * the method will return false.
+     * Existence checks are delegated to the repository-backed manager and do
+     * not resolve the entry or use exceptions for expected control flow.
      *
      * @param string $id The ID of the definition to check.
      * @return bool True if the definition ID exists, false otherwise.
      */
     public function has(string $id): bool
     {
-        try {
-            return $this->invocationManager->has($id);
-        } catch (Exception) {
-            return false;
-        }
+        return $this->invocationManager->has($id);
     }
 
     /**
@@ -591,6 +586,7 @@ final class Container implements ContainerInterface, ArrayAccess
      *                                                |array{kind:'function',function:string}
      * @throws ContainerException If the callable spec is invalid.
      * @throws InvalidArgumentException If no argument is provided.
+     * @internal
      */
     public function parseCallable(string|array|Closure|callable $spec): array
     {
@@ -713,6 +709,7 @@ final class Container implements ContainerInterface, ArrayAccess
      * The supplied resolver must satisfy the supported dynamic-call contract.
      *
      * @param class-string<InjectedCall|GenericCall> $resolverClass The fully qualified class name of the new resolver.
+     * @internal
      */
     public function setResolverClass(string $resolverClass): void
     {

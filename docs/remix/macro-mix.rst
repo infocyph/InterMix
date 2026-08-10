@@ -17,7 +17,7 @@ Advantages
   ``$this`` so you can continue chaining.
 - **Config or annotation loading** — Bulk-load macros from arrays or
   ``@Macro("name")`` annotations.
-- **Thread safety** (optional) — Enable a lock if you care about concurrency.
+- **Optional mutation locking** — Serialize registry writes when required.
 
 Basic Usage
 ===========
@@ -34,7 +34,7 @@ Include the trait in any class:
    {
        use MacroMix;
 
-       // Optional: enable thread-safe macro registration
+       // Optional: serialize registry mutations
        public const ENABLE_LOCK = true;
 
        protected string $color = 'gold';
@@ -226,8 +226,8 @@ Results in:
 
    Exception: Method App\House::nonexistent does not exist.
 
-Thread Safety
-=============
+Mutation Locking
+================
 
 If you define the constant:
 
@@ -238,7 +238,14 @@ If you define the constant:
        public const ENABLE_LOCK = true;
    }
 
-Then:
+When ``ENABLE_LOCK`` is missing or false, mutations take the direct path. When
+it is true, ``macro()``, ``removeMacro()``, ``mix()``,
+``loadMacrosFromConfig()``, and ``loadMacrosFromAnnotations()`` use one
+class-specific portable lock. Bulk operations acquire the lock once for the
+complete registry update.
 
-- Write operations (``macro()``, ``removeMacro()``, ``loadMacrosFromConfig()``) acquire an exclusive file lock on the trait source.
-- Read operations (e.g. ``hasMacro()``, ``getMacros()``, macro calls) skip locking.
+``hasMacro()``, ``getMacros()``, ``__call()``, ``__callStatic()``, and normal
+macro execution remain lock-free, even when mutation locking is enabled.
+
+The lock serializes MacroMix registry mutations. It does not make process-local
+macro registries shared between independent PHP processes.

@@ -57,7 +57,7 @@ body:
     id: reproduce
     attributes:
       label: Minimal reproduction
-      description: Provide the smallest code sample, command, configuration, or repository that reproduces the problem.
+      description: Provide the smallest code sample, command, configuration or repository that reproduces the problem.
       placeholder: |
         1. Install or configure ...
         2. Run ...
@@ -108,7 +108,7 @@ body:
     id: environment
     attributes:
       label: Environment
-      description: Include the operating system, relevant extensions, dependency mode, runtime, and CI provider when applicable.
+      description: Include the operating system, relevant extensions, dependency mode, runtime and CI provider when applicable.
       placeholder: Ubuntu 24.04, locked dependencies, ext-json enabled, GitHub Actions...
     validations:
       required: true
@@ -117,4 +117,4 @@ body:
     id: additional
     attributes:
       label: Additional context
-      description: Add related issues, screenshots, logs, workarounds, or other useful context.
+      description: Add related issues, screenshots, logs, workarounds or other useful context.

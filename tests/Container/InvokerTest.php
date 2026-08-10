@@ -8,6 +8,7 @@ declare(strict_types=1);
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Invoker;
 use Infocyph\InterMix\Exceptions\ContainerException;
+use Infocyph\InterMix\Serializer\ClosureSerializer;
 
 /* -----------------------------------------------------------------
  |  Fixtures
@@ -122,14 +123,24 @@ it('autowires missing static method parameters', function () {
         ->toBe('UTC');
 });
 
-it('throws a ContainerException on unsupported target', function () {
+it('throws an InvalidArgumentException on unsupported target', function () {
     $this->inv->invoke('not-a-callable');
-})->throws(ContainerException::class);
+})->throws(InvalidArgumentException::class);
 
 /* Opis-packed closure ------------------------------------------------------ */
 it('executes a serialized-closure string', function () {
-    $packed = $this->inv->serialize(fn() => 'packed');
+    $packed = ClosureSerializer::serialize(fn() => 'packed');
     expect($this->inv->invoke($packed))->toBe('packed');
+});
+
+it('invokes a static class-method string', function () {
+    expect($this->inv->invoke(StaticController::class . '::health'))
+        ->toBe(['status' => 'ok']);
+});
+
+it('resolves a class-string', function () {
+    expect($this->inv->invoke(MyService::class))
+        ->toBeInstanceOf(MyService::class);
 });
 
 /* -----------------------------------------------------------------
@@ -168,15 +179,6 @@ it('make() constructs invokable classes without invoking them', function () {
 /* -----------------------------------------------------------------
  |  4. Serializer round-trip
  |-----------------------------------------------------------------*/
-it('serialises and restores closures', function () {
-    $packed = $this->inv->serialize(fn() => 42);
-    $restored = $this->inv->unserialize($packed);
-
-    expect($restored)
-        ->toBeInstanceOf(Closure::class)
-        ->and($restored())->toBe(42);
-});
-
 /* -----------------------------------------------------------------
  |  5. NEW — pure callable + DI-injected parameters
  |-----------------------------------------------------------------*/

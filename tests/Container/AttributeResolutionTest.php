@@ -3,7 +3,8 @@
 declare(strict_types=1);
 
 use Infocyph\InterMix\DI\Container;
-use Infocyph\InterMix\DI\Attribute\Infuse;
+use Infocyph\InterMix\DI\Attribute\AttributeResolverInterface;
+use Infocyph\InterMix\DI\Attribute\Inject;
 use Infocyph\InterMix\Tests\Fixture\ExampleAttr;
 use Infocyph\InterMix\Tests\Fixture\ExampleAttrResolver;
 use Infocyph\InterMix\Tests\Fixture\LogicOnlyAttr;
@@ -15,6 +16,23 @@ use Infocyph\InterMix\Tests\Fixture\MethodTarget;
 use Infocyph\InterMix\Tests\Fixture\MixedAttributeExample;
 
 uses()->group('di', 'attribute');
+
+#[Attribute(Attribute::TARGET_PROPERTY)]
+class NullInjection {}
+
+class NullInjectionResolver implements AttributeResolverInterface
+{
+    public function resolve(object $attributeInstance, Reflector $target, Container $container): mixed
+    {
+        return null;
+    }
+}
+
+class NullableAttributeTarget
+{
+    #[NullInjection]
+    public ?string $value;
+}
 
 beforeEach(function () {
     $this->container = new Container();
@@ -37,7 +55,6 @@ it('resolves built-in and custom attributes', function () {
     $c->definitions()->bind('name', 'hello');
     $instance = $c->get(MixedAttributeExample::class);
 
-    // Skip $std as it resolves to IMStdClass by design
     expect($instance->name)
         ->toBe('hello')
         ->and($instance->custom)->toBe('TEST');
@@ -63,7 +80,7 @@ it('supports method parameter attribute injection', function () {
         MethodAttrResolver::class,
     );
 
-    /* 3️⃣  Bind a container definition that Infuse will pick up */
+    /* 3️⃣  Bind a container definition that Inject will pick up */
     $c->definitions()->bind('api_key', 'XYZ123');
 
     /* 4️⃣  Pre-register the method we want the container to invoke */
@@ -103,8 +120,20 @@ it('supports logic-only custom attribute', function () {
     expect($instance)->toBeInstanceOf(LogicOnlyTarget::class);
 });
 
-it('returns the first positional Infuse method argument when requested explicitly', function () {
-    $infuse = new Infuse('first', 'second');
+it('returns the first positional Inject method argument when requested explicitly', function () {
+    $inject = new Inject('first', 'second');
 
-    expect($infuse->getMethodArguments(0))->toBe('first');
+    expect($inject->getMethodArguments(0))->toBe('first');
+});
+
+it('treats null as a resolved custom attribute value', function () {
+    $this->container->attributeRegistry()->register(
+        NullInjection::class,
+        NullInjectionResolver::class,
+    );
+    $this->container->options()->setOptions(propertyAttributes: true);
+
+    $target = $this->container->get(NullableAttributeTarget::class);
+
+    expect($target->value)->toBeNull();
 });

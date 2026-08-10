@@ -27,20 +27,29 @@ Because this manager proxies container access, you can also call container APIs 
 1 · setOptions( injection , methodAttributes , … )
 ----------------------------------------------------
 
-======================  =========  ==========================================================
-Flag                    Default    What it does
-======================  =========  ==========================================================
-``injection``           ``true``   Turn the **reflection autowiring engine** on / off.
-                                  When *false* the container switches to ``GenericCall``
-                                  and **every** dependency must be supplied via
-                                  :ref:`di.registration` or an explicit direct factory.
-``methodAttributes``    ``false``  Honour ``#[Infuse]`` on **method parameters**.
-``propertyAttributes``  ``false``  Honour ``#[Infuse]`` on **class properties**.
-``defaultMethod``       ``null``   If you call ``getReturn(Foo::class)`` **without** a
-                                  registered method, the container will execute this method
-                                  on the freshly-built instance (e.g. ``'__invoke'`` or
-                                  ``'handle'`` in CQRS/HTTP handlers).
-======================  =========  ==========================================================
+.. list-table::
+   :header-rows: 1
+   :widths: 25 15 60
+
+   * - Flag
+     - Default
+     - What it does
+   * - ``injection``
+     - ``true``
+     - Turn the **reflection autowiring engine** on or off. When *false*, the
+       container switches to ``GenericCall`` and **every** dependency must be
+       supplied via :ref:`di.registration` or an explicit direct factory.
+   * - ``methodAttributes``
+     - ``false``
+     - Honour ``#[Inject]`` on **method parameters**.
+   * - ``propertyAttributes``
+     - ``false``
+     - Honour ``#[Inject]`` on **class properties**.
+   * - ``defaultMethod``
+     - ``null``
+     - If you call ``getReturn(Foo::class)`` **without** a registered method,
+       the container executes this method on the freshly built instance (for
+       example, ``'__invoke'`` or ``'handle'`` in CQRS/HTTP handlers).
 
 *Signature* (named arguments supported) ::
 
@@ -66,7 +75,7 @@ container and never reflects or autowires the factory parameters.
    * - Helper
      - Effect
    * - ``enableLazyLoading(true)``
-     - Store class bindings as ``DeferredInitializer`` until first ``get($id)``; reduces boot cost.
+     - Store class bindings as internal deferred entries until first ``get($id)``; reduces boot cost.
    * - ``setEnvironment('prod')``
      - Select the active environment; used with ``bindInterfaceForEnv()`` to swap implementations.
    * - ``bindInterfaceForEnv($env, I::class, C::class)``

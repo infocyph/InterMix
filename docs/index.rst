@@ -23,4 +23,3 @@ Contents
     remix
     functions
     benchmark
-    di/attribute-deferred-initializer

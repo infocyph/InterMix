@@ -3,16 +3,15 @@
 declare(strict_types=1);
 namespace Infocyph\InterMix\Tests\Fixture;
 
-use Infocyph\InterMix\DI\Attribute\Autowire;
-use Infocyph\InterMix\DI\Attribute\Infuse;
+use Infocyph\InterMix\DI\Attribute\Inject;
 use stdClass;
 
 class MixedAttributeExample
 {
-    #[Autowire]
+    #[Inject]
     public ?stdClass $std = null;
 
-    #[Infuse('name')]
+    #[Inject('name')]
     public string $name;
 
     #[ExampleAttr('TEST')]

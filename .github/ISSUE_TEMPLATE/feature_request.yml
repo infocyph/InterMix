@@ -8,13 +8,13 @@ body:
       value: |
         Describe the problem or use case before proposing an implementation.
 
-        For substantial public API, architectural, or compatibility changes, discussion may be requested before implementation.
+        For substantial public API, architectural or compatibility changes, discussion may be requested before implementation.
 
   - type: textarea
     id: problem
     attributes:
       label: Problem or use case
-      description: Explain the limitation, repeated difficulty, or capability you need.
+      description: Explain the limitation, repeated difficulty or capability you need.
       placeholder: I need to... because...
     validations:
       required: true
@@ -32,7 +32,7 @@ body:
     id: example
     attributes:
       label: Example usage
-      description: Optionally show the proposed API, configuration, command, or workflow.
+      description: Optionally show the proposed API, configuration, command or workflow.
       render: php
 
   - type: textarea
@@ -45,10 +45,10 @@ body:
     id: compatibility
     attributes:
       label: Compatibility considerations
-      description: Mention possible public API, behavior, PHP-version, extension, platform, or dependency implications.
+      description: Mention possible public API, behavior, PHP-version, extension, platform or dependency implications.
 
   - type: textarea
     id: additional
     attributes:
       label: Additional context
-      description: Add related issues, prior art, links, benchmarks, or other supporting information.
+      description: Add related issues, prior art, links, benchmarks or other supporting information.

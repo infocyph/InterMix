@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\Tests\Fixture;
 
-use Infocyph\InterMix\DI\Attribute\Infuse;
+use Infocyph\InterMix\DI\Attribute\Inject;
 
 class NotificationService
 {
-    #[Infuse(FileLogger::class)]
+    #[Inject(FileLogger::class)]
     public LoggerInterface $logger;
 
     public function notify(string $message): void

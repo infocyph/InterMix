@@ -6,6 +6,7 @@ namespace Infocyph\InterMix\DI\Support;
 
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\Internal\AtomicFileWriter;
+use Infocyph\InterMix\Internal\ReflectionResource;
 use ReflectionException;
 
 final class PreloadGenerator

@@ -60,11 +60,11 @@ final class AttributeRegistry
      * Resolves the given attribute instance.
      *
      * Looks up the associated resolver in the map and calls its resolve method.
-     * If the resolver is not found or returns null, the method returns null.
+     * If the resolver is not found, the method returns the unresolved sentinel.
      *
      * @param object $attributeInstance The attribute instance to resolve.
      * @param Reflector $target The target of the attribute (e.g. a class, method, or property).
-     * @return mixed The resolved value or null if not possible.
+     * @return mixed The resolved value or the unresolved sentinel.
      */
     public function resolve(
         object $attributeInstance,
@@ -72,7 +72,11 @@ final class AttributeRegistry
     ): mixed {
         $resolver = $this->map[$attributeInstance::class] ?? null;
 
-        return $resolver?->resolve($attributeInstance, $target, $this->container);
+        if ($resolver === null) {
+            return AttributeResolution::Unresolved;
+        }
+
+        return $resolver->resolve($attributeInstance, $target, $this->container);
     }
 
     /**

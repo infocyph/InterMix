@@ -11,9 +11,7 @@ class LimitTraitTest
 }
 
 beforeEach(function () {
-    // Ensure a clean slate before each test
-    LimitTraitTest::setLimit(2);
-    LimitTraitTest::clearInstances();
+    LimitTraitTest::reset();
 });
 
 test('it creates instances up to the defined limit', function () {
@@ -42,4 +40,20 @@ test('it allows setting a new limit', function () {
     $three = LimitTraitTest::instance('three');
 
     expect($three)->toBeInstanceOf(LimitTraitTest::class);
+});
+
+test('clearInstances preserves an override while reset restores the declared limit', function () {
+    LimitTraitTest::setLimit(3);
+    LimitTraitTest::clearInstances();
+
+    LimitTraitTest::instance('one');
+    LimitTraitTest::instance('two');
+    LimitTraitTest::instance('three');
+
+    LimitTraitTest::reset();
+    LimitTraitTest::instance('one');
+    LimitTraitTest::instance('two');
+
+    expect(fn() => LimitTraitTest::instance('three'))
+        ->toThrow(LimitExceededException::class);
 });

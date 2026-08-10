@@ -7,8 +7,17 @@ use Infocyph\InterMix\Remix\MacroMix;
 class MacroTestClass
 {
     use MacroMix;
+
     public const ENABLE_LOCK = true;
+
     public string $name = '';
+}
+
+class UnlockedMacroTestClass
+{
+    use MacroMix;
+
+    public const ENABLE_LOCK = false;
 }
 
 it('registers & calls macros', function () {
@@ -114,4 +123,60 @@ it('throws when calling an undefined macro', function () {
             'Method %s::undefinedMacro does not exist.',
             MacroTestClass::class
         ));
+});
+
+it('uses the direct mutation path when locking is disabled', function () {
+    UnlockedMacroTestClass::macro('direct', static fn(): string => 'ok');
+    UnlockedMacroTestClass::loadMacrosFromConfig([
+        'configured' => static fn(): string => 'configured',
+    ]);
+
+    expect(UnlockedMacroTestClass::direct())->toBe('ok')
+        ->and(UnlockedMacroTestClass::configured())->toBe('configured');
+
+    UnlockedMacroTestClass::removeMacro('direct');
+    expect(UnlockedMacroTestClass::hasMacro('direct'))->toBeFalse();
+});
+
+it('protects direct and bulk mutations when locking is enabled', function () {
+    MacroTestClass::macro('lockedDirect', static fn(): int => 1);
+    MacroTestClass::loadMacrosFromConfig([
+        'lockedA' => static fn(): int => 2,
+        'lockedB' => static fn(): int => 3,
+    ]);
+
+    expect(MacroTestClass::lockedDirect())->toBe(1)
+        ->and(MacroTestClass::lockedA())->toBe(2)
+        ->and(MacroTestClass::lockedB())->toBe(3);
+
+    MacroTestClass::removeMacro('lockedDirect');
+    expect(MacroTestClass::hasMacro('lockedDirect'))->toBeFalse();
+});
+
+it('releases the mutation lock when an operation throws', function () {
+    $mutate = new ReflectionMethod(MacroTestClass::class, 'mutate');
+
+    expect(fn() => $mutate->invoke(null, static fn() => throw new RuntimeException('failed')))
+        ->toThrow(RuntimeException::class, 'failed');
+
+    $lockHandle = new ReflectionMethod(MacroTestClass::class, 'lockHandle');
+    $handle = $lockHandle->invoke(null);
+
+    expect(flock($handle, LOCK_EX | LOCK_NB))->toBeTrue();
+    flock($handle, LOCK_UN);
+});
+
+it('keeps reads and macro execution lock-free', function () {
+    MacroTestClass::macro('lockFreeRead', static fn(): string => 'read');
+    $lockHandle = new ReflectionMethod(MacroTestClass::class, 'lockHandle');
+    $handle = $lockHandle->invoke(null);
+    flock($handle, LOCK_EX);
+
+    try {
+        expect(MacroTestClass::hasMacro('lockFreeRead'))->toBeTrue()
+            ->and(MacroTestClass::getMacros())->toHaveKey('lockFreeRead')
+            ->and(MacroTestClass::lockFreeRead())->toBe('read');
+    } finally {
+        flock($handle, LOCK_UN);
+    }
 });

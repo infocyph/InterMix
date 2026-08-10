@@ -1,5 +1,5 @@
 name: Documentation improvement
-description: Report missing, outdated, unclear, or incorrect documentation
+description: Report missing, outdated, unclear or incorrect documentation
 labels:
   - documentation
 body:
@@ -21,7 +21,7 @@ body:
     id: location
     attributes:
       label: Documentation location
-      description: Provide the file path, section, symbol, or URL.
+      description: Provide the file path, section, symbol or URL.
       placeholder: README.md — Quick Start
     validations:
       required: true
@@ -30,7 +30,7 @@ body:
     id: problem
     attributes:
       label: Problem
-      description: Explain what is missing, unclear, outdated, or incorrect.
+      description: Explain what is missing, unclear, outdated or incorrect.
       placeholder: The current documentation says or omits...
     validations:
       required: true
@@ -48,11 +48,11 @@ body:
     id: suggestion
     attributes:
       label: Suggested improvement
-      description: Optionally propose wording, structure, examples, or references.
+      description: Optionally propose wording, structure, examples or references.
       placeholder: It may be clearer to...
 
   - type: textarea
     id: additional
     attributes:
       label: Additional context
-      description: Add related links, screenshots, discussions, or examples.
+      description: Add related links, screenshots, discussions or examples.

@@ -2,12 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Infocyph\InterMix\DI\Attribute;
+namespace Infocyph\InterMix\DI\Internal;
 
 use Closure;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Support\TraceLevelEnum;
 
+/** @internal */
 final class DeferredInitializer
 {
     private bool $done = false;

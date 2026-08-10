@@ -13,8 +13,8 @@ use Reflector;
  * The container guarantees that:
  *   • $attributeInstance  is an *instance* of the attribute class
  *   • $target            is the Reflector (parameter / property / method)
- *   • return `null`      → “I choose not to resolve this attribute”
- *   • return anything else → injected value
+ * Return {@see AttributeResolution::Unresolved} when the resolver declines.
+ * Every other value, including null, is an injected value.
  */
 interface AttributeResolverInterface
 {
