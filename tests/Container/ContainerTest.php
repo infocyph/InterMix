@@ -232,7 +232,7 @@ test('Property Injection: NotificationService -> logger', function () {
 //   5) Attribute-based Method Injection (ClassA->resolveIt())
 // -------------------------------------------------------------------------
 
-test('Method injection with attribute Infuse (ClassA->resolveIt)', function () {
+test('Method injection with attribute Inject (ClassA->resolveIt)', function () {
     $container = container(null, 'classA_method_test')
         ->options()
         ->setOptions(true, true)

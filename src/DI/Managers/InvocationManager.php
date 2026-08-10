@@ -6,8 +6,8 @@ namespace Infocyph\InterMix\DI\Managers;
 
 use ArrayAccess;
 use Closure;
-use Infocyph\InterMix\DI\Attribute\DeferredInitializer;
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\DeferredInitializer;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\DI\Support\TraceLevelEnum;

@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Resolver;
 
-use Infocyph\InterMix\DI\Attribute\IMStdClass;
-use Infocyph\InterMix\DI\Attribute\Infuse;
-use Infocyph\InterMix\DI\Support\ReflectionResource;
+use Infocyph\InterMix\DI\Attribute\AttributeResolution;
+use Infocyph\InterMix\DI\Attribute\Inject;
 use Infocyph\InterMix\DI\Support\TraceLevelEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
+use Infocyph\InterMix\Internal\ReflectionResource;
 use Psr\Cache\InvalidArgumentException;
 use ReflectionClass;
 use ReflectionException;
@@ -125,14 +125,14 @@ class PropertyResolver
     }
 
     /**
-     * Attempt to resolve a single property value using the built-in #[Infuse] attribute.
+     * Attempt to resolve a single property value using the built-in #[Inject] attribute.
      *
      * @param ReflectionProperty $property The property to resolve a value for.
      * @param object $classInstance The instance of the class to set the property on.
      * @return array<int, mixed>|null An array of two items: the instance and the resolved value. Or null if not possible to resolve.
      * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
-    private function attemptBuiltInInfuse(
+    private function attemptBuiltInInject(
         ReflectionProperty $property,
         object $classInstance,
     ): ?array {
@@ -140,24 +140,24 @@ class PropertyResolver
             return null;
         }
 
-        $attrs = $property->getAttributes(Infuse::class);
+        $attrs = $property->getAttributes(Inject::class);
         if (!$attrs) {
             return null;
         }
 
-        /** @var Infuse $infuse */
-        $infuse = $attrs[0]->newInstance();
+        /** @var Inject $inject */
+        $inject = $attrs[0]->newInstance();
 
-        // (a)  #[Infuse]   – no args  ➜  infer by type-hint
+        // (a)  #[Inject]   – no args  ➜  infer by type-hint
         if ($attrs[0]->getArguments() === []) {
             $val = $this->resolveWithoutArgument($property, $property->getType());
 
             return [$classInstance, $val];
         }
 
-        // (b)  #[Infuse(...)] – has args ➜ delegate to ClassResolver
-        $val = $this->classResolver->resolveInfuse($infuse);
-        if ($val instanceof IMStdClass) {
+        // (b)  #[Inject(...)] – has args ➜ delegate to ClassResolver
+        $val = $this->classResolver->resolveInject($inject);
+        if ($val === AttributeResolution::Unresolved) {
             return null;
         }
 
@@ -185,7 +185,7 @@ class PropertyResolver
         ReflectionProperty $property,
         object $classInstance,
     ): ?array {
-        $injectVal = null;
+        $injectVal = AttributeResolution::Unresolved;
         $handled = false;
 
         foreach ($property->getAttributes() as $raw) {
@@ -198,7 +198,7 @@ class PropertyResolver
             $handled = true;
             $val = $this->repository->attributeRegistry()->resolve($attrObj, $property);
 
-            if ($injectVal === null && $val !== null && !$val instanceof IMStdClass) {
+            if ($injectVal === AttributeResolution::Unresolved && $val !== AttributeResolution::Unresolved) {
                 $injectVal = $val;
             }
         }
@@ -207,7 +207,7 @@ class PropertyResolver
             return null;
         }
 
-        if ($injectVal === null) {
+        if ($injectVal === AttributeResolution::Unresolved) {
             return [];
         }
 
@@ -375,7 +375,7 @@ class PropertyResolver
             return $attempt;
         }
 
-        $attempt = $this->attemptBuiltInInfuse($property, $classInstance);
+        $attempt = $this->attemptBuiltInInject($property, $classInstance);
         if ($attempt !== null) {
             return $attempt;
         }
@@ -391,7 +391,7 @@ class PropertyResolver
     /**
      * Resolve a property without an argument.
      *
-     * If the property has a `#[Infuse]` attribute with no arguments, this method
+     * If the property has a `#[Inject]` attribute with no arguments, this method
      * is called to resolve the value. It will throw a
      * `ContainerException` if the property type is not a class or interface.
      * If the type is an interface, it will check for an environment-based
@@ -410,7 +410,7 @@ class PropertyResolver
     ): object {
         if (!$parameterType instanceof ReflectionNamedType || $parameterType->isBuiltin()) {
             throw new ContainerException(
-                'Malformed #[Infuse] or invalid property type on '
+                'Malformed #[Inject] or invalid property type on '
                 . "{$property->getDeclaringClass()->getName()}::\${$property->getName()}",
             );
         }
@@ -443,7 +443,7 @@ class PropertyResolver
     {
         return $property->isPromoted()
             && !isset(($registeredProps ?? [])[$property->getName()])
-            && $property->getAttributes(Infuse::class) === [];
+            && $property->getAttributes(Inject::class) === [];
     }
 
     /**

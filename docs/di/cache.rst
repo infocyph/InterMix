@@ -14,9 +14,9 @@ Why care?
 * **Predictability** – warm and reuse cacheable definition data.
 * **Flexibility** – use any PSR-6 implementation (for example from ``infocyph/cachelayer``).
 
----------------
+--------------------
 Quick Example 🚀
----------------
+--------------------
 
 .. code-block:: php
 
@@ -53,13 +53,19 @@ Eager warm-up:
 One-liner Cheat-Sheet
 ---------------------
 
-===========  =================================================================
-Action        Code
-===========  =================================================================
-Assign pool   ``$c->definitions()->enableDefinitionCache($pool)``
-Warm all      ``$c->definitions()->cacheAllDefinitions()``
-Clear + warm  ``…->cacheAllDefinitions(forceClearFirst:true)``
-Disable       Omit ``enableDefinitionCache(...)``
-===========  =================================================================
+.. list-table::
+   :header-rows: 1
+   :widths: 20 80
+
+   * - Action
+     - Code
+   * - Assign pool
+     - ``$c->definitions()->enableDefinitionCache($pool)``
+   * - Warm all
+     - ``$c->definitions()->cacheAllDefinitions()``
+   * - Clear + warm
+     - ``…->cacheAllDefinitions(forceClearFirst:true)``
+   * - Disable
+     - Omit ``enableDefinitionCache(...)``
 
 Next stop » :doc:`debug_tracing`

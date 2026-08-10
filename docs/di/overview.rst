@@ -13,7 +13,7 @@ Why another container?
 
 * **Simple first** – one-liner definitions, no config files
 * **Reflection-aware** – autowiring you can *switch off*
-* **Attribute powered** – ``#[Infuse]``, ``#[Autowire]``, ``#[Inject]``
+* **Attribute powered** – one canonical ``#[Inject]`` API
 * **Fluent API** – four tiny managers that chain like one object
 * **Performant** – static reflection cache, parameter-resolution planning cache,
   optional PSR-6/16 cache,
@@ -112,7 +112,7 @@ needed.
 #. **Already resolved?**
 
    * Return immediately if found in the in-memory cache.
-   * If the cache entry is a :php:class:`DeferredInitializer` *lazy* wrapper, execute it now and swap in the real object.
+   * If the cache entry is an internal deferred value, initialize it now and swap in the real object.
 
 #. **FunctionReference lookup**
 
@@ -141,12 +141,14 @@ User closure vs. lazy
 
      $c->definitions()->bind('heavy', fn () => new Expensive());
 
-  is executed **immediately** – you asked for a closure.
+  executes when the definition is resolved. Singleton and scoped lifetimes
+  reuse the resolved value; transient definitions execute on every resolution.
 
-* **DeferredInitializer**
+* **Internal deferred entry**
 
   For class strings/arrays *and* ``enableLazyLoading(true)``, InterMix stores a
-  small wrapper and postpones construction until the first real ``get()``.
+  small internal initializer and postpones construction until the first real
+  ``get()``. This implementation type is not a public attribute or application API.
 
 Concurrency note
 ~~~~~~~~~~~~~~~~

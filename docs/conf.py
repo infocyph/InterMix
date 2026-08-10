@@ -45,6 +45,7 @@ extensions = [
     "sphinxcontrib.phpdomain",
     "sphinx.ext.extlinks",
 ]
+autosectionlabel_prefix_document = True
 
 # MyST (Markdown)
 myst_enable_extensions = [

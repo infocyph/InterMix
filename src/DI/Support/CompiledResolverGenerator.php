@@ -9,6 +9,7 @@ use Composer\InstalledVersions;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Internal\AtomicFileWriter;
+use Infocyph\InterMix\Internal\ReflectionResource;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionFunctionAbstract;

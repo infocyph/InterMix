@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Support;
 
-use Infocyph\InterMix\DI\Attribute\Infuse;
+use Infocyph\InterMix\DI\Attribute\Inject;
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\Internal\ReflectionResource;
 use ReflectionClass;
 use ReflectionIntersectionType;
 use ReflectionNamedType;
@@ -250,7 +251,7 @@ final class AutomaticClassCompiler
      */
     private function propertyHasRegisteredAttribute(Container $container, ReflectionProperty $property): bool
     {
-        return array_any($property->getAttributes(), fn($attribute) => $attribute->getName() === Infuse::class
+        return array_any($property->getAttributes(), fn($attribute) => $attribute->getName() === Inject::class
             || $container->attributeRegistry()->has($attribute->getName()));
     }
 

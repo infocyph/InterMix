@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\Tests\Fixture;
 
-use Infocyph\InterMix\DI\Attribute\Infuse;
+use Infocyph\InterMix\DI\Attribute\Inject;
 
 class PropertyClass extends ParentPropertyClass
 {
@@ -12,16 +12,16 @@ class PropertyClass extends ParentPropertyClass
 
     private string $nothing;
 
-    #[Infuse]
+    #[Inject]
     private ClassA $classA;
 
-    #[Infuse('db.host')]
+    #[Inject('db.host')]
     private string $something;
 
-    #[Infuse(strtotime: 'last monday')]
+    #[Inject(strtotime: 'last monday')]
     private int $yesterday;
 
-    #[Infuse(strtotime: ['last monday', 1678786990])]
+    #[Inject(strtotime: ['last monday', 1678786990])]
     private int $yesterdayFromADate;
 
     public function __get(string $key): mixed

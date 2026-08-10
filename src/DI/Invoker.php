@@ -6,7 +6,7 @@ namespace Infocyph\InterMix\DI;
 
 use Closure;
 use Infocyph\InterMix\Exceptions\ContainerException;
-use Infocyph\InterMix\Serializer\ValueSerializer;
+use Infocyph\InterMix\Serializer\ClosureSerializer;
 use InvalidArgumentException;
 use ReflectionException;
 
@@ -63,7 +63,7 @@ final class Invoker
      * or an object instance. It ensures the target is invokable, either by creating
      * an instance through dependency injection if a class name is provided, or by
      * using the provided object directly. The resulting callable is cached to
-     * optimize subsequent calls.
+     * speed up subsequent calls.
      *
      * @param string|object $target The class name or object to convert to a callable.
      *
@@ -122,7 +122,7 @@ final class Invoker
      * If the callable is a class with a method, the method is invoked.
      * If the callable is a closure or a plain string/object, it is executed directly.
      *
-     * @param string|array{0: string, 1: string}|callable $target The callable to be executed.
+     * @param string|array{0: string|object, 1: string}|callable $target The callable to be executed.
      * @param array<int|string, mixed> $args Optional parameters to pass to the callable.
      *
      * @return mixed The result of executing the callable.
@@ -133,35 +133,23 @@ final class Invoker
      */
     public function invoke(string|array|callable $target, array $args = []): mixed
     {
-        // Serialized closure fast-path
-        if (is_string($target) && ValueSerializer::isSerializedClosure($target)) {
-            return $this->routeCallable($target, $args);
-        }
-        if (is_array($target) && is_callable($target)) {
-            return $this->container
-                ->getCurrentResolver()
-                ->closureSettler($target, $args);
+        if ($target instanceof Closure) {
+            return $this->viaClosure($target, $args);
         }
 
-        $desc = $this->container->parseCallable($target);
+        if (is_object($target)) {
+            return $this->viaClosure(Closure::fromCallable($target), $args);
+        }
 
-        return match ($desc['kind']) {
-            // Closure / invokable / callable array → just call
-            'closure' => $this->routeCallable($desc['closure'], $args),
+        if (is_array($target)) {
+            return $this->invokeArray($target, $args);
+        }
 
-            // Global function name → just call
-            'function' => $this->routeCallable($desc['function'], $args),
+        if (is_string($target)) {
+            return $this->invokeString($target, $args);
+        }
 
-            // Class only → register ctor args then resolve
-            'class' => $this->container
-                ->registration()->registerClass($desc['class'], $args)
-                ->invocation()->getReturn($desc['class']),
-
-            // Class + method → register method args then resolve
-            'method' => $this->container
-                ->registration()->registerMethod($desc['class'], $desc['method'], $args)
-                ->invocation()->getReturn($desc['class']),
-        };
+        throw new InvalidArgumentException('Unsupported callable formation.');
     }
 
     /**
@@ -227,70 +215,52 @@ final class Invoker
     }
 
     /**
-     * Serializes a given value into a string.
-     *
-     * This method wraps the ValueSerializer serialize function.
-     *
-     * @param mixed $v The value to be serialized, which may contain resources.
-     *
-     * @return string The serialized string representation of the value.
-     *
-     * @throws InvalidArgumentException If a resource type has no registered handler.
+     * @param array{0: string|object, 1: string} $target
+     * @param array<int|string, mixed> $args
      */
-    public function serialize(mixed $v): string
+    private function invokeArray(array $target, array $args): mixed
     {
-        return ValueSerializer::serialize($v);
-    }
-
-    /**
-     * Unserializes a string into its original value.
-     *
-     * This method wraps the Opis Closure unserialize function and unwraps any
-     * wrapped resources within the resulting value using registered resource
-     * handlers.
-     *
-     * @param string $b The serialized string to be converted back to its original form.
-     *
-     * @return mixed The original value, with any resources restored.
-     */
-    public function unserialize(string $b): mixed
-    {
-        return ValueSerializer::unserialize($b);
-    }
-
-    /**
-     * Routes a callable to the appropriate execution path based on its type.
-     *
-     * Closures, functions, class targets, invokable objects, and serialized
-     * closures retain their corresponding execution semantics.
-     *
-     * @param mixed $callable The callable to be routed and executed.
-     * @param array<int|string, mixed> $args The arguments to pass to the callable.
-     * @return mixed The result of executing the callable.
-     * @throws ContainerException|ReflectionException|\Psr\Cache\InvalidArgumentException
-     */
-    private function routeCallable(mixed $callable, array $args): mixed
-    {
-        if (\is_string($callable) && ValueSerializer::isSerializedClosure($callable)) {
-            $unserialized = ValueSerializer::unserialize($callable);
-            if (!$unserialized instanceof \Closure) {
-                throw new \InvalidArgumentException('Serialized closure payload did not produce a Closure.');
-            }
-
-            return $this->viaClosure($unserialized, $args);
+        if (is_callable($target)) {
+            return $this->container
+                ->getCurrentResolver()
+                ->closureSettler($target, $args);
         }
 
-        return match (true) {
-            \is_string($callable) => match (true) {
-                !\str_contains($callable, '::') && \function_exists($callable) => $this->viaClosure(\Closure::fromCallable($callable), $args),
-                \str_contains($callable, '::') && \is_callable($callable) => $this->viaClosure(\Closure::fromCallable($callable), $args),
-                \class_exists($callable) => $this->container->make($callable),
-                default => throw new \InvalidArgumentException('Unsupported callable formation.'),
-            },
-            $callable instanceof \Closure => $this->viaClosure($callable, $args),
-            \is_object($callable) && \is_callable($callable) => $this->viaClosure(\Closure::fromCallable($callable), $args),
-            default => throw new \InvalidArgumentException('Unsupported callable formation.'),
-        };
+        $class = $target[0];
+        $method = $target[1];
+        if (is_string($class) && class_exists($class) && method_exists($class, $method)) {
+            return $this->container
+                ->registration()->registerMethod($class, $method, $args)
+                ->invocation()->getReturn($class);
+        }
+
+        throw new InvalidArgumentException('Unsupported callable formation.');
+    }
+
+    /**
+     * @param array<int|string, mixed> $args
+     */
+    private function invokeString(string $target, array $args): mixed
+    {
+
+        $classMethod = str_contains($target, '::');
+        if (!$classMethod && function_exists($target)) {
+            return $this->viaClosure(Closure::fromCallable($target), $args);
+        }
+
+        if ($classMethod && is_callable($target)) {
+            return $this->viaClosure(Closure::fromCallable($target), $args);
+        }
+
+        if (class_exists($target)) {
+            return $this->make($target, $args);
+        }
+
+        if (ClosureSerializer::isSerialized($target)) {
+            return $this->viaClosure(ClosureSerializer::unserialize($target), $args);
+        }
+
+        throw new InvalidArgumentException('Unsupported callable formation.');
     }
 
     /**

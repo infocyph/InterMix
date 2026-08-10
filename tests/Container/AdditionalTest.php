@@ -6,7 +6,7 @@ use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Support\DebugTracer;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\DI\Support\PreloadGenerator;
-use Infocyph\InterMix\DI\Support\ReflectionResource;
+use Infocyph\InterMix\Internal\ReflectionResource;
 use Infocyph\InterMix\DI\Support\TraceLevelEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Tests\Fixture\DemoProvider;

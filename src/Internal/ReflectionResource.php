@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Infocyph\InterMix\DI\Support;
+namespace Infocyph\InterMix\Internal;
 
 use Closure;
 use InvalidArgumentException;

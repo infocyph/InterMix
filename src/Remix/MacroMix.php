@@ -6,10 +6,11 @@ namespace Infocyph\InterMix\Remix;
 
 use Closure;
 use Exception;
-use Infocyph\InterMix\DI\Support\ReflectionResource;
+use Infocyph\InterMix\Internal\ReflectionResource;
 use ReflectionException;
 use ReflectionFunction;
 use ReflectionMethod;
+use RuntimeException;
 
 // Public trait consumers live in downstream projects and the excluded test suite.
 // @phpstan-ignore trait.unused
@@ -23,10 +24,8 @@ trait MacroMix
      */
     protected static array $macros = [];
 
-    /**
-     * @var resource|false|null
-     */
-    private static $lockHandle;
+    /** @var array<class-string, resource> */
+    private static array $lockHandles = [];
 
     /**
      * Handles dynamic calls to the object.
@@ -105,16 +104,18 @@ trait MacroMix
     {
         $instance = is_object($class) ? $class : new $class();
         $reflection = ReflectionResource::getClassReflection($instance);
+        $macros = [];
         foreach ($reflection->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
             $docComment = $method->getDocComment();
             if ($docComment && preg_match('/@Macro\("(\w+)"\)/', $docComment, $matches)) {
                 $macroName = $matches[1];
-                $macro = $method->isStatic()
+                $macros[$macroName] = $method->isStatic()
                     ? fn(...$args) => $method->invoke(null, ...$args)
                     : fn(...$args) => $method->invoke($instance, ...$args);
-                static::macro($macroName, $macro);
             }
         }
+
+        static::registerMany($macros);
     }
 
     /**
@@ -129,15 +130,7 @@ trait MacroMix
      */
     public static function loadMacrosFromConfig(array $config): void
     {
-        self::acquireLock();
-
-        try {
-            foreach ($config as $name => $macro) {
-                static::macro($name, $macro);
-            }
-        } finally {
-            self::releaseLock();
-        }
+        static::registerMany($config);
     }
 
     /**
@@ -150,14 +143,13 @@ trait MacroMix
      */
     public static function macro(string $name, callable|object $macro): void
     {
-        static::$macros[$name] = $macro;
-        if ($macro instanceof Closure) {
-            static::$macroIsStaticClosure[$name] = new ReflectionFunction($macro)->isStatic();
+        if (!self::isLockEnabled()) {
+            static::registerMacroUnlocked($name, $macro);
 
             return;
         }
 
-        unset(static::$macroIsStaticClosure[$name]);
+        self::mutate(static fn() => static::registerMacroUnlocked($name, $macro));
     }
 
     /**
@@ -180,19 +172,22 @@ trait MacroMix
             ReflectionMethod::IS_PUBLIC | ReflectionMethod::IS_PROTECTED,
         );
 
+        $macros = [];
         foreach ($methods as $method) {
             $name = $method->name;
 
-            if (!$replace && static::hasMacro($name)) {
-                continue;
-            }
-
-            $macro = $method->isStatic()
+            $macros[$name] = $method->isStatic()
                 ? fn(...$args) => $method->invoke(null, ...$args)
                 : fn(...$args) => $method->invoke($instance, ...$args);
-
-            static::macro($name, $macro);
         }
+
+        if (!self::isLockEnabled()) {
+            static::registerMixinUnlocked($macros, $replace);
+
+            return;
+        }
+
+        self::mutate(static fn() => static::registerMixinUnlocked($macros, $replace));
     }
 
     /**
@@ -204,44 +199,51 @@ trait MacroMix
      */
     public static function removeMacro(string $name): void
     {
-        unset(static::$macros[$name]);
-        unset(static::$macroIsStaticClosure[$name]);
-    }
-
-    /**
-     * Acquires a lock to ensure thread-safe operations.
-     *
-     * This method checks if locking is enabled and acquires an exclusive lock
-     * on the current file. It initializes the lock handle if it is not already set.
-     * If the lock handle is valid, it uses `flock` to apply an exclusive lock.
-     */
-    private static function acquireLock(): void
-    {
         if (!self::isLockEnabled()) {
+            static::removeMacroUnlocked($name);
+
             return;
         }
 
-        if (is_null(self::$lockHandle)) {
-            self::$lockHandle = fopen(__FILE__, 'r');
-        }
-
-        if (self::$lockHandle !== false) {
-            flock(self::$lockHandle, LOCK_EX);
-        }
+        self::mutate(static fn() => static::removeMacroUnlocked($name));
     }
 
-    /**
-     * Checks if the locking mechanism is enabled.
-     *
-     * Determines whether the locking feature is enabled by checking the
-     * 'ENABLE_LOCK' constant in the class. If the constant is defined
-     * and true, locking is enabled; otherwise, it is disabled.
-     *
-     * @return bool True if locking is enabled, false otherwise.
-     */
     private static function isLockEnabled(): bool
     {
-        return defined('static::ENABLE_LOCK') && (bool) static::ENABLE_LOCK;
+        $class = static::class;
+
+        return defined("$class::ENABLE_LOCK") && (bool) constant("$class::ENABLE_LOCK");
+    }
+
+    /** @return resource */
+    private static function lockHandle()
+    {
+        $class = static::class;
+        if (isset(self::$lockHandles[$class])) {
+            return self::$lockHandles[$class];
+        }
+
+        $path = sys_get_temp_dir() . '/intermix-macro-' . hash('xxh3', $class) . '.lock';
+        $handle = fopen($path, 'c');
+        if ($handle === false) {
+            throw new RuntimeException("Unable to open the MacroMix mutation lock for $class.");
+        }
+
+        return self::$lockHandles[$class] = $handle;
+    }
+
+    private static function mutate(Closure $operation): mixed
+    {
+        $handle = self::lockHandle();
+        if (!flock($handle, LOCK_EX)) {
+            throw new RuntimeException('Unable to acquire the MacroMix mutation lock.');
+        }
+
+        try {
+            return $operation();
+        } finally {
+            flock($handle, LOCK_UN);
+        }
     }
 
     /**
@@ -297,25 +299,55 @@ trait MacroMix
         return $result ?? $bind ?? static::class;
     }
 
-    /**
-     * Releases the lock to allow other processes to access the resource.
-     *
-     * This method checks if locking is enabled and releases the exclusive lock
-     * on the current file by using `flock` to remove the lock. It then closes
-     * the lock handle and sets it to null to indicate that the lock is no longer
-     * held. If locking is not enabled or the lock handle is not set, the method
-     * returns without taking any action.
-     */
-    private static function releaseLock(): void
+    private static function registerMacroUnlocked(string $name, callable|object $macro): void
     {
-        if (!self::isLockEnabled() || is_null(self::$lockHandle)) {
+        static::$macros[$name] = $macro;
+        if ($macro instanceof Closure) {
+            static::$macroIsStaticClosure[$name] = new ReflectionFunction($macro)->isStatic();
+
             return;
         }
 
-        if (self::$lockHandle !== false) {
-            flock(self::$lockHandle, LOCK_UN);
-            fclose(self::$lockHandle);
-            self::$lockHandle = null;
+        unset(static::$macroIsStaticClosure[$name]);
+    }
+
+    /**
+     * @param array<string, callable|object> $macros
+     */
+    private static function registerMany(array $macros): void
+    {
+        if (!self::isLockEnabled()) {
+            foreach ($macros as $name => $macro) {
+                static::registerMacroUnlocked($name, $macro);
+            }
+
+            return;
         }
+
+        self::mutate(static function () use ($macros): void {
+            foreach ($macros as $name => $macro) {
+                static::registerMacroUnlocked($name, $macro);
+            }
+        });
+    }
+
+    /**
+     * @param array<string, callable|object> $macros
+     * @param bool $replace Whether existing macro names may be replaced.
+     */
+    private static function registerMixinUnlocked(array $macros, bool $replace): void
+    {
+        foreach ($macros as $name => $macro) {
+            if (!$replace && isset(static::$macros[$name])) {
+                continue;
+            }
+
+            static::registerMacroUnlocked($name, $macro);
+        }
+    }
+
+    private static function removeMacroUnlocked(string $name): void
+    {
+        unset(static::$macros[$name], static::$macroIsStaticClosure[$name]);
     }
 }

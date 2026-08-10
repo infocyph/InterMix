@@ -163,7 +163,7 @@ Toggle globally:
 
    $c->options()->enableLazyLoading(false);   // eager – resolve immediately
 
-User-supplied **closures** are **not wrapped** in ``DeferredInitializer``. They
+User-supplied **closures** are **not wrapped** in another deferred object. They
 execute when the ID is resolved (for example on first ``get()`` for singleton/scoped,
 or every ``get()`` for transient), not at bind-time.
 

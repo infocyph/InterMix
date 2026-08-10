@@ -4,237 +4,114 @@
 Attribute Injection
 ===================
 
-InterMix supports **PHP 8+ native attributes** for expressive, declarative
-injection.
-Two families exist:
+InterMix provides one canonical injection attribute: ``#[Inject]``. It supports
+properties, parameters, and whole-method defaults without maintaining synonymous
+public APIs.
 
-* **Built-in** tags shipped with InterMix (``Infuse`` / ``Autowire`` / ``Inject``)
-* **Custom** attributes you register at runtime through
-  :php:meth:`Infocyph\\InterMix\\DI\\Attribute\\AttributeRegistry::register`
-
--------------------------------------------------
-Built-in Tags (Infuse / Autowire / Inject)
--------------------------------------------------
-
-* ``#[Infuse]`` – canonical
-* ``#[Autowire]`` – Spring-style alias
-* ``#[Inject]`` – common DI alias
-* ``#[DeferredInitializer]`` – marks classes for lazy initialization
-
-They are **identical** and can inject via :
-
-* **Type-hint** (class / interface)
-* **Container key** (``'cfg.debug'``, ``'db.host'``, …)
-* **Global callable** (e.g. ``#[Inject(strtotime: 'next monday')]``)
-
--------------------------------------------------
-Quick syntax
--------------------------------------------------
+Built-in Injection
+==================
 
 .. code-block:: php
 
-   use Infocyph\InterMix\DI\Attribute\{Infuse, Autowire, Inject};
+   use Infocyph\InterMix\DI\Attribute\Inject;
 
-   class Service {
-       #[Infuse]                        private LoggerInterface $logger; // by type
-       #[Autowire('cfg.debug')]         private bool $debug;             // by key
-       #[Inject(strtotime: '+1 day')]   private int  $expires;           // via function
+   final class Service
+   {
+       #[Inject]
+       private LoggerInterface $logger;
+
+       #[Inject('cfg.debug')]
+       private bool $debug;
+
+       #[Inject(strtotime: '+1 day')]
+       private int $expires;
+
+       #[Inject(retries: 2)]
+       public function run(
+           int $retries,
+           #[Inject('cfg.env')] string $environment,
+       ): void {}
    }
 
-   class App {
-       #[Infuse(user: 'admin')]       // method-level default
-       public function boot(
-           #[Inject('cfg.env')] string $env   // parameter-level override
-       ) {}
-   }
+``#[Inject]`` without arguments resolves by type. A positional string selects a
+container definition, function, class, or interface. Named arguments provide
+whole-method defaults or function arguments.
 
-.. toctree::
-    :maxdepth: 1
-    :hidden:
-    attribute-deferred-initializer
-
--------------------------------------------------
-Custom Attribute Support
--------------------------------------------------
-
-Create any attribute & a resolver that implements
-:php:class:`Infocyph\\InterMix\\DI\\Attribute\\AttributeResolverInterface`.
+Enable only the resolution surfaces the application uses:
 
 .. code-block:: php
+
+   $container->options()->setOptions(
+       injection: true,
+       methodAttributes: true,
+       propertyAttributes: true,
+   );
+
+Explicit values registered through ``registerClass()``, ``registerMethod()``, or
+``registerProperty()`` take priority over attribute values.
+
+Custom Attributes
+=================
+
+Custom resolvers implement ``AttributeResolverInterface`` and are registered at
+bootstrap.
+
+.. code-block:: php
+
+   use Infocyph\InterMix\DI\Attribute\AttributeResolution;
+   use Infocyph\InterMix\DI\Attribute\AttributeResolverInterface;
 
    #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
-   class UpperCase {
+   final readonly class UpperCase
+   {
        public function __construct(public string $text) {}
    }
 
-   use Infocyph\InterMix\DI\Attribute\AttributeResolverInterface;
-
-   class UpperCaseResolver implements AttributeResolverInterface {
+   final class UpperCaseResolver implements AttributeResolverInterface
+   {
        public function resolve(
-           object     $attribute,
-           Reflector  $target,
-           Container  $c
+           object $attribute,
+           Reflector $target,
+           Container $container,
        ): mixed {
            return strtoupper($attribute->text);
        }
    }
 
-   // Register once during bootstrap
-   $c->attributeRegistry()->register(
+   $container->attributeRegistry()->register(
        UpperCase::class,
-       UpperCaseResolver::class
+       UpperCaseResolver::class,
    );
 
-Usage:
+A resolver may inject any value, including ``null``. It returns
+``AttributeResolution::Unresolved`` only when it declines to provide a value:
 
 .. code-block:: php
 
-   class Banner {
-       #[UpperCase('hello world')]
-       public string $title;
+   public function resolve(
+       object $attribute,
+       Reflector $target,
+       Container $container,
+   ): mixed {
+       $container->get('logger')->notice($target->getName());
+
+       return AttributeResolution::Unresolved;
    }
 
-   echo $c->get(Banner::class)->title;    // HELLO WORLD
+For multiple registered attributes on one target, the first value other than the
+unresolved sentinel is injected. Registered resolvers may still perform explicit
+logic before declining.
 
-.. hint::
+Resolution Priority
+===================
 
-   *Multiple* attributes may decorate the **same** target.
-   InterMix calls each registered resolver in discovery order; the **first**
-   non-null, non-``IMStdClass`` result becomes the injected value.
-   Later resolvers can still run side-effect logic even if they don’t inject.
+1. Values registered for the class, method, or property
+2. Arguments supplied to ``call()`` or ``make()``
+3. Container definitions
+4. ``#[Inject]``
+5. Registered custom attribute resolvers
 
--------------------------------------------------
-Method & Parameter Injection
--------------------------------------------------
-
-.. code-block:: php
-
-   class Mailer {
-       public function send(
-           #[Infuse('cfg.smtp')] array $config,
-           #[Inject]  LoggerInterface $log
-       ) {}
-   }
-
-Whole-method defaults:
-
-.. code-block:: php
-
-   class Worker {
-       #[Autowire(retries: 2, delay: 5)]
-       public function execute(int $retries, int $delay) {}
-   }
-
-*Arguments provided* via :php:meth:`Infocyph\\InterMix\\DI\\Container::call`,
-:php:meth:`Infocyph\\InterMix\\DI\\Managers\\RegistrationManager::registerMethod`
-or explicit arrays always **override** attributes.
-
--------------------------------------------------
-Property Injection
--------------------------------------------------
-
-Enable with ``propertyAttributes: true``:
-
-.. code-block:: php
-
-   class Controller {
-       #[Infuse]        private Request $request;          // by type
-       #[Autowire('cfg.csrf')] private string $csrf;       // by key
-       #[UpperCase('admin')]  private string $role;        // custom
-   }
-
-Properties are injected *after* construction.
-Values set via :php:meth:`Infocyph\\InterMix\\DI\\Managers\\RegistrationManager::registerProperty`
-win over attributes.
-
--------------------------------------------------
-Resolution Workflow
--------------------------------------------------
-
-#. **Built-in tag** (``Infuse`` / ``Autowire`` / ``Inject``) – first match wins
-#. **Custom attributes** – executed in registration order:
-
-   * if a resolver returns **non-null & not ``IMStdClass``** → injected
-   * if resolver returns ``null`` or ``IMStdClass`` → treated as “logic-only”
-
--------------------------------------------------
-Enabling Attributes
--------------------------------------------------
-
-.. code-block:: php
-
-   $c->options()->setOptions(
-       injection:           true,
-       methodAttributes:    true,   // enable #[Infuse] on params / methods
-       propertyAttributes:  true    // enable #[Infuse] on properties
-   );
-
-You may enable only one flag to limit scope.
-
--------------------------------------------------
-Resolution Priority (high → low)
--------------------------------------------------
-
-1. ``registerClass()`` / ``registerMethod()`` / ``registerProperty()``
-2. Supplied args (``call()``, ``make()``, etc.)
-3. ``definitions()`` map
-4. Built-in tags (Infuse / Autowire / Inject)
-5. Custom attributes via **AttributeRegistry**
-
--------------------------------------------------
-Examples
--------------------------------------------------
-
-Inject scalar config:
-
-.. code-block:: php
-
-   class Analytics {
-       #[Inject('cfg.api_key')] private string $apiKey;
-   }
-
-Global callable:
-
-.. code-block:: php
-
-   class Session {
-       #[Infuse('uuid_create')] private string $sessionId;
-   }
-
-Logic-only attribute (no injection):
-
-.. code-block:: php
-
-   #[Attribute(Attribute::TARGET_METHOD)]
-   class LogCall {
-       public function __construct(public string $level = 'info') {}
-   }
-
-   class LogCallResolver implements AttributeResolverInterface {
-       public function resolve(object $attr, Reflector $target, Container $c): mixed {
-           $c->get('logger')->log($attr->level, "[DI] $target handled");
-           return null;       // no injection, marks as handled
-       }
-   }
-
--------------------------------------------------
-Debugging
--------------------------------------------------
-
-.. code-block:: php
-
-   $c->options()->enableDebugTracing(true);
-   $c->get(MyService::class);
-   print_r($c->debug(MyService::class));
-
--------------------------------------------------
-Summary
--------------------------------------------------
-
-* Built-in tags: **Infuse / Autowire / Inject**
-* Register unlimited **custom** attributes with resolvers
-* Works on properties, parameters, or whole methods
-* First non-null result wins; others may perform side-effects only
-* Fully traceable with ``enableDebugTracing()``
+The lazy initializer used internally by the container is not an attribute or a
+supported application API.
 
 Next → :ref:`di.lifetimes`

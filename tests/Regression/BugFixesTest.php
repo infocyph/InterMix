@@ -6,31 +6,9 @@ use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\DI\Support\PreloadGenerator;
 use Infocyph\InterMix\DI\Support\TraceLevelEnum;
-use Infocyph\InterMix\Serializer\ResourceHandlers;
-use Infocyph\InterMix\Serializer\ValueSerializer;
 use Infocyph\InterMix\Tests\Fixture\NamespacedClosureFactory;
 use Psr\Cache\CacheItemInterface;
 use Psr\Cache\CacheItemPoolInterface;
-
-class RegressionResourceHandlers extends ResourceHandlers
-{
-    public static function registerStream(): void
-    {
-        ValueSerializer::registerResourceHandler(
-            'stream',
-            function ($res): array {
-                rewind($res);
-                return ['content' => stream_get_contents($res)];
-            },
-            function (array $data) {
-                $s = fopen('php://memory', 'r+');
-                fwrite($s, $data['content']);
-                rewind($s);
-                return $s;
-            }
-        );
-    }
-}
 
 interface RegressionTokenSource
 {
@@ -199,22 +177,6 @@ it('supports pure PSR-6 pools when resolving definitions', function () {
 
     expect($c->get('answer'))->toBe(42)
         ->and($c->get('answer'))->toBe(42);
-});
-
-it('registerDefaults discovers subclass register methods', function () {
-    ValueSerializer::clearResourceHandlers();
-    RegressionResourceHandlers::registerDefaults();
-
-    $s = fopen('php://memory', 'r+');
-    fwrite($s, 'ok');
-    rewind($s);
-
-    $blob = ValueSerializer::serialize($s);
-    $rest = ValueSerializer::unserialize($blob);
-
-    expect(is_resource($rest))->toBeTrue()
-        ->and(get_resource_type($rest))->toBe('stream')
-        ->and(stream_get_contents($rest))->toBe('ok');
 });
 
 it('does not reuse non-constructor method parameter resolution values across calls', function () {

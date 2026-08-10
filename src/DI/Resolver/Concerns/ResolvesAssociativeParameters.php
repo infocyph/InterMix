@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Resolver\Concerns;
 
-use Infocyph\InterMix\DI\Support\ReflectionResource;
+use Infocyph\InterMix\DI\Attribute\AttributeResolution;
 use Infocyph\InterMix\Exceptions\ContainerException;
+use Infocyph\InterMix\Internal\ReflectionResource;
 use Psr\Cache\InvalidArgumentException;
 use ReflectionAttribute;
 use ReflectionClass;
@@ -86,7 +87,7 @@ trait ResolvesAssociativeParameters
                 $processed,
             );
 
-            if ($resolvedValue !== $this->stdClass) {
+            if ($resolvedValue !== AttributeResolution::Unresolved) {
                 $processed[$paramName] = $resolvedValue;
 
                 continue;
@@ -131,7 +132,7 @@ trait ResolvesAssociativeParameters
         string $attributeValue,
     ): mixed {
         $definition = $this->resolveByDefinitionType($attributeValue, $param);
-        if ($definition !== $this->stdClass) {
+        if ($definition !== AttributeResolution::Unresolved) {
             return $definition;
         }
 
@@ -141,11 +142,11 @@ trait ResolvesAssociativeParameters
             return $attributeValue(...$this->resolve($reflectionFn, [], 'constructor'));
         }
 
-        return $this->stdClass;
+        return AttributeResolution::Unresolved;
     }
 
     /**
-     * @param array<int, ReflectionAttribute<\Infocyph\InterMix\DI\Attribute\Infuse>> $attributes
+     * @param array<int, ReflectionAttribute<\Infocyph\InterMix\DI\Attribute\Inject>> $attributes
      * @return array<string, string>
      */
     private function resolveMethodAttributes(array $attributes): array
@@ -191,7 +192,7 @@ trait ResolvesAssociativeParameters
         $paramName = $param->getName();
 
         $definition = $this->resolveByDefinitionType($paramName, $param);
-        if ($definition !== $this->stdClass) {
+        if ($definition !== AttributeResolution::Unresolved) {
             return $definition;
         }
 
@@ -201,7 +202,7 @@ trait ResolvesAssociativeParameters
                 $this->ownerFor($reflector),
                 $classReflection,
             );
-            if ($contextual !== $this->stdClass) {
+            if ($contextual !== AttributeResolution::Unresolved) {
                 return $contextual;
             }
 
@@ -222,11 +223,11 @@ trait ResolvesAssociativeParameters
 
         if (isset($parameterAttribute[$paramName])) {
             $resolved = $this->resolveIndividualAttribute($param, $parameterAttribute[$paramName]);
-            if ($resolved !== $this->stdClass) {
+            if ($resolved !== AttributeResolution::Unresolved) {
                 return $resolved;
             }
         }
 
-        return $this->stdClass;
+        return AttributeResolution::Unresolved;
     }
 }

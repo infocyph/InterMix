@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Resolver\Concerns;
 
-use Infocyph\InterMix\DI\Attribute\IMStdClass;
+use Infocyph\InterMix\DI\Attribute\AttributeResolution;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\InvalidArgumentException;
 use ReflectionException;
@@ -22,20 +22,20 @@ trait ResolvesParameterAttributes
     private function resolveParameterAttribute(ReflectionParameter $param): array
     {
         $plan = $this->getParameterAttributePlan($param);
-        $infuse = $plan['infuse'];
-        $firstInfuse = $infuse[0] ?? null;
-        if ($firstInfuse !== null && $firstInfuse->getArguments() !== []) {
-            $resolved = $this->classResolver->resolveInfuse($firstInfuse->newInstance());
+        $inject = $plan['inject'];
+        $firstInject = $inject[0] ?? null;
+        if ($firstInject !== null && $firstInject->getArguments() !== []) {
+            $resolved = $this->classResolver->resolveInject($firstInject->newInstance());
 
             return [
                 'isResolved' => true,
-                'inject' => !$resolved instanceof IMStdClass,
+                'inject' => $resolved !== AttributeResolution::Unresolved,
                 'value' => $resolved,
             ];
         }
 
         $registry = $this->repository->attributeRegistry();
-        $injectVal = null;
+        $injectVal = AttributeResolution::Unresolved;
         $handled = false;
 
         foreach ($plan['all'] as $raw) {
@@ -48,14 +48,14 @@ trait ResolvesParameterAttributes
             $handled = true;
             $val = $registry->resolve($attrObj, $param);
 
-            if ($injectVal === null && $val !== null && !$val instanceof IMStdClass) {
+            if ($injectVal === AttributeResolution::Unresolved && $val !== AttributeResolution::Unresolved) {
                 $injectVal = $val;
             }
         }
 
         return [
             'isResolved' => $handled,
-            'inject' => $injectVal !== null,
+            'inject' => $injectVal !== AttributeResolution::Unresolved,
             'value' => $injectVal,
         ];
     }

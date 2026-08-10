@@ -8,11 +8,12 @@ I did not build InterMix as a large framework from the beginning. I built it bec
 
 Back in October 2020, I started with a small project called DI-Container. At that time, the goal was straightforward. I wanted a compact utility that could resolve constructors and callables cleanly, without unnecessary heaviness. It began as an experiment, but as I kept working on it, I found myself solving more than just container-related problems. Each improvement opened the door to another need, better invocation flow, more flexible resolution, cleaner abstractions and utilities that naturally belonged around the core idea.
 
-That was the point where I realized I was no longer building just a DI container.
+That was the point where I realized DI and invocation could remain the center of
+a small runtime toolkit.
 
 In May 2021, that earlier work evolved into InterMix. I wanted a better foundation, something that could grow without losing the original simplicity that made the first project useful. The new direction was not about making the project bigger for the sake of being bigger. It was about giving it the structure and freedom to become a toolkit I could genuinely rely on across real applications.
 
-I built InterMix incrementally. There was no single moment where everything was fully designed in advance. The project grew through repeated iteration: building, using, refining, rethinking and improving. Over time, dependency injection remained the center, but the ecosystem around it expanded naturally into caching, macro-style extensibility, memoization, helper utilities, and safety-focused tools. Those additions were not random. They came from practical needs that kept appearing during development.
+I built InterMix incrementally. There was no single moment where everything was fully designed in advance. The project grew through repeated iteration: building, using, refining, rethinking and improving. Over time, dependency injection remained the center, while invocation, compiled resolution, Closure serialization, macro-style extensibility, fluent helpers, and Fence grew around it. Those additions came from practical needs that kept appearing during development.
 
 That is really the reason InterMix exists.
 

@@ -36,6 +36,12 @@ final class IntermixBench
     }
 
     #[BeforeMethods('setUpContainer')]
+    public function benchContainerHasHotPath(): void
+    {
+        $this->container->has('bench.config');
+    }
+
+    #[BeforeMethods('setUpContainer')]
     public function benchDirectFactoryTransientResolution(): void
     {
         $this->container->get('bench.factory.direct');
@@ -141,6 +147,16 @@ final class IntermixBench
     public function benchTaggedLookupFindByTag(): void
     {
         $this->container->findByTag('bench.pipeline.pre');
+    }
+
+    #[BeforeMethods('setUpContainer')]
+    public function benchTaggedLookupLazy(): void
+    {
+        foreach ($this->container->tagged('bench.pipeline.pre') as $factory) {
+            $factory();
+
+            break;
+        }
     }
 
     #[BeforeMethods('setUpContainer')]

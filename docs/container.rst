@@ -26,9 +26,9 @@ or the day you must **swap** an implementation in *production* only.
 InterMix automates construction, honours interfaces, supports
 environment-specific overrides and gives you sugar for 1-liners.
 
-------------------------------------------------
+---------------------------------------------------------
 15-second “Hello World” with constructor autowire
-------------------------------------------------
+---------------------------------------------------------
 
 .. code-block:: php
 
@@ -74,7 +74,7 @@ CLI workers, micro-modules, etc.
 Container Features
 --------------------------------
 
-* **Scoped services** – ``enterScope()``, ``leaveScope()``, ``withinScope()`` for request/fiber isolation
+* **Scoped services** – ``enterScope()``, ``leaveScope()``, ``withinScope()`` for logical request or job scopes
 * **Dependency graph export** – ``exportGraph()`` for debugging and analysis
 * **Environment-specific bindings** – ``setEnvironment()`` for different deployment configs
 * **Debug tracing** – ``debug()`` and ``tracer()`` for development insight
@@ -82,12 +82,25 @@ Container Features
 * **Container locking** – ``lock()`` to prevent runtime modifications
 * **Multiple container instances** – ``Container::instance($alias)`` for isolated contexts
 
----------------------------------------------
+Container API Classification
+----------------------------
+
+The supported surface is grouped by intended use:
+
+* **Core** – ``get()``, ``has()``, ``bind()``, ``singleton()``, ``scoped()``,
+  ``transient()``, ``make()``, ``call()``, ``factory()``, and ``withinScope()``.
+* **Advanced** – compiled/prevalidated resolution, validation, pipelines,
+  lifecycle hooks, contextual/environment bindings, graph export, and tracing.
+* **Internal/tooling** – repository access, resolver selection, and callable
+  parsing. Public methods in this group exist for package tooling and are marked
+  ``@internal``; they are not quick-start application APIs.
+
+----------------------------------------------------------
 Modifying behaviour with ``options()->setOptions()``
----------------------------------------------
+----------------------------------------------------------
 
 + **injection** – reflection autowiring engine
-+ **methodAttributes / propertyAttributes** – enable ``#[Infuse]``
++ **methodAttributes / propertyAttributes** – enable ``#[Inject]``
 + **defaultMethod** – method to call when none supplied
 + **lazyLoading** – defer heavy construction until first use
 
@@ -128,9 +141,9 @@ Common quick patterns (copy-paste as you learn the rest)
    // scoped services now unique to this request
    $c->leaveScope();
 
------------
+--------------------
 Dive in Details
------------
+--------------------
 
 Dive into the detailed sub-chapters. Happy mixing!  Questions?  Open an issue or drop by the discussion board.
 

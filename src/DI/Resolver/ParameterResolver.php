@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Resolver;
 
-use Infocyph\InterMix\DI\Attribute\IMStdClass;
-use Infocyph\InterMix\DI\Attribute\Infuse;
+use Infocyph\InterMix\DI\Attribute\AttributeResolution;
+use Infocyph\InterMix\DI\Attribute\Inject;
 use Infocyph\InterMix\DI\Resolver\Concerns\ResolvesAssociativeParameters;
 use Infocyph\InterMix\DI\Resolver\Concerns\ResolvesNumericAndVariadicParameters;
 use Infocyph\InterMix\DI\Resolver\Concerns\ResolvesParameterAttributes;
-use Infocyph\InterMix\DI\Support\ReflectionResource;
 use Infocyph\InterMix\DI\Support\TraceLevelEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
+use Infocyph\InterMix\Internal\ReflectionResource;
 use Psr\Cache\InvalidArgumentException;
 use ReflectionAttribute;
 use ReflectionClass;
@@ -43,21 +43,19 @@ class ParameterResolver
     use ResolvesNumericAndVariadicParameters;
     use ResolvesParameterAttributes;
 
-    private const int INFUSE_CACHE_LIMIT = 1024;
+    private const int INJECT_CACHE_LIMIT = 1024;
 
     private const int PARAM_ATTRIBUTE_PLAN_CACHE_LIMIT = 4096;
 
     private const int RESOLUTION_PLAN_CACHE_LIMIT = 2048;
 
-    private readonly IMStdClass $stdClass;
-
     private ClassResolver $classResolver;
 
-    /** @var array<string, array<int, ReflectionAttribute<Infuse>>> */
-    private array $infuseCache = [];
+    /** @var array<string, array<int, ReflectionAttribute<Inject>>> */
+    private array $injectCache = [];
 
     /** @var array<string, array{
-     *   infuse: array<int, ReflectionAttribute<Infuse>>,
+     *   inject: array<int, ReflectionAttribute<Inject>>,
      *   all: array<int, ReflectionAttribute<object>>
      * }>
      */
@@ -74,9 +72,7 @@ class ParameterResolver
     public function __construct(
         private readonly Repository $repository,
         private readonly DefinitionResolver $definitionResolver,
-    ) {
-        $this->stdClass = new IMStdClass();
-    }
+    ) {}
 
     /**
      * @param array<int|string, mixed> $suppliedParameters
@@ -181,7 +177,7 @@ class ParameterResolver
             }
         }
 
-        return $this->stdClass;
+        return AttributeResolution::Unresolved;
     }
 
     /**
@@ -190,12 +186,12 @@ class ParameterResolver
     public function resolveContextualDependency(string $consumer, ReflectionClass $dependency): mixed
     {
         if ($consumer === '') {
-            return $this->stdClass;
+            return AttributeResolution::Unresolved;
         }
 
         $binding = $this->repository->getContextualBinding($consumer, $dependency->getName());
         if ($binding === null) {
-            return $this->stdClass;
+            return AttributeResolution::Unresolved;
         }
 
         if (is_callable($binding)) {
@@ -292,21 +288,21 @@ class ParameterResolver
     }
 
     /**
-     * @return array<int, ReflectionAttribute<Infuse>>
+     * @return array<int, ReflectionAttribute<Inject>>
      */
-    private function getInfuseAttributes(ReflectionFunctionAbstract $reflector): array
+    private function getInjectAttributes(ReflectionFunctionAbstract $reflector): array
     {
         $key = $this->reflectorCacheKey($reflector);
 
-        return $this->infuseCache[$key] ?? $this->rememberInfuse(
+        return $this->injectCache[$key] ?? $this->rememberInject(
             $key,
-            $reflector->getAttributes(Infuse::class),
+            $reflector->getAttributes(Inject::class),
         );
     }
 
     /**
      * @return array{
-     *   infuse: array<int, ReflectionAttribute<Infuse>>,
+     *   inject: array<int, ReflectionAttribute<Inject>>,
      *   all: array<int, ReflectionAttribute<object>>
      * }
      */
@@ -315,7 +311,7 @@ class ParameterResolver
         $key = $this->makeParameterAttributePlanKey($parameter);
 
         return $this->parameterAttributePlanCache[$key] ?? $this->rememberParameterAttributePlan($key, [
-            'infuse' => $parameter->getAttributes(Infuse::class),
+            'inject' => $parameter->getAttributes(Inject::class),
             'all' => $parameter->getAttributes(),
         ]);
     }
@@ -340,7 +336,7 @@ class ParameterResolver
 
         $attributeData = [];
         if ($applyAttribute) {
-            $attributeData = $this->resolveMethodAttributes($this->getInfuseAttributes($reflector));
+            $attributeData = $this->resolveMethodAttributes($this->getInjectAttributes($reflector));
         }
 
         return $this->rememberResolutionPlan($key, [
@@ -471,24 +467,24 @@ class ParameterResolver
     }
 
     /**
-     * @param array<int, ReflectionAttribute<Infuse>> $value
-     * @return array<int, ReflectionAttribute<Infuse>>
+     * @param array<int, ReflectionAttribute<Inject>> $value
+     * @return array<int, ReflectionAttribute<Inject>>
      */
-    private function rememberInfuse(string $key, array $value): array
+    private function rememberInject(string $key, array $value): array
     {
-        $this->evictCacheKeyIfNeeded($this->infuseCache, $key, self::INFUSE_CACHE_LIMIT);
-        $this->infuseCache[$key] = $value;
+        $this->evictCacheKeyIfNeeded($this->injectCache, $key, self::INJECT_CACHE_LIMIT);
+        $this->injectCache[$key] = $value;
 
         return $value;
     }
 
     /**
      * @param array{
-     *   infuse: array<int, ReflectionAttribute<Infuse>>,
+     *   inject: array<int, ReflectionAttribute<Inject>>,
      *   all: array<int, ReflectionAttribute<object>>
      * } $value
      * @return array{
-     *   infuse: array<int, ReflectionAttribute<Infuse>>,
+     *   inject: array<int, ReflectionAttribute<Inject>>,
      *   all: array<int, ReflectionAttribute<object>>
      * }
      */

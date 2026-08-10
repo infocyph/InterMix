@@ -6,7 +6,7 @@ namespace Infocyph\InterMix\DI\Invoker;
 
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\DI\Support\DirectFactory;
-use Infocyph\InterMix\DI\Support\ReflectionResource;
+use Infocyph\InterMix\Internal\ReflectionResource;
 use InvalidArgumentException;
 use ReflectionException;
 

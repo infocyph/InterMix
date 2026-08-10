@@ -1,16 +1,52 @@
 .. _serializer:
 
+=====================
+Closure Serialization
+=====================
+
+InterMix serializes only ``Closure`` objects, because ordinary PHP values already
+have native serialization facilities. Resource serialization is application or
+specialized-package responsibility.
+
+Unsigned Closures
+=================
+
+.. code-block:: php
+
+   use Infocyph\InterMix\Serializer\ClosureSerializer;
+
+   $payload = ClosureSerializer::serialize(
+       static fn (int $value): int => $value * 2,
+   );
+
+   if (ClosureSerializer::isSerialized($payload)) {
+       $closure = ClosureSerializer::unserialize($payload);
+   }
+
+Unsigned payloads use the versioned ``imxc1.`` envelope. Recognition is a
+constant-time prefix check; it does not inspect Opis internals.
+
+Signed Closures
 ===============
-Serializer API
-===============
 
-The **ValueSerializer** and **ResourceHandlers** classes let you
-serialize arbitrary PHP values—including closures and resources—
-using ``Opis Closure v4`` under the hood, plus a simple plugin system
-for wrapping/unwrapping resources.
+Executable closures transported through a queue, database, cache, IPC, or a
+remote system should be authenticated when the transport does not already
+provide equivalent integrity protection.
 
-.. toctree::
-   :maxdepth: 1
+.. code-block:: php
 
-   serializer/value_serializer
-   serializer/resource_handlers
+   $serializer = ClosureSerializer::signed($_ENV['APP_KEY']);
+   $payload = $serializer->serialize(static fn (): string => 'work');
+   $closure = $serializer->unserialize($payload);
+
+Signed payloads use the ``imxcs1.`` envelope and HMAC-SHA-256. Signing keys are
+held by the serializer instance; InterMix has no process-global signing state.
+Unsigned serializers reject signed payloads, signed serializers reject unsigned
+payloads, and verification occurs before executable data is decoded.
+
+Invocation Boundary
+===================
+
+``Invoker`` accepts an InterMix unsigned Closure payload only as a cold string
+fallback. Native closures, invokable objects, functions, static methods, and
+class strings never perform Opis, payload decoding, or HMAC work.

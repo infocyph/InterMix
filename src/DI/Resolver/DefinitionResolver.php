@@ -8,8 +8,8 @@ use Closure;
 use Infocyph\InterMix\DI\Support\DirectFactory;
 use Infocyph\InterMix\DI\Support\FactoryDefinition;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
-use Infocyph\InterMix\DI\Support\ReflectionResource;
 use Infocyph\InterMix\Exceptions\ContainerException;
+use Infocyph\InterMix\Internal\ReflectionResource;
 use Psr\Cache\InvalidArgumentException;
 use ReflectionException;
 

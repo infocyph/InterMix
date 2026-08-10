@@ -79,7 +79,7 @@ Resolution priority:
 1. **Environment-bound class** (if active)
 2. **Globally bound class** via
    :php:meth:`Infocyph\\InterMix\\DI\\Managers\\DefinitionManager::bind`
-3. **Autowire fallback** (if ``injection=true``)
+3. **Autowiring fallback** (if ``injection=true``)
 
 -------------------
 Best Practices 💡
