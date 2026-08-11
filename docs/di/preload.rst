@@ -19,8 +19,9 @@ Generate the Preload File
    $generator = new PreloadGenerator();
    $generator->generate($c, __DIR__ . '/preload.php');
 
-This will create a preload script that includes all known classes, definitions,
-and registered services from the container instance.
+This creates preload entries for classes known through current container
+registration metadata. It is a best-effort registration scan, not traversal of
+the complete autowired dependency graph.
 
 ------------------------
 Example Output Contents
@@ -38,7 +39,8 @@ The generated file looks like:
    require_once '/path/to/app/Service/UserService.php';
    // ...
 
-No logic — just ``require_once`` entries for reflection-resolved classes.
+No resolution logic — just ``require_once`` entries with absolute paths for
+reflection-resolved classes.
 
 -----------------------------------
 Use with ``opcache.preload`` in PHP
@@ -63,6 +65,7 @@ You should regenerate the preload file when:
 - You register new classes or services
 - Definitions change significantly
 - Deploying to production with updated dependencies
+- The absolute deployment path changes
 
 Automate it as part of your deployment pipeline or cache warm-up.
 

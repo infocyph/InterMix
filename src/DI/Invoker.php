@@ -6,18 +6,12 @@ namespace Infocyph\InterMix\DI;
 
 use Closure;
 use Infocyph\InterMix\Exceptions\ContainerException;
-use Infocyph\InterMix\Serializer\ClosureSerializer;
 use InvalidArgumentException;
 use ReflectionException;
 
 final class Invoker
 {
-    private const int CALLABLE_CACHE_LIMIT = 256;
-
     private static ?self $sharedInstance = null;
-
-    /** @var array<string, callable(): mixed> */
-    private array $callableCache = [];
 
     /**
      * Construct an instance of the invoker.
@@ -83,25 +77,20 @@ final class Invoker
             return $target(...);
         }
 
-        if (isset($this->callableCache[$target])) {
-            return $this->callableCache[$target];
-        }
-
-        $instance = $this->make($target);
-        if (!\is_object($instance) || !\is_callable($instance)) {
+        if (!class_exists($target) || !method_exists($target, '__invoke')) {
             throw new InvalidArgumentException(
-                sprintf(
-                    '%s is not invokable.',
-                    $target,
-                ),
+                sprintf('%s is not invokable.', $target),
             );
         }
 
-        if (count($this->callableCache) >= self::CALLABLE_CACHE_LIMIT) {
-            unset($this->callableCache[array_key_first($this->callableCache)]);
-        }
+        return function (mixed ...$arguments) use ($target): mixed {
+            $instance = $this->make($target);
+            if (!is_callable($instance)) {
+                throw new InvalidArgumentException(sprintf('%s is not invokable.', $target));
+            }
 
-        return $this->callableCache[$target] = $instance(...);
+            return $instance(...$arguments);
+        };
     }
 
     /**
@@ -185,19 +174,16 @@ final class Invoker
         string|bool $method = false,
         array $methodArgs = [],
     ): mixed {
-        $this->container->registration()->registerClass($class, $ctorArgs);
+        $targetMethod = $method === true ? null : $method;
+        $resolved = $this->container->getCurrentResolver()->classSettler(
+            $class,
+            $targetMethod,
+            true,
+            $ctorArgs,
+            $methodArgs,
+        );
 
-        if ($method === false) {
-            return $this->container->make($class, false);
-        }
-
-        if ($method === true) {
-            return $this->container->make($class, true);
-        }
-
-        $this->container->registration()->registerMethod($class, $method, $methodArgs);
-
-        return $this->container->make($class, $method);
+        return $resolved->methodInvoked ? $resolved->returned : $resolved->instance;
     }
 
     /**
@@ -229,9 +215,14 @@ final class Invoker
         $class = $target[0];
         $method = $target[1];
         if (is_string($class) && class_exists($class) && method_exists($class, $method)) {
-            return $this->container
-                ->registration()->registerMethod($class, $method, $args)
-                ->invocation()->getReturn($class);
+            $resolved = $this->container->getCurrentResolver()->classSettler(
+                $class,
+                $method,
+                true,
+                methodParameters: $args,
+            );
+
+            return $resolved->returned;
         }
 
         throw new InvalidArgumentException('Unsupported callable formation.');
@@ -254,10 +245,6 @@ final class Invoker
 
         if (class_exists($target)) {
             return $this->make($target, $args);
-        }
-
-        if (ClosureSerializer::isSerialized($target)) {
-            return $this->viaClosure(ClosureSerializer::unserialize($target), $args);
         }
 
         throw new InvalidArgumentException('Unsupported callable formation.');

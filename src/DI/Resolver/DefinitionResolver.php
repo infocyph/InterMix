@@ -10,8 +10,11 @@ use Infocyph\InterMix\DI\Support\FactoryDefinition;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Internal\ReflectionResource;
+use Psr\Cache\CacheItemInterface;
+use Psr\Cache\CacheItemPoolInterface;
 use Psr\Cache\InvalidArgumentException;
 use ReflectionException;
+use Throwable;
 
 class DefinitionResolver
 {
@@ -52,27 +55,13 @@ class DefinitionResolver
      */
     public function resolve(string $name): mixed
     {
-        if (isset($this->entriesResolving[$name])) {
-            throw new ContainerException("Circular dependency for definition '$name'.");
-        }
+        return $this->resolveTracked($name, false);
+    }
 
-        $parent = end($this->definitionStack);
-        if (is_string($parent) && $parent !== $name && $this->repository->isTracingEnabled()) {
-            $this->repository->tracer()->recordDependency($parent, $name, 'definition');
-        }
-
-        $this->entriesResolving[$name] = true;
-        $this->definitionStack[] = $name;
-        if ($this->repository->isTracingEnabled()) {
-            $this->repository->tracer()->push("def:$name");
-        }
-
-        try {
-            return $this->getFromCacheOrResolve($name);
-        } finally {
-            unset($this->entriesResolving[$name]);
-            array_pop($this->definitionStack);
-        }
+    /** Resolve a warmup miss without repeating the external cache lookup. */
+    public function resolveForDefinitionCacheWarmup(string $name): mixed
+    {
+        return $this->resolveTracked($name, true);
     }
 
     /**
@@ -153,16 +142,11 @@ class DefinitionResolver
                 $refClass = ReflectionResource::getClassReflection($definition);
                 $res = $classResolver->resolve($refClass, make: true);
 
-                return $res['instance'];
+                return $res->instance;
 
             default:
                 return $definition;
         }
-    }
-
-    private static function stableHash(string $value): string
-    {
-        return hash('xxh128', $value);
     }
 
     /**
@@ -175,7 +159,7 @@ class DefinitionResolver
      * @throws InvalidArgumentException
      * @throws ReflectionException
      */
-    private function getFromCacheOrResolve(string $name): mixed
+    private function getFromCacheOrResolve(string $name, bool $skipExternalCache = false): mixed
     {
         $lifetime = $this->repository->getDefinitionLifetime($name);
         $environment = $this->repository->getEnvironment() ?? 'default';
@@ -190,10 +174,45 @@ class DefinitionResolver
             return $this->repository->getResolvedDefinitionEntry($resolvedKey);
         }
 
-        $value = $this->resolveSingletonDefinition($name, $resolvedKey);
+        $value = $skipExternalCache
+            ? $this->resolveDefinition($name)
+            : $this->resolveSingletonDefinition($name);
         $this->repository->setResolvedDefinition($resolvedKey, $value);
 
         return $value;
+    }
+
+    private function ignoreDefinitionCacheFailure(Throwable $failure): void
+    {
+        if (!$this->repository->isDefinitionCacheFailOpen()) {
+            throw $failure;
+        }
+    }
+
+    private function persistDefinition(
+        CacheItemPoolInterface $cache,
+        CacheItemInterface $item,
+        mixed $value,
+    ): void {
+        try {
+            $item->set($value);
+            if (!$cache->save($item)) {
+                throw new ContainerException('Definition cache write failed.');
+            }
+        } catch (Throwable $failure) {
+            $this->ignoreDefinitionCacheFailure($failure);
+        }
+    }
+
+    /** @return array{CacheItemInterface, bool, mixed} */
+    private function readCachedDefinition(CacheItemPoolInterface $cache, string $key): array
+    {
+        $item = $cache->getItem($key);
+        $hit = $item->isHit();
+        $value = $hit ? $item->get() : null;
+        $hit = $hit && $this->repository->shouldPersistDefinitionValue($value);
+
+        return [$item, $hit, $value];
     }
 
     /**
@@ -225,7 +244,7 @@ class DefinitionResolver
             true,
         );
 
-        return $method !== null ? $resolved['returned'] : $resolved['instance'];
+        return $method !== null ? $resolved->returned : $resolved->instance;
     }
 
     /**
@@ -250,28 +269,56 @@ class DefinitionResolver
         ];
     }
 
-    private function resolveSingletonDefinition(string $name, string $resolvedKey): mixed
+    private function resolveSingletonDefinition(string $name): mixed
     {
-        $cacheAdapter = $this->repository->getCacheAdapter();
-        if ($cacheAdapter === null) {
+        $definitionCache = $this->repository->getDefinitionCache();
+        if ($definitionCache === null) {
             return $this->resolveDefinition($name);
         }
 
-        $cacheKey = $this->repository->makeCacheKey('def:' . self::stableHash($resolvedKey));
-        $item = $cacheAdapter->getItem($cacheKey);
-        if ($item->isHit()) {
-            $cachedValue = $item->get();
-            if ($this->repository->shouldPersistDefinitionValue($cachedValue)) {
+        $cacheKey = $this->repository->makeDefinitionCacheKey($name);
+
+        try {
+            [$item, $hit, $cachedValue] = $this->readCachedDefinition($definitionCache, $cacheKey);
+            if ($hit) {
                 return $cachedValue;
             }
+        } catch (Throwable $failure) {
+            $this->ignoreDefinitionCacheFailure($failure);
+
+            return $this->resolveDefinition($name);
         }
 
         $value = $this->resolveDefinition($name);
         if ($this->repository->shouldPersistDefinitionValue($value)) {
-            $item->set($value);
-            $cacheAdapter->save($item);
+            $this->persistDefinition($definitionCache, $item, $value);
         }
 
         return $value;
+    }
+
+    private function resolveTracked(string $name, bool $skipExternalCache): mixed
+    {
+        if (isset($this->entriesResolving[$name])) {
+            throw new ContainerException("Circular dependency for definition '$name'.");
+        }
+
+        $parent = end($this->definitionStack);
+        if (is_string($parent) && $parent !== $name && $this->repository->isTracingEnabled()) {
+            $this->repository->tracer()->recordDependency($parent, $name, 'definition');
+        }
+
+        $this->entriesResolving[$name] = true;
+        $this->definitionStack[] = $name;
+        if ($this->repository->isTracingEnabled()) {
+            $this->repository->tracer()->push("def:$name");
+        }
+
+        try {
+            return $this->getFromCacheOrResolve($name, $skipExternalCache);
+        } finally {
+            unset($this->entriesResolving[$name]);
+            array_pop($this->definitionStack);
+        }
     }
 }

@@ -130,7 +130,7 @@ Generated files contain an artifact format version and fingerprints for:
 * the PHP major and minor version;
 * the installed InterMix version and package reference;
 * the selected container environment;
-* the complete normalized definition registry;
+* the complete resolution-relevant compiled-configuration identity;
 * definition IDs and resolution-affecting resource, context, attribute, and
   implicit-method configuration;
 * every compiled recipe;
@@ -144,6 +144,11 @@ validation deliberately avoids reflection and source-file hashing; rebuild the
 artifact for every immutable application release so source-only changes cannot
 reuse an older recipe. Treat the cache file as trusted executable build output
 and never accept its path or contents from a request.
+
+The fingerprints are compatibility coordinates, not authentication. They prove
+that the runtime configuration matches the build input; they do not make an
+untrusted PHP artifact safe to execute. Array definitions that require dynamic
+class or method construction are deliberately omitted and reported as skipped.
 
 When the artifact is loaded before the first service resolution, InterMix uses
 a compiled-first resolver that does not construct the class, parameter, or

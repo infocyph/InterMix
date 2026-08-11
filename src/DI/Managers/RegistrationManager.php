@@ -10,6 +10,7 @@ use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\DI\Support\ServiceProviderInterface;
 use Infocyph\InterMix\Exceptions\ContainerException;
+use ReflectionClass;
 
 /**
  * Handles registering closures, classes, methods, and properties.
@@ -59,13 +60,21 @@ class RegistrationManager implements ArrayAccess
     public function import(string|ServiceProviderInterface $provider): self
     {
         if (is_string($provider)) {
-            $provider = new $provider();
-        }
-
-        if (!$provider instanceof ServiceProviderInterface) {
-            throw new ContainerException(
-                'Service-provider must implement ServiceProviderInterface.',
-            );
+            if (!class_exists($provider)
+                || !is_a($provider, ServiceProviderInterface::class, true)
+            ) {
+                throw new ContainerException(
+                    'Service-provider must be an existing implementation of ServiceProviderInterface.',
+                );
+            }
+            $reflection = new ReflectionClass($provider);
+            $constructor = $reflection->getConstructor();
+            if (!$reflection->isInstantiable()
+                || ($constructor !== null && $constructor->getNumberOfRequiredParameters() > 0)
+            ) {
+                throw new ContainerException('Service providers must be instantiable with zero arguments.');
+            }
+            $provider = $reflection->newInstance();
         }
 
         $provider->register($this->container);

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Invoker;
 
 use Closure;
+use Infocyph\InterMix\DI\Internal\ClassResolution;
 use Infocyph\InterMix\DI\Resolver\ClassResolver;
 use Infocyph\InterMix\DI\Resolver\DefinitionResolver;
 use Infocyph\InterMix\DI\Resolver\ParameterResolver;
@@ -59,20 +60,24 @@ final readonly class InjectedCall
      * @param string|object $class The class name or object to settle.
      * @param string|false|null $method Method to call, false to construct only, or null for configured behavior.
      * @param bool $make Whether to create a new instance (bypassing any cached instance).
-     * @return array<string, mixed> An associative array with keys 'instance' and possibly 'returned'.
-     *
+     * @param array<int|string, mixed> $constructorParameters Ephemeral constructor arguments.
+     * @param array<int|string, mixed> $methodParameters Ephemeral method arguments.
      * @throws ReflectionException|ContainerException
      */
     public function classSettler(
         string|object $class,
         string|false|null $method = null,
         bool $make = false,
-    ): array {
+        array $constructorParameters = [],
+        array $methodParameters = [],
+    ): ClassResolution {
         return $this->classResolver->resolve(
             ReflectionResource::getClassReflection($class),
             null,
             $method,
             $make,
+            $constructorParameters,
+            $methodParameters,
         );
     }
 
@@ -131,5 +136,11 @@ final readonly class InjectedCall
     public function resolveByDefinition(string $name): mixed
     {
         return $this->definitionResolver->resolve($name);
+    }
+
+    /** Resolve a warmup miss without another PSR-6 lookup. */
+    public function resolveDefinitionForWarmup(string $name): mixed
+    {
+        return $this->definitionResolver->resolveForDefinitionCacheWarmup($name);
     }
 }

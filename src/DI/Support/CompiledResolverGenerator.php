@@ -236,28 +236,7 @@ final class CompiledResolverGenerator
             return $this->skipped('array definition does not start with an existing class');
         }
 
-        $reflection = ReflectionResource::getClassReflection($definition[0]);
-        if (!$reflection->isInstantiable()) {
-            return $this->skipped('array definition target is not instantiable');
-        }
-
-        $method = isset($definition[1]) && is_string($definition[1]) ? $definition[1] : null;
-        if ($method !== null && !$reflection->hasMethod($method)) {
-            return $this->skipped('array definition method does not exist');
-        }
-
-        $class = '\\' . ltrim($reflection->getName(), '\\');
-        $methodCode = $method !== null ? var_export($method, true) : 'false';
-
-        return [
-            'code' => "\$c->make({$class}::class, {$methodCode})",
-            'signature' => [
-                'kind' => 'array',
-                'class' => $reflection->getName(),
-                'method' => $method,
-            ],
-            'reason' => '',
-        ];
+        return $this->skipped('array definitions require dynamic class or method construction');
     }
 
     /**

@@ -19,12 +19,14 @@ Unsigned Closures
        static fn (int $value): int => $value * 2,
    );
 
-   if (ClosureSerializer::isSerialized($payload)) {
+   if (ClosureSerializer::isEnvelope($payload)) {
        $closure = ClosureSerializer::unserialize($payload);
    }
 
 Unsigned payloads use the versioned ``imxc1.`` envelope. Recognition is a
 constant-time prefix check; it does not inspect Opis internals.
+Deserialization rejects envelopes larger than the configured maximum before
+base64 decoding. The default maximum payload size is 1 MiB.
 
 Signed Closures
 ===============
@@ -47,6 +49,13 @@ payloads, and verification occurs before executable data is decoded.
 Invocation Boundary
 ===================
 
-``Invoker`` accepts an InterMix unsigned Closure payload only as a cold string
-fallback. Native closures, invokable objects, functions, static methods, and
-class strings never perform Opis, payload decoding, or HMAC work.
+``Invoker`` does not detect or execute serialized Closure payloads. Deserialize
+at an explicit trusted boundary, then pass the resulting Closure to it:
+
+.. code-block:: php
+
+   $closure = ClosureSerializer::unserialize($payload);
+   $result = $container->invocation()->invoke($closure);
+
+Native closures, invokable objects, functions, static methods, and class strings
+perform no Opis, payload-decoding, or HMAC work.

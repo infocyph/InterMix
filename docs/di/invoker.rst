@@ -35,7 +35,7 @@ Key Features
    * - ``resolve()``
      - Retrieve from container by key
    * - ``callableFor()``
-     - Resolve and cache an invokable class for this Invoker instance
+     - Resolve an invokable class for immediate use
 
 ---------------
 Usage Examples
@@ -86,7 +86,6 @@ The invoker routes common callables in this order:
 - function strings
 - static ``Class::method`` strings
 - class strings
-- unsigned InterMix Closure envelopes as a cold fallback
 
 Normal callable routing performs no Opis, payload decoding, signing, or HMAC
 work. Serialization remains the responsibility of ``ClosureSerializer``.

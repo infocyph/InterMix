@@ -35,11 +35,12 @@
         "psr/container": "^2.0"
     },
     "require-dev": {
+        "infocyph/cachelayer": "^3.1",
         "infocyph/phpforge": "dev-main@dev"
     },
     "suggest": {
         "ext-mbstring": "Recommended for development tools output formatting (Pest/Termwind)",
-        "infocyph/cachelayer": "Optional cache adapters for InterMix definition cache integration (PSR-6)"
+        "infocyph/cachelayer": "Recommended PSR-6 cache implementation with memory, APCu, SQLite, Redis/Valkey, tiered and node-local adapters"
     },
     "minimum-stability": "stable",
     "prefer-stable": true,

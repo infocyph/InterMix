@@ -10,7 +10,6 @@ use ReflectionClass;
 use ReflectionEnum;
 use ReflectionException;
 use ReflectionFunction;
-use ReflectionFunctionAbstract;
 use ReflectionMethod;
 use Throwable;
 use UnitEnum;
@@ -41,6 +40,7 @@ final class ReflectionResource
 
     /**
      * @return array{limit:int,classes:int,enums:int,functions:int,methods:int,total:int}
+     * @internal
      */
     public static function cacheStats(): array
     {
@@ -59,6 +59,7 @@ final class ReflectionResource
         ];
     }
 
+    /** @internal */
     public static function clearCache(): void
     {
         self::$reflectionCache = [
@@ -205,18 +206,7 @@ final class ReflectionResource
         throw new InvalidArgumentException('Invalid reflection subject.');
     }
 
-    /**
-     * @param ReflectionClass<object>|ReflectionEnum<UnitEnum>|ReflectionFunctionAbstract $reflection
-     */
-    public static function getSignature(
-        ReflectionClass|ReflectionEnum|ReflectionFunctionAbstract $reflection,
-    ): string {
-        $fileName = $reflection->getFileName() ?: 'unknown';
-        $startLine = $reflection instanceof ReflectionEnum ? 0 : ($reflection->getStartLine() ?: 0);
-
-        return base64_encode("$fileName:$startLine");
-    }
-
+    /** @internal */
     public static function setCacheLimit(int $limit): void
     {
         self::$cacheLimit = max(0, $limit);

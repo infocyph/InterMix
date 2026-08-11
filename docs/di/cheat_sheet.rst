@@ -50,7 +50,7 @@ Managers At A Glance
    * - Manager
      - Core methods
    * - ``definitions()``
-     - ``bind()``, ``addDefinitions()``, ``enableDefinitionCache($pool)``, ``cacheAllDefinitions()``, ``setMetaForEnv()``
+     - ``bind()``, ``addDefinitions()``, ``enableDefinitionCache($pool)``, ``warmDefinitionCache()``, ``setMetaForEnv()``
    * - ``registration()``
      - ``registerClass()``, ``registerMethod()``, ``registerProperty()``, ``registerClosure()``, ``import()``
    * - ``options()``
@@ -131,7 +131,7 @@ Definition cache warmup:
 
    $c->definitions()
        ->enableDefinitionCache($pool)
-       ->cacheAllDefinitions(forceClearFirst: true);
+       ->warmDefinitionCache(rotateGeneration: true);
 
 Scoped resolution:
 

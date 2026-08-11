@@ -9,6 +9,7 @@ InterMix ships with PhpBench suites at:
 - ``benchmarks/IntermixBench.php``
 - ``benchmarks/RuntimeFeaturesBench.php``
 - ``benchmarks/CompiledResolverBench.php``
+- ``benchmarks/DefinitionCacheBench.php``
 - ``benchmarks/FenceBench.php``
 
 Run via Composer:
@@ -44,11 +45,14 @@ The suite covers DI paths end-to-end:
 - ``Invoker`` static-method callable fast path
 - ``Invoker`` zero-argument closure fast path
 - ``Invoker`` function, invokable object, class-string, and static-method string paths
-- Serialized Closure invocation as a cold fallback
 - Unsigned and signed Closure serialization/deserialization
 - MacroMix instance/static invocation
 - MacroMix direct and bulk registration with mutation locking on and off
 - Compiled artifact generation, boot, prevalidated boot, and resolution
+- Uncached scalar resolution and PSR-6/CacheLayer memory-cache hits
+- CacheLayer APCu hits when APCu is available
+- Definition-cache warmup at 10, 100, and 1000 entries
+- Bulk versus sequential warmup and logical generation rotation
 - Definition-free scope seeding for ready request/job instances
 - Service-provider registration path
 - Environment-conditional interface binding path

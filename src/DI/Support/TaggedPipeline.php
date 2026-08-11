@@ -29,7 +29,7 @@ final class TaggedPipeline
     public function thenReturn(): mixed
     {
         $current = $this->passable;
-        foreach ($this->container->findByTagLazy($this->tag) as $resolver) {
+        foreach ($this->container->findByTagLazy($this->tag) as $id => $resolver) {
             $service = $resolver();
 
             if (is_callable($service)) {
@@ -46,7 +46,13 @@ final class TaggedPipeline
 
             if (is_object($service) && method_exists($service, 'process')) {
                 $current = $service->process($current);
+
+                continue;
             }
+
+            throw new ContainerException(
+                "Tagged service '$id' cannot participate in pipeline '{$this->tag}'.",
+            );
         }
 
         return $current;

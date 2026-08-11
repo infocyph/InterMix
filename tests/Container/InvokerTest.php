@@ -128,9 +128,10 @@ it('throws an InvalidArgumentException on unsupported target', function () {
 })->throws(InvalidArgumentException::class);
 
 /* Opis-packed closure ------------------------------------------------------ */
-it('executes a serialized-closure string', function () {
+it('requires explicit serialized-closure deserialization', function () {
     $packed = ClosureSerializer::serialize(fn() => 'packed');
-    expect($this->inv->invoke($packed))->toBe('packed');
+    expect(fn() => $this->inv->invoke($packed))->toThrow(InvalidArgumentException::class)
+        ->and($this->inv->invoke(ClosureSerializer::unserialize($packed)))->toBe('packed');
 });
 
 it('invokes a static class-method string', function () {
@@ -199,7 +200,7 @@ it('invokes an anonymous closure with DI-resolved parameters', function () {
         return "Hi $name — " . $now->format('Y-m-d H:i');
     };
 
-    $out = $this->inv->invoke($closure, ['Bob']);
+    $out = $this->inv->invoke($closure, ['name' => 'Bob']);
 
     expect($out)->toStartWith('Hi Bob — ');
 });
@@ -215,7 +216,7 @@ it('invokes a named function string with DI-resolved parameters', function () {
 
     $this->c->options()->setOptions(injection: true);
 
-    $out = $this->inv->invoke('greet_time_test', ['Alice']);
+    $out = $this->inv->invoke('greet_time_test', ['name' => 'Alice']);
 
     expect($out)->toMatch('/HELLO ALICE @ \d{2}:\d{2}/');
 });
@@ -268,22 +269,15 @@ it('isolates callableFor cache per container', function () {
         ->and($f2())->toBe('Asia/Dhaka');
 });
 
-it('releases cached invokable instances with their invoker lifecycle', function () {
+it('does not pin a concrete invokable service in callableFor', function () {
     $container = Container::instance(uniqid('invoker_cache_lifecycle_'));
     $container->definitions()->bind(DateTimeZone::class, fn() => new DateTimeZone('UTC'));
     $invoker = Invoker::with($container);
     $callable = $invoker->callableFor(CachedCallableService::class);
 
     $reflection = new ReflectionFunction($callable);
-    $service = $reflection->getClosureThis();
-    expect($service)->toBeInstanceOf(CachedCallableService::class);
-    $weakService = WeakReference::create($service);
-
-    $container->unset();
-    unset($reflection, $service, $callable, $invoker, $container);
-    gc_collect_cycles();
-
-    expect($weakService->get())->toBeNull();
+    expect($reflection->getClosureThis())->toBe($invoker)
+        ->and($callable())->toBe('UTC');
 });
 
 it('invokes closures directly without storing closure aliases', function () {

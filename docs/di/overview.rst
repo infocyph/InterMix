@@ -16,7 +16,7 @@ Why another container?
 * **Attribute powered** – one canonical ``#[Inject]`` API
 * **Fluent API** – four tiny managers that chain like one object
 * **Performant** – static reflection cache, parameter-resolution planning cache,
-  optional PSR-6/16 cache,
+  optional PSR-6 cache,
   lazy services by default
 * **Production ready** – env-specific bindings, scoped lifetimes,
   preload file generator
@@ -129,8 +129,9 @@ needed.
 
 #. **Cache layer**
 
-   With definition caching enabled, cache is consulted. Resolution
-   results are stored back for next time.
+   With definition caching enabled, PSR-6 is consulted after the in-memory
+   singleton store. Only safe null/scalar/array singleton results are stored;
+   scoped, transient, object, Closure, and resource values remain runtime-only.
 
 User closure vs. lazy
 ~~~~~~~~~~~~~~~~~~~~~

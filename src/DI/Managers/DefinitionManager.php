@@ -5,14 +5,22 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Managers;
 
 use ArrayAccess;
+use Closure;
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ServiceId;
+use Infocyph\InterMix\DI\Invoker\CompiledCall;
 use Infocyph\InterMix\DI\Invoker\GenericCall;
+use Infocyph\InterMix\DI\Invoker\InjectedCall;
 use Infocyph\InterMix\DI\Resolver\Repository;
+use Infocyph\InterMix\DI\Support\DirectFactory;
+use Infocyph\InterMix\DI\Support\FactoryDefinition;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
+use Psr\Cache\CacheItemInterface;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Cache\InvalidArgumentException;
 use ReflectionException;
+use Throwable;
 
 /**
  * @implements ArrayAccess<string, mixed>
@@ -73,6 +81,7 @@ class DefinitionManager implements ArrayAccess
         LifetimeEnum $lifetime = LifetimeEnum::Singleton,
         array $tags = [],
     ): self {
+        $id = ServiceId::from($id);
         if (is_string($definition) && $id === $definition && !class_exists($definition)) {
             throw new ContainerException("Scalar/string alias cannot point to itself ($id).");
         }
@@ -86,57 +95,18 @@ class DefinitionManager implements ArrayAccess
     }
 
     /**
-     * Pre-cache all definitions.
-     *
-     * This method takes a boolean to force-clear the cache before caching
-     * definitions. It will throw a {@see ContainerException} if no definitions
-     * are added or if no cache adapter is set.
-     *
-     * @param bool $forceClearFirst Whether to clear the cache before caching all definitions.
-     *
-     * @throws ContainerException|InvalidArgumentException
-     * @throws ReflectionException
-     */
-    public function cacheAllDefinitions(bool $forceClearFirst = false): self
-    {
-        if ($this->repository->getFunctionReference() === []) {
-            throw new ContainerException('No definitions added.');
-        }
-        $cacheAdapter = $this->repository->getCacheAdapter();
-        if (!$cacheAdapter) {
-            throw new ContainerException('No cache adapter set.');
-        }
-        if ($forceClearFirst) {
-            $cacheAdapter->clear();
-        }
-
-        // Use the container’s set resolver to pre-resolve
-        $resolver = $this->container->getCurrentResolver();
-        if ($resolver instanceof GenericCall) {
-            throw new ContainerException('Definition caching requires injection-enabled resolver.');
-        }
-
-        foreach ($this->repository->getFunctionReference() as $id => $_def) {
-            // This triggers definition resolution + caching
-            $resolver->resolveByDefinition($id);
-        }
-
-        return $this;
-    }
-
-    /**
      * Enable definition caching with an assigned cache pool.
      *
-     * The given adapter can be any PHP-FIG PSR-6 pool implementation.
+     * The given pool can be any PHP-FIG PSR-6 implementation.
      *
      * @throws ContainerException
      */
     public function enableDefinitionCache(
-        CacheItemPoolInterface $adapter,
-        bool $cacheRuntimeObjects = false,
+        CacheItemPoolInterface $pool,
+        ?string $generation = null,
+        bool $failOpen = true,
     ): self {
-        $this->repository->setCacheAdapter($adapter);
-        $this->repository->setCacheRuntimeObjects($cacheRuntimeObjects);
+        $this->repository->setDefinitionCache($pool, $generation, $failOpen);
 
         return $this;
     }
@@ -181,5 +151,198 @@ class DefinitionManager implements ArrayAccess
         $this->container->options()->setDefinitionMetaForEnv($env, $id, $lifetime, $tags);
 
         return $this;
+    }
+
+    public function unbind(string $id): self
+    {
+        $this->repository->removeDefinition(ServiceId::from($id));
+
+        return $this;
+    }
+
+    /**
+     * Warm safe singleton definitions using one PSR-6 bulk read and commit.
+     *
+     * @return array{hits: int, written: int, skipped: int, failed: int}
+     * @throws ContainerException|InvalidArgumentException|ReflectionException
+     */
+    public function warmDefinitionCache(bool $rotateGeneration = false): array
+    {
+        $definitions = $this->repository->getFunctionReference();
+        if ($definitions === []) {
+            throw new ContainerException('No definitions added.');
+        }
+        $definitionCache = $this->repository->getDefinitionCache();
+        if ($definitionCache === null) {
+            throw new ContainerException('No definition cache set.');
+        }
+        if ($rotateGeneration) {
+            $this->repository->rotateDefinitionCacheGeneration();
+        }
+
+        $resolver = $this->container->getCurrentResolver();
+        if ($resolver instanceof GenericCall) {
+            throw new ContainerException('Definition caching requires injection-enabled resolver.');
+        }
+
+        $report = ['hits' => 0, 'written' => 0, 'skipped' => 0, 'failed' => 0];
+        $keys = $this->warmupKeys($definitions, $report);
+
+        if ($keys === []) {
+            return $report;
+        }
+
+        $items = $this->warmupItems($definitionCache, array_values($keys));
+        if ($items === null) {
+            $report['failed'] += count($keys);
+            $this->resolveWarmupDefinitions($resolver, array_keys($keys));
+
+            return $report;
+        }
+
+        $deferred = 0;
+        foreach ($keys as $id => $key) {
+            $outcome = $this->warmDefinition($resolver, $definitionCache, $id, $items[$key] ?? null);
+            ++$report[$outcome];
+            if ($outcome === 'written') {
+                ++$deferred;
+            }
+        }
+
+        if ($deferred > 0 && !$this->commitDefinitionCache($definitionCache)) {
+            $report['written'] -= $deferred;
+            $report['failed'] += $deferred;
+        }
+
+        return $report;
+    }
+
+    private function canResolveToPersistableValue(mixed $definition): bool
+    {
+        return !is_resource($definition)
+            && (!is_object($definition)
+                || $definition instanceof Closure
+                || $definition instanceof DirectFactory
+                || $definition instanceof FactoryDefinition);
+    }
+
+    private function commitDefinitionCache(CacheItemPoolInterface $cache): bool
+    {
+        try {
+            if (!$cache->commit()) {
+                throw new ContainerException('Definition cache commit failed.');
+            }
+
+            return true;
+        } catch (Throwable $failure) {
+            $this->ignoreDefinitionCacheFailure($failure);
+
+            return false;
+        }
+    }
+
+    private function ignoreDefinitionCacheFailure(Throwable $failure): void
+    {
+        if (!$this->repository->isDefinitionCacheFailOpen()) {
+            throw $failure;
+        }
+    }
+
+    /** @param list<string> $ids */
+    private function resolveWarmupDefinitions(CompiledCall|InjectedCall $resolver, array $ids): void
+    {
+        foreach ($ids as $id) {
+            $resolver->resolveDefinitionForWarmup($id);
+        }
+    }
+
+    /**
+     * @return string Warmup report field to increment.
+     * @phpstan-return 'hits'|'written'|'skipped'|'failed'
+     */
+    private function warmDefinition(
+        CompiledCall|InjectedCall $resolver,
+        CacheItemPoolInterface $cache,
+        string $id,
+        mixed $item,
+    ): string {
+        if (!$item instanceof CacheItemInterface) {
+            $resolver->resolveDefinitionForWarmup($id);
+
+            return 'failed';
+        }
+
+        try {
+            if ($item->isHit() && $this->repository->shouldPersistDefinitionValue($item->get())) {
+                return 'hits';
+            }
+        } catch (Throwable $failure) {
+            $this->ignoreDefinitionCacheFailure($failure);
+            $resolver->resolveDefinitionForWarmup($id);
+
+            return 'failed';
+        }
+
+        $value = $resolver->resolveDefinitionForWarmup($id);
+        if (!$this->repository->shouldPersistDefinitionValue($value)) {
+            return 'skipped';
+        }
+
+        try {
+            $item->set($value);
+            if (!$cache->saveDeferred($item)) {
+                throw new ContainerException('Definition cache deferred write failed.');
+            }
+
+            return 'written';
+        } catch (Throwable $failure) {
+            $this->ignoreDefinitionCacheFailure($failure);
+
+            return 'failed';
+        }
+    }
+
+    /**
+     * @param list<string> $keys
+     * @return array<string, CacheItemInterface>|null
+     */
+    private function warmupItems(CacheItemPoolInterface $cache, array $keys): ?array
+    {
+        try {
+            $items = [];
+            foreach ($cache->getItems($keys) as $item) {
+                if ($item instanceof CacheItemInterface) {
+                    $items[$item->getKey()] = $item;
+                }
+            }
+
+            return $items;
+        } catch (Throwable $failure) {
+            $this->ignoreDefinitionCacheFailure($failure);
+
+            return null;
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $definitions
+     * @param array{hits: int, written: int, skipped: int, failed: int} $report
+     * @return array<string, string>
+     */
+    private function warmupKeys(array $definitions, array &$report): array
+    {
+        $keys = [];
+        foreach ($definitions as $id => $definition) {
+            if ($this->repository->getDefinitionLifetime($id) !== LifetimeEnum::Singleton
+                || !$this->canResolveToPersistableValue($definition)
+            ) {
+                ++$report['skipped'];
+
+                continue;
+            }
+            $keys[$id] = $this->repository->makeDefinitionCacheKey($id);
+        }
+
+        return $keys;
     }
 }

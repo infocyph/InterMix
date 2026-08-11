@@ -151,6 +151,15 @@ trait Fence
      */
     private static function checkRequirements(?array $c): void
     {
+        foreach (['extensions', 'classes'] as $key) {
+            $requirements = $c[$key] ?? [];
+            if (!is_array($requirements)
+                || array_any($requirements, static fn(mixed $value): bool => !is_string($value))
+            ) {
+                throw new InvalidArgumentException("Fence requirement '{$key}' must be an array of strings.");
+            }
+        }
+
         if ($c === null || (($c['extensions'] ?? []) === [] && ($c['classes'] ?? []) === [])) {
             return;
         }
@@ -259,7 +268,12 @@ trait Fence
             return PHP_INT_MAX;
         }
 
-        return (int) constant("$className::FENCE_LIMIT");
+        $limit = (int) constant("$className::FENCE_LIMIT");
+        if ($limit < 1) {
+            throw new InvalidArgumentException('Declared FENCE_LIMIT must be at least 1.');
+        }
+
+        return $limit;
     }
 
     private static function isKeyed(): bool

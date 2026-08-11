@@ -52,7 +52,7 @@ final class DebugTracer
         if (!$this->enabled || $lvl->value > $this->level->value) {
             return fn() => null;
         }
-        $id = dechex(++$this->seq);
+        $id = 's' . dechex(++$this->seq);
         $depth = \count($this->activeSpans);
 
         $this->activeSpans[$id] = [
@@ -96,6 +96,7 @@ final class DebugTracer
      */
     public function dependencyGraph(bool $clear = false): array
     {
+        $this->closeActiveSpans();
         $edges = array_values($this->graphEdges);
         $nodes = [];
 
@@ -125,12 +126,6 @@ final class DebugTracer
             return;
         }
         if (!isset($this->activeSpans[$spanId])) {
-            $this->push(
-                "◀ end: span {$spanId}",
-                TraceLevelEnum::Node,
-                ['span_id' => $spanId] + $context,
-            );
-
             return;
         }
 
@@ -157,6 +152,8 @@ final class DebugTracer
     /** @return TraceEntry[] */
     public function getEntries(): array
     {
+        $this->closeActiveSpans();
+
         return $this->entries;
     }
 
@@ -165,6 +162,7 @@ final class DebugTracer
      */
     public function getFormatted(callable $formatter): mixed
     {
+        $this->closeActiveSpans();
         $out = $formatter($this->entries);
         $this->clear();
 
@@ -219,6 +217,8 @@ final class DebugTracer
             new DateTimeImmutable(),
             $file,
             $line,
+            memory_get_usage(),
+            (int) hrtime(true),
         );
     }
 
@@ -277,11 +277,11 @@ final class DebugTracer
      */
     public function toArray(): array
     {
+        $this->closeActiveSpans();
         $out = [];
-        $prevMicros = null;
+        $previous = null;
 
         foreach ($this->entries as $entry) {
-            $currentMicros = (int) $entry->timestamp->format('Uu');
             $out[] = [
                 'ts' => $entry->timestamp->format('c'),
                 'level' => $entry->level->name,
@@ -289,9 +289,11 @@ final class DebugTracer
                 'ctx' => $entry->context,
                 'file' => $entry->file,
                 'line' => $entry->line,
-                'Δus' => $prevMicros === null ? 0 : ($currentMicros - $prevMicros),
+                'Δus' => $previous === null
+                    ? 0
+                    : intdiv($entry->hrtime - $previous->hrtime, 1000),
             ];
-            $prevMicros = $currentMicros;
+            $previous = $entry;
         }
 
         $this->clear();
@@ -304,6 +306,7 @@ final class DebugTracer
      */
     public function toCli(): string
     {
+        $this->closeActiveSpans();
         $palette = [
             TraceLevelEnum::Verbose->value => "\033[2m",
             TraceLevelEnum::Node->value => "\033[36m",
@@ -327,5 +330,12 @@ final class DebugTracer
         $this->clear();
 
         return $out;
+    }
+
+    private function closeActiveSpans(): void
+    {
+        foreach (array_keys($this->activeSpans) as $spanId) {
+            $this->endSpan($spanId, ['auto_close' => true]);
+        }
     }
 }

@@ -28,9 +28,9 @@ it('recognizes only the unsigned InterMix envelope', function () {
     $payload = ClosureSerializer::serialize(static fn(): null => null);
 
     expect($payload)->toStartWith('imxc1.')
-        ->and(ClosureSerializer::isSerialized($payload))->toBeTrue()
-        ->and(ClosureSerializer::isSerialized('not-a-payload'))->toBeFalse()
-        ->and(ClosureSerializer::isSerialized('imxcs1.signature.payload'))->toBeFalse();
+        ->and(ClosureSerializer::isEnvelope($payload))->toBeTrue()
+        ->and(ClosureSerializer::isEnvelope('not-a-payload'))->toBeFalse()
+        ->and(ClosureSerializer::isEnvelope('imxcs1.signature.payload'))->toBeFalse();
 });
 
 it('rejects missing malformed and non-Closure payloads', function (string $payload) {

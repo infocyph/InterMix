@@ -45,7 +45,7 @@ Registering a Macro
 
 .. code-block:: php
 
-   public static function macro(string $name, callable|object $macro): void
+   public static function macro(string $name, callable $macro): void
 
 - ``$name``: method name you want to add.
 - ``$macro``: a callable or object. Closures are wrapped so that if they return

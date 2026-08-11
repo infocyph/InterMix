@@ -6,6 +6,7 @@ namespace Infocyph\InterMix\DI\Managers;
 
 use BadMethodCallException;
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ServiceId;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\InvalidArgumentException;
 
@@ -42,7 +43,7 @@ trait ManagerProxy
      */
     public function __call(string $method, array $args): mixed
     {
-        if (!\method_exists($this->container, $method)) {
+        if (!is_callable([$this->container, $method])) {
             throw new BadMethodCallException("Container has no {$method}()");
         }
 
@@ -100,15 +101,7 @@ trait ManagerProxy
         $this->container->definitions()->bind($id, $definition);
     }
 
-    /**
-     * Ends the current scope and returns the Container instance.
-     *
-     * When called, this method will return the Container instance and
-     * remove the current scope from the stack, effectively ending the
-     * current scope.
-     *
-     * @return Container The Container instance.
-     */
+    /** Return to the owning Container. */
     public function end(): Container
     {
         return $this->container;
@@ -122,11 +115,13 @@ trait ManagerProxy
      */
     public function offsetExists(mixed $offset): bool
     {
-        if (!is_int($offset) && !is_string($offset)) {
+        try {
+            $id = ServiceId::from($offset);
+        } catch (\InvalidArgumentException) {
             return false;
         }
 
-        return $this->__isset((string) $offset);
+        return $this->__isset($id);
     }
 
     /**
@@ -138,11 +133,7 @@ trait ManagerProxy
      */
     public function offsetGet(mixed $offset): mixed
     {
-        if (!is_int($offset) && !is_string($offset)) {
-            throw new \InvalidArgumentException('Offset must be an int or string.');
-        }
-
-        return $this->__get((string) $offset);
+        return $this->__get(ServiceId::from($offset));
     }
 
     /**
@@ -154,23 +145,14 @@ trait ManagerProxy
      */
     public function offsetSet(mixed $offset, mixed $value): void
     {
-        if (!is_int($offset) && !is_string($offset)) {
-            throw new ContainerException('Offset must be an int or string.');
-        }
-
-        $this->__set((string) $offset, $value);
+        $this->__set(ServiceId::from($offset), $value);
     }
 
     /**
-     * No-op implementation of offsetUnset (ArrayAccess).
-     *
-     * This is intentionally a no-op to prevent accidental removal of services.
-     * Use the container's remove() method directly if you need to remove a service.
-     *
-     * @param mixed $offset The offset to unset (ignored)
+     * @param mixed $offset The offset to unset.
      */
     public function offsetUnset(mixed $offset): void
     {
-        // Intentionally left empty - use container's remove() method instead
+        $this->container->unbind(ServiceId::from($offset));
     }
 }
