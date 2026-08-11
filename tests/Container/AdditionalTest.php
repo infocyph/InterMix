@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ClassResolution;
 use Infocyph\InterMix\DI\Support\DebugTracer;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\DI\Support\PreloadGenerator;
@@ -279,9 +280,9 @@ it('stores resolved entries only through lifetime-aware keys', function () {
 
     expect($repo->hasResolved('svc.singleton'))->toBeTrue()
         ->and($repo->hasResolved('svc.scoped'))->toBeFalse()
-        ->and($repo->hasResolved('svc.scoped@request-a'))->toBeTrue()
+        ->and($repo->hasResolvedScoped('request-a', 'svc.scoped'))->toBeTrue()
         ->and($repo->hasResolved('svc.transient'))->toBeFalse()
-        ->and($repo->hasResolved('svc.transient@request-a'))->toBeFalse();
+        ->and($repo->hasResolvedScoped('request-a', 'svc.transient'))->toBeFalse();
 
     $c->leaveScope();
 });
@@ -310,11 +311,11 @@ it('reads scoped getReturn values from the current scope key', function () {
     $repo->setResolved('scope.return', ['instance' => new stdClass(), 'returned' => 'stale-base']);
 
     $repo->setScope('request-1');
-    $repo->setResolvedScoped('request-1', 'scope.return@request-1', ['instance' => new stdClass(), 'returned' => 'scope-1']);
+    $repo->setResolvedScoped('request-1', 'scope.return', new ClassResolution(new stdClass(), 'scope-1', true));
     $first = $c->getReturn('scope.return');
 
     $repo->setScope('request-2');
-    $repo->setResolvedScoped('request-2', 'scope.return@request-2', ['instance' => new stdClass(), 'returned' => 'scope-2']);
+    $repo->setResolvedScoped('request-2', 'scope.return', new ClassResolution(new stdClass(), 'scope-2', true));
     $second = $c->getReturn('scope.return');
 
     expect($first)->toBe('scope-1')
@@ -334,8 +335,8 @@ it('routes call() definition IDs through lifetime-aware get()', function () {
 
     expect($firstScoped)->toBe($secondScoped)
         ->and($firstTransient)->not->toBe($secondTransient)
-        ->and($c->getRepository()->hasResolved('svc.scoped@request-a'))->toBeTrue()
-        ->and($c->getRepository()->hasResolved('svc.transient@request-a'))->toBeFalse();
+        ->and($c->getRepository()->hasResolvedScoped('request-a', 'svc.scoped'))->toBeTrue()
+        ->and($c->getRepository()->hasResolvedScoped('request-a', 'svc.transient'))->toBeFalse();
 });
 
 it('factory binding is deferred until lifetime selection', function () {
@@ -718,7 +719,7 @@ it('does not leak resolved-resource state when make() fails', function () {
     $resolved = $c->getRepository()->getResolvedResource();
 
     expect(array_key_exists(FailingMakeTarget::class, $resolved))->toBeFalse()
-        ->and($c->getRepository()->getResolvedResourceFor(FailingMakeTarget::class))->toBe([]);
+        ->and($c->getRepository()->getResolvedResourceFor(FailingMakeTarget::class))->toBeNull();
 });
 
 it('allows class-string self binding and rejects scalar self aliases', function () {
@@ -910,13 +911,11 @@ it('begins and ends a span with a returned closure', function () {
     $close = $t->beginSpan('compile-container');   // returns Closure
     expect($close)
         ->toBeInstanceOf(Closure::class)
-        ->and($t->getEntries())->toHaveCount(1)
+        ->and($t->getEntries())->toHaveCount(2)
         ->and($t->getEntries()[0]->message)
         ->toContain('start: compile-container');
 
-    // span should be in the active list now
-
-    // close the span
+    // Exporting entries auto-closes active spans; the closer is idempotent.
     $close();
 
     $entries = $t->getEntries();

@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\Remix;
 
+use BadMethodCallException;
 use Closure;
-use Exception;
 use Infocyph\InterMix\Internal\ReflectionResource;
+use InvalidArgumentException;
 use ReflectionException;
 use ReflectionFunction;
 use ReflectionMethod;
@@ -17,15 +18,15 @@ use RuntimeException;
 trait MacroMix
 {
     /** @var array<string, bool> */
+    protected static array $macroIsBindableClosure = [];
+
+    /** @var array<string, bool> */
     protected static array $macroIsStaticClosure = [];
 
     /**
-     * @var array<string, callable|object>
+     * @var array<string, callable>
      */
     protected static array $macros = [];
-
-    /** @var array<class-string, resource> */
-    private static array $lockHandles = [];
 
     /**
      * Handles dynamic calls to the object.
@@ -38,7 +39,7 @@ trait MacroMix
      *
      * @return mixed The result of the macro call.
      *
-     * @throws Exception If the macro does not exist.
+     * @throws BadMethodCallException If the macro does not exist.
      */
     public function __call(string $method, array $parameters): mixed
     {
@@ -56,7 +57,7 @@ trait MacroMix
      *
      * @return mixed The result of the macro call.
      *
-     * @throws Exception If the macro does not exist.
+     * @throws BadMethodCallException If the macro does not exist.
      */
     public static function __callStatic(string $method, array $parameters): mixed
     {
@@ -68,7 +69,7 @@ trait MacroMix
      *
      * Retrieves a list of all macros currently registered with the class.
      *
-     * @return array<string, callable|object> An array of all registered macros.
+     * @return array<string, callable> An array of all registered macros.
      */
     public static function getMacros(): array
     {
@@ -102,16 +103,21 @@ trait MacroMix
      */
     public static function loadMacrosFromAnnotations(string|object $class): void
     {
-        $instance = is_object($class) ? $class : new $class();
-        $reflection = ReflectionResource::getClassReflection($instance);
+        $instance = is_object($class) ? $class : null;
+        $reflection = ReflectionResource::getClassReflection($class);
         $macros = [];
         foreach ($reflection->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
             $docComment = $method->getDocComment();
             if ($docComment && preg_match('/@Macro\("(\w+)"\)/', $docComment, $matches)) {
                 $macroName = $matches[1];
+                if (!$method->isStatic() && $instance === null) {
+                    throw new InvalidArgumentException(
+                        "An object is required to load instance macro {$reflection->getName()}::{$method->getName()}().",
+                    );
+                }
                 $macros[$macroName] = $method->isStatic()
-                    ? fn(...$args) => $method->invoke(null, ...$args)
-                    : fn(...$args) => $method->invoke($instance, ...$args);
+                    ? static fn(...$args) => $method->invoke(null, ...$args)
+                    : static fn(...$args) => $method->invoke($instance, ...$args);
             }
         }
 
@@ -139,9 +145,9 @@ trait MacroMix
      * Registers a macro with the given name.
      *
      * @param string $name The macro name.
-     * @param callable|object $macro The macro to register.
+     * @param callable $macro The macro to register.
      */
-    public static function macro(string $name, callable|object $macro): void
+    public static function macro(string $name, callable $macro): void
     {
         if (!self::isLockEnabled()) {
             static::registerMacroUnlocked($name, $macro);
@@ -167,18 +173,27 @@ trait MacroMix
      */
     public static function mix(object|string $mixin, bool $replace = true): void
     {
-        $instance = is_object($mixin) ? $mixin : new $mixin();
-        $methods = (ReflectionResource::getClassReflection($instance))->getMethods(
+        $instance = is_object($mixin) ? $mixin : null;
+        $reflection = ReflectionResource::getClassReflection($mixin);
+        $methods = $reflection->getMethods(
             ReflectionMethod::IS_PUBLIC | ReflectionMethod::IS_PROTECTED,
         );
 
         $macros = [];
         foreach ($methods as $method) {
+            if ($method->isConstructor() || $method->isDestructor()) {
+                continue;
+            }
+            if (!$method->isStatic() && $instance === null) {
+                throw new InvalidArgumentException(
+                    "An object is required to mix instance method {$reflection->getName()}::{$method->getName()}().",
+                );
+            }
             $name = $method->name;
 
             $macros[$name] = $method->isStatic()
-                ? fn(...$args) => $method->invoke(null, ...$args)
-                : fn(...$args) => $method->invoke($instance, ...$args);
+                ? static fn(...$args) => $method->invoke(null, ...$args)
+                : static fn(...$args) => $method->invoke($instance, ...$args);
         }
 
         if (!self::isLockEnabled()) {
@@ -215,27 +230,21 @@ trait MacroMix
         return defined("$class::ENABLE_LOCK") && (bool) constant("$class::ENABLE_LOCK");
     }
 
-    /** @return resource */
-    private static function lockHandle()
-    {
-        $class = static::class;
-        if (isset(self::$lockHandles[$class])) {
-            return self::$lockHandles[$class];
-        }
-
-        $path = sys_get_temp_dir() . '/intermix-macro-' . hash('xxh3', $class) . '.lock';
-        $handle = fopen($path, 'c');
-        if ($handle === false) {
-            throw new RuntimeException("Unable to open the MacroMix mutation lock for $class.");
-        }
-
-        return self::$lockHandles[$class] = $handle;
-    }
-
     private static function mutate(Closure $operation): mixed
     {
-        $handle = self::lockHandle();
+        $directory = sys_get_temp_dir() . '/intermix-locks';
+        if (!is_dir($directory) && !mkdir($directory, 0700, true) && !is_dir($directory)) {
+            throw new RuntimeException('Unable to create the InterMix lock directory.');
+        }
+        chmod($directory, 0700);
+        $path = $directory . '/macro-' . hash('sha256', static::class) . '.lock';
+        $handle = fopen($path, 'c');
+        if ($handle === false) {
+            throw new RuntimeException('Unable to open the MacroMix mutation lock.');
+        }
         if (!flock($handle, LOCK_EX)) {
+            fclose($handle);
+
             throw new RuntimeException('Unable to acquire the MacroMix mutation lock.');
         }
 
@@ -243,6 +252,7 @@ trait MacroMix
             return $operation();
         } finally {
             flock($handle, LOCK_UN);
+            fclose($handle);
         }
     }
 
@@ -259,12 +269,12 @@ trait MacroMix
      *
      * @return mixed The result of the macro call.
      *
-     * @throws Exception If the macro does not exist.
+     * @throws BadMethodCallException If the macro does not exist.
      */
     private static function process(?object $bind, string $method, array $parameters): mixed
     {
         if (!static::hasMacro($method)) {
-            throw new Exception(
+            throw new BadMethodCallException(
                 sprintf('Method %s::%s does not exist.', static::class, $method),
             );
         }
@@ -278,9 +288,24 @@ trait MacroMix
             $isStaticClosure = static::$macroIsStaticClosure[$method]
                 ??= new ReflectionFunction($macro)->isStatic();
 
+            if ($bind === null && !$isStaticClosure) {
+                throw new BadMethodCallException(
+                    sprintf('Cannot call non-static macro %s::%s() statically.', static::class, $method),
+                );
+            }
             if ($bind !== null && !$isStaticClosure) {
+                if (!(static::$macroIsBindableClosure[$method] ?? false)) {
+                    throw new BadMethodCallException(
+                        sprintf('Unable to bind macro %s::%s().', static::class, $method),
+                    );
+                }
                 $bound = $macro->bindTo($bind, static::class);
-                $closure = $bound instanceof Closure ? $bound : $macro;
+                if (!$bound instanceof Closure) {
+                    throw new BadMethodCallException(
+                        sprintf('Unable to bind macro %s::%s().', static::class, $method),
+                    );
+                }
+                $closure = $bound;
             }
 
             $result = $closure(...$parameters);
@@ -289,7 +314,7 @@ trait MacroMix
         }
 
         if (!is_callable($macro)) {
-            throw new Exception(
+            throw new BadMethodCallException(
                 sprintf('Method %s::%s is not callable.', static::class, $method),
             );
         }
@@ -299,20 +324,22 @@ trait MacroMix
         return $result ?? $bind ?? static::class;
     }
 
-    private static function registerMacroUnlocked(string $name, callable|object $macro): void
+    private static function registerMacroUnlocked(string $name, callable $macro): void
     {
         static::$macros[$name] = $macro;
         if ($macro instanceof Closure) {
-            static::$macroIsStaticClosure[$name] = new ReflectionFunction($macro)->isStatic();
+            $reflection = new ReflectionFunction($macro);
+            static::$macroIsStaticClosure[$name] = $reflection->isStatic();
+            static::$macroIsBindableClosure[$name] = str_starts_with($reflection->getName(), '{closure');
 
             return;
         }
 
-        unset(static::$macroIsStaticClosure[$name]);
+        unset(static::$macroIsBindableClosure[$name], static::$macroIsStaticClosure[$name]);
     }
 
     /**
-     * @param array<string, callable|object> $macros
+     * @param array<string, callable> $macros
      */
     private static function registerMany(array $macros): void
     {
@@ -332,7 +359,7 @@ trait MacroMix
     }
 
     /**
-     * @param array<string, callable|object> $macros
+     * @param array<string, callable> $macros
      * @param bool $replace Whether existing macro names may be replaced.
      */
     private static function registerMixinUnlocked(array $macros, bool $replace): void
@@ -348,6 +375,6 @@ trait MacroMix
 
     private static function removeMacroUnlocked(string $name): void
     {
-        unset(static::$macros[$name], static::$macroIsStaticClosure[$name]);
+        unset(static::$macros[$name], static::$macroIsBindableClosure[$name], static::$macroIsStaticClosure[$name]);
     }
 }

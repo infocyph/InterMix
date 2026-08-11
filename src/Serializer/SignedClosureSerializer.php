@@ -16,10 +16,16 @@ final readonly class SignedClosureSerializer
 
     private const string PREFIX = 'imxcs1.';
 
-    public function __construct(#[\SensitiveParameter] private string $key)
-    {
+    public function __construct(
+        #[\SensitiveParameter]
+        private string $key,
+        private int $maxPayloadSize = ClosureSerializer::DEFAULT_MAX_PAYLOAD_SIZE,
+    ) {
         if ($this->key === '') {
             throw new InvalidArgumentException('Closure signing key cannot be empty.');
+        }
+        if ($this->maxPayloadSize < 1) {
+            throw new InvalidArgumentException('Maximum Closure payload size must be positive.');
         }
     }
 
@@ -33,6 +39,9 @@ final readonly class SignedClosureSerializer
 
     public function unserialize(string $payload): Closure
     {
+        if (strlen($payload) > $this->maxPayloadSize) {
+            throw new InvalidArgumentException('Signed Closure payload exceeds the configured size limit.');
+        }
         if (!str_starts_with($payload, self::PREFIX)) {
             throw new InvalidArgumentException('Signed InterMix Closure payload expected.');
         }
@@ -45,7 +54,7 @@ final readonly class SignedClosureSerializer
 
         $signature = base64_decode(substr($envelope, 0, $separator), true);
         $serialized = base64_decode(substr($envelope, $separator + 1), true);
-        if ($signature === false || $serialized === false || $serialized === '') {
+        if ($signature === false || strlen($signature) !== 32 || $serialized === false || $serialized === '') {
             throw new InvalidArgumentException('Invalid signed Closure payload encoding.');
         }
 

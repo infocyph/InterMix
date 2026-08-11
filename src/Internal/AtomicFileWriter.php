@@ -15,9 +15,14 @@ final class AtomicFileWriter
      * @param string $filePath Final artifact destination.
      * @param string $contents Complete generated contents.
      * @param null|callable(string): void $validate Receives the staged path before activation.
+     * @param int $mode Final file permission mode.
      */
-    public static function write(string $filePath, string $contents, ?callable $validate = null): void
-    {
+    public static function write(
+        string $filePath,
+        string $contents,
+        ?callable $validate = null,
+        int $mode = 0644,
+    ): void {
         $directory = realpath(dirname($filePath));
         if ($directory === false || !is_dir($directory)) {
             throw new RuntimeException("Output directory does not exist for '$filePath'.");
@@ -36,6 +41,10 @@ final class AtomicFileWriter
 
             if ($validate !== null) {
                 $validate($temporaryPath);
+            }
+
+            if (!chmod($temporaryPath, $mode)) {
+                throw new RuntimeException("Unable to set generated file permissions for '$filePath'.");
             }
 
             if (!rename($temporaryPath, $filePath)) {

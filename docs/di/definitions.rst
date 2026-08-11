@@ -161,7 +161,7 @@ Toggle globally:
 
 .. code-block:: php
 
-   $c->options()->enableLazyLoading(false);   // eager – resolve immediately
+   $c->options()->enableLazyLoading(false);   // future class bindings resolve without placeholders
 
 User-supplied **closures** are **not wrapped** in another deferred object. They
 execute when the ID is resolved (for example on first ``get()`` for singleton/scoped,

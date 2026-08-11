@@ -20,13 +20,21 @@ class UnlockedMacroTestClass
     public const ENABLE_LOCK = false;
 }
 
+class StaticMacroMixin
+{
+    public static function ping(): string
+    {
+        return 'pong';
+    }
+}
+
 it('registers & calls macros', function () {
-    MacroTestClass::macro('sayHello', fn () => 'Hello, MacroMix!');
+    MacroTestClass::macro('sayHello', static fn () => 'Hello, MacroMix!');
     expect(MacroTestClass::sayHello())->toBe('Hello, MacroMix!');
 });
 
 it('detects & removes macros', function () {
-    MacroTestClass::macro('sayGoodbye', fn () => 'Goodbye, MacroMix!');
+    MacroTestClass::macro('sayGoodbye', static fn () => 'Goodbye, MacroMix!');
     expect(MacroTestClass::hasMacro('sayGoodbye'))->toBeTrue();
     MacroTestClass::removeMacro('sayGoodbye');
     expect(MacroTestClass::hasMacro('sayGoodbye'))->toBeFalse();
@@ -67,10 +75,7 @@ it('mixes methods from another class', function () {
 
 it('mixes via class string', function () {
     // Confirm mix() accepts class names
-    $class = new class {
-        public function ping() { return 'pong'; }
-    };
-    MacroTestClass::mix($class::class);
+    MacroTestClass::mix(StaticMacroMixin::class);
 
     expect((new MacroTestClass())->ping())->toBe('pong');
 });
@@ -159,17 +164,24 @@ it('releases the mutation lock when an operation throws', function () {
     expect(fn() => $mutate->invoke(null, static fn() => throw new RuntimeException('failed')))
         ->toThrow(RuntimeException::class, 'failed');
 
-    $lockHandle = new ReflectionMethod(MacroTestClass::class, 'lockHandle');
-    $handle = $lockHandle->invoke(null);
+    $path = sys_get_temp_dir() . '/intermix-locks/macro-' . hash('sha256', MacroTestClass::class) . '.lock';
+    $handle = fopen($path, 'c');
+    if ($handle === false) {
+        throw new RuntimeException('Unable to open test lock.');
+    }
 
     expect(flock($handle, LOCK_EX | LOCK_NB))->toBeTrue();
     flock($handle, LOCK_UN);
+    fclose($handle);
 });
 
 it('keeps reads and macro execution lock-free', function () {
     MacroTestClass::macro('lockFreeRead', static fn(): string => 'read');
-    $lockHandle = new ReflectionMethod(MacroTestClass::class, 'lockHandle');
-    $handle = $lockHandle->invoke(null);
+    $path = sys_get_temp_dir() . '/intermix-locks/macro-' . hash('sha256', MacroTestClass::class) . '.lock';
+    $handle = fopen($path, 'c');
+    if ($handle === false) {
+        throw new RuntimeException('Unable to open test lock.');
+    }
     flock($handle, LOCK_EX);
 
     try {
@@ -178,5 +190,6 @@ it('keeps reads and macro execution lock-free', function () {
             ->and(MacroTestClass::lockFreeRead())->toBe('read');
     } finally {
         flock($handle, LOCK_UN);
+        fclose($handle);
     }
 });

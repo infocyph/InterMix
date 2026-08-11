@@ -7,7 +7,7 @@ Fence (Class Initialization Barrier)
 The ``Fence`` package provides a single core trait (``Fence``)
 and three lightweight wrappers (``Single``, ``Multi``, ``Limit``) that let you:
 
-- Control exactly how many objects of a class may exist.
+- Control how many objects are created through ``::instance()``.
 - Choose whether instances are “keyed” by string or always a singleton.
 - Enforce optional PHP‐extension/class requirements at startup.
 - Inspect or reset active instances.
@@ -52,12 +52,18 @@ Caller-provided keys are used until the configured limit is reached.
 ``classes``. If any extension or class is missing, a ``RequirementException`` is thrown
 before a **new** instance is created.
 
-**New Features Added**
+**Inspection and management**
 
 - **Instance inspection** – ``hasInstance()``, ``countInstances()``, ``getInstances()``, ``getKeys()``
 - **Cache management** – ``clearInstances()`` for testing
 - **Runtime limit override** – ``setLimit()`` for dynamic configuration
-- **Enhanced error handling** – Better exception messages and validations new object
+- **Input validation** – clear errors for malformed requirements and invalid limits
+
+Fence governs only instances created through ``::instance()``. A public
+constructor still permits direct ``new`` construction outside Fence's registry.
+To make Fence the only construction route, give the consuming class a non-public
+zero-argument constructor where that is compatible with the application. The
+current factory itself expects a zero-argument constructor.
 
 **Singleton (Single)**
 
@@ -121,12 +127,6 @@ before a **new** instance is created.
     ReportCache::instance("rC");           // throws LimitExceededException if >2 and setLimit not called
     ReportCache::setLimit(3);              // Override to accept 3
     ReportCache::instance("rC");           // now allowed
-
-**Requirement Checking**
-
-``::instance()`` accepts an optional constraints array with ``extensions`` and/or
-``classes``. If any extension or class is missing, a ``RequirementException`` is thrown
-before any new instance is created.
 
 **Limit Enforcement**
 
@@ -230,7 +230,8 @@ Applying requirements::
 Best Practices
 --------------
 
-* **Always call ``::instance()``** instead of ``new``.
+* Use ``::instance()`` whenever the object should participate in Fence's registry.
+* Use a non-public zero-argument constructor when direct ``new`` construction must be prevented.
 * If your class must remain a singleton, use ``Single``.
 * If you need per‐key instances, use ``Multi``.
 * If you want to cap how many objects can coexist, use ``Limit``.

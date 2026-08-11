@@ -4,10 +4,9 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Support;
 
-use BadMethodCallException;
+use Infocyph\InterMix\DI\Internal\ServiceId;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\InvalidArgumentException;
-use Stringable;
 
 /**
  * Tiny syntactic sugar layer for the Container *itself*.
@@ -17,25 +16,6 @@ use Stringable;
  */
 trait ContainerProxy
 {
-    /**
-     * Delegate calls to methods on the container.
-     *
-     * @param string $method The name of the method to call.
-     * @param array<int, mixed> $args The arguments to pass to the method.
-     *
-     * @return mixed The result of the method call.
-     *
-     * @throws BadMethodCallException If the method does not exist.
-     */
-    public function __call(string $method, array $args): mixed
-    {
-        if (!\method_exists($this, $method)) {
-            throw new BadMethodCallException("Undefined method $method()");
-        }
-
-        return $this->$method(...$args);
-    }
-
     /**
      * Magic getter method.
      *
@@ -127,21 +107,12 @@ trait ContainerProxy
      * @suppress PhanUnreferencedPublicMethod
      */
     public function offsetUnset(mixed $offset): void
-    { /* silently ignore */
+    {
+        $this->unbind(ServiceId::from($offset));
     }
 
     private function offsetToString(mixed $offset): string
     {
-        if (is_string($offset)) {
-            return $offset;
-        }
-        if ($offset instanceof Stringable) {
-            return (string) $offset;
-        }
-        if (is_int($offset) || is_float($offset) || is_bool($offset) || $offset === null) {
-            return (string) $offset;
-        }
-
-        throw new BadMethodCallException('Array-access offset must be string-convertible.');
+        return ServiceId::from($offset);
     }
 }

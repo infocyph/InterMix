@@ -44,7 +44,7 @@ test('PSR-11: container can get() a class with no constructor', function () {
     $container = Container::instance('basic_test')
         ->lock(); // locking is optional here
 
-    expect($container->has(BasicClass::class))->toBeFalse();
+    expect($container->has(BasicClass::class))->toBeTrue();
 
     // Not defined? The container might attempt auto-resolve if your container supports reflection-based
     // or might throw if no auto-resolve is available. If you do reflection auto-resolve, this might pass:
@@ -77,7 +77,7 @@ test('Constructor Injection: interface & scalar param', function () {
         ->registerClass(UserService::class, [
             // param 1 => LoggerInterface => FileLogger (above),
             // param 2 => $dbName => 'test_database'
-            'test_database',
+            'dbName' => 'test_database',
         ])->end();
 
     /** @var UserService $service */
@@ -126,7 +126,7 @@ test('Constructor injection: singletons vs. make for ClassInit', function () {
         ->registration()
         ->registerClass(ClassInit::class, [
             // param1 => ClassA => auto-resolve or define
-            'abc', // param2 => string
+            'myString' => 'abc', // param2 => string
             'dbS' => 'def', // param3 => string
         ])->end();
 
@@ -242,10 +242,7 @@ test('Method injection with attribute Inject (ClassA->resolveIt)', function () {
         ])
         ->registration()
         ->registerMethod(ClassA::class, 'resolveIt', [
-            'abc',     // param => parameterA (non-associative)
-            'def',     // leftover => goes into variadic? Actually param => ??? we can reorder
             'parameterB' => 'ghi',  // associative => => param named $parameterB
-            'jkl',     // leftover => goes into variadic
         ])->end();
 
     /** @var array $result */
@@ -257,7 +254,7 @@ test('Method injection with attribute Inject (ClassA->resolveIt)', function () {
         ->toBeInstanceOf(ClassB::class)
         ->and($result['parameterA'])->toBe(gethostname())
         ->and($result['parameterB'])->toBe('ghi')
-        ->and($result['parameterC'])->toBe(['abc', 'def', 'jkl']);
+        ->and($result['parameterC'])->toBe([]);
     // 'parameterA' => 'abc' (non-associative)
     // 'parameterB' => 'ghi' from the associative param
     // leftover => 'def', 'jkl'

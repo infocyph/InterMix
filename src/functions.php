@@ -150,9 +150,9 @@ if (!function_exists('measure')) {
      */
     function measure(callable $fn, ?float &$ms = null): mixed
     {
-        $t0 = microtime(true);
+        $t0 = hrtime(true);
         $out = $fn();
-        $ms = (microtime(true) - $t0) * 1000;
+        $ms = (float) ((hrtime(true) - $t0) / 1_000_000);
 
         return $out;
     }

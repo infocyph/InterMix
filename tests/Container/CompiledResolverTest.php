@@ -194,22 +194,11 @@ it('rejects non-declarative factory inputs at their registration boundary', func
     }
 });
 
-it('reports invalid declarative targets during compilation without publishing them', function () {
-    $container = Container::instance(uniqid('invalid_declarative_'));
-    $container->bind(
-        'non-static',
-        FactoryDefinition::staticFactory(CompiledResolverProduct::class, 'nonStatic'),
-    );
-    $container->bind(
-        'missing-class',
-        FactoryDefinition::construct('Missing\\DeclarativeFactoryTarget'),
-    );
-    $container->compileTo(compiledResolverPath(), load: true);
-
-    $report = $container->compilationReport();
-    expect($report['skipped'])->toHaveKeys(['non-static', 'missing-class'])
-        ->and($container->getRepository()->getCompiledResolver('non-static'))->toBeNull()
-        ->and($container->getRepository()->getCompiledResolver('missing-class'))->toBeNull();
+it('rejects invalid declarative targets during configuration', function () {
+    expect(fn() => FactoryDefinition::staticFactory(CompiledResolverProduct::class, 'nonStatic'))
+        ->toThrow(InvalidArgumentException::class)
+        ->and(fn() => FactoryDefinition::construct('Missing\\DeclarativeFactoryTarget'))
+        ->toThrow(InvalidArgumentException::class);
 });
 
 it('reports compiled and deliberately dynamic definitions', function () {
@@ -587,7 +576,7 @@ it('invalidates active compiled resolvers on definition context environment and 
 
     $resolver = $newContainer('resolver');
     $resolver->setResolverClass(InjectedCall::class);
-    expect($resolver->getRepository()->getCompiledResolver('service'))->toBeNull();
+    expect($resolver->getRepository()->getCompiledResolver('service'))->toBeInstanceOf(Closure::class);
 });
 
 it('generates deterministic artifacts regardless of definition registration order', function () {

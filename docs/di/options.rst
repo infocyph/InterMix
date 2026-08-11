@@ -87,7 +87,7 @@ container and never reflects or autowires the factory parameters.
 3 · Practical primer
 ----------------------------------------------------
 
-**Local development** – verbose trace & eager loading:
+**Local development** – verbose tracing and direct future bindings:
 
 .. code-block:: php
 
@@ -98,7 +98,7 @@ container and never reflects or autowires the factory parameters.
            methodAttributes: true,
            propertyAttributes: true,
        )
-       ->enableLazyLoading(false)          // eager
+       ->enableLazyLoading(false)          // do not wrap future class bindings in placeholders
        ->enableDebugTracing()              // Node-level logs
        ->setEnvironment('local');
 

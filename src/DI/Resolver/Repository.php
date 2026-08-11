@@ -7,10 +7,10 @@ namespace Infocyph\InterMix\DI\Resolver;
 use Closure;
 use Infocyph\InterMix\DI\Attribute\AttributeRegistry;
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ClassResolution;
+use Infocyph\InterMix\DI\Resolver\Concerns\InvalidatesRepositoryState;
 use Infocyph\InterMix\DI\Support\DebugTracer;
-use Infocyph\InterMix\DI\Support\DefinitionCachePoolInterface;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
-use Infocyph\InterMix\DI\Support\Psr6DefinitionCachePoolAdapter;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\CacheItemPoolInterface;
 
@@ -24,13 +24,11 @@ use Psr\Cache\CacheItemPoolInterface;
  */
 class Repository
 {
+    use InvalidatesRepositoryState;
+
     private string $alias = 'default';
 
     private ?AttributeRegistry $attributeRegistry = null;
-
-    private ?DefinitionCachePoolInterface $cacheAdapter = null;
-
-    private bool $cacheRuntimeObjects = false;
 
     /** @var array<string, array<string, mixed>> */
     private array $classResource = [];
@@ -53,6 +51,14 @@ class Repository
     private string $currentScope = 'root';
 
     private ?string $defaultMethod = null;
+
+    private ?CacheItemPoolInterface $definitionCache = null;
+
+    private bool $definitionCacheFailOpen = true;
+
+    private ?string $definitionCacheGeneration = null;
+
+    private int $definitionCacheRevision = 0;
 
     /** @var array<string, array{lifetime: LifetimeEnum, tags: array<int, string>}> */
     private array $definitionMeta = [];
@@ -90,11 +96,11 @@ class Repository
     /** @var array<string, mixed> */
     private array $resolvedDefinition = [];
 
-    /** @var array<string, array<string, bool>> */
-    private array $resolvedKeysByScope = [];
+    /** @var array<string, ClassResolution> */
+    private array $resolvedResource = [];
 
     /** @var array<string, array<string, mixed>> */
-    private array $resolvedResource = [];
+    private array $resolvedScoped = [];
 
     /** @var array<string, mixed> */
     private array $resolvedSingleton = [];
@@ -143,7 +149,11 @@ class Repository
     public function addClassResource(string $class, string $key, array $data): void
     {
         $this->checkIfLocked();
+        if (($this->classResource[$class][$key] ?? null) === $data) {
+            return;
+        }
         $this->classResource[$class][$key] = $data;
+        $this->invalidateClass($class);
     }
 
     /**
@@ -164,6 +174,7 @@ class Repository
     {
         $this->checkIfLocked();
         $this->closureResource[$alias] = ['on' => $function, 'params' => $params];
+        $this->invalidateDefinition($alias);
     }
 
     /**
@@ -195,7 +206,11 @@ class Repository
     public function bindInterfaceForEnv(string $env, string $interface, string $concrete): void
     {
         $this->checkIfLocked();
+        if (($this->conditionalBindings[$env][$interface] ?? null) === $concrete) {
+            return;
+        }
         $this->conditionalBindings[$env][$interface] = $concrete;
+        $this->invalidateResolutionConfiguration();
     }
 
     public function container(): Container
@@ -238,7 +253,11 @@ class Repository
     public function enableLazyLoading(bool $lazy): void
     {
         $this->checkIfLocked();
+        if ($this->lazyLoading === $lazy) {
+            return;
+        }
         $this->lazyLoading = $lazy;
+        $this->invalidateResolutionConfiguration();
     }
 
     /**
@@ -256,7 +275,11 @@ class Repository
     public function enableMethodAttribute(bool $enable): void
     {
         $this->checkIfLocked();
+        if ($this->enableMethodAttribute === $enable) {
+            return;
+        }
         $this->enableMethodAttribute = $enable;
+        $this->invalidateResolutionConfiguration();
     }
 
     /**
@@ -274,7 +297,11 @@ class Repository
     public function enablePropertyAttribute(bool $enable): void
     {
         $this->checkIfLocked();
+        if ($this->enablePropertyAttribute === $enable) {
+            return;
+        }
         $this->enablePropertyAttribute = $enable;
+        $this->invalidateResolutionConfiguration();
     }
 
     /**
@@ -285,6 +312,10 @@ class Repository
      */
     public function enterScope(string $scope, array $instances = []): void
     {
+        if ($scope === $this->currentScope || in_array($scope, $this->scopeStack, true)) {
+            throw new ContainerException("Scope \"{$scope}\" is already active.");
+        }
+
         $this->scopeStack[] = $this->currentScope;
         $this->currentScope = $scope;
         if ($instances !== []) {
@@ -293,21 +324,12 @@ class Repository
     }
 
     /**
-     * If the given value is an array with an 'instance' key, returns the value of that key.
-     * Otherwise, returns the given value.
-     *
-     * This method is used to extract the instance from a parameter definition.
-     *
      * @param mixed $value The value to extract the instance from.
      * @return mixed The instance or the original value.
      */
     public function fetchInstanceOrValue(mixed $value): mixed
     {
-        if (is_array($value) && isset($value['instance'])) {
-            return $value['instance'];
-        }
-
-        return $value;
+        return $value instanceof ClassResolution ? $value->instance : $value;
     }
 
     /**
@@ -354,16 +376,6 @@ class Repository
     public function getAllDefinitionMeta(): array
     {
         return $this->definitionMeta;
-    }
-
-    /**
-     * Gets the cache adapter instance.
-     *
-     * @return DefinitionCachePoolInterface|null The cache adapter, or null if no cache adapter is set.
-     */
-    public function getCacheAdapter(): ?DefinitionCachePoolInterface
-    {
-        return $this->cacheAdapter;
     }
 
     /**
@@ -440,6 +452,12 @@ class Repository
     public function getDefaultMethod(): ?string
     {
         return $this->defaultMethod;
+    }
+
+    /** Return the optional PSR-6 definition cache. */
+    public function getDefinitionCache(): ?CacheItemPoolInterface
+    {
+        return $this->definitionCache;
     }
 
     public function getDefinitionLifetime(string $id): LifetimeEnum
@@ -606,19 +624,22 @@ class Repository
     /**
      * Return class resolution state keyed by class name.
      *
-     * @return array<string, array<string, mixed>> the array of resolved resources for class-based resources
+     * @return array<string, ClassResolution> the resolved class resources
      */
     public function getResolvedResource(): array
     {
         return $this->resolvedResource;
     }
 
-    /**
-     * @return array<string, mixed>
-     */
-    public function getResolvedResourceFor(string $class): array
+    public function getResolvedResourceFor(string $class): ?ClassResolution
     {
-        return $this->resolvedResource[$class] ?? [];
+        return $this->resolvedResource[$class] ?? null;
+    }
+
+    /** @internal */
+    public function getResolvedScopedEntry(string $scope, string $id): mixed
+    {
+        return $this->resolvedScoped[$scope][$id] ?? null;
     }
 
     /** @internal */
@@ -692,6 +713,12 @@ class Repository
     }
 
     /** @internal */
+    public function hasResolvedScoped(string $scope, string $id): bool
+    {
+        return array_key_exists($id, $this->resolvedScoped[$scope] ?? []);
+    }
+
+    /** @internal */
     public function hasResolvedSingleton(string $key): bool
     {
         return array_key_exists($key, $this->resolvedSingleton);
@@ -703,15 +730,9 @@ class Repository
         return $this->scopeSeeds !== [];
     }
 
-    /**
-     * Invalidate generated construction recipes after a configuration mutation.
-     *
-     * @internal
-     */
-    public function invalidateCompiledResolvers(): void
+    public function isDefinitionCacheFailOpen(): bool
     {
-        $this->compiledResolver = null;
-        $this->compiledResolverIds = [];
+        return $this->definitionCacheFailOpen;
     }
 
     /**
@@ -784,36 +805,64 @@ class Repository
         $this->isLocked = true;
     }
 
-    /**
-     * Creates a cache key with the given suffix.
-     *
-     * The cache key is the result of concatenating the repository's alias
-     * with the given suffix.
-     *
-     * @param string $suffix The suffix to use for the cache key.
-     * @return string The cache key.
-     */
-    public function makeCacheKey(string $suffix): string
+    /** Create a short, backend-neutral key without exposing definition metadata. */
+    public function makeDefinitionCacheKey(string $definition): string
     {
-        return $this->alias . '-' . $suffix;
+        $environment = $this->environment ?? 'default';
+        $generation = ($this->definitionCacheGeneration ?? 'default')
+            . "\0" . $this->definitionCacheRevision;
+
+        return 'imx.'
+            . substr(hash('sha256', $this->alias), 0, 16)
+            . '.' . substr(hash('sha256', $generation), 0, 16)
+            . '.' . substr(hash('sha256', $definition . "\0" . $environment), 0, 16);
     }
 
     public function onResolved(string $id, callable $hook): void
     {
+        $this->checkIfLocked();
         $this->hasHooks = true;
         $this->onResolvedHooks[$id][] = $hook;
     }
 
     public function onResolving(string $id, callable $hook): void
     {
+        $this->checkIfLocked();
         $this->hasHooks = true;
         $this->onResolvingHooks[$id][] = $hook;
     }
 
     public function onScopeLeave(string $scope, callable $hook): void
     {
+        $this->checkIfLocked();
         $this->hasHooks = true;
         $this->onScopeLeaveHooks[$scope][] = $hook;
+    }
+
+    public function removeDefinition(string $id): void
+    {
+        $this->checkIfLocked();
+        if (!array_key_exists($id, $this->functionReference)
+            && !array_key_exists($id, $this->closureResource)
+        ) {
+            return;
+        }
+
+        foreach ($this->definitionMeta[$id]['tags'] ?? [] as $tag) {
+            unset($this->tagIndex[$tag][$id]);
+        }
+        foreach ($this->definitionMetaByEnv as $env => $definitions) {
+            foreach ($definitions[$id]['tags'] ?? [] as $tag) {
+                unset($this->tagIndexByEnv[$env][$tag][$id]);
+            }
+            unset($this->definitionMetaByEnv[$env][$id], $this->tagOverrideIdsByEnv[$env][$id]);
+        }
+        unset(
+            $this->functionReference[$id],
+            $this->closureResource[$id],
+            $this->definitionMeta[$id],
+        );
+        $this->invalidateDefinition($id);
     }
 
     /**
@@ -829,8 +878,14 @@ class Repository
         $this->clearScopeResolvedEntries($this->currentScope);
         $this->scopeStack = [];
         $this->currentScope = 'root';
-        $this->resolvedKeysByScope = [];
+        $this->resolvedScoped = [];
         $this->scopeSeeds = [];
+    }
+
+    /** Rotate only InterMix's cache namespace; never clear a caller-owned pool. */
+    public function rotateDefinitionCacheGeneration(): void
+    {
+        ++$this->definitionCacheRevision;
     }
 
     /**
@@ -847,32 +902,11 @@ class Repository
     public function setAlias(string $alias): void
     {
         $this->checkIfLocked();
+        if ($this->alias === $alias) {
+            return;
+        }
         $this->alias = $alias;
-    }
-
-    /**
-     * Sets the cache adapter.
-     *
-     * This method sets the cache adapter instance to use for caching
-     * definitions. If the container is locked, an exception will be
-     * thrown.
-     *
-     * @param CacheItemPoolInterface $adapter The cache adapter to set.
-     *
-     * @throws ContainerException if the container is locked.
-     */
-    public function setCacheAdapter(CacheItemPoolInterface $adapter): void
-    {
-        $this->checkIfLocked();
-        $this->cacheAdapter = $adapter instanceof DefinitionCachePoolInterface
-            ? $adapter
-            : new Psr6DefinitionCachePoolAdapter($adapter);
-    }
-
-    public function setCacheRuntimeObjects(bool $cacheRuntimeObjects): void
-    {
-        $this->checkIfLocked();
-        $this->cacheRuntimeObjects = $cacheRuntimeObjects;
+        $this->invalidateResolutionConfiguration();
     }
 
     /**
@@ -882,7 +916,7 @@ class Repository
      */
     public function setCompiledResolver(Closure $resolver, array $ids): void
     {
-        $this->checkIfLocked(invalidateCompiled: false);
+        $this->checkIfLocked();
         $this->compiledResolver = $resolver;
         $this->compiledResolverIds = $ids;
     }
@@ -890,7 +924,13 @@ class Repository
     public function setContextualBinding(string $consumer, string $dependency, mixed $give): void
     {
         $this->checkIfLocked();
+        if (array_key_exists($dependency, $this->contextualBindings[$consumer] ?? [])
+            && $this->contextualBindings[$consumer][$dependency] === $give
+        ) {
+            return;
+        }
         $this->contextualBindings[$consumer][$dependency] = $give;
+        $this->invalidateResolutionConfiguration();
     }
 
     /**
@@ -905,7 +945,30 @@ class Repository
     public function setDefaultMethod(?string $method): void
     {
         $this->checkIfLocked();
+        if ($this->defaultMethod === $method) {
+            return;
+        }
         $this->defaultMethod = $method;
+        $this->invalidateResolutionConfiguration();
+    }
+
+    /** Configure the optional definition cache without invalidating resolver state. */
+    public function setDefinitionCache(
+        CacheItemPoolInterface $cache,
+        ?string $generation = null,
+        bool $failOpen = true,
+    ): void {
+        $this->checkIfLocked();
+        if ($generation === '') {
+            throw new ContainerException('Definition cache generation cannot be empty.');
+        }
+
+        $this->definitionCache = $cache;
+        $this->definitionCacheFailOpen = $failOpen;
+        if ($generation !== null && $generation !== $this->definitionCacheGeneration) {
+            $this->definitionCacheGeneration = $generation;
+            $this->definitionCacheRevision = 0;
+        }
     }
 
     /**
@@ -927,9 +990,13 @@ class Repository
         $normalized['tags'] = $normalizedTags;
         $oldTags = $this->definitionMeta[$id]['tags'] ?? [];
 
+        if (($this->definitionMeta[$id] ?? null) === $normalized) {
+            return;
+        }
         $this->definitionMeta[$id] = $normalized;
         $this->refreshResolvedSingletonIndex($id);
         $this->refreshBaseTagIndex($id, $oldTags, $normalizedTags);
+        $this->invalidateDefinition($id);
     }
 
     /**
@@ -967,6 +1034,10 @@ class Repository
             return;
         }
 
+        if ($existing === ($normalized + $existing)) {
+            return;
+        }
+
         $this->definitionMetaByEnv[$env][$id] = $normalized + $existing;
         if ($this->environment === $env && array_key_exists('lifetime', $normalized)) {
             $this->refreshResolvedSingletonIndex($id);
@@ -976,6 +1047,7 @@ class Repository
             $this->refreshEnvTagIndex($env, $id, $oldTags, $normalized['tags']);
             $this->tagOverrideIdsByEnv[$env][$id] = true;
         }
+        $this->invalidateDefinition($id);
     }
 
     /**
@@ -991,17 +1063,13 @@ class Repository
      */
     public function setEnvironment(string $env): void
     {
-        $this->checkIfLocked();
         if ($this->environment === $env) {
             return;
         }
+        $this->checkIfLocked();
 
         $this->environment = $env;
-        $this->resolved = [];
-        $this->resolvedSingleton = [];
-        $this->resolvedDefinition = [];
-        $this->resolvedResource = [];
-        $this->resolvedKeysByScope = [];
+        $this->invalidateResolutionConfiguration();
         $this->scopeStack = [];
         $this->scopeSeeds = [];
         $this->currentScope = 'root';
@@ -1022,7 +1090,13 @@ class Repository
     public function setFunctionReference(string $id, mixed $definition): void
     {
         $this->checkIfLocked();
+        if (array_key_exists($id, $this->functionReference)
+            && $this->functionReference[$id] === $definition
+        ) {
+            return;
+        }
         $this->functionReference[$id] = $definition;
+        $this->invalidateDefinition($id);
     }
 
     /**
@@ -1061,23 +1135,16 @@ class Repository
     /**
      * Stores a resolved resource for a class-based resource.
      *
-     * This method takes the class name and an array of resolved values for
-     * that class, such as the instance, constructor, properties, and methods.
-     * The array is stored in the "resolvedResource" array with the class name
-     * as the key.
-     *
      * @param string $className The class name of the resource.
-     * @param array<string, mixed> $data The array of resolved values for the class.
      */
-    public function setResolvedResource(string $className, array $data): void
+    public function setResolvedResource(string $className, ClassResolution $data): void
     {
         $this->resolvedResource[$className] = $data;
     }
 
     public function setResolvedScoped(string $scope, string $id, mixed $value): void
     {
-        $this->resolved[$id] = $value;
-        $this->resolvedKeysByScope[$scope][$id] = true;
+        $this->resolvedScoped[$scope][$id] = $value;
     }
 
     /**
@@ -1093,17 +1160,8 @@ class Repository
         $this->currentScope = $scope;
     }
 
-    public function shouldCacheRuntimeObjects(): bool
-    {
-        return $this->cacheRuntimeObjects;
-    }
-
     public function shouldPersistDefinitionValue(mixed $value): bool
     {
-        if ($this->cacheRuntimeObjects) {
-            return !is_resource($value) && !$value instanceof \Closure;
-        }
-
         return $this->isSafeCachedDefinitionValue($value);
     }
 
@@ -1133,36 +1191,16 @@ class Repository
      *
      * @throws ContainerException
      */
-    private function checkIfLocked(bool $invalidateCompiled = true): void
+    private function checkIfLocked(): void
     {
         if ($this->isLocked) {
             throw new ContainerException('Container is locked! Unable to set/modify any value.');
-        }
-
-        if ($invalidateCompiled) {
-            $this->invalidateCompiledResolvers();
         }
     }
 
     private function clearScopeResolvedEntries(string $scope): void
     {
-        $keys = $this->resolvedKeysByScope[$scope] ?? null;
-        if (is_array($keys)) {
-            foreach ($keys as $key => $_) {
-                unset($this->resolved[$key]);
-            }
-            unset($this->resolvedKeysByScope[$scope]);
-
-            return;
-        }
-
-        // Fallback for entries created before scope-indexing was introduced.
-        $suffix = '@' . $scope;
-        foreach ($this->resolved as $key => $_) {
-            if (str_ends_with((string) $key, $suffix)) {
-                unset($this->resolved[$key]);
-            }
-        }
+        unset($this->resolvedScoped[$scope]);
     }
 
     private function isSafeCachedDefinitionValue(mixed $value): bool

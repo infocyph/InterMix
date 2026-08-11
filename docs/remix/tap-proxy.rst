@@ -9,12 +9,12 @@ Tap Proxy (``TapProxy``)
 
 .. code-block:: php
 
-   $someObject->tap()->foo()->bar()->baz();
+   $someObject->tap()->foo();
 
-this actually creates a ``TapProxy($someObject)``. Then each chained method
-(``foo()``, ``bar()``, ``baz()``) is invoked on the real target, **but the proxy
-always returns the original target** (not the proxy itself). That means your
-chain never breaks and you never have to assign the result manually.
+this creates a ``TapProxy($someObject)``. The forwarded ``foo()`` call runs on
+the real target and the proxy returns that original target, regardless of
+``foo()``'s return value. Any following ``bar()`` or ``baz()`` call is therefore
+ordinary target behavior; it is not intercepted by the same tap proxy.
 
 Global Helper Function ``tap()``
 ================================
@@ -29,8 +29,5 @@ Usage Examples
    // 1) With a callback: let me “observe” $user and still return $user.
    $user = tap($user, fn($u) => logger()->info("User id={$u->id}"));
 
-   // 2) Proxy method chaining: call methods but keep $user at end.
-   tap($user)
-       ->setName('Alice')
-       ->activate()
-       ->sendWelcomeEmail();
+   // 2) Call one method but keep $user as the expression result.
+   $user = tap($user)->setName('Alice');

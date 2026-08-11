@@ -117,14 +117,21 @@ MacroTest::mix(new class {
 echo (new MacroTest)->hello('Ali'); // Hey, Ali!
 ```
 
-### Definition Cache (Injectable)
+### Definition Cache (PSR-6)
 
 ```php
-use Psr\Cache\CacheItemPoolInterface;
+use Infocyph\CacheLayer\Cache\Cache;
 
-$pool = /* any PSR-6 pool, e.g. from infocyph/Intermix */;
-$c->definitions()->enableDefinitionCache($pool, cacheRuntimeObjects: false);
+$pool = Cache::memory('intermix.definitions'); // or any PSR-6 pool
+$c->definitions()->enableDefinitionCache($pool, generation: 'deployment-2026-08');
+$report = $c->definitions()->warmDefinitionCache();
 ```
+
+Only null, scalar, and recursively safe array values are persisted. Runtime
+service objects remain in the container's in-memory lifetime store. CacheLayer
+3.1 is recommended and integration-tested, but remains optional; any PSR-6 pool
+is supported. Cache failures fail open by default, and the optional generation
+isolates deployments without clearing the caller-owned pool.
 
 ### Compiled Resolvers
 

@@ -33,6 +33,8 @@ final class RuntimeFeaturesBench
 
     private Invoker $invoker;
 
+    private int $macroSequence = 0;
+
     private string $serializedClosure;
 
     private string $signedSerializedClosure;
@@ -53,6 +55,8 @@ final class RuntimeFeaturesBench
 
         RuntimeUnlockedMacros::macro('instanceMacro', fn(): int => 1);
         RuntimeUnlockedMacros::macro('staticMacro', static fn(): int => 1);
+        RuntimeLockedMacros::macro('instanceMacro', fn(): int => 1);
+        RuntimeLockedMacros::macro('staticMacro', static fn(): int => 1);
     }
 
     #[BeforeMethods('setUp')]
@@ -68,15 +72,30 @@ final class RuntimeFeaturesBench
     }
 
     #[BeforeMethods('setUp')]
+    public function benchContainerClassRegistration(): void
+    {
+        $this->container->registration()->registerClass(
+            RuntimeInvokable::class,
+            ['sequence' => ++$this->macroSequence],
+        );
+    }
+
+    #[BeforeMethods('setUp')]
     public function benchContainerHas(): void
     {
         $this->container->has('runtime.singleton');
     }
 
     #[BeforeMethods('setUp')]
-    public function benchInvokerClass(): void
+    public function benchInvokerClassDynamic(): void
     {
         $this->invoker->invoke(RuntimeInvokable::class);
+    }
+
+    #[BeforeMethods('setUp')]
+    public function benchInvokerClosure(): void
+    {
+        $this->invoker->invoke($this->closure);
     }
 
     #[BeforeMethods('setUp')]
@@ -92,23 +111,17 @@ final class RuntimeFeaturesBench
     }
 
     #[BeforeMethods('setUp')]
-    public function benchInvokerSerializedClosure(): void
-    {
-        $this->invoker->invoke($this->serializedClosure);
-    }
-
-    #[BeforeMethods('setUp')]
     public function benchInvokerStaticMethodString(): void
     {
         $this->invoker->invoke(RuntimeStaticTarget::class . '::run');
     }
 
-    public function benchMacroBulkMixLockDisabled(): void
+    public function benchMacroBulkOverwriteLockDisabled(): void
     {
         RuntimeUnlockedMacros::mix(new RuntimeMixin());
     }
 
-    public function benchMacroBulkMixLockEnabled(): void
+    public function benchMacroBulkOverwriteLockEnabled(): void
     {
         RuntimeLockedMacros::mix(new RuntimeMixin());
     }
@@ -119,20 +132,54 @@ final class RuntimeFeaturesBench
         (new RuntimeUnlockedMacros())->instanceMacro();
     }
 
+    #[BeforeMethods('setUp')]
+    public function benchMacroInstanceInvocationLocked(): void
+    {
+        (new RuntimeLockedMacros())->instanceMacro();
+    }
+
     public function benchMacroRegistrationLockDisabled(): void
     {
-        RuntimeUnlockedMacros::macro('registered', static fn(): int => 1);
+        RuntimeUnlockedMacros::macro('registered-' . ++$this->macroSequence, static fn(): int => 1);
     }
 
     public function benchMacroRegistrationLockEnabled(): void
     {
-        RuntimeLockedMacros::macro('registered', static fn(): int => 1);
+        RuntimeLockedMacros::macro('registered-' . ++$this->macroSequence, static fn(): int => 1);
     }
 
     #[BeforeMethods('setUp')]
     public function benchMacroStaticInvocation(): void
     {
         RuntimeUnlockedMacros::staticMacro();
+    }
+
+    #[BeforeMethods('setUp')]
+    public function benchMacroStaticInvocationLocked(): void
+    {
+        RuntimeLockedMacros::staticMacro();
+    }
+
+    #[BeforeMethods('setUp')]
+    public function benchNativeClosure(): void
+    {
+        ($this->closure)();
+    }
+
+    public function benchNativeFunction(): void
+    {
+        runtimeBenchmarkFunction();
+    }
+
+    #[BeforeMethods('setUp')]
+    public function benchNativeInvokableObject(): void
+    {
+        ($this->invokable)();
+    }
+
+    public function benchNativeStaticMethod(): void
+    {
+        RuntimeStaticTarget::run();
     }
 
     #[BeforeMethods('setUp')]
@@ -150,9 +197,11 @@ final class RuntimeFeaturesBench
 
 final class RuntimeInvokable
 {
+    public function __construct(private readonly int $sequence = 0) {}
+
     public function __invoke(): int
     {
-        return 1;
+        return $this->sequence + 1;
     }
 }
 

@@ -39,6 +39,8 @@ final class AttributeRegistry
      */
     public function register(string $attributeFqcn, string $resolverFqcn): void
     {
+        $repository = $this->container->getRepository();
+        $repository->assertMutable();
         if (!class_exists($attributeFqcn) || !class_exists($resolverFqcn)) {
             throw new ContainerException('Attribute or resolver class missing');
         }
@@ -52,7 +54,10 @@ final class AttributeRegistry
             );
         }
 
-        $this->container->getRepository()->invalidateCompiledResolvers();
+        if (isset($this->map[$attributeFqcn]) && $this->map[$attributeFqcn]::class === $resolverFqcn) {
+            return;
+        }
+        $repository->invalidateResolutionConfiguration();
         $this->map[$attributeFqcn] = new $resolverFqcn();
     }
 

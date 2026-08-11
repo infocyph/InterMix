@@ -6,7 +6,6 @@ namespace Infocyph\InterMix\DI;
 
 use ArrayAccess;
 use Closure;
-use Exception;
 use Infocyph\InterMix\DI\Attribute\AttributeRegistry;
 use Infocyph\InterMix\DI\Invoker\CompiledCall;
 use Infocyph\InterMix\DI\Invoker\GenericCall;
@@ -67,6 +66,9 @@ final class Container implements ContainerInterface, ArrayAccess
      */
     private ?array $compilationReport = null;
 
+    /** @var class-string<InjectedCall|GenericCall> */
+    private string $resolverClass = InjectedCall::class;
+
     /**
      * Container constructor.
      *
@@ -76,7 +78,6 @@ final class Container implements ContainerInterface, ArrayAccess
      */
     public function __construct(private readonly string $instanceAlias = self::DEFAULT_ALIAS)
     {
-        self::$instances[$this->instanceAlias] ??= $this;
         $this->repository = new Repository($this);
         $this->repository->setAlias($this->instanceAlias);
         $this->repository->setFunctionReference(
@@ -103,7 +104,11 @@ final class Container implements ContainerInterface, ArrayAccess
      */
     public static function instance(string $instanceAlias = self::DEFAULT_ALIAS): self
     {
-        return self::$instances[$instanceAlias] ??= new self($instanceAlias);
+        if (!isset(self::$instances[$instanceAlias])) {
+            self::$instances[$instanceAlias] = new self($instanceAlias);
+        }
+
+        return self::$instances[$instanceAlias];
     }
 
     /**
@@ -290,7 +295,6 @@ final class Container implements ContainerInterface, ArrayAccess
     public function enterScope(string $scope, array $instances = []): self
     {
         $this->repository->enterScope($scope, $instances);
-        $this->invocationManager->enterScope($instances);
 
         return $this;
     }
@@ -308,7 +312,7 @@ final class Container implements ContainerInterface, ArrayAccess
      * @param string|null $warmFromId Optional service ID to resolve before exporting the graph.
      * @param bool $clear Whether to clear the tracer data after exporting. Defaults to false.
      * @return array<string, mixed> An array representing the dependency graph with nodes and edges.
-     * @throws Exception If there's an error during service resolution or graph generation.
+     * @throws \Exception If there's an error during service resolution or graph generation.
      * @throws \Psr\Cache\InvalidArgumentException If there's an issue with cache operations during tracing.
      */
     public function exportGraph(?string $warmFromId = null, bool $clear = false): array
@@ -380,14 +384,19 @@ final class Container implements ContainerInterface, ArrayAccess
      * @param string $id The ID of the value to retrieve.
      *
      * @return mixed The retrieved value.
-     * @throws Exception|\Psr\Cache\InvalidArgumentException If the container is unable to retrieve the value.
+     * @throws \Exception|\Psr\Cache\InvalidArgumentException If the container is unable to retrieve the value.
      */
     public function get(string $id): mixed
     {
         try {
             return $this->invocationManager->get($id);
-        } catch (Exception $exception) {
-            throw $this->wrapException($exception, $id);
+        } catch (NotFoundException|ContainerException $exception) {
+            throw $exception;
+        } catch (Throwable $throwable) {
+            throw new ContainerException(
+                "Error retrieving entry '$id': {$throwable->getMessage()}",
+                previous: $throwable,
+            );
         }
     }
 
@@ -488,7 +497,6 @@ final class Container implements ContainerInterface, ArrayAccess
     public function leaveScope(): self
     {
         $this->repository->leaveScope();
-        $this->invocationManager->leaveScope();
 
         return $this;
     }
@@ -698,7 +706,6 @@ final class Container implements ContainerInterface, ArrayAccess
     public function setEnvironment(string $env): self
     {
         $this->repository->setEnvironment($env);
-        $this->invocationManager->resetScopeSeeds();
 
         return $this;
     }
@@ -713,7 +720,12 @@ final class Container implements ContainerInterface, ArrayAccess
      */
     public function setResolverClass(string $resolverClass): void
     {
-        $this->repository->invalidateCompiledResolvers();
+        $this->repository->assertMutable();
+        if ($this->resolverClass === $resolverClass) {
+            return;
+        }
+        $this->repository->invalidateResolutionConfiguration();
+        $this->resolverClass = $resolverClass;
         $this->resolver = fn() => new $resolverClass($this->repository);
     }
 
@@ -773,6 +785,13 @@ final class Container implements ContainerInterface, ArrayAccess
         return $this;
     }
 
+    public function unbind(string $id): self
+    {
+        $this->definitions()->unbind($id);
+
+        return $this;
+    }
+
     /**
      * Remove the container instance from the registry.
      *
@@ -783,7 +802,9 @@ final class Container implements ContainerInterface, ArrayAccess
      */
     public function unset(): void
     {
-        unset(self::$instances[$this->instanceAlias]);
+        if ((self::$instances[$this->instanceAlias] ?? null) === $this) {
+            unset(self::$instances[$this->instanceAlias]);
+        }
     }
 
     /**
@@ -1024,13 +1045,24 @@ final class Container implements ContainerInterface, ArrayAccess
      */
     private function resolveRegisteredCallable(array $desc, array $parameters): mixed
     {
+        $resolver = $this->getCurrentResolver();
         if ($desc['kind'] === 'method') {
-            $this->registration()->registerMethod($desc['class'], (string) $desc['method'], $parameters);
-        } else {
-            $this->registration()->registerClass($desc['class'], $parameters);
+            $resolved = $resolver->classSettler(
+                $desc['class'],
+                (string) $desc['method'],
+                true,
+                methodParameters: $parameters,
+            );
+
+            return $resolved->returned;
         }
 
-        return $this->getReturn($desc['class']);
+        return $resolver->classSettler(
+            $desc['class'],
+            false,
+            true,
+            constructorParameters: $parameters,
+        )->instance;
     }
 
     /**
@@ -1095,25 +1127,5 @@ final class Container implements ContainerInterface, ArrayAccess
         }
 
         return $issues;
-    }
-
-    /**
-     * Wraps an exception into a NotFoundException if it's a NotFoundException,
-     * or a ContainerException with the given ID otherwise.
-     *
-     * @param Exception $exception The exception to wrap.
-     * @param string $id The ID of the entry that caused the exception.
-     * @return Exception The wrapped exception.
-     */
-    private function wrapException(Exception $exception, string $id): Exception
-    {
-        return match (true) {
-            $exception instanceof NotFoundException => new NotFoundException("No entry found for '$id'", 0, $exception),
-            default => new ContainerException(
-                "Error retrieving entry '$id': " . $exception->getMessage(),
-                0,
-                $exception,
-            ),
-        };
     }
 }

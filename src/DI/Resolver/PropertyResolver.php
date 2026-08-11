@@ -8,13 +8,11 @@ use Infocyph\InterMix\DI\Attribute\AttributeResolution;
 use Infocyph\InterMix\DI\Attribute\Inject;
 use Infocyph\InterMix\DI\Support\TraceLevelEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
-use Infocyph\InterMix\Internal\ReflectionResource;
 use Psr\Cache\InvalidArgumentException;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionNamedType;
 use ReflectionProperty;
-use ReflectionType;
 
 class PropertyResolver
 {
@@ -22,76 +20,46 @@ class PropertyResolver
 
     private ClassResolver $classResolver;
 
-    /** @var array<string, array{
-     *   classProperties: array<int, ReflectionProperty>,
-     *   parentClass: ReflectionClass<object>|null,
-     *   parentPrivateProperties: array<int, ReflectionProperty>
-     * }>
-     */
+    /** @var array<string, array<int, ReflectionProperty>> */
     private array $propertyPlanCache = [];
 
-    /**
-     * Constructs a PropertyResolver instance.
-     *
-     * @param Repository $repository The Repository providing definitions, classes, functions, and parameters.
-     */
     public function __construct(
         private readonly Repository $repository,
     ) {}
 
     /**
-     * Resolve any properties for the given class (if instance is already resolved).
-     * If no instance, does nothing.
+     * Resolve registered and attributed properties across the complete hierarchy.
      *
-     * First, resolve any public properties of the class.
-     * Then, resolve any private properties of the parent class.
-     * Finally, mark the property resolution as complete in the repository.
-     *
-     * @param ReflectionClass<object> $class The class to resolve properties for.
-     * @throws ContainerException|ReflectionException
-     * @throws InvalidArgumentException
+     * @param ReflectionClass<object> $class
+     * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
-    public function resolve(ReflectionClass $class): void
+    public function resolve(ReflectionClass $class, object $instance): void
     {
-        $className = $class->getName();
-        $allResolved = $this->repository->getResolvedResourceFor($className);
-        if (!isset($allResolved['instance'])) {
-            return; // no instance => no property injection
-        }
+        foreach ($this->getPropertyPlan($class) as $property) {
+            $registered = $this->getRegisteredProperties(
+                $property->getDeclaringClass()->getName(),
+            );
+            $name = $property->getName();
+            if (array_key_exists($name, $registered)) {
+                $this->setPropertyValue($property, $instance, $registered[$name]);
 
-        $instance = $allResolved['instance'];
-        if (!is_object($instance)) {
-            return;
-        }
+                continue;
+            }
 
-        if (!$this->repository->isPropertyAttributeEnabled()) {
-            $classResource = $this->repository->getClassResourceFor($className);
-            if (!isset($classResource['property']) || !is_array($classResource['property'])) {
-                $allResolved['property'] = true;
-                $this->repository->setResolvedResource($className, $allResolved);
+            if (!$this->repository->isPropertyAttributeEnabled()
+                || ($property->isPromoted() && $property->getAttributes() === [])
+            ) {
+                continue;
+            }
 
-                return;
+            $this->tracePropertyResolution($property);
+            $value = $this->resolveAttributedValue($property);
+            if ($value !== AttributeResolution::Unresolved) {
+                $this->setPropertyValue($property, $instance, $value);
             }
         }
-
-        $plan = $this->getPropertyPlan($class);
-
-        $this->processProperties($class, $plan['classProperties'], $instance);
-
-        if ($plan['parentClass'] instanceof ReflectionClass) {
-            // handle parent private props
-            $this->processProperties($plan['parentClass'], $plan['parentPrivateProperties'], $instance);
-        }
-
-        $allResolved['property'] = true;
-        $this->repository->setResolvedResource($className, $allResolved);
     }
 
-    /**
-     * Called by Container to switch between InjectedCall & GenericCall, etc.
-     *
-     * @param ClassResolver $classResolver The new ClassResolver instance.
-     */
     public function setClassResolverInstance(ClassResolver $classResolver): void
     {
         $this->classResolver = $classResolver;
@@ -99,158 +67,7 @@ class PropertyResolver
 
     /**
      * @param ReflectionClass<object> $class
-     * @param array<int, mixed>|null $values
-     */
-    private function applyPropertyValue(
-        ReflectionClass $class,
-        ReflectionProperty $property,
-        ?array $values,
-    ): void {
-        if ($values === [] || $values === null) {
-            return;
-        }
-
-        if ($property->isStatic()) {
-            $class->setStaticPropertyValue($property->getName(), $values[0]);
-
-            return;
-        }
-
-        $target = $values[0] ?? null;
-        if (!is_object($target)) {
-            return;
-        }
-
-        $property->setValue($target, $values[1] ?? null);
-    }
-
-    /**
-     * Attempt to resolve a single property value using the built-in #[Inject] attribute.
-     *
-     * @param ReflectionProperty $property The property to resolve a value for.
-     * @param object $classInstance The instance of the class to set the property on.
-     * @return array<int, mixed>|null An array of two items: the instance and the resolved value. Or null if not possible to resolve.
-     * @throws ContainerException|ReflectionException|InvalidArgumentException
-     */
-    private function attemptBuiltInInject(
-        ReflectionProperty $property,
-        object $classInstance,
-    ): ?array {
-        if (!$this->repository->isPropertyAttributeEnabled()) {
-            return null;
-        }
-
-        $attrs = $property->getAttributes(Inject::class);
-        if (!$attrs) {
-            return null;
-        }
-
-        /** @var Inject $inject */
-        $inject = $attrs[0]->newInstance();
-
-        // (a)  #[Inject]   – no args  ➜  infer by type-hint
-        if ($attrs[0]->getArguments() === []) {
-            $val = $this->resolveWithoutArgument($property, $property->getType());
-
-            return [$classInstance, $val];
-        }
-
-        // (b)  #[Inject(...)] – has args ➜ delegate to ClassResolver
-        $val = $this->classResolver->resolveInject($inject);
-        if ($val === AttributeResolution::Unresolved) {
-            return null;
-        }
-
-        return $property->isStatic()
-            ? [$val]
-            : [$classInstance, $val];
-    }
-
-    /**
-     * Attempts to resolve custom attributes for a given property.
-     *
-     * This method iterates over the attributes of the provided property
-     * and checks if there is a registered resolver for each attribute.
-     * If a resolver exists, it resolves the attribute value using the
-     * AttributeRegistry. If a valid resolved value is obtained, it returns
-     * an array containing either the resolved value alone (for static properties)
-     * or the class instance and the resolved value (for non-static properties).
-     * If no valid resolved value is found, it returns null.
-     *
-     * @param ReflectionProperty $property The property to resolve attributes for.
-     * @param object $classInstance The instance of the class to set the property on.
-     * @return array<int, mixed>|null An array of two items: the instance (if non-static) and the resolved value, or null if not resolved.
-     */
-    private function attemptCustomAttributes(
-        ReflectionProperty $property,
-        object $classInstance,
-    ): ?array {
-        $injectVal = AttributeResolution::Unresolved;
-        $handled = false;
-
-        foreach ($property->getAttributes() as $raw) {
-            $attrObj = $raw->newInstance();
-
-            if (!$this->repository->attributeRegistry()->has($attrObj::class)) {
-                continue;
-            }
-
-            $handled = true;
-            $val = $this->repository->attributeRegistry()->resolve($attrObj, $property);
-
-            if ($injectVal === AttributeResolution::Unresolved && $val !== AttributeResolution::Unresolved) {
-                $injectVal = $val;
-            }
-        }
-
-        if (!$handled) {
-            return null;
-        }
-
-        if ($injectVal === AttributeResolution::Unresolved) {
-            return [];
-        }
-
-        return $property->isStatic()
-            ? [$injectVal]
-            : [$classInstance, $injectVal];
-    }
-
-    /**
-     * Attempt to resolve a single property value using the user-supplied values.
-     *
-     * Checks if the property is present in the user-supplied values and returns
-     * an array containing the instance and the resolved value. If the property
-     * is not present, returns null.
-     *
-     * @param ReflectionProperty $property The property to resolve a value for.
-     * @param array<string, mixed> $classPropertyValues The user-supplied values for the class.
-     * @param object $classInstance The instance of the class to set the property on.
-     * @return array<int, mixed>|null An array of two items: the instance and the resolved value. Or null if not possible to resolve.
-     */
-    private function attemptUserOverride(
-        ReflectionProperty $property,
-        array $classPropertyValues,
-        object $classInstance,
-    ): ?array {
-        $name = $property->getName();
-
-        if (!array_key_exists($name, $classPropertyValues)) {
-            return null;
-        }
-
-        return $property->isStatic()
-            ? [$classPropertyValues[$name]]
-            : [$classInstance, $classPropertyValues[$name]];
-    }
-
-    /**
-     * @param ReflectionClass<object> $class
-     * @return array{
-     *   classProperties: array<int, ReflectionProperty>,
-     *   parentClass: ReflectionClass<object>|null,
-     *   parentPrivateProperties: array<int, ReflectionProperty>
-     * }
+     * @return array<int, ReflectionProperty>
      */
     private function getPropertyPlan(ReflectionClass $class): array
     {
@@ -259,209 +76,113 @@ class PropertyResolver
             return $this->propertyPlanCache[$className];
         }
 
-        $parent = $class->getParentClass();
+        $properties = [];
+        $current = $class;
+        do {
+            $declaringClass = $current->getName();
+            foreach ($current->getProperties() as $property) {
+                if ($property->getDeclaringClass()->getName() === $declaringClass) {
+                    $properties[] = $property;
+                }
+            }
+            $current = $current->getParentClass();
+        } while ($current instanceof ReflectionClass);
 
-        return $this->rememberPropertyPlan($className, [
-            'classProperties' => $class->getProperties(),
-            'parentClass' => $parent ?: null,
-            'parentPrivateProperties' => $parent
-                ? $parent->getProperties(ReflectionProperty::IS_PRIVATE)
-                : [],
-        ]);
+        if (count($this->propertyPlanCache) >= self::PROPERTY_PLAN_CACHE_LIMIT) {
+            unset($this->propertyPlanCache[array_key_first($this->propertyPlanCache)]);
+        }
+        $this->propertyPlanCache[$className] = $properties;
+
+        return $properties;
     }
 
-    /**
-     * @return array<string, mixed>|null
-     */
-    private function getRegisteredProperties(string $className): ?array
+    /** @return array<string, mixed> */
+    private function getRegisteredProperties(string $className): array
     {
-        $classResource = $this->repository->getClassResourceFor($className);
-        $properties = $classResource['property'] ?? null;
+        $properties = $this->repository->getClassResourceFor($className)['property'] ?? [];
         if (!is_array($properties)) {
-            return null;
+            return [];
         }
 
-        $normalized = [];
-        foreach ($properties as $key => $value) {
-            if (is_string($key)) {
-                $normalized[$key] = $value;
+        $registered = [];
+        foreach ($properties as $name => $value) {
+            if (is_string($name)) {
+                $registered[$name] = $value;
             }
         }
 
-        return $normalized;
+        return $registered;
     }
 
     /**
-     * Resolves any properties for the given class and instance.
-     * Skips properties already set.
-     *
-     * @param ReflectionClass<object> $class The class to resolve properties for.
-     * @param array<int, ReflectionProperty> $properties The properties to resolve.
-     * @param object $classInstance The instance of the class to set properties on.
      * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
-    private function processProperties(
-        ReflectionClass $class,
-        array $properties,
-        object $classInstance,
-    ): void {
-        if ($properties === []) {
-            return;
+    private function resolveAttributedValue(ReflectionProperty $property): mixed
+    {
+        $inject = $property->getAttributes(Inject::class)[0] ?? null;
+        if ($inject !== null) {
+            if ($inject->getArguments() === []) {
+                return $this->resolveWithoutArgument($property);
+            }
+
+            return $this->classResolver->resolveInject($inject->newInstance());
         }
 
-        $className = $class->getName();
-        $registeredProps = $this->getRegisteredProperties($className);
-        if ($this->shouldSkipPropertyResolution($registeredProps)) {
-            return;
-        }
-
-        /** @var ReflectionProperty $property */
-        foreach ($properties as $property) {
-            if ($this->shouldSkipProperty($property, $registeredProps)) {
+        foreach ($property->getAttributes() as $attribute) {
+            $instance = $attribute->newInstance();
+            $registry = $this->repository->attributeRegistry();
+            if (!$registry->has($instance::class)) {
                 continue;
             }
 
-            $this->tracePropertyResolution($property, $className);
-            $values = $this->resolveValue($property, $registeredProps ?? [], $classInstance);
-            $this->applyPropertyValue($class, $property, $values);
+            $value = $registry->resolve($instance, $property);
+            if ($value !== AttributeResolution::Unresolved) {
+                return $value;
+            }
         }
+
+        return AttributeResolution::Unresolved;
     }
 
     /**
-     * @param array{
-     *   classProperties: array<int, ReflectionProperty>,
-     *   parentClass: ReflectionClass<object>|null,
-     *   parentPrivateProperties: array<int, ReflectionProperty>
-     * } $plan
-     * @return array{
-     *   classProperties: array<int, ReflectionProperty>,
-     *   parentClass: ReflectionClass<object>|null,
-     *   parentPrivateProperties: array<int, ReflectionProperty>
-     * }
-     */
-    private function rememberPropertyPlan(string $key, array $plan): array
-    {
-        if (!isset($this->propertyPlanCache[$key])
-            && count($this->propertyPlanCache) >= self::PROPERTY_PLAN_CACHE_LIMIT
-        ) {
-            unset($this->propertyPlanCache[array_key_first($this->propertyPlanCache)]);
-        }
-
-        $this->propertyPlanCache[$key] = $plan;
-
-        return $plan;
-    }
-
-    /**
-     * Resolve a single property value.
-     *
-     * 1) User-supplied values have priority.
-     * 2) If not user-supplied, then attributes are checked.
-     * 3) If no attribute, then return an empty array.
-     *
-     * @param ReflectionProperty $property The property to resolve a value for.
-     * @param array<string, mixed> $classPropertyValues The user-supplied values for the class.
-     * @param object $classInstance The instance of the class to set the property on.
-     * @return array<int, mixed> An array of two items: the instance and the resolved value. Or null if not possible to resolve.
      * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
-    private function resolveValue(
-        ReflectionProperty $property,
-        array $classPropertyValues,
-        object $classInstance,
-    ): array {
-        $attempt = $this->attemptUserOverride($property, $classPropertyValues, $classInstance);
-        if ($attempt !== null) {
-            return $attempt;
-        }
-
-        $attempt = $this->attemptBuiltInInject($property, $classInstance);
-        if ($attempt !== null) {
-            return $attempt;
-        }
-
-        $attempt = $this->attemptCustomAttributes($property, $classInstance);
-        if ($attempt !== null) {
-            return $attempt;
-        }
-
-        return [];
-    }
-
-    /**
-     * Resolve a property without an argument.
-     *
-     * If the property has a `#[Inject]` attribute with no arguments, this method
-     * is called to resolve the value. It will throw a
-     * `ContainerException` if the property type is not a class or interface.
-     * If the type is an interface, it will check for an environment-based
-     * override before resolving the class.
-     *
-     * @param ReflectionProperty $property The property to resolve.
-     * @param ReflectionType|null $parameterType The type of the property.
-     *
-     * @return object The resolved value.
-     *
-     * @throws ContainerException|ReflectionException
-     */
-    private function resolveWithoutArgument(
-        ReflectionProperty $property,
-        ?ReflectionType $parameterType,
-    ): object {
-        if (!$parameterType instanceof ReflectionNamedType || $parameterType->isBuiltin()) {
+    private function resolveWithoutArgument(ReflectionProperty $property): mixed
+    {
+        $type = $property->getType();
+        if (!$type instanceof ReflectionNamedType || $type->isBuiltin()) {
             throw new ContainerException(
                 'Malformed #[Inject] or invalid property type on '
                 . "{$property->getDeclaringClass()->getName()}::\${$property->getName()}",
             );
         }
-        // environment-based override if interface
-        $className = $parameterType->getName();
-        if (interface_exists($className)) {
-            $envConcrete = $this->repository->getEnvConcrete($className);
-            $className = $envConcrete ?: $className;
-        }
-        $refClass = ReflectionResource::getClassReflection($className);
 
-        if (interface_exists($parameterType->getName())
-            && !$refClass->implementsInterface($parameterType->getName())
-        ) {
+        $resolved = $this->classResolver->resolveInject(new Inject($type->getName()));
+        if ($resolved === AttributeResolution::Unresolved) {
             throw new ContainerException(
-                "$className does not implement {$parameterType->getName()} (environment override mismatch)",
+                "Failed to resolve {$type->getName()} for property injection.",
             );
         }
 
-        return $this->classResolver->resolveClassInstance(
-            $refClass,
-            "Failed to resolve {$parameterType->getName()} for property injection.",
-        );
+        return $resolved;
     }
 
-    /**
-     * @param array<string, mixed>|null $registeredProps
-     */
-    private function shouldSkipProperty(ReflectionProperty $property, ?array $registeredProps): bool
-    {
-        return $property->isPromoted()
-            && !isset(($registeredProps ?? [])[$property->getName()])
-            && $property->getAttributes(Inject::class) === [];
+    private function setPropertyValue(
+        ReflectionProperty $property,
+        object $instance,
+        mixed $value,
+    ): void {
+        $property->setValue($property->isStatic() ? null : $instance, $value);
     }
 
-    /**
-     * @param array<string, mixed>|null $registeredProps
-     */
-    private function shouldSkipPropertyResolution(?array $registeredProps): bool
-    {
-        return $registeredProps === null && !$this->repository->isPropertyAttributeEnabled();
-    }
-
-    private function tracePropertyResolution(ReflectionProperty $property, string $className): void
+    private function tracePropertyResolution(ReflectionProperty $property): void
     {
         if (!$this->repository->isTracingEnabled()) {
             return;
         }
 
         $this->repository->tracer()->push(
-            "prop {$property->getName()} of $className",
+            "prop {$property->getName()} of {$property->getDeclaringClass()->getName()}",
             TraceLevelEnum::Verbose,
         );
     }

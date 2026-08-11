@@ -6,6 +6,7 @@ namespace Infocyph\InterMix\DI\Support;
 
 use Infocyph\InterMix\DI\Container;
 use InvalidArgumentException;
+use ReflectionClass;
 
 /**
  * A compilation-safe construction recipe with no captured runtime state.
@@ -25,6 +26,22 @@ final readonly class FactoryDefinition
         public ?string $method,
         public array $arguments,
     ) {
+        if (!class_exists($this->class)) {
+            throw new InvalidArgumentException("Factory class '{$this->class}' does not exist.");
+        }
+        $reflection = new ReflectionClass($this->class);
+        if ($this->method === null && !$reflection->isInstantiable()) {
+            throw new InvalidArgumentException("Factory class '{$this->class}' is not instantiable.");
+        }
+        if ($this->method !== null) {
+            if (!$reflection->hasMethod($this->method)) {
+                throw new InvalidArgumentException("Factory method '{$this->class}::{$this->method}' does not exist.");
+            }
+            $method = $reflection->getMethod($this->method);
+            if (!$method->isPublic() || !$method->isStatic()) {
+                throw new InvalidArgumentException('Declarative factory methods must be public and static.');
+            }
+        }
         if (!array_is_list($this->arguments)) {
             throw new InvalidArgumentException('Declarative factory arguments must be a positional list.');
         }

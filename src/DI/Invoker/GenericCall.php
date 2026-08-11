@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Invoker;
 
+use Infocyph\InterMix\DI\Internal\ClassResolution;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\DI\Support\DirectFactory;
+use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Internal\ReflectionResource;
 use InvalidArgumentException;
 use ReflectionException;
@@ -27,19 +29,25 @@ final readonly class GenericCall
      *
      * @param string $class Fully-qualified class name to instantiate.
      * @param string|false|null $method Method to call, false to construct only, or null for configured behavior.
-     * @return array{
-     *     instance: object,
-     *     returned: mixed
-     * }
-     *
+     * @param bool $make Kept for resolver-contract parity.
+     * @param array<int|string, mixed> $constructorParameters Ephemeral constructor arguments.
+     * @param array<int|string, mixed> $methodParameters Ephemeral method arguments.
      * @throws ReflectionException
      */
-    public function classSettler(string $class, string|false|null $method = null): array
-    {
+    public function classSettler(
+        string $class,
+        string|false|null $method = null,
+        bool $make = false,
+        array $constructorParameters = [],
+        array $methodParameters = [],
+    ): ClassResolution {
+        // Generic resolution always constructs a fresh object, so the parity flag has no further effect.
+        unset($make);
         $classResource = $this->repository->getClassResourceFor($class);
 
         // Constructor parameters
-        $ctorParams = $this->readNestedArray($classResource, ['constructor', 'params']);
+        $ctorParams = $constructorParameters
+            + $this->readNestedArray($classResource, ['constructor', 'params']);
         $instance = ReflectionResource::getClassReflection($class)->newInstanceArgs($ctorParams);
 
         // Set class properties (if any)
@@ -48,16 +56,24 @@ final readonly class GenericCall
 
         // Determine method to invoke (method param, or classResource's configured "method", or defaultMethod)
         if ($method === false) {
-            $returned = null;
-        } else {
-            $method ??= $this->readNestedString($classResource, ['method', 'on']) ?? $this->repository->getDefaultMethod();
-            $returned = $this->invokeMethod($instance, $method, $classResource);
+            return new ClassResolution($instance);
         }
 
-        return [
-            'instance' => $instance,
-            'returned' => $returned,
-        ];
+        $explicitMethod = is_string($method) && $method !== '';
+        $method ??= $this->readNestedString($classResource, ['method', 'on']) ?? $this->repository->getDefaultMethod();
+        if (!$method || !method_exists($instance, $method)) {
+            if ($explicitMethod) {
+                throw new ContainerException('Method ' . $instance::class . "::{$method}() does not exist.");
+            }
+
+            return new ClassResolution($instance);
+        }
+
+        return new ClassResolution(
+            $instance,
+            $this->invokeMethod($instance, $method, $classResource, $methodParameters),
+            true,
+        );
     }
 
     /**
@@ -99,20 +115,22 @@ final readonly class GenericCall
     /**
      * Invokes a method on an object, with optional parameters.
      *
-     * If the method does not exist, this method will simply return null.
-     *
      * @param object $instance Object on which to invoke the method.
-     * @param string|null $method Method to invoke (if null, no method is invoked).
+     * @param string $method Method to invoke.
      * @param array<string, mixed> $classResource Class resource with method parameter data.
-     * @return mixed The result of the method invocation (or null if no method was invoked).
+     * @return mixed The result of the method invocation.
      */
-    private function invokeMethod(object $instance, ?string $method, array $classResource): mixed
-    {
-        if (!$method || !method_exists($instance, $method)) {
-            return null;
-        }
-
-        $params = $this->readNestedArray($classResource, ['method', 'params']);
+    /**
+     * @param array<string, mixed> $classResource
+     * @param array<int|string, mixed> $supplied
+     */
+    private function invokeMethod(
+        object $instance,
+        string $method,
+        array $classResource,
+        array $supplied = [],
+    ): mixed {
+        $params = $supplied + $this->readNestedArray($classResource, ['method', 'params']);
         $reflectionMethod = ReflectionResource::getClassReflection($instance)->getMethod($method);
 
         return $reflectionMethod->invokeArgs($instance, $params);
@@ -168,7 +186,7 @@ final readonly class GenericCall
         $method = isset($definition[1]) && is_string($definition[1]) ? $definition[1] : null;
         $resolved = $this->classSettler($class, $method);
 
-        return $method !== null ? $resolved['returned'] : $resolved['instance'];
+        return $method !== null ? $resolved->returned : $resolved->instance;
     }
 
     /**
@@ -177,7 +195,7 @@ final readonly class GenericCall
     private function resolveScalarDefinition(mixed $definition): mixed
     {
         if (is_string($definition) && class_exists($definition)) {
-            return $this->classSettler($definition)['instance'];
+            return $this->classSettler($definition)->instance;
         }
 
         if (is_string($definition) && function_exists($definition)) {

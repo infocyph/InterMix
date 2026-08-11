@@ -7,11 +7,13 @@ namespace Infocyph\InterMix\DI\Managers;
 use ArrayAccess;
 use Closure;
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ClassResolution;
 use Infocyph\InterMix\DI\Internal\DeferredInitializer;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\DI\Support\TraceLevelEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
+use Infocyph\InterMix\Exceptions\NotFoundException;
 use Psr\Cache\InvalidArgumentException;
 use ReflectionException;
 
@@ -23,12 +25,6 @@ use ReflectionException;
 class InvocationManager implements ArrayAccess
 {
     use ManagerProxy;
-
-    /** @var array<string, mixed>|null */
-    private ?array $activeScopeSeeds = null;
-
-    /** @var array<int, array<string, mixed>|null> */
-    private array $scopeSeedStack = [];
 
     /**
      * Constructs an InvocationManager.
@@ -70,34 +66,24 @@ class InvocationManager implements ArrayAccess
      */
     public function call(string|Closure|callable $classOrClosure, string|bool|null $method = null): mixed
     {
-        // 1) If string & in functionReference
         if (is_string($classOrClosure) && $this->repository->hasFunctionReference($classOrClosure)) {
-            return $this->get($classOrClosure);
+            return $this->callDefinition($classOrClosure, $method);
         }
 
         $resolver = $this->container->getCurrentResolver();
-
-        // 2) If a closure/callable
         if ($classOrClosure instanceof Closure || is_callable($classOrClosure)) {
-            return $resolver->closureSettler($classOrClosure);
+            return $this->callCallable($classOrClosure, $method);
         }
 
-        // 3) If closure alias
         if ($this->repository->hasClosureResource($classOrClosure)) {
-            $closureRes = $this->repository->getClosureResourceEntry($classOrClosure) ?? [];
-            $on = $closureRes['on'] ?? null;
-            $params = $closureRes['params'] ?? [];
-            if (!is_callable($on)) {
-                throw new ContainerException("Closure resource '$classOrClosure' is not callable.");
-            }
-
-            return $resolver->closureSettler($on, $params);
+            return $this->callClosureResource($classOrClosure, $method);
         }
 
-        // 4) Otherwise assume class name
         $targetMethod = $method === false ? false : (\is_string($method) ? $method : null);
 
-        return $resolver->classSettler($classOrClosure, $targetMethod);
+        $resolved = $resolver->classSettler($classOrClosure, $targetMethod);
+
+        return $resolved->methodInvoked ? $resolved->returned : $resolved->instance;
     }
 
     /**
@@ -111,15 +97,8 @@ class InvocationManager implements ArrayAccess
     }
 
     /**
-     * @param array<string, mixed> $instances
      * @internal
      */
-    public function enterScope(array $instances): void
-    {
-        $this->scopeSeedStack[] = $this->activeScopeSeeds;
-        $this->activeScopeSeeds = $instances !== [] ? $instances : null;
-    }
-
     /**
      * Retrieves a value associated with a given ID from the container.
      *
@@ -136,9 +115,13 @@ class InvocationManager implements ArrayAccess
      */
     public function get(string $id): mixed
     {
-        $seeds = $this->activeScopeSeeds;
-        if ($seeds !== null && array_key_exists($id, $seeds)) {
-            return $seeds[$id];
+        $seed = null;
+        if ($this->repository->findScopeSeed($id, $seed)) {
+            return $seed;
+        }
+
+        if (!$this->has($id)) {
+            throw new NotFoundException("No entry found for '$id'.");
         }
 
         $resolved = $this->repository->getResolvedSingletonEntry($id);
@@ -165,9 +148,8 @@ class InvocationManager implements ArrayAccess
         }
 
         $scope = $this->repository->getScope();
-        $scopeKey = $id . '@' . $scope;
 
-        return $this->resolveScoped($id, $scopeKey, $scope);
+        return $this->resolveScoped($id, $scope);
     }
 
     /**
@@ -187,10 +169,13 @@ class InvocationManager implements ArrayAccess
     {
         $resolved = $this->get($id);
         $lifetime = $this->repository->getDefinitionLifetime($id);
-        $key = $this->scopeKeyFor($id, $lifetime);
-        $resource = $this->repository->getResolvedEntry($key) ?? [];
+        $resource = $lifetime === LifetimeEnum::Scoped
+            ? $this->repository->getResolvedScopedEntry($this->repository->getScope(), $id)
+            : $this->repository->getResolvedEntry($id);
 
-        return is_array($resource) && array_key_exists('returned', $resource) ? $resource['returned'] : $resolved;
+        return $resource instanceof ClassResolution && $resource->methodInvoked
+            ? $resource->returned
+            : $resolved;
     }
 
     /**
@@ -206,14 +191,10 @@ class InvocationManager implements ArrayAccess
     public function has(string $id): bool
     {
         return $this->repository->hasFunctionReference($id)
-            || $this->repository->hasResolved($id);
-    }
-
-    /** @internal */
-    public function leaveScope(): void
-    {
-        $previous = array_pop($this->scopeSeedStack);
-        $this->activeScopeSeeds = is_array($previous) ? $previous : null;
+            || $this->repository->hasClosureResource($id)
+            || $this->repository->hasResolved($id)
+            || class_exists($id)
+            || (interface_exists($id) && $this->repository->getEnvConcrete($id) !== null);
     }
 
     /**
@@ -238,7 +219,7 @@ class InvocationManager implements ArrayAccess
         $targetMethod = $method === false ? false : (\is_string($method) ? $method : null);
         $fresh = $resolver->classSettler($class, $targetMethod, true);
 
-        return $method === false ? $fresh['instance'] : $fresh['returned'];
+        return $fresh->methodInvoked ? $fresh->returned : $fresh->instance;
     }
 
     /**
@@ -259,13 +240,6 @@ class InvocationManager implements ArrayAccess
     public function registration(): RegistrationManager
     {
         return $this->container->registration();
-    }
-
-    /** @internal */
-    public function resetScopeSeeds(): void
-    {
-        $this->activeScopeSeeds = null;
-        $this->scopeSeedStack = [];
     }
 
     /**
@@ -291,6 +265,44 @@ class InvocationManager implements ArrayAccess
         return $this->repository->fetchInstanceOrValue($value);
     }
 
+    private function callCallable(callable $callable, string|bool|null $method): mixed
+    {
+        if (is_string($method) && $method !== '') {
+            throw new ContainerException('A method cannot be supplied when invoking a callable.');
+        }
+
+        return $this->container->getCurrentResolver()->closureSettler($callable);
+    }
+
+    private function callClosureResource(string $alias, string|bool|null $method): mixed
+    {
+        if (is_string($method) && $method !== '') {
+            throw new ContainerException('A method cannot be supplied when invoking a callable.');
+        }
+
+        $closureRes = $this->repository->getClosureResourceEntry($alias) ?? [];
+        $on = $closureRes['on'] ?? null;
+        if (!is_callable($on)) {
+            throw new ContainerException("Closure resource '$alias' is not callable.");
+        }
+        $params = $closureRes['params'] ?? [];
+
+        return $this->container->getCurrentResolver()->closureSettler($on, $params);
+    }
+
+    private function callDefinition(string $id, string|bool|null $method): mixed
+    {
+        $service = $this->get($id);
+        if (!is_string($method) || $method === '') {
+            return $service;
+        }
+        if (!is_object($service) || !method_exists($service, $method)) {
+            throw new ContainerException("Method {$id}::{$method}() does not exist.");
+        }
+
+        return $service->{$method}();
+    }
+
     private function resolveAndCache(string $id, string $scopeKey, bool $cacheable, ?string $scope): mixed
     {
         $this->repository->dispatchResolvingHooks($id);
@@ -308,7 +320,8 @@ class InvocationManager implements ArrayAccess
             return $resolved;
         }
 
-        $resolved = $this->call($id);
+        $resolver = $this->container->getCurrentResolver();
+        $resolved = $resolver->classSettler($id);
         if ($cacheable) {
             $this->storeResolvedByLifetime($scopeKey, $resolved, $scope);
         }
@@ -318,26 +331,19 @@ class InvocationManager implements ArrayAccess
         return $this->repository->fetchInstanceOrValue($resolved);
     }
 
-    private function resolveScoped(string $id, string $scopeKey, string $scope): mixed
+    private function resolveScoped(string $id, string $scope): mixed
     {
-        $cached = $this->repository->getResolvedEntry($scopeKey);
-        if ($cached === null && !$this->repository->hasResolved($scopeKey)) {
-            return $this->resolveAndCache($id, $scopeKey, true, $scope);
+        $cached = $this->repository->getResolvedScopedEntry($scope, $id);
+        if ($cached === null && !$this->repository->hasResolvedScoped($scope, $id)) {
+            return $this->resolveAndCache($id, $id, true, $scope);
         }
 
         if ($cached instanceof DeferredInitializer) {
             $cached = $cached();
-            $this->storeResolvedByLifetime($scopeKey, $cached, $scope);
+            $this->storeResolvedByLifetime($id, $cached, $scope);
         }
 
         return $this->repository->fetchInstanceOrValue($cached);
-    }
-
-    private function scopeKeyFor(string $id, LifetimeEnum $lifetime): string
-    {
-        return $lifetime === LifetimeEnum::Scoped
-            ? $id . '@' . $this->repository->getScope()
-            : $id;
     }
 
     private function storeResolvedByLifetime(string $scopeKey, mixed $resolved, ?string $scope): void

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Invoker;
 
+use Infocyph\InterMix\DI\Internal\ClassResolution;
 use Infocyph\InterMix\DI\Resolver\CompiledDefinitionResolver;
 use Infocyph\InterMix\DI\Resolver\Repository;
 
@@ -34,14 +35,23 @@ final class CompiledCall
      * @param string|object $class Class name or object to resolve dynamically.
      * @param string|false|null $method Method to call, false to construct only, or null for configured behavior.
      * @param bool $make Whether to bypass resolved-instance reuse.
-     * @return array<string, mixed> Resolved instance and optional method result.
+     * @param array<int|string, mixed> $constructorParameters Ephemeral constructor arguments.
+     * @param array<int|string, mixed> $methodParameters Ephemeral method arguments.
      */
     public function classSettler(
         string|object $class,
         string|false|null $method = null,
         bool $make = false,
-    ): array {
-        return $this->dynamicResolver()->classSettler($class, $method, $make);
+        array $constructorParameters = [],
+        array $methodParameters = [],
+    ): ClassResolution {
+        return $this->dynamicResolver()->classSettler(
+            $class,
+            $method,
+            $make,
+            $constructorParameters,
+            $methodParameters,
+        );
     }
 
     /**
@@ -59,6 +69,12 @@ final class CompiledCall
     public function resolveByDefinition(string $name): mixed
     {
         return $this->definitionResolver->resolve($name);
+    }
+
+    /** Resolve a warmup miss without another PSR-6 lookup. */
+    public function resolveDefinitionForWarmup(string $name): mixed
+    {
+        return $this->definitionResolver->resolveForDefinitionCacheWarmup($name);
     }
 
     private function dynamicResolver(): InjectedCall
