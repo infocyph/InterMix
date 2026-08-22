@@ -74,6 +74,7 @@ class ClassResolver
         array $constructorParameters = [],
         array $methodParameters = [],
     ): ClassResolution {
+        $requestedClassName = $class->getName();
         $class = $this->getConcreteClassForInterface($class, $supplied);
         $className = $class->getName();
         $parent = end($this->classStack);
@@ -87,9 +88,13 @@ class ClassResolver
         }
 
         try {
-            return $make
+            $resolved = $make
                 ? $this->resolveMake($class, $callMethod, $constructorParameters, $methodParameters)
                 : $this->resolveClassResources($class, $className, $callMethod, $constructorParameters, $methodParameters);
+            $this->repository->markResolved($requestedClassName);
+            $this->repository->markResolved($className);
+
+            return $resolved;
         } finally {
             array_pop($this->classStack);
         }

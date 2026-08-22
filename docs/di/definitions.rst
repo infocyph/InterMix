@@ -42,7 +42,33 @@ the container:
    $def = $c->definitions();
    $def['baz'] = fn() => new SomeService();  // Same as bind()
    $service = $def['baz'];  // Same as get()
-   $hasBaz = isset($def['baz']);  // Same as has()
+   $canResolveBaz = isset($def['baz']);  // Same broad check as Container::has()
+   $hasBazDefinition = $def->has('baz'); // Explicit registration only
+
+Explicit definitions and resolution state
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Use ``$c->definitions()->has($id)`` when deciding whether application setup may
+install a default binding. This checks only definitions and callable resources
+that were deliberately registered. An autowireable class, an environment-bound
+interface, or an ID that was resolved earlier does not become an explicit
+definition.
+
+``$c->has($id)`` remains the broad PSR-style resolvability check. To ask the
+separate lifecycle question, use ``$c->isResolved($id)``. It becomes true after
+the service resolves successfully at least once and remains true for the life of
+that container, including for transient services and after cache or scope state
+is cleared.
+
+.. code-block:: php
+
+   if (!$c->definitions()->has(LoggerInterface::class)) {
+       $c->bind(LoggerInterface::class, FileLogger::class);
+   }
+
+   if ($c->isResolved(DatabaseConnection::class)) {
+       // The process has already constructed this service through the container.
+   }
 
 ---------------------------------------------------
 2.  Direct factories — no reflection or autowiring

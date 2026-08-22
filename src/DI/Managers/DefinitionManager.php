@@ -112,6 +112,18 @@ class DefinitionManager implements ArrayAccess
     }
 
     /**
+     * Determine whether an ID was explicitly registered as a definition or callable resource.
+     *
+     * This intentionally excludes autowireable classes, environment interface
+     * mappings, and entries that only exist because they were resolved.
+     */
+    public function has(string $id): bool
+    {
+        return $this->repository->hasFunctionReference($id)
+            || $this->repository->hasClosureResource($id);
+    }
+
+    /**
      * Jump to InvocationManager
      */
     public function invocation(): InvocationManager

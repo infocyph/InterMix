@@ -96,6 +96,9 @@ class Repository
     /** @var array<string, mixed> */
     private array $resolvedDefinition = [];
 
+    /** @var array<string, true> */
+    private array $resolvedIds = [];
+
     /** @var array<string, ClassResolution> */
     private array $resolvedResource = [];
 
@@ -773,6 +776,12 @@ class Repository
         return $this->enablePropertyAttribute;
     }
 
+    /** @internal */
+    public function isResolved(string $id): bool
+    {
+        return isset($this->resolvedIds[$id]);
+    }
+
     public function isTracingEnabled(): bool
     {
         return $this->tracingEnabled;
@@ -816,6 +825,12 @@ class Repository
             . substr(hash('sha256', $this->alias), 0, 16)
             . '.' . substr(hash('sha256', $generation), 0, 16)
             . '.' . substr(hash('sha256', $definition . "\0" . $environment), 0, 16);
+    }
+
+    /** @internal */
+    public function markResolved(string $id): void
+    {
+        $this->resolvedIds[$id] = true;
     }
 
     public function onResolved(string $id, callable $hook): void
