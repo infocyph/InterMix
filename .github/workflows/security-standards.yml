@@ -12,7 +12,7 @@ jobs:
   phpforge:
     uses: infocyph/phpforge/.github/workflows/security-standards.yml@main
     with:
-      fail_on_skipped_tests: true
+      php_extensions: "apcu"
       integration_services: '[]'
       service_topologies: '{}'
     permissions:
