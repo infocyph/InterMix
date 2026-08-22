@@ -179,14 +179,10 @@ class InvocationManager implements ArrayAccess
     }
 
     /**
-     * Checks if a definition ID exists in the repository.
+     * Determine whether an ID is explicitly registered, already cached, or autowireable.
      *
-     * This method determines whether a given definition ID is present
-     * either in the function references or among the resolved instances
-     * in the repository.
-     *
-     * @param string $id The ID of the definition to check.
-     * @return bool True if the definition ID exists, false otherwise.
+     * Environment-bound interfaces are also resolvable when their active
+     * concrete implementation exists. This check does not resolve the entry.
      */
     public function has(string $id): bool
     {

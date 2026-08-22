@@ -49,6 +49,7 @@ final readonly class GenericCall
         $ctorParams = $constructorParameters
             + $this->readNestedArray($classResource, ['constructor', 'params']);
         $instance = ReflectionResource::getClassReflection($class)->newInstanceArgs($ctorParams);
+        $this->repository->markResolved($class);
 
         // Set class properties (if any)
         $props = $this->readNestedArray($classResource, ['property']);
@@ -97,19 +98,15 @@ final readonly class GenericCall
     {
         $definition = $this->repository->getFunctionDefinition($name);
 
-        if ($definition instanceof DirectFactory) {
-            return $definition->resolve();
-        }
+        $resolved = match (true) {
+            $definition instanceof DirectFactory => $definition->resolve(),
+            $definition instanceof \Closure => $definition(),
+            is_array($definition) => $this->resolveArrayDefinition($definition),
+            default => $this->resolveScalarDefinition($definition),
+        };
+        $this->repository->markResolved($name);
 
-        if ($definition instanceof \Closure) {
-            return $definition();
-        }
-
-        if (is_array($definition)) {
-            return $this->resolveArrayDefinition($definition);
-        }
-
-        return $this->resolveScalarDefinition($definition);
+        return $resolved;
     }
 
     /**

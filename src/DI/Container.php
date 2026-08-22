@@ -458,13 +458,11 @@ final class Container implements ContainerInterface, ArrayAccess
     }
 
     /**
-     * Checks if a definition ID exists in the container.
+     * Determine whether an ID can be resolved by the container.
      *
-     * Existence checks are delegated to the repository-backed manager and do
-     * not resolve the entry or use exceptions for expected control flow.
-     *
-     * @param string $id The ID of the definition to check.
-     * @return bool True if the definition ID exists, false otherwise.
+     * This broad PSR-style check includes explicit registrations, resolved
+     * entries, autowireable classes, and active environment interface mappings.
+     * It does not resolve the entry.
      */
     public function has(string $id): bool
     {
@@ -482,6 +480,17 @@ final class Container implements ContainerInterface, ArrayAccess
     public function invocation(): InvocationManager
     {
         return $this->invocationManager;
+    }
+
+    /**
+     * Determine whether a service has been resolved at least once by this container.
+     *
+     * Resolution history is independent of definition existence, current cache
+     * contents, scope resets, and broad PSR-style resolvability.
+     */
+    public function isResolved(string $id): bool
+    {
+        return $this->repository->isResolved($id);
     }
 
     /**

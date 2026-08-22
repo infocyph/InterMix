@@ -315,7 +315,10 @@ class DefinitionResolver
         }
 
         try {
-            return $this->getFromCacheOrResolve($name, $skipExternalCache);
+            $resolved = $this->getFromCacheOrResolve($name, $skipExternalCache);
+            $this->repository->markResolved($name);
+
+            return $resolved;
         } finally {
             unset($this->entriesResolving[$name]);
             array_pop($this->definitionStack);
