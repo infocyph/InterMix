@@ -70,6 +70,38 @@ is cleared.
        // The process has already constructed this service through the container.
    }
 
+Activating unresolved dependencies
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Hosts with modular or deferred service providers can register a global
+``onMissing`` callback. InterMix calls it only after the normal definition,
+resolved-entry, concrete-class, and active environment-binding checks cannot
+resolve an ID:
+
+.. code-block:: php
+
+   $c->onMissing(function (string $id, Container $container): void {
+       if ($id === Payments::class) {
+           $container->singleton(Payments::class, StripePayments::class);
+       }
+   });
+
+   $checkout = $c->get(Checkout::class); // nested Payments dependency activates here
+
+Callbacks run in registration order and stop as soon as ``has($id)`` becomes
+true. Return values are ignored: a callback must register a normal definition
+or environment binding. The resulting service then follows its configured
+lifetime, scope, compiled/dynamic resolver path, tracing, and
+``onResolving``/``onResolved`` lifecycle hooks.
+
+Activation applies to direct ``get()``, ``make()``, and ``call()`` requests as
+well as nested constructor, method, property, and ``#[Inject]`` dependencies.
+Failures are not cached, so a later resolution may try the callbacks again.
+Recursion is guarded per service ID, allowing one missing service to activate a
+different service without permitting an ``A → B → A`` loop. Callback exceptions
+propagate unchanged. Register hooks and any definitions they may add before
+calling ``lock()``; locking remains strict.
+
 ---------------------------------------------------
 2.  Direct factories — no reflection or autowiring
 ---------------------------------------------------

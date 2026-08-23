@@ -75,6 +75,26 @@ class ClassResolver
         array $methodParameters = [],
     ): ClassResolution {
         $requestedClassName = $class->getName();
+        $activated = $class->isInterface()
+            && $this->repository->getEnvConcrete($requestedClassName) === null
+                ? $this->resolveMissingInterface($requestedClassName)
+                : null;
+        if ($activated instanceof ClassResolution) {
+            if (!is_string($callMethod) || $callMethod === '') {
+                return $activated;
+            }
+
+            return new ClassResolution(
+                $activated->instance,
+                $this->invokeResolvedMethod(
+                    $activated->instance::class,
+                    $callMethod,
+                    $activated->instance,
+                    $methodParameters,
+                ),
+                true,
+            );
+        }
         $class = $this->getConcreteClassForInterface($class, $supplied);
         $className = $class->getName();
         $parent = end($this->classStack);
@@ -358,6 +378,13 @@ class ClassResolver
             return $this->definitionResolver->resolve($type);
         }
 
+        if (!$this->repository->container()->has($type)
+            && $this->repository->tryResolveMissing($type)
+            && $this->repository->hasFunctionReference($type)
+        ) {
+            return $this->repository->container()->get($type);
+        }
+
         if (!class_exists($type) && !interface_exists($type)) {
             return AttributeResolution::Unresolved;
         }
@@ -474,6 +501,21 @@ class ClassResolver
         $params = $supplied + $this->readMethodParams($className);
 
         return $this->parameterResolver->resolve($refMethod, $params, 'method');
+    }
+
+    private function resolveMissingInterface(string $interface): ?ClassResolution
+    {
+        if (!$this->repository->tryResolveMissing($interface)
+            || !$this->repository->hasFunctionReference($interface)) {
+            return null;
+        }
+
+        $resolved = $this->repository->container()->get($interface);
+        if (!is_object($resolved) || !$resolved instanceof $interface) {
+            throw new ContainerException("Resolved service doesn't implement $interface");
+        }
+
+        return new ClassResolution($resolved);
     }
 
     /**

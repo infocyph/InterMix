@@ -172,7 +172,13 @@ class ParameterResolver
         }
 
         foreach ($this->extractNamedTypeCandidates($parameter) as $named) {
-            $typeName = $named->getName();
+            if ($named->isBuiltin()) {
+                continue;
+            }
+            $typeName = $this->normalizeSelfParent(
+                $named->getName(),
+                $parameter->getDeclaringClass(),
+            );
 
             if ($hasScopeSeeds && $this->repository->findScopeSeed($typeName, $seeded)) {
                 return $seeded;
@@ -180,6 +186,13 @@ class ParameterResolver
 
             if ($this->repository->hasFunctionReference($typeName)) {
                 return $this->definitionResolver->resolve($typeName);
+            }
+
+            if (!$this->repository->container()->has($typeName)
+                && $this->repository->tryResolveMissing($typeName)
+                && $this->repository->hasFunctionReference($typeName)
+            ) {
+                return $this->repository->container()->get($typeName);
             }
         }
 

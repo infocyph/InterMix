@@ -70,7 +70,6 @@ class InvocationManager implements ArrayAccess
             return $this->callDefinition($classOrClosure, $method);
         }
 
-        $resolver = $this->container->getCurrentResolver();
         if ($classOrClosure instanceof Closure || is_callable($classOrClosure)) {
             return $this->callCallable($classOrClosure, $method);
         }
@@ -79,6 +78,14 @@ class InvocationManager implements ArrayAccess
             return $this->callClosureResource($classOrClosure, $method);
         }
 
+        if (!$this->has($classOrClosure) && !interface_exists($classOrClosure)) {
+            $this->repository->tryResolveMissing($classOrClosure);
+        }
+        if ($this->repository->hasFunctionReference($classOrClosure)) {
+            return $this->callDefinition($classOrClosure, $method);
+        }
+
+        $resolver = $this->container->getCurrentResolver();
         $targetMethod = $method === false ? false : (\is_string($method) ? $method : null);
 
         $resolved = $resolver->classSettler($classOrClosure, $targetMethod);
@@ -120,7 +127,7 @@ class InvocationManager implements ArrayAccess
             return $seed;
         }
 
-        if (!$this->has($id)) {
+        if (!$this->has($id) && !$this->repository->tryResolveMissing($id)) {
             throw new NotFoundException("No entry found for '$id'.");
         }
 
@@ -211,6 +218,14 @@ class InvocationManager implements ArrayAccess
      */
     public function make(string $class, string|bool $method = false): mixed
     {
+        $activated = false;
+        if (!$this->has($class) && !interface_exists($class)) {
+            $activated = $this->repository->tryResolveMissing($class);
+        }
+        if ($activated && $this->repository->hasFunctionReference($class)) {
+            return $this->callDefinition($class, $method);
+        }
+
         $resolver = $this->container->getCurrentResolver();
         $targetMethod = $method === false ? false : (\is_string($method) ? $method : null);
         $fresh = $resolver->classSettler($class, $targetMethod, true);
