@@ -35,7 +35,7 @@
         "psr/container": "^2.0"
     },
     "require-dev": {
-        "infocyph/cachelayer": "^3.1",
+        "infocyph/cachelayer": "^3.2.0",
         "infocyph/phpforge": "dev-main@dev"
     },
     "suggest": {
