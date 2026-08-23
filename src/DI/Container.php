@@ -393,6 +393,10 @@ final class Container implements ContainerInterface, ArrayAccess
         } catch (NotFoundException|ContainerException $exception) {
             throw $exception;
         } catch (Throwable $throwable) {
+            if ($this->repository->isOnMissingFailure($throwable)) {
+                throw $throwable;
+            }
+
             throw new ContainerException(
                 "Error retrieving entry '$id': {$throwable->getMessage()}",
                 previous: $throwable,
@@ -463,6 +467,8 @@ final class Container implements ContainerInterface, ArrayAccess
      * This broad PSR-style check includes explicit registrations, resolved
      * entries, autowireable classes, and active environment interface mappings.
      * It does not resolve the entry.
+     *
+     * @phpstan-impure
      */
     public function has(string $id): bool
     {
@@ -544,6 +550,22 @@ final class Container implements ContainerInterface, ArrayAccess
     public function make(string $class, string|bool $method = false): mixed
     {
         return $this->invocationManager->make($class, $method);
+    }
+
+    /**
+     * Register a host callback that may define an otherwise unresolved service.
+     *
+     * Callbacks run in registration order and receive the missing ID and this
+     * container. Their return values are ignored; resolution succeeds only when
+     * the callback makes the ID normally resolvable.
+     *
+     * @throws ContainerException
+     */
+    public function onMissing(callable $callback): self
+    {
+        $this->repository->onMissing($callback);
+
+        return $this;
     }
 
     /**

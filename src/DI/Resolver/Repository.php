@@ -9,6 +9,7 @@ use Infocyph\InterMix\DI\Attribute\AttributeRegistry;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Internal\ClassResolution;
 use Infocyph\InterMix\DI\Resolver\Concerns\InvalidatesRepositoryState;
+use Infocyph\InterMix\DI\Resolver\Concerns\ResolvesMissingServices;
 use Infocyph\InterMix\DI\Support\DebugTracer;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
@@ -25,6 +26,7 @@ use Psr\Cache\CacheItemPoolInterface;
 class Repository
 {
     use InvalidatesRepositoryState;
+    use ResolvesMissingServices;
 
     private string $alias = 'default';
 

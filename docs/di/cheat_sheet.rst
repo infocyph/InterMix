@@ -22,6 +22,8 @@ Container Entry Points
      - ``$c->definitions()`` / ``$c->registration()`` / ``$c->options()`` / ``$c->invocation()``
    * - Resolve by ID/class
      - ``$c->get($id)``
+   * - Activate unresolved IDs
+     - ``$c->onMissing(fn (string $id, Container $c) => ...)``
    * - Bind direct factory
      - ``$c->bindFactory($id, $factory, LifetimeEnum::Singleton)`` / ``$c->factory($id, $factory)->scoped()``
    * - Resolve + execute default/registered method
