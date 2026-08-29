@@ -72,7 +72,7 @@ final class RuntimeIslandResolver
         }
 
         return $method->invokeArgs(
-            $instance,
+            $method->isStatic() ? null : $instance,
             $this->parameterResolver->resolve($method, $parameters, 'method'),
         );
     }
