@@ -41,7 +41,7 @@ final class StaticTypedMethodInjectConsumer
 
     public ?StaticInjectLiteralDependency $dependency = null;
 
-    #[Inject(dependency: StaticInjectLiteralDependency::class)]
+    #[Inject(dependency: 'dep')]
     public function boot(StaticInjectLiteralDependency $dependency): void
     {
         $this->dependency = $dependency;
@@ -104,6 +104,7 @@ it('compiles deterministic parameter-level Inject service targets', function () 
 it('keeps typed method-level Inject semantics in the dynamic island until their precedence is compiled', function () {
     $builder = ContainerBuilder::create(uniqid('static_typed_method_inject_'));
     $builder->options()->setOptions(methodAttributes: true);
+    $builder->singleton('dep', StaticInjectLiteralDependency::class);
     $builder->singleton('consumer', StaticTypedMethodInjectConsumer::class);
     $path = staticBuiltInInjectArtifactPath();
 
