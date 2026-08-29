@@ -26,12 +26,13 @@ final class StaticRuntimeRenderer
      */
     public function render(DefinitionGraph $graph, array $plans, array $slots): string
     {
+        $invocationRenderer = new StaticInvocationRenderer();
         $source = "<?php\n\ndeclare(strict_types=1);\n\n";
         $source .= "use Infocyph\\InterMix\\DI\\ProductionContainer;\n\n";
         $source .= "return new class extends ProductionContainer\n{\n";
         $source .= $this->renderAliasSingletonProperties($plans);
         $source .= $this->renderFactorySingletonProperties($plans);
-        $source .= $this->renderInvocationSingletonProperties($plans);
+        $source .= $invocationRenderer->renderSingletonProperties($plans);
         $source .= $this->renderSingletonProperties($plans, $slots);
         $source .= $this->renderGet($plans, $slots);
         $source .= $this->renderHas($plans);
@@ -42,7 +43,7 @@ final class StaticRuntimeRenderer
         $source .= $this->renderFreshMethods($plans, $slots);
         $source .= $this->renderCompiledSingletonValues($plans, $slots);
         $source .= $this->renderTags($graph, $plans);
-        $source .= $this->renderServiceMethods($plans, $slots);
+        $source .= $this->renderServiceMethods($plans, $slots, $invocationRenderer);
 
         return rtrim($source) . "\n};\n";
     }
@@ -135,38 +136,6 @@ final class StaticRuntimeRenderer
         }
 
         return $class . '::' . $plan['method'] . '(' . implode(', ', $arguments) . ')';
-    }
-
-    /**
-     * @param InvocationPlan $plan
-     * @param array<string, int> $slots
-     */
-    private function invocationStatements(array $plan, array $slots): string
-    {
-        $constructorArguments = [];
-        foreach ($plan['arguments'] as $argument) {
-            $constructorArguments[] = $this->argumentExpression($argument, $slots);
-        }
-
-        $class = '\\' . ltrim($plan['class'], '\\');
-        $source = '        $instance = new ' . $class . '(' . implode(', ', $constructorArguments) . ");\n";
-        foreach ($plan['properties'] as $property) {
-            $value = $this->argumentExpression($property['argument'], $slots);
-            if ($property['static']) {
-                $declaring = '\\' . ltrim($property['declaring'], '\\');
-                $source .= '        ' . $declaring . '::$' . $property['property'] . " = {$value};\n";
-            } else {
-                $source .= '        $instance->' . $property['property'] . " = {$value};\n";
-            }
-        }
-
-        $methodArguments = [];
-        foreach ($plan['invocation']['arguments'] as $argument) {
-            $methodArguments[] = $this->argumentExpression($argument, $slots);
-        }
-
-        return $source . ('        $result = $instance->' . $plan['invocation']['method']
-            . '(' . implode(', ', $methodArguments) . ");\n");
     }
 
     /**
@@ -454,47 +423,6 @@ final class StaticRuntimeRenderer
         return $source . "        };\n    }\n\n";
     }
 
-    /**
-     * @param InvocationPlan $plan
-     * @param array<string, int> $slots
-     */
-    private function renderInvocationMethod(int $slot, array $plan, array $slots): string
-    {
-        $source = "    private function s{$slot}(): mixed\n    {\n";
-        $source .= $this->renderSeedGuard($slot);
-
-        if ($plan['lifetime'] === LifetimeEnum::Scoped) {
-            $source .= "        if (array_key_exists({$slot}, \$this->scope->resolved)) {\n";
-            $source .= "            return \$this->scope->resolved[{$slot}];\n";
-            $source .= "        }\n\n";
-            $source .= $this->invocationStatements($plan, $slots);
-            $source .= "\n        return \$this->scope->resolved[{$slot}] = \$result;\n";
-        } elseif ($plan['lifetime'] === LifetimeEnum::Singleton) {
-            $source .= "        if (array_key_exists({$slot}, \$this->invocationSingletons)) {\n";
-            $source .= "            return \$this->invocationSingletons[{$slot}];\n";
-            $source .= "        }\n\n";
-            $source .= $this->invocationStatements($plan, $slots);
-            $source .= "\n        return \$this->invocationSingletons[{$slot}] = \$result;\n";
-        } else {
-            $source .= $this->invocationStatements($plan, $slots);
-            $source .= "\n        return \$result;\n";
-        }
-
-        return $source . "    }\n\n";
-    }
-
-    /** @param array<string, ServicePlan> $plans */
-    private function renderInvocationSingletonProperties(array $plans): string
-    {
-        foreach ($plans as $plan) {
-            if ($plan['kind'] === 'invocation' && $plan['lifetime'] === LifetimeEnum::Singleton) {
-                return "    /** @var array<int, mixed> */\n    private array \$invocationSingletons = [];\n\n";
-            }
-        }
-
-        return '';
-    }
-
     private function renderSeedGuard(int $slot): string
     {
         return "        if (\$this->scope->parent !== null && array_key_exists({$slot}, \$this->scope->seeds)) {\n"
@@ -506,15 +434,18 @@ final class StaticRuntimeRenderer
      * @param array<string, ServicePlan> $plans
      * @param array<string, int> $slots
      */
-    private function renderServiceMethods(array $plans, array $slots): string
-    {
+    private function renderServiceMethods(
+        array $plans,
+        array $slots,
+        StaticInvocationRenderer $invocationRenderer,
+    ): string {
         $source = '';
         foreach ($plans as $id => $plan) {
             $source .= match ($plan['kind']) {
                 'alias' => $this->renderAliasMethod($slots[$id], $plan, $slots),
                 'class' => $this->renderClassMethod($slots[$id], $plan, $slots),
                 'factory' => $this->renderFactoryMethod($slots[$id], $plan, $slots),
-                'invocation' => $this->renderInvocationMethod($slots[$id], $plan, $slots),
+                'invocation' => $invocationRenderer->renderMethod($slots[$id], $plan, $slots),
                 'value' => $this->renderValueMethod($slots[$id], $plan),
             };
         }
