@@ -21,6 +21,19 @@ final readonly class StaticRuntimeRoot
     public function __construct(public StaticRuntimeMiddle $middle) {}
 }
 
+interface StaticRuntimeContract {}
+
+final class StaticRuntimeDefaultService implements StaticRuntimeContract {}
+
+final class StaticRuntimeContextService implements StaticRuntimeContract {}
+
+final class StaticRuntimeEnvironmentService implements StaticRuntimeContract {}
+
+final readonly class StaticRuntimeContractConsumer
+{
+    public function __construct(public StaticRuntimeContract $service) {}
+}
+
 function staticRuntimeArtifactPath(): string
 {
     return sys_get_temp_dir() . '/intermix-static-runtime-' . bin2hex(random_bytes(8)) . '.php';
@@ -107,8 +120,8 @@ it('rejects unknown identifiers using the PSR not-found contract', function () {
     }
 });
 
-it('does not specialize contextual graphs until contextual folding exists', function () {
-    $container = new Container(uniqid('static_runtime_contextual_'));
+it('keeps dynamic contextual bindings outside the static graph', function () {
+    $container = new Container(uniqid('static_runtime_dynamic_contextual_'));
     $container->singleton(StaticRuntimeLeaf::class);
     $container->singleton(StaticRuntimeMiddle::class);
     $container->singleton('root', StaticRuntimeRoot::class);
@@ -124,8 +137,57 @@ it('does not specialize contextual graphs until contextual folding exists', func
         );
 
         expect($generated['compiled'])->not->toContain(StaticRuntimeMiddle::class, 'root')
-            ->and($generated['skipped'][StaticRuntimeMiddle::class])->toContain('contextual binding')
+            ->and($generated['skipped'][StaticRuntimeMiddle::class])->toContain('dynamic contextual binding')
             ->and($generated['skipped']['root'])->toContain('not statically compiled');
+    } finally {
+        removeStaticRuntimeArtifact($path);
+    }
+});
+
+it('folds deterministic contextual class bindings into the static graph', function () {
+    $container = new Container(uniqid('static_runtime_contextual_'));
+    $container->singleton('consumer', StaticRuntimeContractConsumer::class);
+    $container->when(StaticRuntimeContractConsumer::class)
+        ->needs(StaticRuntimeContract::class)
+        ->give(StaticRuntimeContextService::class);
+
+    $path = staticRuntimeArtifactPath();
+    try {
+        $generated = new StaticRuntimeGenerator()->generate(
+            DefinitionGraph::from($container->getRepository()),
+            $path,
+        );
+        $consumer = $generated['runtime']->get('consumer');
+
+        expect($generated['compiled'])->toContain('consumer', StaticRuntimeContextService::class)
+            ->and($consumer)->toBeInstanceOf(StaticRuntimeContractConsumer::class)
+            ->and($consumer->service)->toBeInstanceOf(StaticRuntimeContextService::class);
+    } finally {
+        removeStaticRuntimeArtifact($path);
+    }
+});
+
+it('folds the active environment interface binding into the static graph', function () {
+    $container = new Container(uniqid('static_runtime_environment_'));
+    $container->singleton('consumer', StaticRuntimeContractConsumer::class);
+    $container->options()->bindInterfaceForEnv(
+        'production',
+        StaticRuntimeContract::class,
+        StaticRuntimeEnvironmentService::class,
+    );
+    $container->setEnvironment('production');
+
+    $path = staticRuntimeArtifactPath();
+    try {
+        $generated = new StaticRuntimeGenerator()->generate(
+            DefinitionGraph::from($container->getRepository()),
+            $path,
+        );
+        $consumer = $generated['runtime']->get('consumer');
+
+        expect($generated['compiled'])->toContain('consumer', StaticRuntimeEnvironmentService::class)
+            ->and($consumer)->toBeInstanceOf(StaticRuntimeContractConsumer::class)
+            ->and($consumer->service)->toBeInstanceOf(StaticRuntimeEnvironmentService::class);
     } finally {
         removeStaticRuntimeArtifact($path);
     }
