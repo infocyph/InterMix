@@ -15,6 +15,7 @@ jobs:
       php_extensions: "apcu"
       integration_services: '[]'
       service_topologies: '{}'
+      benchmark_composer_script: "bench:intermix"
     permissions:
       security-events: write
       actions: read
