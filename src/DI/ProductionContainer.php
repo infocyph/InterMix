@@ -112,6 +112,10 @@ abstract class ProductionContainer implements ContainerInterface
     /** @throws ContainerException|\ReflectionException|\Psr\Cache\InvalidArgumentException */
     public final function getReturn(string $id): mixed
     {
+        if ($this->isCompiledDefinition($id)) {
+            return $this->get($id);
+        }
+
         return $this->dynamic()->getReturn($id);
     }
 
@@ -132,6 +136,13 @@ abstract class ProductionContainer implements ContainerInterface
     /** @throws ContainerException|\ReflectionException */
     public final function make(string $class, string|bool $method = false): mixed
     {
+        if ($method === false) {
+            $fresh = $this->freshCompiled($class);
+            if ($fresh !== null) {
+                return $fresh;
+            }
+        }
+
         return $this->dynamic()->make($class, $method);
     }
 
@@ -143,6 +154,17 @@ abstract class ProductionContainer implements ContainerInterface
         string|Closure|callable|array|null $spec,
         array $parameters = [],
     ): mixed {
+        if ($spec === null) {
+            return $this;
+        }
+
+        if ($parameters === [] && is_string($spec)) {
+            $fresh = $this->freshCompiled($spec);
+            if ($fresh !== null) {
+                return $fresh;
+            }
+        }
+
         return $this->dynamic()->resolveNow($spec, $parameters);
     }
 
@@ -172,6 +194,11 @@ abstract class ProductionContainer implements ContainerInterface
     protected final function fallbackHas(string $id): bool
     {
         return $this->dynamic()->has($id);
+    }
+
+    protected function freshCompiled(string $class): ?object
+    {
+        return null;
     }
 
     /** @return array<int, string> */
