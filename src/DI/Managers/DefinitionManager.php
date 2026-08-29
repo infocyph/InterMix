@@ -22,38 +22,19 @@ use Psr\Cache\InvalidArgumentException;
 use ReflectionException;
 use Throwable;
 
-/**
- * @implements ArrayAccess<string, mixed>
- */
+/** @implements ArrayAccess<string, mixed> */
 class DefinitionManager implements ArrayAccess
 {
     use ManagerProxy;
 
-    /**
-     * Initialize the definition manager.
-     *
-     * @param Repository $repository The internal repository holding all definitions.
-     * @param Container $container The container instance this manager is bound to.
-     */
     public function __construct(
         protected Repository $repository,
         protected Container $container,
     ) {}
 
-    /**
-     * Adds multiple definitions to the container.
-     *
-     * This method takes an associative array with definition names as keys and
-     * the definitions themselves as values. It then internally calls the
-     * {@see bind()} method for each definition.
-     *
-     * @param array<string, mixed> $definitions The array of definitions.
-     *
-     * @throws ContainerException
-     */
+    /** @param array<string, mixed> $definitions */
     public function addDefinitions(array $definitions): self
     {
-        // The repository internally checks for lock
         foreach ($definitions as $id => $definition) {
             $this->bind($id, $definition);
         }
@@ -61,20 +42,7 @@ class DefinitionManager implements ArrayAccess
         return $this;
     }
 
-    /**
-     * Registers a definition with the container.
-     *
-     * Registers a definition with the container, which can then be retrieved
-     * using the {@see get()} method. The definition can be any type of value,
-     * including another definition.
-     *
-     * @param string $id The identifier of the definition.
-     * @param mixed $definition The definition itself.
-     * @param LifetimeEnum $lifetime The lifetime of the definition.
-     * @param array<int, string> $tags An array of tags to associate with the definition.
-     *
-     * @throws ContainerException if the container is locked or if the id is the same as the definition.
-     */
+    /** @param array<int, string> $tags */
     public function bind(
         string $id,
         mixed $definition,
@@ -85,22 +53,12 @@ class DefinitionManager implements ArrayAccess
         if (is_string($definition) && $id === $definition && !class_exists($definition)) {
             throw new ContainerException("Scalar/string alias cannot point to itself ($id).");
         }
-        $this->repository->setFunctionReference($id, $definition);
-        $this->repository->setDefinitionMeta($id, [
-            'lifetime' => $lifetime,
-            'tags' => $tags,
-        ]);
+
+        $this->repository->setDefinition($id, $definition, $lifetime, $tags);
 
         return $this;
     }
 
-    /**
-     * Enable definition caching with an assigned cache pool.
-     *
-     * The given pool can be any PHP-FIG PSR-6 implementation.
-     *
-     * @throws ContainerException
-     */
     public function enableDefinitionCache(
         CacheItemPoolInterface $pool,
         ?string $generation = null,
@@ -111,49 +69,28 @@ class DefinitionManager implements ArrayAccess
         return $this;
     }
 
-    /**
-     * Determine whether an ID was explicitly registered as a definition or callable resource.
-     *
-     * This intentionally excludes autowireable classes, environment interface
-     * mappings, and entries that only exist because they were resolved.
-     */
     public function has(string $id): bool
     {
         return $this->repository->hasFunctionReference($id)
             || $this->repository->hasClosureResource($id);
     }
 
-    /**
-     * Jump to InvocationManager
-     */
     public function invocation(): InvocationManager
     {
         return $this->container->invocation();
     }
 
-    /**
-     * Jump to OptionsManager
-     */
     public function options(): OptionsManager
     {
         return $this->container->options();
     }
 
-    /**
-     * Jump to RegistrationManager
-     */
     public function registration(): RegistrationManager
     {
         return $this->container->registration();
     }
 
-    /**
-     * Override existing definition metadata for a specific environment.
-     *
-     * @param array<int, string>|null $tags
-     *
-     * @throws ContainerException
-     */
+    /** @param array<int, string>|null $tags */
     public function setMetaForEnv(
         string $env,
         string $id,
@@ -173,8 +110,6 @@ class DefinitionManager implements ArrayAccess
     }
 
     /**
-     * Warm safe singleton definitions using one PSR-6 bulk read and commit.
-     *
      * @return array{hits: int, written: int, skipped: int, failed: int}
      * @throws ContainerException|InvalidArgumentException|ReflectionException
      */
@@ -199,7 +134,6 @@ class DefinitionManager implements ArrayAccess
 
         $report = ['hits' => 0, 'written' => 0, 'skipped' => 0, 'failed' => 0];
         $keys = $this->warmupKeys($definitions, $report);
-
         if ($keys === []) {
             return $report;
         }
@@ -268,10 +202,7 @@ class DefinitionManager implements ArrayAccess
         }
     }
 
-    /**
-     * @return string Warmup report field to increment.
-     * @phpstan-return 'hits'|'written'|'skipped'|'failed'
-     */
+    /** @phpstan-return 'hits'|'written'|'skipped'|'failed' */
     private function warmDefinition(
         CompiledCall|InjectedCall $resolver,
         CacheItemPoolInterface $cache,
@@ -314,10 +245,7 @@ class DefinitionManager implements ArrayAccess
         }
     }
 
-    /**
-     * @param list<string> $keys
-     * @return array<string, CacheItemInterface>|null
-     */
+    /** @param list<string> $keys @return array<string, CacheItemInterface>|null */
     private function warmupItems(CacheItemPoolInterface $cache, array $keys): ?array
     {
         try {
