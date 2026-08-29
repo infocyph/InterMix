@@ -164,10 +164,9 @@ final class StaticRuntimeRenderer
         foreach ($plan['invocation']['arguments'] as $argument) {
             $methodArguments[] = $this->argumentExpression($argument, $slots);
         }
-        $source .= '        $result = $instance->' . $plan['invocation']['method']
-            . '(' . implode(', ', $methodArguments) . ");\n";
 
-        return $source;
+        return $source . ('        $result = $instance->' . $plan['invocation']['method']
+            . '(' . implode(', ', $methodArguments) . ");\n");
     }
 
     /**
