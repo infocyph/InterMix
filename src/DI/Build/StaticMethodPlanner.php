@@ -76,30 +76,12 @@ final class StaticMethodPlanner
         ];
     }
 
-    private function hasDynamicAttributes(DefinitionGraph $graph, ReflectionMethod $method): bool
-    {
-        if (!$graph->methodAttributesEnabled()) {
-            return false;
-        }
-        if ($method->getAttributes(Inject::class) !== []) {
-            return true;
-        }
-
-        return array_any(
-            $method->getParameters(),
-            fn(ReflectionParameter $parameter): bool => $this->hasDynamicParameterAttribute($graph, $parameter),
-        );
-    }
-
     private function hasDynamicParameterAttribute(DefinitionGraph $graph, ReflectionParameter $parameter): bool
     {
-        if ($parameter->getAttributes(Inject::class) !== []) {
-            return true;
-        }
-
         return array_any(
             $parameter->getAttributes(),
-            fn(ReflectionAttribute $attribute): bool => $graph->hasAttributeType($attribute->getName()),
+            fn(ReflectionAttribute $attribute): bool => $attribute->getName() !== Inject::class
+                && $graph->hasAttributeType($attribute->getName()),
         );
     }
 
@@ -114,8 +96,22 @@ final class StaticMethodPlanner
         if (!$method->isPublic() || $method->isStatic()) {
             return "method '{$className}::{$methodName}()' requires reflection-based invocation";
         }
-        if ($this->hasDynamicAttributes($graph, $method)) {
+
+        if ($graph->methodAttributesEnabled()
+            && array_any(
+                $method->getParameters(),
+                fn(ReflectionParameter $parameter): bool => $this->hasDynamicParameterAttribute($graph, $parameter),
+            )
+        ) {
             return "method '{$className}::{$methodName}()' has runtime attributes";
+        }
+
+        $attributeArguments = [];
+        if ($graph->methodAttributesEnabled()) {
+            $attributeArguments = new StaticInjectPlanner()->methodArguments($graph, $method);
+            if (is_string($attributeArguments)) {
+                return $attributeArguments;
+            }
         }
 
         $parameters = new StaticParameterPlanner()->callablePlan(
@@ -125,6 +121,7 @@ final class StaticMethodPlanner
             $supplied,
             'method',
             false,
+            $attributeArguments,
         );
         if (is_string($parameters)) {
             return $parameters;
