@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI;
 
 use Closure;
+use Infocyph\InterMix\DI\Internal\RuntimeIslandResolver;
 use Infocyph\InterMix\DI\Internal\ScopeState;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
@@ -26,6 +27,8 @@ abstract class ProductionContainer implements ContainerInterface
      */
     private array $fallbackDefinitions = [];
 
+    private ?RuntimeIslandResolver $runtimeIslands = null;
+
     public function __construct(?Container $fallback = null)
     {
         $this->scope = new ScopeState('root');
@@ -44,6 +47,7 @@ abstract class ProductionContainer implements ContainerInterface
     {
         if ($this->fallback !== $fallback) {
             $this->fallbackDefinitions = [];
+            $this->runtimeIslands = null;
         }
 
         $this->captureFallbackDefinitions($fallback);
@@ -248,6 +252,24 @@ abstract class ProductionContainer implements ContainerInterface
         }
     }
 
+    final protected function applyCompiledRuntimePropertyAttribute(
+        object $instance,
+        string $declaringClass,
+        string $propertyName,
+    ): void {
+        $this->runtimeIslandResolver()->applyAttributedProperty($instance, $declaringClass, $propertyName);
+    }
+
+    final protected function assignCompiledRuntimeProperty(
+        object $instance,
+        string $declaringClass,
+        string $propertyName,
+        mixed $value,
+    ): void {
+        $property = new \ReflectionProperty($declaringClass, $propertyName);
+        $property->setValue($property->isStatic() ? null : $instance, $value);
+    }
+
     /** @return array<int, string> */
     protected function compiledIds(): array
     {
@@ -288,6 +310,14 @@ abstract class ProductionContainer implements ContainerInterface
     protected function freshCompiledInvocation(string $class, string $method, mixed &$result): bool
     {
         return false;
+    }
+
+    final protected function invokeCompiledRuntimeMethod(
+        object $instance,
+        string $className,
+        string $methodName,
+    ): mixed {
+        return $this->runtimeIslandResolver()->invokeMethod($instance, $className, $methodName);
     }
 
     protected function isCompiledDefinition(string $id): bool
@@ -422,6 +452,17 @@ abstract class ProductionContainer implements ContainerInterface
                 $snapshot['tags'],
             );
         }
+    }
+
+    private function runtimeIslandResolver(): RuntimeIslandResolver
+    {
+        if (!$this->fallback instanceof Container) {
+            throw new ContainerException(
+                'Compiled runtime attribute/method islands require the configured development fallback graph.',
+            );
+        }
+
+        return $this->runtimeIslands ??= new RuntimeIslandResolver($this->fallback->getRepository());
     }
 
     private function synchronizeFallbackScopes(Container $fallback): void
