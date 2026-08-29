@@ -8,7 +8,7 @@ use Infocyph\InterMix\DI\Support\LifetimeEnum;
 
 /**
  * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
- * @phpstan-type PropertyPlan array{declaring: class-string, property: string, static: bool, argument: ServiceArgument|null, runtime?: 'attribute'|'assign'}
+ * @phpstan-type PropertyPlan array{declaring: class-string, property: string, static: bool, argument: ServiceArgument|null, runtime?: 'attribute'|'assign'|'registered'}
  * @phpstan-type MethodPlan array{method: string, arguments: list<ServiceArgument>, dependencies: list<string>, runtime?: bool}
  * @phpstan-type ClassPlan array{kind: 'class', class: class-string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, postMethod: MethodPlan|null, dependencies: list<string>}
  * @phpstan-type ServicePlan array{kind: string, lifetime: LifetimeEnum, postMethod?: MethodPlan|null}
@@ -28,6 +28,10 @@ final class StaticReturnRenderer
             $method,
             $slots,
         );
+        if ($plan['lifetime'] === LifetimeEnum::Transient) {
+            return "\n        {$expression};\n";
+        }
+
         $target = $plan['lifetime'] === LifetimeEnum::Scoped
             ? "\$this->scope->returned[{$slot}]"
             : "\$this->classReturns[{$slot}]";
@@ -43,7 +47,10 @@ final class StaticReturnRenderer
     {
         $entries = [];
         foreach ($plans as $id => $plan) {
-            if ($plan['kind'] !== 'class' || !is_array($plan['postMethod'] ?? null)) {
+            if ($plan['kind'] !== 'class'
+                || !is_array($plan['postMethod'] ?? null)
+                || $plan['lifetime'] === LifetimeEnum::Transient
+            ) {
                 continue;
             }
             $entries[] = [
@@ -76,7 +83,7 @@ final class StaticReturnRenderer
         foreach ($plans as $plan) {
             if ($plan['kind'] === 'class'
                 && is_array($plan['postMethod'] ?? null)
-                && $plan['lifetime'] !== LifetimeEnum::Scoped
+                && $plan['lifetime'] === LifetimeEnum::Singleton
             ) {
                 return "    /** @var array<int, mixed> */\n    private array \$classReturns = [];\n\n";
             }
