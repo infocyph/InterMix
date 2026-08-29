@@ -46,7 +46,7 @@ function removeStaticBatchArtifact(string $path): void
     }
 }
 
-it('keeps lifecycle-hooked services in the dynamic island without deoptimizing neighbors', function () {
+it('keeps lifecycle-hooked services compiled without affecting unhooked neighbors', function () {
     $builder = ContainerBuilder::create(uniqid('static_batch_hooks_'));
     $resolved = 0;
     $builder->singleton('stable', StaticBatchStableService::class)
@@ -60,11 +60,12 @@ it('keeps lifecycle-hooked services in the dynamic island without deoptimizing n
         $report = $builder->compile($path);
         $runtime = $builder->production($path);
         $stable = $runtime->get('stable');
+        $hooked = $runtime->get('hooked');
 
-        expect($report['compiled'])->toContain('stable')
-            ->and($report['compiled'])->not->toContain('hooked')
-            ->and($report['skipped']['hooked'])->toContain('lifecycle hooks')
-            ->and($runtime->get('hooked'))->toBeInstanceOf(StaticBatchDynamicService::class)
+        expect($report['compiled'])->toContain('stable', 'hooked')
+            ->and($report['skipped'])->not->toHaveKey('hooked')
+            ->and($hooked)->toBeInstanceOf(StaticBatchDynamicService::class)
+            ->and($runtime->get('hooked'))->toBe($hooked)
             ->and($resolved)->toBe(1)
             ->and($runtime->get('stable'))->toBe($stable);
     } finally {
