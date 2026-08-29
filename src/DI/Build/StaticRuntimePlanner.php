@@ -17,8 +17,9 @@ use ReflectionClass;
  * @phpstan-type AliasPlan array{kind: 'alias', target: string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
  * @phpstan-type ClassPlan array{kind: 'class', class: class-string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, postMethod: MethodPlan|null, dependencies: list<string>}
  * @phpstan-type FactoryPlan array{kind: 'factory', class: class-string, method: string|null, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
+ * @phpstan-type InvocationPlan array{kind: 'invocation', class: class-string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, invocation: MethodPlan, dependencies: list<string>}
  * @phpstan-type ValuePlan array{kind: 'value', code: string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
- * @phpstan-type ServicePlan AliasPlan|ClassPlan|FactoryPlan|ValuePlan
+ * @phpstan-type ServicePlan AliasPlan|ClassPlan|FactoryPlan|InvocationPlan|ValuePlan
  * @internal
  */
 final class StaticRuntimePlanner
@@ -270,6 +271,26 @@ final class StaticRuntimePlanner
     }
 
     /** @return ServicePlan|string */
+    private function planArrayDefinition(DefinitionGraph $graph, string $id, array $definition): array|string
+    {
+        $className = $definition[0] ?? null;
+        if (!is_string($className) || !class_exists($className)) {
+            return 'array definition requires the dynamic runtime';
+        }
+
+        $methodName = $definition[1] ?? null;
+        if (!is_string($methodName)) {
+            return $this->classPlan(
+                $graph,
+                $id,
+                ReflectionResource::getClassReflection($className),
+            );
+        }
+
+        return new StaticInvocationPlanner()->plan($graph, $id, $className, $methodName);
+    }
+
+    /** @return ServicePlan|string */
     private function planDefinition(DefinitionGraph $graph, string $id, mixed $definition): array|string
     {
         if ($graph->requiresDynamicService($id)) {
@@ -281,6 +302,9 @@ final class StaticRuntimePlanner
         }
         if ($definition instanceof FactoryDefinition) {
             return new StaticFactoryPlanner()->plan($graph, $id, $definition);
+        }
+        if ($this->isCallableArrayDefinition($definition)) {
+            return $this->planArrayDefinition($graph, $id, $definition);
         }
 
         $valuePlan = $this->valuePlan($graph, $id, $definition);
