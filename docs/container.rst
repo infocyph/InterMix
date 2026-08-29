@@ -17,6 +17,10 @@ Dependency Injection (Container)
       $c->definitions()->bind('answer', 42);  // ② register
       echo $c->get('answer');                 // ③ resolve  → 42
 
+   This dynamic ``Container`` remains the development and compatibility API.
+   For deployment, :doc:`di/compiled-resolvers` shows how ``ContainerBuilder``
+   finalizes the same graph into the generated InterMix 10 runtime.
+
 -----------------------------------
 Why bother with a DI-Container?
 -----------------------------------
@@ -81,6 +85,8 @@ Container Features
 * **Service location** – ``findByTag()`` for tagged service discovery
 * **Container locking** – ``lock()`` to prevent runtime modifications
 * **Multiple container instances** – ``Container::instance($alias)`` for isolated contexts
+* **Generated production runtime** – ``ContainerBuilder`` compiles finalized
+  graphs into a small ``ProductionContainer`` with lazy dynamic islands
 
 Container API Classification
 ----------------------------
@@ -94,6 +100,11 @@ The supported surface is grouped by intended use:
 * **Internal/tooling** – repository access, resolver selection, and callable
   parsing. Public methods in this group exist for package tooling and are marked
   ``@internal``; they are not quick-start application APIs.
+
+``has()`` answers whether an ID can resolve. Use ``definitions()->has()`` for
+explicit registration checks and ``isResolved()`` for process/container
+resolution-state checks; these three questions intentionally have different
+semantics.
 
 ----------------------------------------------------------
 Modifying behaviour with ``options()->setOptions()``
@@ -153,6 +164,7 @@ Dive into the detailed sub-chapters. Happy mixing!  Questions?  Open an issue or
 
     di/overview
     di/quickstart
+    di/development-production
     di/understanding
     di/definitions
     di/registration

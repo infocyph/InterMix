@@ -14,6 +14,7 @@ use Infocyph\InterMix\DI\Support\AliasDefinition;
 use Infocyph\InterMix\DI\Support\ContextualBindingBuilder;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\DI\Support\PendingFactoryBinding;
+use Infocyph\InterMix\Exceptions\ContainerException;
 
 final class ContainerBuilder
 {
@@ -25,8 +26,12 @@ final class ContainerBuilder
     /** @var array<string, true> */
     private array $dynamicServiceIds = [];
 
+    private bool $finalizedArtifactExists = false;
+
     /** @var list<ProductionContainer> */
     private array $productionRuntimes = [];
+
+    private bool $requiresCompilation = false;
 
     /** @var array<string, true> */
     private array $resolvedHookIds = [];
@@ -37,9 +42,16 @@ final class ContainerBuilder
     /** @var array<string, true> */
     private array $scopeLeaveHookScopes = [];
 
+    private bool $suppressMutationListener = false;
+
     public function __construct(?Container $development = null)
     {
         $this->development = $development ?? new Container();
+        $this->development->getRepository()->setConfigurationMutationListener(
+            function (): void {
+                $this->repositoryMutated();
+            },
+        );
     }
 
     public static function create(string $alias = Container::DEFAULT_ALIAS): self
@@ -109,6 +121,8 @@ final class ContainerBuilder
             'skipped' => $generated['skipped'],
             'sha256' => $generated['sha256'],
         ];
+        $this->finalizedArtifactExists = true;
+        $this->requiresCompilation = false;
 
         return $this->compilationReport;
     }
@@ -186,18 +200,26 @@ final class ContainerBuilder
 
     public function production(string $path): ProductionContainer
     {
-        return $this->rememberProductionRuntime(
-            new StaticRuntimeGenerator()->load($path, $this->development),
+        $this->beforeProductionLoad();
+
+        return $this->withoutMutationNotifications(
+            fn(): ProductionContainer => $this->rememberProductionRuntime(
+                new StaticRuntimeGenerator()->load($path, $this->development),
+            ),
         );
     }
 
     public function productionPrevalidated(string $path, string $sha256): ProductionContainer
     {
-        return $this->rememberProductionRuntime(
-            new StaticRuntimeGenerator()->loadPrevalidated(
-                $path,
-                $sha256,
-                $this->development,
+        $this->beforeProductionLoad();
+
+        return $this->withoutMutationNotifications(
+            fn(): ProductionContainer => $this->rememberProductionRuntime(
+                new StaticRuntimeGenerator()->loadPrevalidated(
+                    $path,
+                    $sha256,
+                    $this->development,
+                ),
             ),
         );
     }
@@ -278,20 +300,74 @@ final class ContainerBuilder
 
     private function beforeMutation(): void
     {
+        if ($this->finalizedArtifactExists) {
+            $this->compilationReport = null;
+            $this->requiresCompilation = true;
+        }
+
+        $this->deoptimizeProductionRuntimes();
+    }
+
+    private function beforeProductionLoad(): void
+    {
+        if ($this->requiresCompilation) {
+            throw new ContainerException(
+                'The static runtime must be recompiled after builder configuration mutation.',
+            );
+        }
+
+        $this->deoptimizeProductionRuntimes();
+    }
+
+    private function deoptimizeProductionRuntimes(): void
+    {
         if ($this->productionRuntimes === []) {
             return;
         }
 
-        foreach ($this->productionRuntimes as $runtime) {
-            $runtime->deoptimize();
-        }
+        $this->withoutMutationNotifications(function (): void {
+            foreach ($this->productionRuntimes as $runtime) {
+                $runtime->deoptimize();
+            }
+        });
         $this->productionRuntimes = [];
     }
 
     private function rememberProductionRuntime(ProductionContainer $runtime): ProductionContainer
     {
         $this->productionRuntimes[] = $runtime;
+        $this->finalizedArtifactExists = true;
 
         return $runtime;
+    }
+
+    private function repositoryMutated(): void
+    {
+        if ($this->suppressMutationListener) {
+            return;
+        }
+        if ($this->finalizedArtifactExists) {
+            $this->compilationReport = null;
+            $this->requiresCompilation = true;
+        }
+
+        $this->deoptimizeProductionRuntimes();
+    }
+
+    /**
+     * @template T
+     * @param callable(): T $callback
+     * @return T
+     */
+    private function withoutMutationNotifications(callable $callback): mixed
+    {
+        $previous = $this->suppressMutationListener;
+        $this->suppressMutationListener = true;
+
+        try {
+            return $callback();
+        } finally {
+            $this->suppressMutationListener = $previous;
+        }
     }
 }

@@ -31,7 +31,7 @@ When does InterMix create the instance?
 
 * On your first call to ``$c->get('expensive')``
 * If another service depends on it via autowiring or attribute
-* If preloading or caching is used (``resolveDefinition()`` internally)
+* If another explicit warmup path resolves the definition
 
 ---------------
 Default Rules
@@ -90,6 +90,10 @@ Best Practices 💡
 * Leave lazy loading **on** unless you're doing eager preloading
 * Use it with **scoped** services for maximum gain (e.g. per request objects)
 * Consider disabling during unit tests to catch misconfigurations early
+
+Compiling a v10 production artifact does not instantiate services. Generated
+singleton and scoped slots remain lazy until first resolution, while skipped
+definitions are resolved by lazy dynamic islands.
 
 See also:
 

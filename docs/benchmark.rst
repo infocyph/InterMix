@@ -9,7 +9,9 @@ InterMix ships with PhpBench suites at:
 - ``benchmarks/IntermixBench.php``
 - ``benchmarks/RuntimeFeaturesBench.php``
 - ``benchmarks/CompiledResolverBench.php``
+- ``benchmarks/CompiledRuntimeBench.php``
 - ``benchmarks/DefinitionCacheBench.php``
+- ``benchmarks/RequestPathBench.php``
 - ``benchmarks/FenceBench.php``
 
 Run via Composer:
@@ -17,6 +19,12 @@ Run via Composer:
 .. code-block:: bash
 
    composer ic:benchmark
+
+Run the focused InterMix 10 production-runtime matrix with:
+
+.. code-block:: bash
+
+   composer bench:intermix
 
 Other useful variants:
 
@@ -49,6 +57,8 @@ The suite covers DI paths end-to-end:
 - MacroMix instance/static invocation
 - MacroMix direct and bulk registration with mutation locking on and off
 - Compiled artifact generation, boot, prevalidated boot, and resolution
+- Generated ``ProductionContainer`` singleton/transient graphs versus dynamic,
+  compatible compiled-resolver, array-map, and native-construction baselines
 - Uncached scalar resolution and PSR-6/CacheLayer memory-cache hits
 - CacheLayer APCu hits when APCu is available
 - Definition-cache warmup at 10, 100, and 1000 entries
@@ -57,6 +67,15 @@ The suite covers DI paths end-to-end:
 - Service-provider registration path
 - Environment-conditional interface binding path
 - Manual object graph baseline (non-container)
+
+Interpretation
+--------------
+
+These are isolated microbenchmarks, not application requests-per-second or
+capacity guarantees. Compare the same subject, PHP build, extensions, machine,
+warmup and revision; inspect variance before acting on a difference. Generated
+runtime improvements should also be validated in an application-shaped request
+or job benchmark.
 
 Output columns
 --------------

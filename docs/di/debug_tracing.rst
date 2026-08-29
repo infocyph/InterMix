@@ -33,6 +33,11 @@ repository flag; the tracer and its entry/graph arrays are created only when
 tracing is explicitly requested. Dependency edges reuse the resolver's existing
 cycle-detection stacks rather than maintaining another resolution stack.
 
+Generated static paths intentionally do not allocate tracing state. Use the
+development ``Container`` plus ``validate()``, compilation reports, and tracing
+while diagnosing a graph. Dynamic compatibility islands retain normal container
+diagnostics.
+
 --------------------------
 See the Trace Output 👀
 --------------------------

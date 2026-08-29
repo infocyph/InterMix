@@ -22,6 +22,7 @@ trait InvalidatesRepositoryState
 
     public function invalidateClass(string $class): void
     {
+        $this->notifyConfigurationMutation();
         if (!$this->hasPropertyResources) {
             $properties = $this->classResource[$class]['property'] ?? null;
             $this->hasPropertyResources = is_array($properties) && $properties !== [];
@@ -43,6 +44,7 @@ trait InvalidatesRepositoryState
 
     public function invalidateDefinition(string $id): void
     {
+        $this->notifyConfigurationMutation();
         unset($this->resolved[$id], $this->resolvedSingleton[$id]);
         foreach (array_keys($this->resolvedDefinition) as $key) {
             if ($key === $id || str_starts_with($key, $id . '@env:')) {
@@ -62,6 +64,7 @@ trait InvalidatesRepositoryState
 
     public function invalidateResolutionConfiguration(): void
     {
+        $this->notifyConfigurationMutation();
         $this->resolved = [];
         $this->resolvedSingleton = [];
         $this->resolvedDefinition = [];

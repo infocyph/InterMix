@@ -22,6 +22,9 @@ abstract class ProductionContainer implements ContainerInterface
 
     private ?Container $fallback;
 
+    /** @var array<string, mixed> */
+    private array $fallbackBridgeDefinitions = [];
+
     /**
      * @var array<string, array{exists: bool, definition: mixed, lifetime: LifetimeEnum, tags: array<int, string>}>
      */
@@ -82,9 +85,9 @@ abstract class ProductionContainer implements ContainerInterface
             );
         }
 
-        $this->restoreFallbackDefinitions($this->fallback);
-        $this->transferCompiledState($this->fallback);
         $this->deoptimized = true;
+        $overridden = $this->restoreFallbackDefinitions($this->fallback);
+        $this->transferCompiledState($this->fallback, $overridden);
     }
 
     /** @param array<string, mixed> $instances */
@@ -206,7 +209,7 @@ abstract class ProductionContainer implements ContainerInterface
     }
 
     /**
-     * @param string|array{0:string,1:string}|Closure|callable|null $spec
+     * @param string|array<array-key, mixed>|Closure|callable|null $spec
      * @param array<int|string, mixed> $parameters
      */
     final public function resolveNow(
@@ -222,6 +225,9 @@ abstract class ProductionContainer implements ContainerInterface
             if ($this->resolveFreshCompiledSpec($spec, $result)) {
                 return $result;
             }
+        }
+        if (is_array($spec) && (count($spec) !== 2 || !array_is_list($spec))) {
+            return $this->dynamic()->resolveNow($spec, $parameters);
         }
         if (is_array($spec) && !is_string($spec[0])) {
             if (!is_callable($spec)) {
@@ -416,6 +422,7 @@ abstract class ProductionContainer implements ContainerInterface
                 fn(): mixed => $this->get($id),
                 LifetimeEnum::Transient,
             );
+            $this->fallbackBridgeDefinitions[$id] = $fallback->getRepository()->getFunctionDefinition($id);
         }
     }
 
@@ -444,9 +451,19 @@ abstract class ProductionContainer implements ContainerInterface
         return $this->freshCompiledInvocation($spec[0], $spec[1], $result);
     }
 
-    private function restoreFallbackDefinitions(Container $fallback): void
+    /** @return array<string, true> */
+    private function restoreFallbackDefinitions(Container $fallback): array
     {
+        $overridden = [];
+        $repository = $fallback->getRepository();
         foreach ($this->fallbackDefinitions as $id => $snapshot) {
+            if (($this->fallbackBridgeDefinitions[$id] ?? null)
+                !== $repository->getFunctionDefinition($id)
+            ) {
+                $overridden[$id] = true;
+
+                continue;
+            }
             if (!$snapshot['exists']) {
                 $fallback->unbind($id);
 
@@ -460,6 +477,8 @@ abstract class ProductionContainer implements ContainerInterface
                 $snapshot['tags'],
             );
         }
+
+        return $overridden;
     }
 
     private function runtimeIslandResolver(): RuntimeIslandResolver
@@ -489,7 +508,8 @@ abstract class ProductionContainer implements ContainerInterface
         }
     }
 
-    private function transferCompiledState(?Container $fallback): void
+    /** @param array<string, true> $overridden */
+    private function transferCompiledState(?Container $fallback, array $overridden = []): void
     {
         if (!$fallback instanceof Container) {
             return;
@@ -497,6 +517,9 @@ abstract class ProductionContainer implements ContainerInterface
 
         $repository = $fallback->getRepository();
         foreach ($this->compiledSingletonValues() as $id => $value) {
+            if (isset($overridden[$id])) {
+                continue;
+            }
             $repository->setResolved($id, $value);
             $repository->markResolved($id);
         }
@@ -505,7 +528,7 @@ abstract class ProductionContainer implements ContainerInterface
         for ($scope = $this->scope; $scope instanceof ScopeState; $scope = $scope->parent) {
             foreach ($scope->resolved as $slot => $value) {
                 $id = $ids[$slot] ?? null;
-                if (!is_string($id)) {
+                if (!is_string($id) || isset($overridden[$id])) {
                     continue;
                 }
                 $repository->setResolvedScoped($scope->name, $id, $value);

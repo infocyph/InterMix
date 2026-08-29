@@ -36,6 +36,7 @@ trait ResolvesMissingServices
     public function onMissing(callable $hook): void
     {
         $this->checkIfLocked();
+        $this->notifyConfigurationMutation();
         $this->onMissingHooks[] = $hook;
     }
 

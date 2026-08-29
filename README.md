@@ -105,6 +105,10 @@ container injection is enabled or disabled.
 
 See full container guide at: [https://docs.infocyph.com/projects/intermix/di/overview.html](https://docs.infocyph.com/projects/intermix/di/overview.html)
 
+For consuming applications, the [development and production workflow](https://docs.infocyph.com/projects/intermix/di/development-production.html)
+explains which runtime to select, when to compile, and how to deploy the
+generated artifact safely.
+
 ### Dynamic Macros
 
 ```php
@@ -129,11 +133,40 @@ $report = $c->definitions()->warmDefinitionCache();
 
 Only null, scalar, and recursively safe array values are persisted. Runtime
 service objects remain in the container's in-memory lifetime store. CacheLayer
-3.1 is recommended and integration-tested, but remains optional; any PSR-6 pool
+3.2 is recommended and integration-tested, but remains optional; any PSR-6 pool
 is supported. Cache failures fail open by default, and the optional generation
 isolates deployments without clearing the caller-owned pool.
 
-### Compiled Resolvers
+### InterMix 10 Production Runtime
+
+Use `ContainerBuilder` when production should execute a finalized generated
+container instead of the dynamic resolver graph:
+
+```php
+use Infocyph\InterMix\DI\ContainerBuilder;
+
+$builder = ContainerBuilder::create()
+    ->setEnvironment('production')
+    ->singleton(Logger::class, JsonLogger::class)
+    ->singleton(Mailer::class);
+
+// Build/release stage.
+$path = __DIR__ . '/var/intermix.production.php';
+$report = $builder->compile($path);
+
+// Runtime stage. The digest comes from trusted deployment metadata.
+$container = $builder->productionPrevalidated($path, $report['sha256']);
+$mailer = $container->get(Mailer::class);
+```
+
+Known dependency edges use generated direct calls. Closures and other genuinely
+runtime-dependent behavior stay in narrow fallback islands. The manifest binds
+the artifact to its compiled environment; a mismatch fails before the PHP
+artifact is loaded. If builder configuration changes after compilation, compile
+again before loading production. Use separate builders for simultaneously active
+production runtimes.
+
+### Dynamic Container Compiled Resolvers
 
 ```php
 use Infocyph\InterMix\DI\Support\FactoryDefinition;
@@ -167,6 +200,8 @@ disables the active map until it is rebuilt. Ordinary closures and
 See the [compiled resolver guide](https://docs.infocyph.com/projects/InterMix/en/latest/di/compiled-resolvers.html).
 
 ### Closure Serialization
+
+Install the optional adapter first with `composer require opis/closure`.
 
 ```php
 use Infocyph\InterMix\Serializer\ClosureSerializer;

@@ -42,6 +42,9 @@ class Repository
     /** @var array<string, array<string, string>> */
     private array $conditionalBindings = [];
 
+    /** @var (Closure(): void)|null */
+    private ?Closure $configurationMutationListener = null;
+
     /** @var array<string, array<string, mixed>> */
     private array $contextualBindings = [];
 
@@ -492,6 +495,15 @@ class Repository
     }
 
     /**
+     * @return array<int, string>
+     * @internal
+     */
+    public function getResolvedHookIds(): array
+    {
+        return array_keys($this->onResolvedHooks);
+    }
+
+    /**
      * @return array<string, ClassResolution>
      */
     public function getResolvedResource(): array
@@ -516,9 +528,27 @@ class Repository
         return $this->resolvedSingleton[$key] ?? null;
     }
 
+    /**
+     * @return array<int, string>
+     * @internal
+     */
+    public function getResolvingHookIds(): array
+    {
+        return array_keys($this->onResolvingHooks);
+    }
+
     public function getScope(): string
     {
         return $this->currentScope;
+    }
+
+    /**
+     * @return array<int, string>
+     * @internal
+     */
+    public function getScopeLeaveHookScopes(): array
+    {
+        return array_keys($this->onScopeLeaveHooks);
     }
 
     public function hasClosureResource(string $alias): bool
@@ -661,9 +691,18 @@ class Repository
         $this->resolvedIds[$id] = true;
     }
 
+    /** @internal */
+    public function notifyConfigurationMutation(): void
+    {
+        if ($this->configurationMutationListener instanceof Closure) {
+            ($this->configurationMutationListener)();
+        }
+    }
+
     public function onResolved(string $id, callable $hook): void
     {
         $this->checkIfLocked();
+        $this->notifyConfigurationMutation();
         $this->hasHooks = true;
         $this->onResolvedHooks[$id][] = $hook;
     }
@@ -671,6 +710,7 @@ class Repository
     public function onResolving(string $id, callable $hook): void
     {
         $this->checkIfLocked();
+        $this->notifyConfigurationMutation();
         $this->hasHooks = true;
         $this->onResolvingHooks[$id][] = $hook;
     }
@@ -678,6 +718,7 @@ class Repository
     public function onScopeLeave(string $scope, callable $hook): void
     {
         $this->checkIfLocked();
+        $this->notifyConfigurationMutation();
         $this->hasHooks = true;
         $this->onScopeLeaveHooks[$scope][] = $hook;
     }
@@ -746,6 +787,15 @@ class Repository
         $this->compiledResolverIds = $ids;
     }
 
+    /**
+     * @param (Closure(): void)|null $listener
+     * @internal
+     */
+    public function setConfigurationMutationListener(?Closure $listener): void
+    {
+        $this->configurationMutationListener = $listener;
+    }
+
     public function setContextualBinding(string $consumer, string $dependency, mixed $give): void
     {
         $this->checkIfLocked();
@@ -811,6 +861,15 @@ class Repository
         if ($generation === '') {
             throw new ContainerException('Definition cache generation cannot be empty.');
         }
+
+        if ($this->definitionCache === $cache
+            && ($generation === null || $generation === $this->definitionCacheGeneration)
+            && $this->definitionCacheFailOpen === $failOpen
+        ) {
+            return;
+        }
+
+        $this->notifyConfigurationMutation();
 
         $this->definitionCache = $cache;
         $this->definitionCacheFailOpen = $failOpen;

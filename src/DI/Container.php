@@ -382,7 +382,7 @@ final class Container implements ContainerInterface, ArrayAccess
     }
 
     /**
-     * @param string|array{0:string,1:string}|Closure|callable|null $spec
+     * @param string|array<array-key, mixed>|Closure|callable|null $spec
      * @param array<int|string, mixed> $parameters
      */
     public function resolveNow(

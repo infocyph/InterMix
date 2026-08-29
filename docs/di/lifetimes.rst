@@ -66,6 +66,8 @@ Best Practices 💡
 * Don’t overuse ``Transient`` unless necessary — caching saves performance.
 * Use ``Scoped`` with request-specific data or tenant-aware resolution.
 * Each container alias (``Container::instance('xyz')``) has its own Singleton set.
+* Generated production slots preserve the same singleton/scoped/transient
+  semantics across compiled-to-dynamic dependency edges and safe deoptimization.
 
 -----------
 Summary 📚

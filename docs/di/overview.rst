@@ -18,8 +18,8 @@ Why another container?
 * **Performant** – static reflection cache, parameter-resolution planning cache,
   optional PSR-6 cache,
   lazy services by default
-* **Production ready** – env-specific bindings, scoped lifetimes,
-  preload file generator
+* **Production ready** – generated ``ProductionContainer`` runtime,
+  env-specific bindings, scoped lifetimes, preload file generator
 * **Debuggable** – built-in tracer (node / verbose)
 
 15-second “hello world”
@@ -151,13 +151,15 @@ User closure vs. lazy
   small internal initializer and postpones construction until the first real
   ``get()``. This implementation type is not a public attribute or application API.
 
-Concurrency note
-~~~~~~~~~~~~~~~~
+Persistent-worker note
+~~~~~~~~~~~~~~~~~~~~~~
 
-Reflection metadata lives in a **static cache**. In common *process-per-request*
-set-ups (PHP-FPM, CLI), this is safe.
-In rare multi-thread situations (Swoole, ReactPHP, pthreads) you might clear or
-synchronise that cache manually.
+Reflection metadata is immutable and may be reused process-wide. Resolved
+singletons and scopes belong to a container instance. In long-running workers,
+keep request/job state in short-lived scopes and use isolated containers for
+truly concurrent execution contexts; InterMix does not provide automatic
+Fiber- or coroutine-local storage. Swoole and ReactPHP event loops are not, by
+themselves, PHP threads.
 
 Parameter resolution cache note
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -169,15 +171,22 @@ Runtime object reuse is controlled by the container lifetime layer: Singleton, S
 Typical lifecycle
 -----------------
 
-1. **Create** a container (alias per app / test / worker)
-2. **Bind & register** – definitions, classes, methods, properties
-3. **Tune options** – autowire on/off, attributes, environment, cache …
-4. **Resolve** with ``get() / call() / make() / getReturn()``
-5. *(optional)* **Lock** the container to freeze configuration
+1. **Configure** a ``ContainerBuilder`` (or a dynamic ``Container`` for
+   development/compatibility).
+2. **Bind & register** definitions, classes, methods and properties.
+3. **Tune options** such as autowiring, attributes and environment.
+4. **Validate and compile** the finalized graph during build/deployment.
+5. **Load** ``ProductionContainer`` once at process bootstrap and resolve from it.
+
+The dynamic-only path may instead resolve directly and optionally call
+``lock()``. It remains fully supported, but it does not provide the v10 static
+hot path.
 
 Next steps
 ----------
 
 If you like to learn by **code**, jump straight to :doc:`quickstart`.
+For application bootstrap and deployment, continue with
+:doc:`development-production`.
 Prefer concepts first? start with :doc:`understanding`.
 Either way – **happy mixing!**

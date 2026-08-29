@@ -60,6 +60,27 @@ it('keeps hooked singleton services compiled and dispatches hooks only on cache 
     }
 });
 
+it('captures hooks registered through a retained development container', function () {
+    $events = [];
+    $builder = ContainerBuilder::create(uniqid('static_hook_development_'));
+    $development = $builder->development();
+    $builder->singleton('service', StaticHookCompiledService::class);
+    $development->onResolved('service', function (string $id) use (&$events): void {
+        $events[] = $id;
+    });
+    $path = staticLifecycleHookArtifactPath();
+
+    try {
+        $report = $builder->compile($path);
+        $runtime = $builder->productionPrevalidated($path, $report['sha256']);
+
+        expect($runtime->get('service'))->toBeInstanceOf(StaticHookCompiledService::class)
+            ->and($events)->toBe(['service']);
+    } finally {
+        removeStaticLifecycleHookArtifact($path);
+    }
+});
+
 it('dispatches compiled transient value hooks for every resolution', function () {
     $events = [];
     $builder = ContainerBuilder::create(uniqid('static_hook_value_'));

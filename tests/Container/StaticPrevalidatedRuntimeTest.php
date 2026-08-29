@@ -55,3 +55,43 @@ it('rejects malformed and mismatched deployment digests', function () {
         removeStaticPrevalidatedArtifact($path);
     }
 });
+
+it('requires recompilation after environment mutation', function () {
+    $builder = ContainerBuilder::create(uniqid('static_prevalidated_environment_'));
+    $builder->setEnvironment('production')
+        ->singleton('service', StaticPrevalidatedService::class);
+    $path = staticPrevalidatedArtifactPath();
+
+    try {
+        $report = $builder->compile($path);
+        $builder->setEnvironment('staging');
+
+        expect(fn() => $builder->production($path))
+            ->toThrow(ContainerException::class, 'recompiled')
+            ->and(fn() => $builder->productionPrevalidated($path, $report['sha256']))
+            ->toThrow(ContainerException::class, 'recompiled');
+    } finally {
+        removeStaticPrevalidatedArtifact($path);
+    }
+});
+
+it('validates the artifact environment when loading in a fresh process builder', function () {
+    $compiler = ContainerBuilder::create(uniqid('static_prevalidated_environment_source_'));
+    $compiler->setEnvironment('production')
+        ->singleton('service', StaticPrevalidatedService::class);
+    $path = staticPrevalidatedArtifactPath();
+
+    try {
+        $report = $compiler->compile($path);
+        $loader = ContainerBuilder::create(uniqid('static_prevalidated_environment_loader_'));
+        $loader->setEnvironment('staging')
+            ->singleton('service', StaticPrevalidatedService::class);
+
+        expect(fn() => $loader->production($path))
+            ->toThrow(ContainerException::class, 'environment')
+            ->and(fn() => $loader->productionPrevalidated($path, $report['sha256']))
+            ->toThrow(ContainerException::class, 'environment');
+    } finally {
+        removeStaticPrevalidatedArtifact($path);
+    }
+});

@@ -64,7 +64,8 @@ final class StaticRuntimeGenerator
 
     public function load(string $filePath, ?Container $fallback = null): ProductionContainer
     {
-        $this->validateManifest($filePath);
+        $manifest = $this->validateManifest($filePath);
+        $this->assertEnvironmentMatches($manifest, $fallback);
 
         return $this->attachFallback($this->loadRuntime($filePath), $fallback);
     }
@@ -88,11 +89,27 @@ final class StaticRuntimeGenerator
                 'Prevalidated static runtime does not match the active deployment digest.',
             );
         }
+        $this->assertEnvironmentMatches($manifest, $fallback);
 
         return $this->attachFallback($this->loadRuntime($filePath), $fallback);
     }
 
-    /** @param array{abi: int, sha256: string} $manifest */
+    /** @param array{abi: int, sha256: string, environment: ?string} $manifest */
+    private function assertEnvironmentMatches(array $manifest, ?Container $fallback): void
+    {
+        if (!$fallback instanceof Container) {
+            return;
+        }
+
+        $environment = $fallback->getRepository()->getEnvironment();
+        if ($manifest['environment'] !== $environment) {
+            throw new ContainerException(
+                'Static runtime environment does not match the configured container environment.',
+            );
+        }
+    }
+
+    /** @param array{abi: int, sha256: string, environment: ?string} $manifest */
     private function assertManifestAbi(array $manifest): void
     {
         if ($manifest['abi'] !== self::ARTIFACT_ABI) {
@@ -139,7 +156,7 @@ final class StaticRuntimeGenerator
         return $filePath . self::MANIFEST_SUFFIX;
     }
 
-    /** @return array{abi: int, sha256: string} */
+    /** @return array{abi: int, sha256: string, environment: ?string} */
     private function readManifest(string $filePath): array
     {
         $manifestPath = $this->manifestPath($filePath);
@@ -159,16 +176,23 @@ final class StaticRuntimeGenerator
         }
         if (!is_array($manifest)
             || !isset($manifest['abi'], $manifest['sha256'])
+            || !array_key_exists('environment', $manifest)
             || !is_int($manifest['abi'])
             || !is_string($manifest['sha256'])
+            || (!is_string($manifest['environment']) && $manifest['environment'] !== null)
         ) {
             throw new ContainerException('Static runtime manifest has an invalid shape.');
         }
 
-        return ['abi' => $manifest['abi'], 'sha256' => $manifest['sha256']];
+        return [
+            'abi' => $manifest['abi'],
+            'sha256' => $manifest['sha256'],
+            'environment' => $manifest['environment'],
+        ];
     }
 
-    private function validateManifest(string $filePath): void
+    /** @return array{abi: int, sha256: string, environment: ?string} */
+    private function validateManifest(string $filePath): array
     {
         $manifest = $this->readManifest($filePath);
         $this->assertManifestAbi($manifest);
@@ -177,6 +201,8 @@ final class StaticRuntimeGenerator
         if (!is_string($hash) || !hash_equals($manifest['sha256'], $hash)) {
             throw new ContainerException('Static runtime artifact hash does not match its manifest.');
         }
+
+        return $manifest;
     }
 
     /**

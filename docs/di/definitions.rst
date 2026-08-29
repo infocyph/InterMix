@@ -167,6 +167,11 @@ Finish the pending binding with exactly one of ``singleton()``, ``scoped()``, or
 Lifetimes apply **equally** to class-string bindings – InterMix transparently converts them
 into internal lazy initialisers.
 
+When the graph is finalized through ``ContainerBuilder``, compatible
+definitions become generated slots. Ordinary closures and direct factories stay
+as explicit dynamic islands because their captured runtime state cannot be
+safely converted into PHP source.
+
 -----------------------------------------------
 4.  Tags – collect related services
 -----------------------------------------------

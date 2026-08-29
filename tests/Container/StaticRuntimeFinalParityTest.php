@@ -39,6 +39,7 @@ it('preserves compiled call error semantics for missing methods', function () {
     $developmentBuilder->singleton('callable', StaticFinalParityCallable::class);
 
     $developmentError = null;
+
     try {
         $developmentBuilder->development()->call('callable', 'missing');
     } catch (ContainerException $exception) {
@@ -85,6 +86,7 @@ it('keeps arbitrary closure invocation in a narrow dynamic island with compiled 
 it('preserves callable parser errors across development and production fallback', function () {
     $developmentBuilder = ContainerBuilder::create(uniqid('final_dev_parser_'));
     $developmentError = null;
+
     try {
         $developmentBuilder->development()->resolveNow(['StaticFinalParityMissingClass', 'run']);
     } catch (ContainerException $exception) {
@@ -102,6 +104,34 @@ it('preserves callable parser errors across development and production fallback'
         expect($developmentError)->toBeInstanceOf(ContainerException::class)
             ->and(fn() => $runtime->resolveNow(['StaticFinalParityMissingClass', 'run']))->toThrow(
                 ContainerException::class,
+                $developmentError->getMessage(),
+            );
+    } finally {
+        removeStaticFinalParityArtifact($path);
+    }
+});
+
+it('preserves malformed array callable errors without production warnings', function () {
+    $development = ContainerBuilder::create(uniqid('final_dev_array_parser_'))->development();
+    $developmentError = null;
+
+    try {
+        $development->resolveNow([]);
+    } catch (InvalidArgumentException $exception) {
+        $developmentError = $exception;
+    }
+
+    $builder = ContainerBuilder::create(uniqid('final_prod_array_parser_'));
+    $builder->singleton(StaticFinalParityDependency::class);
+    $path = staticFinalParityArtifactPath();
+
+    try {
+        $report = $builder->compile($path);
+        $runtime = $builder->productionPrevalidated($path, $report['sha256']);
+
+        expect($developmentError)->toBeInstanceOf(InvalidArgumentException::class)
+            ->and(fn() => $runtime->resolveNow([]))->toThrow(
+                InvalidArgumentException::class,
                 $developmentError->getMessage(),
             );
     } finally {

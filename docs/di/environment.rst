@@ -67,6 +67,13 @@ Switch dynamically:
 
    $c->options()->setEnvironment('debug');
 
+For a generated production runtime, choose the environment before
+``ContainerBuilder::compile()``. The environment is recorded in the companion
+manifest, and both production loaders reject a fallback graph configured for a
+different environment. Changing it after finalization deoptimizes an active
+runtime and requires recompilation before that builder can load the artifact
+again.
+
 -----------------------------
 Priority & Resolution Order
 -----------------------------
@@ -88,6 +95,7 @@ Best Practices 💡
 * Use environment bindings for **external systems** (payment, mail, auth).
 * Avoid overusing for things easily toggled with config values.
 * Prefer strings like ``"prod"``, ``"test"``, ``"local"`` – but any name is allowed.
+* Use one finalized artifact per environment when bindings or metadata differ.
 
 You can also override definition metadata (lifetime/tags) per environment:
 

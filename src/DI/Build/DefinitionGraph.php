@@ -92,9 +92,18 @@ final readonly class DefinitionGraph
             ),
             attributeTypes: array_fill_keys($repository->getRegisteredAttributeTypes(), true),
             dynamicServiceIds: array_fill_keys($dynamicServiceIds, true),
-            resolvingHookIds: array_fill_keys($resolvingHookIds, true),
-            resolvedHookIds: array_fill_keys($resolvedHookIds, true),
-            scopeLeaveHookScopes: array_fill_keys($scopeLeaveHookScopes, true),
+            resolvingHookIds: array_fill_keys([
+                ...$resolvingHookIds,
+                ...$repository->getResolvingHookIds(),
+            ], true),
+            resolvedHookIds: array_fill_keys([
+                ...$resolvedHookIds,
+                ...$repository->getResolvedHookIds(),
+            ], true),
+            scopeLeaveHookScopes: array_fill_keys([
+                ...$scopeLeaveHookScopes,
+                ...$repository->getScopeLeaveHookScopes(),
+            ], true),
             environment: $repository->getEnvironment(),
             defaultMethod: $repository->getDefaultMethod(),
             injectionEnabled: !$repository->container()->getCurrentResolver() instanceof GenericCall,

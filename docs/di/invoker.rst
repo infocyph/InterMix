@@ -59,6 +59,8 @@ the container so constructor and method dependencies can be resolved.
 
 **3. Serialize and restore a closure**
 
+This optional example requires ``composer require opis/closure``.
+
 .. code-block:: php
 
    use Infocyph\InterMix\Serializer\ClosureSerializer;

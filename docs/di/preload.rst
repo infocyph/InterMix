@@ -72,5 +72,12 @@ Automate it as part of your deployment pipeline or cache warm-up.
 The generator is intentionally final. Configure the container definitions
 before calling ``generate()`` to control which known class files are emitted.
 
+The class preload file and the InterMix 10 generated container are separate
+artifacts: preload makes selected PHP classes available to OPcache, while the
+generated container specializes construction and resolution. Deploy and
+regenerate both when their inputs change; do not add the generated container to
+the class scanner as a substitute for loading it through ``production()`` or
+``productionPrevalidated()``.
+
 
 Next stop » :doc:`debug_tracing`

@@ -9,6 +9,69 @@ stage. They replace only a service's construction recipe. Lifetimes, scopes,
 hooks, tracing, cycle detection, and normal container error handling remain in
 the regular resolution lifecycle.
 
+InterMix 10 also provides a finalized production runtime. Use
+``ContainerBuilder`` for the maximum-performance generated container described
+below. The later ``Container::compileTo()`` sections document the compatible
+dynamic-container resolver map, which remains available when applications need
+the mutable ``Container`` API at runtime.
+
+InterMix 10 Production Runtime
+------------------------------
+
+Configure the graph through ``ContainerBuilder``. Development can use the
+underlying dynamic container without compilation:
+
+.. code-block:: php
+
+   use Infocyph\InterMix\DI\ContainerBuilder;
+
+   $builder = ContainerBuilder::create()
+       ->setEnvironment('production')
+       ->singleton(Logger::class, JsonLogger::class)
+       ->singleton(Mailer::class);
+
+   $development = $builder->development();
+
+Compile during the build or release stage, then load the generated runtime from
+the immutable release:
+
+.. code-block:: php
+
+   $path = __DIR__ . '/bootstrap/cache/intermix.production.php';
+   $report = $builder->compile($path);
+
+   $container = $builder->productionPrevalidated(
+       $path,
+       $report['sha256'],
+   );
+
+``production($path)`` verifies the artifact with ``hash_file()`` before loading.
+``productionPrevalidated($path, $sha256)`` is for deployment systems that already
+verified the immutable artifact and obtained its digest from trusted deployment
+metadata. It validates the manifest and expected digest without hashing the PHP
+file on every process start.
+
+The generated runtime specializes known service IDs, lifetimes, scopes, tags,
+deterministic injection, and known invocation paths. Closures, custom runtime
+attributes, arbitrary callables, and unregistered autowirable classes remain
+available through lazy compatibility islands. Production never compiles because
+an artifact is missing.
+
+The artifact manifest records the environment selected during compilation.
+Loading it against a differently configured builder fails before executing the
+artifact. Any builder configuration mutation after compilation invalidates the
+finalization and requires another ``compile()`` before production can be loaded.
+This includes mutations performed through a manager or development-container
+reference obtained earlier; an already active runtime deoptimizes before the
+new configuration becomes authoritative.
+Loading a second production runtime from one builder first deoptimizes the prior
+runtime so fallback bridges cannot chain across runtimes. Use independent
+builders when several production containers must remain active simultaneously.
+
+The existing ``Container`` remains the fully dynamic/development API. Choose the
+runtime model at the composition root; application services should normally
+depend on PSR-11 or on their concrete dependencies, not on ``ContainerBuilder``.
+
 Build And Load
 --------------
 

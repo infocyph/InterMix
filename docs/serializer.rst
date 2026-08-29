@@ -8,6 +8,15 @@ InterMix serializes only ``Closure`` objects, because ordinary PHP values alread
 have native serialization facilities. Resource serialization is application or
 specialized-package responsibility.
 
+Closure serialization is optional in InterMix 10. Install its runtime adapter
+before using this page's APIs:
+
+.. code-block:: bash
+
+   composer require opis/closure
+
+Applications that do not serialize closures do not load or execute Opis code.
+
 Unsigned Closures
 =================
 

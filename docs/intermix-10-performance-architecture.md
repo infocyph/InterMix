@@ -56,9 +56,9 @@ This checker is authoritative for the InterMix 10 standalone implementation.
 - [x] 21. Compile known `call()`, `getReturn()`, fresh `make()`, class-only/explicit-method `resolveNow()`, `[Class::class, 'method']` definitions and statically representable invocation parameters; arbitrary runtime callables remain compatibility islands.
 - [x] 22. Support arbitrary dynamic invocation/service fallback without deoptimizing unrelated known compiled services.
 - [x] 23. Keep Closure definitions and `DirectFactory` as explicit dynamic islands with compiled-ID bridges preserving singleton/scoped identity across compiled↔dynamic edges.
-- [x] 24. Implement explicit production deoptimization for configuration mutation with original definitions restored and compiled singleton/scoped identity transferred.
+- [x] 24. Implement explicit production deoptimization for configuration mutation with original definitions restored and compiled singleton/scoped identity transferred; repeated loads replace fallback bridges safely and post-finalization mutation through the builder, a retained manager, or the development container requires recompilation.
 - [x] 25. Separate compiler/diagnostic metadata into a sidecar; the hot artifact contains generated runtime execution code only.
-- [x] 26. Perform atomic generation and build/deployment validation with ABI/SHA-256 metadata; prevalidated production loading avoids request-time `hash_file()` work.
+- [x] 26. Perform atomic generation and build/deployment validation with ABI/SHA-256 and compiled-environment metadata; prevalidated production loading avoids request-time `hash_file()` work.
 - [x] 27. Finalize the constant-folding/transient-inlining decision: no additional speculative inlining pass is added without stable representative evidence of a sustained end-to-end win.
 - [x] 28. Benchmark generated boundary representations. The immutable ID→slot candidate showed only a noisy nominal advantage, so the simpler generated string `match` boundary is retained until stable-environment measurements justify changing it.
 - [x] 29. Keep Repository/managers/reflection resolver machinery entirely out of fully static generated artifacts; instantiate the optimized dynamic engine lazily only when a declared compatibility island is exercised.
@@ -76,6 +76,7 @@ This checker is authoritative for the InterMix 10 standalone implementation.
 - [x] Project `composer.json` does not override PHPForge `ic:*` commands.
 - [x] No temporary diagnostic workflow remains.
 - [x] Fully static artifact tests verify the generated artifact contains no `Reflection`, `Repository`, `RuntimeIslandResolver`, `ParameterResolver`, `ClassResolution` or `InjectedCall` machinery.
+- [x] Public documentation provides a dedicated development-versus-production workflow for consuming applications and frameworks.
 - [x] Final InterMix-only diff/release decision is complete; downstream request-level validation is tracked separately.
 
 ## 1. Objective
@@ -411,6 +412,10 @@ Deoptimization preserves correctness by:
 
 After deoptimization, correctness takes priority over compiled speed.
 
+Loading another production runtime from the same builder deoptimizes the prior
+runtime before installing replacement fallback bridges. A builder mutation after
+an artifact was finalized requires recompilation before another production load.
+
 ## 24. `get()`, `has()`, `make()`, `call()`, `resolveNow()` and `getReturn()`
 
 Known service retrieval uses generated dispatch.
@@ -443,6 +448,7 @@ Build/deployment validates:
 - contextual/environment inconsistencies
 - circular dependencies
 - artifact ABI/digest compatibility
+- compiled-environment compatibility with the configured runtime graph
 
 Production never performs expensive compilation because an artifact is absent on a live request.
 

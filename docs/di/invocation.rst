@@ -94,6 +94,11 @@ Tip: These helpers respect the **same options** (autowiring, attributes,
 environment overrides) you configured on the container—so your wiring rules
 apply everywhere.
 
+``ProductionContainer`` specializes known compiled class and method targets.
+Arbitrary callables, runtime parameters, and malformed specs are delegated to
+the dynamic implementation so return values and exceptions retain ``Container``
+parity.
+
 -------------------------------------------------------
 Reference Table
 -------------------------------------------------------
