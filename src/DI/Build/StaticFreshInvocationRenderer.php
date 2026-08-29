@@ -8,8 +8,8 @@ use Infocyph\InterMix\DI\Support\LifetimeEnum;
 
 /**
  * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
- * @phpstan-type PropertyPlan array{declaring: class-string, property: string, static: bool, argument: ServiceArgument}
- * @phpstan-type MethodPlan array{method: string, arguments: list<ServiceArgument>, dependencies: list<string>}
+ * @phpstan-type PropertyPlan array{declaring: class-string, property: string, static: bool, argument: ServiceArgument|null, runtime?: 'attribute'|'assign'}
+ * @phpstan-type MethodPlan array{method: string, arguments: list<ServiceArgument>, dependencies: list<string>, runtime?: bool}
  * @phpstan-type AliasPlan array{kind: 'alias', target: string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
  * @phpstan-type ClassPlan array{kind: 'class', class: class-string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, postMethod: MethodPlan|null, dependencies: list<string>}
  * @phpstan-type FactoryPlan array{kind: 'factory', class: class-string, method: string|null, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
@@ -123,22 +123,10 @@ final class StaticFreshInvocationRenderer
         $class = '\\' . ltrim($recipe['class'], '\\');
         $source = "    private function fi{$index}(mixed &\$result): bool\n    {\n";
         $source .= '        $instance = new ' . $class . '(' . implode(', ', $constructorArguments) . ");\n";
-        foreach ($recipe['properties'] as $property) {
-            $value = $this->argumentExpression($property['argument'], $slots);
-            if ($property['static']) {
-                $declaring = '\\' . ltrim($property['declaring'], '\\');
-                $source .= '        ' . $declaring . '::$' . $property['property'] . " = {$value};\n";
-            } else {
-                $source .= '        $instance->' . $property['property'] . " = {$value};\n";
-            }
-        }
-
-        $methodArguments = [];
-        foreach ($recipe['invocation']['arguments'] as $argument) {
-            $methodArguments[] = $this->argumentExpression($argument, $slots);
-        }
-        $source .= '        $result = $instance->' . $recipe['invocation']['method']
-            . '(' . implode(', ', $methodArguments) . ");\n";
+        $islands = new StaticRuntimeIslandRenderer();
+        $source .= $islands->propertyStatements($recipe['properties'], $slots);
+        $method = $islands->methodExpression($recipe['class'], $recipe['invocation'], $slots);
+        $source .= "        \$result = {$method};\n";
         $source .= "\n        return true;\n";
 
         return $source . "    }\n\n";
