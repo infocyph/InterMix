@@ -124,6 +124,10 @@ class PropertyResolver
             return true;
         }
 
+        if ($this->repository->getClassResource() === []) {
+            return false;
+        }
+
         for ($current = $class; $current instanceof ReflectionClass; $current = $current->getParentClass()) {
             $properties = $this->repository->getClassResourceFor($current->getName())['property'] ?? null;
             if (is_array($properties) && $properties !== []) {
