@@ -214,7 +214,7 @@ abstract class ProductionContainer implements ContainerInterface
         foreach ($this->compiledIds() as $id) {
             $fallback->bindFactory(
                 $id,
-                fn(Container $_container): mixed => $this->get($id),
+                fn(): mixed => $this->get($id),
                 LifetimeEnum::Transient,
             );
         }
