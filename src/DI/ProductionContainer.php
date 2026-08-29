@@ -165,6 +165,13 @@ abstract class ProductionContainer implements ContainerInterface
 
     final public function leaveScope(): static
     {
+        $scope = $this->scope->name;
+        if ($this->requiresScopeLeaveHook($scope) && !$this->fallback instanceof Container) {
+            throw new ContainerException(
+                "Compiled scope '$scope' requires its runtime scope-leave hook graph.",
+            );
+        }
+
         $this->fallback?->leaveScope();
         $parent = $this->scope->parent;
         $this->scope = $parent ?? new ScopeState('root');
@@ -253,6 +260,16 @@ abstract class ProductionContainer implements ContainerInterface
         return [];
     }
 
+    final protected function dispatchCompiledResolvedHooks(string $id, mixed $value): void
+    {
+        $this->hookRuntime($id)->getRepository()->dispatchResolvedHooks($id, $value);
+    }
+
+    final protected function dispatchCompiledResolvingHooks(string $id): void
+    {
+        $this->hookRuntime($id)->getRepository()->dispatchResolvingHooks($id);
+    }
+
     final protected function fallbackGet(string $id): mixed
     {
         return $this->dynamic()->get($id);
@@ -281,6 +298,11 @@ abstract class ProductionContainer implements ContainerInterface
     final protected function isDeoptimized(): bool
     {
         return $this->deoptimized;
+    }
+
+    protected function requiresScopeLeaveHook(string $scope): bool
+    {
+        return false;
     }
 
     /** @return array<int, string> */
@@ -335,6 +357,17 @@ abstract class ProductionContainer implements ContainerInterface
         $this->fallback = $fallback;
 
         return $fallback;
+    }
+
+    private function hookRuntime(string $id): Container
+    {
+        if ($this->fallback instanceof Container) {
+            return $this->fallback;
+        }
+
+        throw new ContainerException(
+            "Compiled service '$id' requires its runtime lifecycle-hook graph.",
+        );
     }
 
     private function installFallbackBridges(Container $fallback): void
