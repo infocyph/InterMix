@@ -14,23 +14,27 @@ InterMix ships with PhpBench suites at:
 - ``benchmarks/RequestPathBench.php``
 - ``benchmarks/FenceBench.php``
 
-Run via Composer:
+Run every suite with PHPForge's quick benchmark profile:
+
+.. code-block:: bash
+
+   composer ic:bench:quick
+
+This discovers every ``*Bench.php`` file under ``benchmarks/`` and uses fewer
+revolutions and iterations for a fast development or CI signal. No
+project-specific benchmark command is required.
+
+Run the same complete suite with the full benchmark profile before accepting a
+performance-sensitive change or preparing a release:
 
 .. code-block:: bash
 
    composer ic:benchmark
 
-Run the focused InterMix 10 production-runtime matrix with:
+Render the complete suite as a console chart with:
 
 .. code-block:: bash
 
-   composer bench:intermix
-
-Other useful variants:
-
-.. code-block:: bash
-
-   composer ic:bench:quick
    composer ic:bench:chart
 
 What it measures

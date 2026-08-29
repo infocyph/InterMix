@@ -63,7 +63,7 @@ This checker is authoritative for the InterMix 10 standalone implementation.
 - [x] 28. Benchmark generated boundary representations. The immutable ID→slot candidate showed only a noisy nominal advantage, so the simpler generated string `match` boundary is retained until stable-environment measurements justify changing it.
 - [x] 29. Keep Repository/managers/reflection resolver machinery entirely out of fully static generated artifacts; instantiate the optimized dynamic engine lazily only when a declared compatibility island is exercised.
 - [x] 30. Complete development/compiled/deoptimized parity coverage across lifetimes/scopes/seeds, aliases/cycles/cache barriers, tags, environment/context and compound types, factories/closures, properties/methods/custom attributes, hooks, arbitrary classes, invocation/error surfaces, generic/injection-off mode, prevalidated loading, deoptimization and cross-island identity.
-- [x] 31. Run PHPBench natively through PHPForge on PHP 8.4 and PHP 8.5 using the project `bench:intermix` script; no project `ic:*` command is overridden.
+- [x] 31. Run every PHPBench suite natively through PHPForge on PHP 8.4 and PHP 8.5 using `composer ic:bench:quick` for fast feedback and `composer ic:benchmark` for the full profile; no project-specific benchmark command or `ic:*` override is required.
 - [x] 32. Move external Webrick RPM validation to the downstream Webrick phase after InterMix standalone semantic/quality/benchmark gates are green.
 - [x] 33. Finalize the public migration model: existing `Container` remains the compatible dynamic/development API, `ContainerBuilder` is the explicit InterMix 10 configuration/finalization API, and generated `ProductionContainer` is the production runtime.
 
