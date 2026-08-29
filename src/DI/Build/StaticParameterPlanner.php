@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Build;
 
 use ReflectionClass;
+use ReflectionFunctionAbstract;
 use ReflectionIntersectionType;
 use ReflectionNamedType;
 use ReflectionParameter;
@@ -27,11 +28,44 @@ final class StaticParameterPlanner
             return ['arguments' => [], 'dependencies' => []];
         }
 
+        return $this->callablePlan(
+            $graph,
+            $class,
+            $constructor,
+            $this->resourceParameters($graph, $class->getName(), 'constructor'),
+            'constructor',
+            true,
+        );
+    }
+
+    /**
+     * @param ReflectionClass<object> $consumer
+     * @param array<int|string, mixed> $supplied
+     * @return array{arguments: list<ServiceArgument>, dependencies: list<string>}|string
+     */
+    public function callablePlan(
+        DefinitionGraph $graph,
+        ReflectionClass $consumer,
+        ReflectionFunctionAbstract $reflector,
+        array $supplied = [],
+        string $label = 'parameter',
+        bool $rejectAttributes = false,
+    ): array|string {
+        $parameters = $reflector->getParameters();
+        $supplied = $this->normalizeSuppliedParameters($parameters, $supplied);
         $arguments = [];
         $dependencies = [];
         $seenDependencies = [];
-        foreach ($constructor->getParameters() as $parameter) {
-            $argument = $this->parameterPlan($graph, $class, $parameter);
+
+        foreach ($parameters as $parameter) {
+            $argument = $this->parameterPlan(
+                $graph,
+                $consumer,
+                $parameter,
+                $supplied,
+                $label,
+                $rejectAttributes,
+            );
             if (is_string($argument)) {
                 return $argument;
             }
@@ -73,27 +107,60 @@ final class StaticParameterPlanner
     }
 
     /**
-     * @param ReflectionClass<object> $class
+     * @param array<int, ReflectionParameter> $parameters
+     * @param array<int|string, mixed> $supplied
+     * @return array<int|string, mixed>
+     */
+    private function normalizeSuppliedParameters(array $parameters, array $supplied): array
+    {
+        foreach ($parameters as $position => $parameter) {
+            if ($parameter->isVariadic() || !array_key_exists($position, $supplied)) {
+                continue;
+            }
+
+            if (!array_key_exists($parameter->getName(), $supplied)) {
+                $supplied[$parameter->getName()] = $supplied[$position];
+            }
+            unset($supplied[$position]);
+        }
+
+        return $supplied;
+    }
+
+    /**
+     * @param ReflectionClass<object> $consumer
+     * @param array<int|string, mixed> $supplied
      * @return ServiceArgument|string
      */
     private function parameterPlan(
         DefinitionGraph $graph,
-        ReflectionClass $class,
+        ReflectionClass $consumer,
         ReflectionParameter $parameter,
+        array $supplied,
+        string $label,
+        bool $rejectAttributes,
     ): array|string {
+        $name = $parameter->getName();
         if ($parameter->isVariadic()) {
-            return "constructor parameter '{$parameter->getName()}' is variadic";
+            return "{$label} parameter '{$name}' is variadic";
         }
-        if ($parameter->getAttributes() !== []) {
-            return "constructor parameter '{$parameter->getName()}' has attributes";
+        if (array_key_exists($name, $supplied)) {
+            if (!$this->isExportable($supplied[$name])) {
+                return "{$label} parameter '{$name}' has a non-exportable supplied value";
+            }
+
+            return ['kind' => 'value', 'code' => var_export($supplied[$name], true)];
+        }
+        if ($rejectAttributes && $parameter->getAttributes() !== []) {
+            return "{$label} parameter '{$name}' has attributes";
         }
 
         $type = $parameter->getType();
         if ($type instanceof ReflectionUnionType || $type instanceof ReflectionIntersectionType) {
-            return "constructor parameter '{$parameter->getName()}' has a union or intersection type";
+            return "{$label} parameter '{$name}' has a union or intersection type";
         }
         if ($type instanceof ReflectionNamedType && !$type->isBuiltin()) {
-            return $this->typedParameterPlan($graph, $class, $parameter, $type);
+            return $this->typedParameterPlan($graph, $consumer, $parameter, $type, $label);
         }
         if ($parameter->isDefaultValueAvailable() && $this->isExportable($parameter->getDefaultValue())) {
             return ['kind' => 'value', 'code' => var_export($parameter->getDefaultValue(), true)];
@@ -102,28 +169,45 @@ final class StaticParameterPlanner
             return ['kind' => 'value', 'code' => 'null'];
         }
 
-        return "constructor parameter '{$parameter->getName()}' cannot be represented statically";
+        return "{$label} parameter '{$name}' cannot be represented statically";
     }
 
     /**
-     * @param ReflectionClass<object> $class
+     * @param ReflectionClass<object> $consumer
      * @return array{kind: 'service', id: string}|string
      */
     private function typedParameterPlan(
         DefinitionGraph $graph,
-        ReflectionClass $class,
+        ReflectionClass $consumer,
         ReflectionParameter $parameter,
         ReflectionNamedType $type,
+        string $label,
     ): array|string {
-        $dependency = $this->normalizedDependencyType($class, $type->getName());
+        $dependency = $this->normalizedDependencyType($consumer, $type->getName());
         if ($dependency === null) {
-            return "constructor parameter '{$parameter->getName()}' has an unsupported relative type";
+            return "{$label} parameter '{$parameter->getName()}' has an unsupported relative type";
+        }
+        if ($graph->hasContextualBinding($consumer->getName(), $dependency)) {
+            return $this->typedServicePlan($graph, $consumer->getName(), $dependency, $label);
         }
         if ($graph->hasDefinition($parameter->getName())) {
             return ['kind' => 'service', 'id' => $parameter->getName()];
         }
 
-        return $this->typedServicePlan($graph, $class->getName(), $dependency);
+        return $this->typedServicePlan($graph, $consumer->getName(), $dependency, $label);
+    }
+
+    /** @return array<int|string, mixed> */
+    private function resourceParameters(DefinitionGraph $graph, string $class, string $scope): array
+    {
+        $resource = $graph->classResourcesFor($class)[$scope] ?? null;
+        if (!is_array($resource)) {
+            return [];
+        }
+
+        $parameters = $resource['params'] ?? [];
+
+        return is_array($parameters) ? $parameters : [];
     }
 
     /** @return array{kind: 'service', id: string}|string */
@@ -131,6 +215,7 @@ final class StaticParameterPlanner
         DefinitionGraph $graph,
         string $consumer,
         string $dependency,
+        string $label,
     ): array|string {
         if (!$graph->hasContextualBinding($consumer, $dependency)) {
             return [
@@ -141,13 +226,13 @@ final class StaticParameterPlanner
 
         $binding = $graph->contextualBinding($consumer, $dependency);
         if (!is_string($binding)) {
-            return "constructor dependency '$dependency' has a dynamic contextual binding";
+            return "{$label} dependency '$dependency' has a dynamic contextual binding";
         }
         if ($graph->hasDefinition($binding)) {
             return ['kind' => 'service', 'id' => $binding];
         }
         if (!class_exists($binding) && !interface_exists($binding)) {
-            return "constructor dependency '$dependency' has a non-service contextual binding";
+            return "{$label} dependency '$dependency' has a non-service contextual binding";
         }
 
         return [

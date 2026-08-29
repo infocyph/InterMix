@@ -17,15 +17,8 @@ final class StaticFeatureClassifier
             return null;
         }
 
-        if (array_key_exists('constructor', $resources)) {
-            return 'class has registered constructor parameters';
-        }
-        if (array_key_exists('method', $resources)) {
-            return 'class has registered method invocation';
-        }
-
         foreach (array_keys($resources) as $resource) {
-            if ($resource !== 'property') {
+            if (!in_array($resource, ['constructor', 'method', 'property'], true)) {
                 return 'class has registered runtime resources';
             }
         }

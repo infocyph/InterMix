@@ -13,8 +13,9 @@ use ReflectionClass;
 /**
  * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
  * @phpstan-type PropertyPlan array{declaring: class-string, property: string, static: bool, argument: ServiceArgument}
+ * @phpstan-type MethodPlan array{method: string, arguments: list<ServiceArgument>, dependencies: list<string>}
  * @phpstan-type AliasPlan array{kind: 'alias', target: string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
- * @phpstan-type ClassPlan array{kind: 'class', class: class-string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
+ * @phpstan-type ClassPlan array{kind: 'class', class: class-string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, method: MethodPlan|null, dependencies: list<string>}
  * @phpstan-type FactoryPlan array{kind: 'factory', class: class-string, method: string|null, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
  * @phpstan-type ValuePlan array{kind: 'value', code: string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
  * @phpstan-type ServicePlan AliasPlan|ClassPlan|FactoryPlan|ValuePlan
@@ -80,11 +81,6 @@ final class StaticRuntimePlanner
             return $dynamicReason;
         }
 
-        $method = $this->implicitMethod($graph, $class);
-        if ($method !== null) {
-            return "class invokes implicit method '$method'";
-        }
-
         $constructor = new StaticParameterPlanner()->constructorPlan($graph, $class);
         if (is_string($constructor)) {
             return $constructor;
@@ -93,6 +89,12 @@ final class StaticRuntimePlanner
         if (is_string($property)) {
             return $property;
         }
+        $method = new StaticMethodPlanner()->plan($graph, $class);
+        if (is_string($method)) {
+            return $method;
+        }
+
+        $methodDependencies = is_array($method) ? $method['dependencies'] : [];
 
         return [
             'kind' => 'class',
@@ -100,9 +102,11 @@ final class StaticRuntimePlanner
             'lifetime' => $graph->definitionMetaFor($id)['lifetime'],
             'arguments' => $constructor['arguments'],
             'properties' => $property['properties'],
+            'method' => $method,
             'dependencies' => array_values(array_unique([
                 ...$constructor['dependencies'],
                 ...$property['dependencies'],
+                ...$methodDependencies,
             ])),
         ];
     }
@@ -203,23 +207,6 @@ final class StaticRuntimePlanner
             $dependency,
             ReflectionResource::getClassReflection($dependency),
         );
-    }
-
-    /** @param ReflectionClass<object> $class */
-    private function implicitMethod(DefinitionGraph $graph, ReflectionClass $class): ?string
-    {
-        $constant = $class->hasConstant('CALL_ON') ? 'CALL_ON' : 'callOn';
-        $callOn = $class->hasConstant($constant) ? $class->getConstant($constant) : null;
-        if (is_string($callOn) && $callOn !== '' && $class->hasMethod($callOn)) {
-            return $callOn;
-        }
-
-        $default = $graph->defaultMethod();
-        if (is_string($default) && $default !== '' && $class->hasMethod($default)) {
-            return $default;
-        }
-
-        return $class->hasMethod('__invoke') ? '__invoke' : null;
     }
 
     private function isCallableArrayDefinition(mixed $definition): bool

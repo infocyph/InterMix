@@ -9,8 +9,9 @@ use Infocyph\InterMix\DI\Support\LifetimeEnum;
 /**
  * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
  * @phpstan-type PropertyPlan array{declaring: class-string, property: string, static: bool, argument: ServiceArgument}
+ * @phpstan-type MethodPlan array{method: string, arguments: list<ServiceArgument>, dependencies: list<string>}
  * @phpstan-type AliasPlan array{kind: 'alias', target: string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
- * @phpstan-type ClassPlan array{kind: 'class', class: class-string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
+ * @phpstan-type ClassPlan array{kind: 'class', class: class-string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, method: MethodPlan|null, dependencies: list<string>}
  * @phpstan-type FactoryPlan array{kind: 'factory', class: class-string, method: string|null, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
  * @phpstan-type ValuePlan array{kind: 'value', code: string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
  * @phpstan-type ServicePlan AliasPlan|ClassPlan|FactoryPlan|ValuePlan
@@ -73,7 +74,7 @@ final class StaticRuntimeRenderer
      * @param ClassPlan $plan
      * @param array<string, int> $slots
      */
-    private function classConstructionStatements(array $plan, array $slots): string
+    private function classInitializationStatements(array $plan, array $slots): string
     {
         $source = '        $instance = ' . $this->classConstruction($plan, $slots) . ";\n";
         foreach ($plan['properties'] as $property) {
@@ -85,6 +86,27 @@ final class StaticRuntimeRenderer
                 $source .= '        $instance->' . $property['property'] . " = {$value};\n";
             }
         }
+
+        return $source;
+    }
+
+    /**
+     * @param ClassPlan $plan
+     * @param array<string, int> $slots
+     */
+    private function classServiceStatements(array $plan, array $slots): string
+    {
+        $source = $this->classInitializationStatements($plan, $slots);
+        $method = $plan['method'];
+        if (!is_array($method)) {
+            return $source;
+        }
+
+        $arguments = [];
+        foreach ($method['arguments'] as $argument) {
+            $arguments[] = $this->argumentExpression($argument, $slots);
+        }
+        $source .= '\n        $instance->' . $method['method'] . '(' . implode(', ', $arguments) . ");\n";
 
         return $source;
     }
@@ -155,31 +177,31 @@ final class StaticRuntimeRenderer
     {
         $source = "    private function s{$slot}(): mixed\n    {\n";
         $source .= $this->renderSeedGuard($slot);
-        $hasProperties = $plan['properties'] !== [];
-        $construction = $hasProperties ? null : $this->classConstruction($plan, $slots);
+        $hasSetup = $plan['properties'] !== [] || $plan['method'] !== null;
+        $construction = $hasSetup ? null : $this->classConstruction($plan, $slots);
 
         if ($plan['lifetime'] === LifetimeEnum::Scoped) {
             $source .= "        if (array_key_exists({$slot}, \$this->scope->resolved)) {\n";
             $source .= "            return \$this->scope->resolved[{$slot}];\n";
             $source .= "        }\n\n";
-            if ($hasProperties) {
-                $source .= $this->classConstructionStatements($plan, $slots);
+            if ($hasSetup) {
+                $source .= $this->classServiceStatements($plan, $slots);
                 $source .= "\n        return \$this->scope->resolved[{$slot}] = \$instance;\n";
             } else {
                 $source .= "        return \$this->scope->resolved[{$slot}] = {$construction};\n";
             }
         } elseif ($plan['lifetime'] === LifetimeEnum::Singleton) {
-            if ($hasProperties) {
+            if ($hasSetup) {
                 $source .= "        if (\$this->v{$slot} !== null) {\n";
                 $source .= "            return \$this->v{$slot};\n";
                 $source .= "        }\n\n";
-                $source .= $this->classConstructionStatements($plan, $slots);
+                $source .= $this->classServiceStatements($plan, $slots);
                 $source .= "\n        return \$this->v{$slot} = \$instance;\n";
             } else {
                 $source .= "        return \$this->v{$slot} ??= {$construction};\n";
             }
-        } elseif ($hasProperties) {
-            $source .= $this->classConstructionStatements($plan, $slots);
+        } elseif ($hasSetup) {
+            $source .= $this->classServiceStatements($plan, $slots);
             $source .= "\n        return \$instance;\n";
         } else {
             $source .= "        return {$construction};\n";
@@ -257,7 +279,6 @@ final class StaticRuntimeRenderer
         if ($definitions === []) {
             return '';
         }
-
         $ids = implode(', ', array_map(static fn(string $id): string => var_export($id, true), $definitions));
 
         return "    protected function isCompiledDefinition(string \$id): bool\n"
@@ -349,7 +370,7 @@ final class StaticRuntimeRenderer
             }
             $slot = $slots[$id];
             $source .= "    private function f{$slot}(): object\n    {\n";
-            $source .= $this->classConstructionStatements($plan, $slots);
+            $source .= $this->classInitializationStatements($plan, $slots);
             $source .= "\n        return \$instance;\n    }\n\n";
         }
 
