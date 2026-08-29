@@ -16,22 +16,14 @@ use Infocyph\InterMix\Internal\ReflectionResource;
 use ReflectionNamedType;
 use ReflectionProperty;
 
-/**
- * Reflection-backed execution for compiler-selected dynamic islands.
- *
- * This object is created lazily only when a generated recipe explicitly needs
- * runtime-only attribute/method/property semantics. Ordinary compiled service
- * resolution never constructs it.
- *
- * @internal
- */
-final class RuntimeIslandResolver
+/** @internal */
+final readonly class RuntimeIslandResolver
 {
-    private readonly ClassResolver $classResolver;
+    private ClassResolver $classResolver;
 
-    private readonly ParameterResolver $parameterResolver;
+    private ParameterResolver $parameterResolver;
 
-    public function __construct(private readonly Repository $repository)
+    public function __construct(private Repository $repository)
     {
         [$this->classResolver, $this->parameterResolver] = new InjectedCall($repository)->reflectionResolvers();
     }
