@@ -82,7 +82,7 @@ final class StaticParameterPlanner
         );
     }
 
-    /** @return ServiceArgument|string|null */
+    /** @return array{kind: 'service', id: string}|string|null */
     private function attributeParameterPlan(
         DefinitionGraph $graph,
         ReflectionParameter $parameter,
