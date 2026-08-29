@@ -231,31 +231,17 @@ trait ResolvesAssociativeParameters
         }
 
         $declaring = $parameter->getDeclaringClass();
-        foreach ($groups as $group) {
-            if ($this->satisfiesTypeGroup($value, $group, $declaring)) {
-                return true;
-            }
-        }
 
-        return false;
+        return array_any($groups, fn($group) => $this->satisfiesTypeGroup($value, $group, $declaring));
     }
 
     /**
      * @param array<int, array<int, \ReflectionNamedType>> $groups
      * @param ReflectionClass<object>|null $declaring
      */
-    private function satisfiesAnyTypeGroupsForDeclaring(
-        mixed $value,
-        array $groups,
-        ?ReflectionClass $declaring,
-    ): bool {
-        foreach ($groups as $group) {
-            if ($this->satisfiesTypeGroup($value, $group, $declaring)) {
-                return true;
-            }
-        }
-
-        return false;
+    private function satisfiesAnyTypeGroupsForDeclaring(mixed $value, array $groups, ?ReflectionClass $declaring): bool
+    {
+        return array_any($groups, fn($group) => $this->satisfiesTypeGroup($value, $group, $declaring));
     }
 
     /**
