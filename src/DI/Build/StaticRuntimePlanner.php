@@ -15,7 +15,7 @@ use ReflectionClass;
  * @phpstan-type PropertyPlan array{declaring: class-string, property: string, static: bool, argument: ServiceArgument}
  * @phpstan-type MethodPlan array{method: string, arguments: list<ServiceArgument>, dependencies: list<string>}
  * @phpstan-type AliasPlan array{kind: 'alias', target: string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
- * @phpstan-type ClassPlan array{kind: 'class', class: class-string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, method: MethodPlan|null, dependencies: list<string>}
+ * @phpstan-type ClassPlan array{kind: 'class', class: class-string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, postMethod: MethodPlan|null, dependencies: list<string>}
  * @phpstan-type FactoryPlan array{kind: 'factory', class: class-string, method: string|null, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
  * @phpstan-type ValuePlan array{kind: 'value', code: string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
  * @phpstan-type ServicePlan AliasPlan|ClassPlan|FactoryPlan|ValuePlan
@@ -89,12 +89,12 @@ final class StaticRuntimePlanner
         if (is_string($property)) {
             return $property;
         }
-        $method = new StaticMethodPlanner()->plan($graph, $class);
-        if (is_string($method)) {
-            return $method;
+        $postMethod = new StaticMethodPlanner()->plan($graph, $class);
+        if (is_string($postMethod)) {
+            return $postMethod;
         }
 
-        $methodDependencies = is_array($method) ? $method['dependencies'] : [];
+        $methodDependencies = is_array($postMethod) ? $postMethod['dependencies'] : [];
 
         return [
             'kind' => 'class',
@@ -102,7 +102,7 @@ final class StaticRuntimePlanner
             'lifetime' => $graph->definitionMetaFor($id)['lifetime'],
             'arguments' => $constructor['arguments'],
             'properties' => $property['properties'],
-            'method' => $method,
+            'postMethod' => $postMethod,
             'dependencies' => array_values(array_unique([
                 ...$constructor['dependencies'],
                 ...$property['dependencies'],
