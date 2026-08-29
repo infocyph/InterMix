@@ -57,6 +57,9 @@
             "/tests/**/*Test.php"
         ]
     },
+    "scripts": {
+        "bench:intermix": "@php vendor/bin/phpbench run benchmarks/CompiledRuntimeBench.php --report=aggregate"
+    },
     "config": {
         "allow-plugins": {
             "ergebnis/composer-normalize": true,
