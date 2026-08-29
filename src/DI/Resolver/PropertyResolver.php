@@ -28,25 +28,34 @@ class PropertyResolver
     ) {}
 
     /**
-     * Resolve registered and attributed properties across the complete hierarchy.
-     *
      * @param ReflectionClass<object> $class
      * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
     public function resolve(ReflectionClass $class, object $instance): void
     {
+        // Constructor injection is by far the common path. Do not enumerate a
+        // class hierarchy's properties merely to discover that property
+        // injection is disabled and no registered property values exist.
+        if (!$this->hasPropertyWork($class)) {
+            return;
+        }
+
+        $propertyAttributes = $this->repository->isPropertyAttributeEnabled();
+        $registeredByClass = [];
+
         foreach ($this->getPropertyPlan($class) as $property) {
-            $registered = $this->getRegisteredProperties(
-                $property->getDeclaringClass()->getName(),
-            );
+            $declaring = $property->getDeclaringClass()->getName();
+            $registered = $registeredByClass[$declaring]
+                ??= $this->getRegisteredProperties($declaring);
             $name = $property->getName();
+
             if (array_key_exists($name, $registered)) {
                 $this->setPropertyValue($property, $instance, $registered[$name]);
 
                 continue;
             }
 
-            if (!$this->repository->isPropertyAttributeEnabled()
+            if (!$propertyAttributes
                 || ($property->isPromoted() && $property->getAttributes() === [])
             ) {
                 continue;
@@ -65,6 +74,23 @@ class PropertyResolver
         $this->classResolver = $classResolver;
     }
 
+    /** @param ReflectionClass<object> $class */
+    private function hasPropertyWork(ReflectionClass $class): bool
+    {
+        if ($this->repository->isPropertyAttributeEnabled()) {
+            return true;
+        }
+
+        for ($current = $class; $current instanceof ReflectionClass; $current = $current->getParentClass()) {
+            $properties = $this->repository->getClassResourceFor($current->getName())['property'] ?? null;
+            if (is_array($properties) && $properties !== []) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /**
      * @param ReflectionClass<object> $class
      * @return array<int, ReflectionProperty>
@@ -77,23 +103,20 @@ class PropertyResolver
         }
 
         $properties = [];
-        $current = $class;
-        do {
+        for ($current = $class; $current instanceof ReflectionClass; $current = $current->getParentClass()) {
             $declaringClass = $current->getName();
             foreach ($current->getProperties() as $property) {
                 if ($property->getDeclaringClass()->getName() === $declaringClass) {
                     $properties[] = $property;
                 }
             }
-            $current = $current->getParentClass();
-        } while ($current instanceof ReflectionClass);
+        }
 
         if (count($this->propertyPlanCache) >= self::PROPERTY_PLAN_CACHE_LIMIT) {
             unset($this->propertyPlanCache[array_key_first($this->propertyPlanCache)]);
         }
-        $this->propertyPlanCache[$className] = $properties;
 
-        return $properties;
+        return $this->propertyPlanCache[$className] = $properties;
     }
 
     /** @return array<string, mixed> */
@@ -114,9 +137,7 @@ class PropertyResolver
         return $registered;
     }
 
-    /**
-     * @throws ContainerException|ReflectionException|InvalidArgumentException
-     */
+    /** @throws ContainerException|ReflectionException|InvalidArgumentException */
     private function resolveAttributedValue(ReflectionProperty $property): mixed
     {
         $inject = $property->getAttributes(Inject::class)[0] ?? null;
@@ -144,9 +165,7 @@ class PropertyResolver
         return AttributeResolution::Unresolved;
     }
 
-    /**
-     * @throws ContainerException|ReflectionException|InvalidArgumentException
-     */
+    /** @throws ContainerException|ReflectionException|InvalidArgumentException */
     private function resolveWithoutArgument(ReflectionProperty $property): mixed
     {
         $type = $property->getType();
@@ -167,23 +186,18 @@ class PropertyResolver
         return $resolved;
     }
 
-    private function setPropertyValue(
-        ReflectionProperty $property,
-        object $instance,
-        mixed $value,
-    ): void {
+    private function setPropertyValue(ReflectionProperty $property, object $instance, mixed $value): void
+    {
         $property->setValue($property->isStatic() ? null : $instance, $value);
     }
 
     private function tracePropertyResolution(ReflectionProperty $property): void
     {
-        if (!$this->repository->isTracingEnabled()) {
-            return;
+        if ($this->repository->isTracingEnabled()) {
+            $this->repository->tracer()->push(
+                "prop {$property->getName()} of {$property->getDeclaringClass()->getName()}",
+                TraceLevelEnum::Verbose,
+            );
         }
-
-        $this->repository->tracer()->push(
-            "prop {$property->getName()} of {$property->getDeclaringClass()->getName()}",
-            TraceLevelEnum::Verbose,
-        );
     }
 }
