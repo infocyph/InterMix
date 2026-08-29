@@ -76,6 +76,9 @@ final class StaticRuntimePlanner
         if (!$class->isInstantiable()) {
             return 'class definition is not instantiable';
         }
+        if (!$graph->injectionEnabled()) {
+            return $this->genericClassPlan($graph, $id, $class);
+        }
 
         $dynamicReason = new StaticFeatureClassifier()->dynamicReason($graph, $class);
         if ($dynamicReason !== null) {
@@ -179,6 +182,38 @@ final class StaticRuntimePlanner
         } while ($changed);
 
         return $plans;
+    }
+
+    /**
+     * @param ReflectionClass<object> $class
+     * @return ClassPlan|string
+     */
+    private function genericClassPlan(
+        DefinitionGraph $graph,
+        string $id,
+        ReflectionClass $class,
+    ): array|string {
+        if ($graph->classResourcesFor($class->getName()) !== []) {
+            return 'injection-off class has registered generic resources';
+        }
+        if ($graph->defaultMethod() !== null) {
+            return 'injection-off class has a configured default method';
+        }
+
+        $constructor = $class->getConstructor();
+        if ($constructor !== null && $constructor->getNumberOfRequiredParameters() > 0) {
+            return 'injection-off class requires constructor parameters';
+        }
+
+        return [
+            'kind' => 'class',
+            'class' => $class->getName(),
+            'lifetime' => $graph->definitionMetaFor($id)['lifetime'],
+            'arguments' => [],
+            'properties' => [],
+            'postMethod' => null,
+            'dependencies' => [],
+        ];
     }
 
     /**
