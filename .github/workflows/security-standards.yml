@@ -20,7 +20,7 @@ jobs:
       actions: read
       contents: read
 
-  phpstan-debug:
+  comments-debug:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -29,4 +29,4 @@ jobs:
           php-version: "8.4"
           coverage: none
       - run: composer install --no-interaction --prefer-dist --no-progress
-      - run: vendor/bin/phpstan analyse --configuration=vendor/infocyph/phpforge/resources/phpstan.neon.dist --memory-limit=1G --no-progress
+      - run: php vendor/bin/phpprobe comments --config=vendor/infocyph/phpforge/resources/phpprobe.json --fail-on=info --explain src tests
