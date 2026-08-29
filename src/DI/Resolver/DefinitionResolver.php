@@ -227,8 +227,9 @@ class DefinitionResolver
     /** @param array<int|string, mixed> $definition */
     private function resolveArrayDefinitionTracked(string $name, array $definition): mixed
     {
-        if ($this->repository->isTracingEnabled()) {
-            $this->repository->tracer()->recordDependency($name, (string) $definition[0], 'definition-class');
+        $class = $definition[0] ?? null;
+        if ($this->repository->isTracingEnabled() && is_string($class)) {
+            $this->repository->tracer()->recordDependency($name, $class, 'definition-class');
         }
 
         return $this->resolveArrayDefinition(array_values($definition));
