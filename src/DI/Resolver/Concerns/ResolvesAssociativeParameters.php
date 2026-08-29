@@ -36,6 +36,7 @@ trait ResolvesAssociativeParameters
         $processed = [];
         $paramsLeft = [];
         $sort = [];
+        $availableSupply = $suppliedParameters;
 
         foreach ($availableParams as $key => $param) {
             $paramName = $param->getName();
@@ -58,6 +59,7 @@ trait ResolvesAssociativeParameters
 
             if ($resolvedValue !== AttributeResolution::Unresolved) {
                 $processed[$paramName] = $resolvedValue;
+                unset($availableSupply[$paramName]);
 
                 continue;
             }
@@ -68,7 +70,7 @@ trait ResolvesAssociativeParameters
         return [
             'availableParams' => $paramsLeft,
             'processed' => $processed,
-            'availableSupply' => array_diff_key($suppliedParameters, $processed),
+            'availableSupply' => $availableSupply,
             'sort' => $sort,
         ];
     }
@@ -228,10 +230,14 @@ trait ResolvesAssociativeParameters
             return true;
         }
 
-        return array_any(
-            $groups,
-            fn($group) => $this->satisfiesTypeGroup($value, $group, $parameter->getDeclaringClass()),
-        );
+        $declaring = $parameter->getDeclaringClass();
+        foreach ($groups as $group) {
+            if ($this->satisfiesTypeGroup($value, $group, $declaring)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -243,10 +249,13 @@ trait ResolvesAssociativeParameters
         array $groups,
         ?ReflectionClass $declaring,
     ): bool {
-        return array_any(
-            $groups,
-            fn($group) => $this->satisfiesTypeGroup($value, $group, $declaring),
-        );
+        foreach ($groups as $group) {
+            if ($this->satisfiesTypeGroup($value, $group, $declaring)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

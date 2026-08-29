@@ -120,18 +120,20 @@ class ParameterResolver
             return $container->get($name);
         }
 
-        foreach ($this->extractNamedTypeCandidates($parameter) as $named) {
-            if ($named->isBuiltin()) {
-                continue;
-            }
+        foreach ($this->extractTypeGroups($parameter) as $group) {
+            foreach ($group as $named) {
+                if ($named->isBuiltin()) {
+                    continue;
+                }
 
-            $typeName = $this->normalizeSelfParent(
-                $named->getName(),
-                $parameter->getDeclaringClass(),
-            );
-            $resolved = $this->resolveNamedDefinitionType($typeName, $hasScopeSeeds, $seeded);
-            if ($resolved !== AttributeResolution::Unresolved) {
-                return $resolved;
+                $typeName = $this->normalizeSelfParent(
+                    $named->getName(),
+                    $parameter->getDeclaringClass(),
+                );
+                $resolved = $this->resolveNamedDefinitionType($typeName, $hasScopeSeeds, $seeded);
+                if ($resolved !== AttributeResolution::Unresolved) {
+                    return $resolved;
+                }
             }
         }
 
@@ -184,7 +186,13 @@ class ParameterResolver
      */
     private function alreadyExist(string $className, array $parameters): bool
     {
-        return array_any($parameters, fn($value) => $value instanceof $className);
+        foreach ($parameters as $value) {
+            if ($value instanceof $className) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function applyEnvOverride(string $fqcn): string
@@ -200,11 +208,6 @@ class ParameterResolver
     private function buildResolutionPlan(ReflectionFunctionAbstract $reflector, string $type): array
     {
         $availableParams = $reflector->getParameters();
-
-        foreach ($availableParams as $parameter) {
-            $this->extractTypeGroups($parameter);
-        }
-
         $isMethod = $reflector instanceof ReflectionMethod;
         $applyAttribute = $this->repository->isMethodAttributeEnabled()
             && ($type === 'constructor' xor $isMethod);
@@ -245,21 +248,6 @@ class ParameterResolver
                 unset($cache[$firstKey]);
             }
         }
-    }
-
-    /**
-     * @return array<int, ReflectionNamedType>
-     */
-    private function extractNamedTypeCandidates(ReflectionParameter $parameter): array
-    {
-        $types = [];
-        foreach ($this->extractTypeGroups($parameter) as $group) {
-            foreach ($group as $candidate) {
-                $types[] = $candidate;
-            }
-        }
-
-        return $types;
     }
 
     /**
