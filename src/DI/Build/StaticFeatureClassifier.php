@@ -12,6 +12,10 @@ final class StaticFeatureClassifier
     /** @param ReflectionClass<object> $class */
     public function dynamicReason(DefinitionGraph $graph, ReflectionClass $class): ?string
     {
+        if (!$graph->injectionEnabled()) {
+            return 'injection-off class requires generic runtime';
+        }
+
         $resources = $graph->classResourcesFor($class->getName());
         if ($resources === []) {
             return null;
