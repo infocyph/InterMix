@@ -157,9 +157,17 @@ final class StaticParameterPlanner
 
         $type = $parameter->getType();
         if ($type instanceof ReflectionUnionType || $type instanceof ReflectionIntersectionType) {
-            return "{$label} parameter '{$name}' has a union or intersection type";
-        }
-        if ($type instanceof ReflectionNamedType && !$type->isBuiltin()) {
+            $compound = new StaticCompoundTypePlanner()->plan(
+                $graph,
+                $consumer,
+                $parameter,
+                $type,
+                $label,
+            );
+            if ($compound !== null) {
+                return $compound;
+            }
+        } elseif ($type instanceof ReflectionNamedType && !$type->isBuiltin()) {
             return $this->typedParameterPlan($graph, $consumer, $parameter, $type, $label);
         }
         if ($parameter->isDefaultValueAvailable() && $this->isExportable($parameter->getDefaultValue())) {
