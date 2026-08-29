@@ -199,15 +199,27 @@ final class StaticCompoundTypePlanner
         $definition = $graph->definitions()[$id] ?? null;
 
         if ($definition instanceof AliasDefinition) {
-            return $this->definitionClass($graph, $definition->target, $seen);
+            if ($graph->hasDefinition($definition->target)) {
+                return $this->definitionClass($graph, $definition->target, $seen);
+            }
+            if (class_exists($definition->target)) {
+                return ['known' => true, 'class' => $definition->target];
+            }
+
+            return ['known' => false, 'class' => null];
         }
         if ($definition instanceof FactoryDefinition || $definition instanceof Closure) {
             return ['known' => false, 'class' => null];
         }
         if (is_string($definition)) {
-            return class_exists($definition)
-                ? ['known' => true, 'class' => $definition]
-                : ['known' => true, 'class' => null];
+            if (class_exists($definition)) {
+                return ['known' => true, 'class' => $definition];
+            }
+            if ($graph->hasDefinition($definition)) {
+                return $this->definitionClass($graph, $definition, $seen);
+            }
+
+            return ['known' => true, 'class' => null];
         }
         if (is_array($definition)) {
             $class = $definition[0] ?? null;
