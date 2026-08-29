@@ -43,9 +43,9 @@ final class StaticMethodPlanner
 
     /**
      * @param ReflectionClass<object> $class
-     * @return MethodPlan|null|string
+     * @return MethodPlan|null
      */
-    public function plan(DefinitionGraph $graph, ReflectionClass $class): array|string|null
+    public function plan(DefinitionGraph $graph, ReflectionClass $class): ?array
     {
         $resource = $graph->classResourcesFor($class->getName())['method'] ?? null;
         $methodName = $this->targetMethod($graph, $class, $resource);
