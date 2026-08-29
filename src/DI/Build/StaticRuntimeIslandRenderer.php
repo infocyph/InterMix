@@ -6,7 +6,7 @@ namespace Infocyph\InterMix\DI\Build;
 
 /**
  * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
- * @phpstan-type PropertyPlan array{declaring: class-string, property: string, static: bool, argument: ServiceArgument|null, runtime?: 'attribute'|'assign'|'registered'}
+ * @phpstan-type PropertyPlan array{declaring: class-string, property: string, static: bool, argument: ServiceArgument|null, runtime?: 'attribute'|'assign'}
  * @phpstan-type MethodPlan array{method: string, arguments: list<ServiceArgument>, dependencies: list<string>, runtime?: bool}
  * @internal
  */
@@ -50,7 +50,7 @@ final class StaticRuntimeIslandRenderer
         $source = '';
         foreach ($properties as $property) {
             $runtime = $property['runtime'] ?? null;
-            if ($runtime === 'attribute' || $runtime === 'registered') {
+            if ($runtime === 'attribute') {
                 $source .= '        $this->applyCompiledRuntimePropertyAttribute('
                     . $instance . ', '
                     . var_export($property['declaring'], true) . ', '

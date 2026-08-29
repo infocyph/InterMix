@@ -9,7 +9,7 @@ use Infocyph\InterMix\Internal\ReflectionResource;
 
 /**
  * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
- * @phpstan-type PropertyPlan array{declaring: class-string<object>, property: string, static: bool, argument: ServiceArgument|null, runtime?: 'attribute'|'assign'|'registered'}
+ * @phpstan-type PropertyPlan array{declaring: class-string<object>, property: string, static: bool, argument: ServiceArgument|null, runtime?: 'attribute'|'assign'}
  * @phpstan-type MethodPlan array{method: string, arguments: list<ServiceArgument>, dependencies: list<string>, runtime?: bool}
  * @phpstan-type InvocationPlan array{kind: 'invocation', class: class-string<object>, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, invocation: MethodPlan, dependencies: list<string>}
  * @internal

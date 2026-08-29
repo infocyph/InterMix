@@ -11,7 +11,7 @@ use ReflectionProperty;
 
 /**
  * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
- * @phpstan-type PropertyPlan array{declaring: class-string<object>, property: string, static: bool, argument: ServiceArgument|null, runtime?: 'attribute'|'assign'|'registered'}
+ * @phpstan-type PropertyPlan array{declaring: class-string<object>, property: string, static: bool, argument: ServiceArgument|null, runtime?: 'attribute'|'assign'}
  * @internal
  */
 final class StaticPropertyPlanner
@@ -138,7 +138,7 @@ final class StaticPropertyPlanner
         $name = $property->getName();
         if (array_key_exists($name, $registered)) {
             if (!$this->isExportable($registered[$name])) {
-                return $this->runtimePropertyPlan($property, 'registered');
+                return $this->runtimePropertyPlan($property);
             }
 
             return [
@@ -157,7 +157,7 @@ final class StaticPropertyPlanner
         if ($property->getAttributes(Inject::class) !== []) {
             $argument = $this->injectArgument($graph, $property);
             if (is_string($argument) || !$property->isPublic() || $property->isReadOnly()) {
-                return $this->runtimePropertyPlan($property, 'attribute');
+                return $this->runtimePropertyPlan($property);
             }
             if ($argument === null) {
                 return null;
@@ -172,7 +172,7 @@ final class StaticPropertyPlanner
         }
 
         return $this->hasRuntimeAttribute($graph, $property)
-            ? $this->runtimePropertyPlan($property, 'attribute')
+            ? $this->runtimePropertyPlan($property)
             : null;
     }
 
@@ -194,18 +194,15 @@ final class StaticPropertyPlanner
         return $properties;
     }
 
-    /**
-     * @param 'attribute'|'registered' $runtime
-     * @return PropertyPlan
-     */
-    private function runtimePropertyPlan(ReflectionProperty $property, string $runtime): array
+    /** @return PropertyPlan */
+    private function runtimePropertyPlan(ReflectionProperty $property): array
     {
         return [
             'declaring' => $property->getDeclaringClass()->getName(),
             'property' => $property->getName(),
             'static' => $property->isStatic(),
             'argument' => null,
-            'runtime' => $runtime,
+            'runtime' => 'attribute',
         ];
     }
 
