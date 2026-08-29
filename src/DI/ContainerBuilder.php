@@ -28,6 +28,15 @@ final class ContainerBuilder
     /** @var list<ProductionContainer> */
     private array $productionRuntimes = [];
 
+    /** @var array<string, true> */
+    private array $resolvedHookIds = [];
+
+    /** @var array<string, true> */
+    private array $resolvingHookIds = [];
+
+    /** @var array<string, true> */
+    private array $scopeLeaveHookScopes = [];
+
     public function __construct(?Container $development = null)
     {
         $this->development = $development ?? new Container();
@@ -89,6 +98,9 @@ final class ContainerBuilder
             DefinitionGraph::from(
                 $this->development->getRepository(),
                 array_keys($this->dynamicServiceIds),
+                array_keys($this->resolvingHookIds),
+                array_keys($this->resolvedHookIds),
+                array_keys($this->scopeLeaveHookScopes),
             ),
             $path,
         );
@@ -141,7 +153,7 @@ final class ContainerBuilder
     public function onResolved(string $id, callable $callback): self
     {
         $this->beforeMutation();
-        $this->dynamicServiceIds[$id] = true;
+        $this->resolvedHookIds[$id] = true;
         $this->development->onResolved($id, $callback);
 
         return $this;
@@ -150,7 +162,7 @@ final class ContainerBuilder
     public function onResolving(string $id, callable $callback): self
     {
         $this->beforeMutation();
-        $this->dynamicServiceIds[$id] = true;
+        $this->resolvingHookIds[$id] = true;
         $this->development->onResolving($id, $callback);
 
         return $this;
@@ -159,6 +171,7 @@ final class ContainerBuilder
     public function onScopeLeave(string $scope, callable $callback): self
     {
         $this->beforeMutation();
+        $this->scopeLeaveHookScopes[$scope] = true;
         $this->development->onScopeLeave($scope, $callback);
 
         return $this;
