@@ -6,6 +6,7 @@ use Infocyph\InterMix\DI\Build\DefinitionGraph;
 use Infocyph\InterMix\DI\Build\StaticRuntimeGenerator;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
+use Infocyph\InterMix\Exceptions\NotFoundException;
 use Psr\Container\NotFoundExceptionInterface;
 
 final class StaticRuntimeLeaf {}
@@ -88,6 +89,8 @@ it('specializes singleton identity inside the generated runtime', function () {
 });
 
 it('rejects unknown identifiers using the PSR not-found contract', function () {
+    expect(NotFoundException::class)->toImplement(NotFoundExceptionInterface::class);
+
     $container = new Container(uniqid('static_runtime_not_found_'));
     $container->singleton(StaticRuntimeLeaf::class);
 
@@ -98,7 +101,7 @@ it('rejects unknown identifiers using the PSR not-found contract', function () {
             $path,
         )['runtime'];
 
-        expect(fn() => $runtime->get('missing'))->toThrow(NotFoundExceptionInterface::class);
+        expect(fn() => $runtime->get('missing'))->toThrow(NotFoundException::class);
     } finally {
         removeStaticRuntimeArtifact($path);
     }
