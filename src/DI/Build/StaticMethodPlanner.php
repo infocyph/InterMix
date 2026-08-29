@@ -54,6 +54,22 @@ final class StaticMethodPlanner
         ];
     }
 
+    /**
+     * @param ReflectionClass<object> $class
+     * @return array{configured: bool, method: string|null}
+     */
+    private function configuredMethod(ReflectionClass $class, mixed $candidate): array
+    {
+        if (!$candidate) {
+            return ['configured' => false, 'method' => null];
+        }
+
+        return [
+            'configured' => true,
+            'method' => is_string($candidate) && $class->hasMethod($candidate) ? $candidate : null,
+        ];
+    }
+
     private function hasDynamicAttributes(DefinitionGraph $graph, ReflectionMethod $method): bool
     {
         if (!$graph->methodAttributesEnabled()) {
@@ -84,20 +100,26 @@ final class StaticMethodPlanner
     /** @param ReflectionClass<object> $class */
     private function targetMethod(DefinitionGraph $graph, ReflectionClass $class, mixed $resource): ?string
     {
-        $registered = is_array($resource) ? ($resource['on'] ?? null) : null;
-        if (is_string($registered) && $registered !== '') {
-            return $class->hasMethod($registered) ? $registered : null;
+        $registered = $this->configuredMethod(
+            $class,
+            is_array($resource) ? ($resource['on'] ?? null) : null,
+        );
+        if ($registered['configured']) {
+            return $registered['method'];
         }
 
         $constant = $class->hasConstant('CALL_ON') ? 'CALL_ON' : 'callOn';
-        $callOn = $class->hasConstant($constant) ? $class->getConstant($constant) : null;
-        if ($callOn) {
-            return is_string($callOn) && $class->hasMethod($callOn) ? $callOn : null;
+        $callOn = $this->configuredMethod(
+            $class,
+            $class->hasConstant($constant) ? $class->getConstant($constant) : null,
+        );
+        if ($callOn['configured']) {
+            return $callOn['method'];
         }
 
-        $default = $graph->defaultMethod();
-        if (is_string($default) && $default !== '') {
-            return $class->hasMethod($default) ? $default : null;
+        $default = $this->configuredMethod($class, $graph->defaultMethod());
+        if ($default['configured']) {
+            return $default['method'];
         }
 
         return $class->hasMethod('__invoke') ? '__invoke' : null;
