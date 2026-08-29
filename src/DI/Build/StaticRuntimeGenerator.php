@@ -32,7 +32,11 @@ final class StaticRuntimeGenerator
         $plans = $this->pruneCycles($plans, $skipped);
         ksort($plans, SORT_STRING);
 
-        $slots = array_flip(array_keys($plans));
+        $slots = [];
+        foreach (array_keys($plans) as $slot => $id) {
+            $slots[$id] = $slot;
+        }
+
         $source = $this->renderRuntime($plans, $slots);
         AtomicFileWriter::write(
             $filePath,
