@@ -177,10 +177,7 @@ final class StaticRuntimePlanner
         return $plans;
     }
 
-    /**
-     * @param FactoryDefinition $definition
-     * @return FactoryPlan
-     */
+    /** @return FactoryPlan */
     private function factoryPlan(DefinitionGraph $graph, string $id, FactoryDefinition $definition): array
     {
         $arguments = [];
