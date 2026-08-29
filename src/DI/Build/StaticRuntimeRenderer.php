@@ -28,18 +28,21 @@ final class StaticRuntimeRenderer
     {
         $invocationRenderer = new StaticInvocationRenderer();
         $lifecycleRenderer = new StaticLifecycleHookRenderer();
+        $returnRenderer = new StaticReturnRenderer();
         $source = "<?php\n\ndeclare(strict_types=1);\n\n";
         $source .= "use Infocyph\\InterMix\\DI\\ProductionContainer;\n\n";
         $source .= "return new class extends ProductionContainer\n{\n";
         $source .= $this->renderAliasSingletonProperties($plans);
         $source .= $this->renderFactorySingletonProperties($plans);
         $source .= $invocationRenderer->renderSingletonProperties($plans);
+        $source .= $returnRenderer->renderProperties($plans);
         $source .= $lifecycleRenderer->renderValueSingletonProperties($graph, $plans);
         $source .= $this->renderSingletonProperties($plans, $slots);
         $source .= $this->renderGet($plans, $slots);
         $source .= $this->renderHas($plans);
         $source .= $this->renderSlotMap($slots);
         $source .= $this->renderCompiledIds($plans);
+        $source .= $returnRenderer->renderDispatch($plans, $slots);
         $source .= $this->renderDefinitionMap($graph, $plans);
         $source .= $this->renderFreshMap($plans, $slots);
         $source .= $this->renderFreshMethods($plans, $slots);
@@ -97,7 +100,7 @@ final class StaticRuntimeRenderer
      * @param ClassPlan $plan
      * @param array<string, int> $slots
      */
-    private function classServiceStatements(array $plan, array $slots): string
+    private function classServiceStatements(array $plan, array $slots, int $slot): string
     {
         $source = $this->classInitializationStatements($plan, $slots);
         $postMethod = $plan['postMethod'];
@@ -105,13 +108,12 @@ final class StaticRuntimeRenderer
             return $source;
         }
 
-        $expression = new StaticRuntimeIslandRenderer()->methodExpression(
-            $plan['class'],
+        return $source . new StaticReturnRenderer()->invocationStatement(
+            $plan,
             $postMethod,
             $slots,
+            $slot,
         );
-
-        return $source . "\n        {$expression};\n";
     }
 
     /**
@@ -207,7 +209,7 @@ final class StaticRuntimeRenderer
                 $slot,
                 $id,
                 $plan['lifetime'],
-                $this->classServiceStatements($plan, $slots),
+                $this->classServiceStatements($plan, $slots, $slot),
             );
         }
 
@@ -221,7 +223,7 @@ final class StaticRuntimeRenderer
             $source .= "            return \$this->scope->resolved[{$slot}];\n";
             $source .= "        }\n\n";
             if ($hasSetup) {
-                $source .= $this->classServiceStatements($plan, $slots);
+                $source .= $this->classServiceStatements($plan, $slots, $slot);
                 $source .= "\n        return \$this->scope->resolved[{$slot}] = \$instance;\n";
             } else {
                 $source .= "        return \$this->scope->resolved[{$slot}] = {$construction};\n";
@@ -231,13 +233,13 @@ final class StaticRuntimeRenderer
                 $source .= "        if (\$this->v{$slot} !== null) {\n";
                 $source .= "            return \$this->v{$slot};\n";
                 $source .= "        }\n\n";
-                $source .= $this->classServiceStatements($plan, $slots);
+                $source .= $this->classServiceStatements($plan, $slots, $slot);
                 $source .= "\n        return \$this->v{$slot} = \$instance;\n";
             } else {
                 $source .= "        return \$this->v{$slot} ??= {$construction};\n";
             }
         } elseif ($hasSetup) {
-            $source .= $this->classServiceStatements($plan, $slots);
+            $source .= $this->classServiceStatements($plan, $slots, $slot);
             $source .= "\n        return \$instance;\n";
         } else {
             $source .= "        return {$construction};\n";
