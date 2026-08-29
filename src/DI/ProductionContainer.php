@@ -161,7 +161,10 @@ abstract class ProductionContainer implements ContainerInterface
             return $this->dynamic()->getReturn($id);
         }
         if ($this->isCompiledDefinition($id)) {
-            return $this->get($id);
+            $service = $this->get($id);
+            $returned = null;
+
+            return $this->compiledReturn($id, $returned) ? $returned : $service;
         }
 
         return $this->dynamic()->getReturn($id);
@@ -274,6 +277,11 @@ abstract class ProductionContainer implements ContainerInterface
     protected function compiledIds(): array
     {
         return [];
+    }
+
+    protected function compiledReturn(string $id, mixed &$returned): bool
+    {
+        return false;
     }
 
     /** @return array<string, mixed> */
