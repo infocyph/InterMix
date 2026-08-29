@@ -6,8 +6,6 @@ namespace Infocyph\InterMix\DI\Build;
 
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
-use Infocyph\InterMix\Internal\ReflectionResource;
-use ReflectionNamedType;
 
 /**
  * Immutable build-time snapshot of resolution-affecting container state.
@@ -66,7 +64,7 @@ final readonly class DefinitionGraph
             classResources: $repository->getClassResource(),
             closureResources: $repository->getClosureResource(),
             contextualBindings: $contextualBindings,
-            environmentBindings: self::snapshotEnvironmentBindings(
+            environmentBindings: (new EnvironmentBindingSnapshot())->capture(
                 $repository,
                 $definitions,
                 $contextualBindings,
@@ -178,77 +176,5 @@ final readonly class DefinitionGraph
     public function registeredAttributeTypes(): array
     {
         return array_keys($this->attributeTypes);
-    }
-
-    /**
-     * @param array<string, mixed> $definitions
-     * @param array<string, array<string, mixed>> $contextualBindings
-     * @return array<string, string>
-     */
-    private static function snapshotEnvironmentBindings(
-        Repository $repository,
-        array $definitions,
-        array $contextualBindings,
-    ): array {
-        if ($repository->getEnvironment() === null) {
-            return [];
-        }
-
-        $pending = [];
-        foreach ($definitions as $definition) {
-            if (is_string($definition) && class_exists($definition)) {
-                $pending[] = $definition;
-            }
-        }
-        foreach ($contextualBindings as $bindings) {
-            foreach ($bindings as $binding) {
-                if (is_string($binding) && (class_exists($binding) || interface_exists($binding))) {
-                    $pending[] = $binding;
-                }
-            }
-        }
-
-        $bindings = [];
-        $seen = [];
-        while (($type = array_pop($pending)) !== null) {
-            if (isset($seen[$type])) {
-                continue;
-            }
-            $seen[$type] = true;
-
-            $concrete = $repository->getEnvConcrete($type);
-            if ($concrete !== null && class_exists($concrete)) {
-                $bindings[$type] = $concrete;
-                $pending[] = $concrete;
-                $type = $concrete;
-            }
-            if (!class_exists($type)) {
-                continue;
-            }
-
-            $constructor = ReflectionResource::getClassReflection($type)->getConstructor();
-            if ($constructor === null) {
-                continue;
-            }
-            foreach ($constructor->getParameters() as $parameter) {
-                $parameterType = $parameter->getType();
-                if (!$parameterType instanceof ReflectionNamedType || $parameterType->isBuiltin()) {
-                    continue;
-                }
-
-                $dependency = $parameterType->getName();
-                $environmentConcrete = $repository->getEnvConcrete($dependency);
-                if ($environmentConcrete !== null && class_exists($environmentConcrete)) {
-                    $bindings[$dependency] = $environmentConcrete;
-                    $pending[] = $environmentConcrete;
-                } elseif (class_exists($dependency)) {
-                    $pending[] = $dependency;
-                }
-            }
-        }
-
-        ksort($bindings, SORT_STRING);
-
-        return $bindings;
     }
 }
