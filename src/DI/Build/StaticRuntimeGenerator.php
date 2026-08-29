@@ -125,7 +125,10 @@ final class StaticRuntimeGenerator
         return ['arguments' => $arguments, 'dependencies' => $dependencies];
     }
 
-    /** @param array<string, array{dependencies: list<string>}> $plans */
+    /**
+     * @param array<string, array{dependencies: list<string>}> $plans
+     * @param array<string, true> $remaining
+     */
     private function hasRemainingDependency(array $plans, array $remaining, string $id): bool
     {
         foreach ($plans[$id]['dependencies'] as $dependency) {
@@ -137,6 +140,7 @@ final class StaticRuntimeGenerator
         return false;
     }
 
+    /** @param ReflectionClass<object> $class */
     private function implicitMethod(DefinitionGraph $graph, ReflectionClass $class): ?string
     {
         $constant = $class->hasConstant('CALL_ON') ? 'CALL_ON' : 'callOn';
