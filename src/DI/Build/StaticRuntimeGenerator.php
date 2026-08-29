@@ -92,6 +92,7 @@ final class StaticRuntimeGenerator
         return $this->attachFallback($this->loadRuntime($filePath), $fallback);
     }
 
+    /** @param array{abi: int, sha256: string} $manifest */
     private function assertManifestAbi(array $manifest): void
     {
         if ($manifest['abi'] !== self::ARTIFACT_ABI) {
