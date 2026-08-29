@@ -16,13 +16,14 @@ use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Container\ContainerInterface;
 
-/** Central mutable state for one container instance. */
+/**
+ * Central storage for the container's definitions, resolved instances, and
+ * resolution configuration.
+ */
 class Repository
 {
     use InvalidatesRepositoryState;
     use ResolvesMissingServices;
-
-    private string $alias = 'default';
 
     private ?AttributeRegistry $attributeRegistry = null;
 
@@ -127,28 +128,32 @@ class Repository
 
     /**
      * Bootstrap immutable repository facts directly. A fresh repository has no
-     * cache state to invalidate, so construction must not travel through normal
-     * mutation APIs.
+     * runtime state to invalidate, so construction avoids the mutation path.
      */
     public function __construct(
         private readonly Container $container,
-        string $alias = 'default',
+        private string $alias = 'default',
     ) {
-        $this->alias = $alias;
         $this->functionReference[ContainerInterface::class] = $container;
     }
 
+    /**
+     * @param array<string, mixed> $data
+     */
     public function addClassResource(string $class, string $key, array $data): void
     {
         $this->checkIfLocked();
         if (($this->classResource[$class][$key] ?? null) === $data) {
             return;
         }
+
         $this->classResource[$class][$key] = $data;
         $this->invalidateClass($class);
     }
 
-    /** @param array<int|string, mixed> $params */
+    /**
+     * @param array<int|string, mixed> $params
+     */
     public function addClosureResource(string $alias, callable $function, array $params = []): void
     {
         $this->checkIfLocked();
@@ -167,6 +172,7 @@ class Repository
         if (($this->conditionalBindings[$env][$interface] ?? null) === $concrete) {
             return;
         }
+
         $this->conditionalBindings[$env][$interface] = $concrete;
         $this->invalidateResolutionConfiguration();
     }
@@ -181,6 +187,7 @@ class Repository
         if (!$this->hasHooks) {
             return;
         }
+
         foreach ($this->onResolvedHooks[$id] ?? [] as $hook) {
             $hook($id, $value);
         }
@@ -191,20 +198,25 @@ class Repository
         if (!$this->hasHooks) {
             return;
         }
+
         foreach ($this->onResolvingHooks[$id] ?? [] as $hook) {
             $hook($id);
         }
     }
 
     /**
-     * The public lazy flag is retained for compatibility. Definitions are
-     * naturally deferred until get(); toggling this flag therefore must not
-     * destroy already-resolved state or compiled artifacts.
+     * Enable or disable lazy loading and invalidate resolution configuration
+     * when the option changes, preserving the established container contract.
      */
     public function enableLazyLoading(bool $lazy): void
     {
         $this->checkIfLocked();
+        if ($this->lazyLoading === $lazy) {
+            return;
+        }
+
         $this->lazyLoading = $lazy;
+        $this->invalidateResolutionConfiguration();
     }
 
     public function enableMethodAttribute(bool $enable): void
@@ -213,6 +225,7 @@ class Repository
         if ($this->enableMethodAttribute === $enable) {
             return;
         }
+
         $this->enableMethodAttribute = $enable;
         $this->invalidateResolutionConfiguration();
     }
@@ -223,11 +236,14 @@ class Repository
         if ($this->enablePropertyAttribute === $enable) {
             return;
         }
+
         $this->enablePropertyAttribute = $enable;
         $this->invalidateResolutionConfiguration();
     }
 
-    /** @param array<string, mixed> $instances */
+    /**
+     * @param array<string, mixed> $instances
+     */
     public function enterScope(string $scope, array $instances = []): void
     {
         if ($scope === $this->currentScope || in_array($scope, $this->scopeStack, true)) {
@@ -246,15 +262,23 @@ class Repository
         return $value instanceof ClassResolution ? $value->instance : $value;
     }
 
+    /**
+     * Read an instance seeded into the active scope without consulting global
+     * definitions or lifetime metadata.
+     *
+     * @internal
+     */
     public function findScopeSeed(string $id, mixed &$value): bool
     {
         if ($this->scopeSeeds === []) {
             return false;
         }
+
         $seeds = $this->scopeSeeds[$this->currentScope] ?? null;
         if (!is_array($seeds) || !array_key_exists($id, $seeds)) {
             return false;
         }
+
         $value = $seeds[$id];
 
         return true;
@@ -265,31 +289,41 @@ class Repository
         return $this->alias;
     }
 
-    /** @return array<string, array{lifetime: LifetimeEnum, tags: array<int, string>}> */
+    /**
+     * @return array<string, array{lifetime: LifetimeEnum, tags: array<int, string>}>
+     */
     public function getAllDefinitionMeta(): array
     {
         return $this->definitionMeta;
     }
 
-    /** @return array<string, array<string, mixed>> */
+    /**
+     * @return array<string, array<string, mixed>>
+     */
     public function getClassResource(): array
     {
         return $this->classResource;
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * @return array<string, mixed>
+     */
     public function getClassResourceFor(string $class): array
     {
         return $this->classResource[$class] ?? [];
     }
 
-    /** @return array<string, array{on: callable, params: array<int|string, mixed>}> */
+    /**
+     * @return array<string, array{on: callable, params: array<int|string, mixed>}>
+     */
     public function getClosureResource(): array
     {
         return $this->closureResource;
     }
 
-    /** @return array{on: callable, params: array<int|string, mixed>}|null */
+    /**
+     * @return array{on: callable, params: array<int|string, mixed>}|null
+     */
     public function getClosureResourceEntry(string $alias): ?array
     {
         return $this->closureResource[$alias] ?? null;
@@ -305,7 +339,10 @@ class Repository
         return $this->contextualBindings[$consumer][$dependency] ?? null;
     }
 
-    /** @return array<string, array<int, string>> */
+    /**
+     * @return array<string, array<int, string>>
+     * @internal
+     */
     public function getContextualBindingShape(): array
     {
         $shape = [];
@@ -333,6 +370,7 @@ class Repository
     {
         $lifetime = $this->definitionMeta[$id]['lifetime'] ?? LifetimeEnum::Singleton;
         $env = $this->environment;
+
         if ($env !== null && isset($this->definitionMetaByEnv[$env][$id]['lifetime'])) {
             return $this->definitionMetaByEnv[$env][$id]['lifetime'];
         }
@@ -340,11 +378,14 @@ class Repository
         return $lifetime;
     }
 
-    /** @return array{lifetime: LifetimeEnum, tags: array<int, string>} */
+    /**
+     * @return array{lifetime: LifetimeEnum, tags: array<int, string>}
+     */
     public function getDefinitionMeta(string $id): array
     {
         $meta = $this->definitionMeta[$id] ?? ['lifetime' => LifetimeEnum::Singleton, 'tags' => []];
         $env = $this->environment;
+
         if ($env !== null && isset($this->definitionMetaByEnv[$env][$id])) {
             $override = $this->definitionMetaByEnv[$env][$id];
             if (array_key_exists('lifetime', $override)) {
@@ -377,17 +418,22 @@ class Repository
         return $this->functionReference[$id] ?? null;
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * @return array<string, mixed>
+     */
     public function getFunctionReference(): array
     {
         return $this->functionReference;
     }
 
-    /** @return array<int, string> */
+    /**
+     * @return array<int, string>
+     */
     public function getIdsByTag(string $tag): array
     {
         $ids = $this->tagIndex[$tag] ?? [];
         $env = $this->environment;
+
         if ($env === null) {
             return array_keys($ids);
         }
@@ -395,11 +441,13 @@ class Repository
         foreach ($this->tagIndexByEnv[$env][$tag] ?? [] as $id => $_) {
             $ids[$id] = true;
         }
+
         foreach ($this->tagOverrideIdsByEnv[$env] ?? [] as $id => $_) {
             $override = $this->definitionMetaByEnv[$env][$id] ?? null;
             if (!is_array($override) || !array_key_exists('tags', $override)) {
                 continue;
             }
+
             if (!in_array($tag, $override['tags'], true)) {
                 unset($ids[$id]);
             }
@@ -408,19 +456,26 @@ class Repository
         return array_keys($ids);
     }
 
-    /** @return array<int, class-string> */
+    /**
+     * @return array<int, class-string>
+     * @internal
+     */
     public function getRegisteredAttributeTypes(): array
     {
         return $this->attributeRegistry?->types() ?? [];
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * @return array<string, mixed>
+     */
     public function getResolved(): array
     {
         return $this->resolved;
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * @return array<string, mixed>
+     */
     public function getResolvedDefinition(): array
     {
         return $this->resolvedDefinition;
@@ -436,7 +491,9 @@ class Repository
         return $this->resolved[$key] ?? null;
     }
 
-    /** @return array<string, ClassResolution> */
+    /**
+     * @return array<string, ClassResolution>
+     */
     public function getResolvedResource(): array
     {
         return $this->resolvedResource;
@@ -447,11 +504,13 @@ class Repository
         return $this->resolvedResource[$class] ?? null;
     }
 
+    /** @internal */
     public function getResolvedScopedEntry(string $scope, string $id): mixed
     {
         return $this->resolvedScoped[$scope][$id] ?? null;
     }
 
+    /** @internal */
     public function getResolvedSingletonEntry(string $key): mixed
     {
         return $this->resolvedSingleton[$key] ?? null;
@@ -467,6 +526,7 @@ class Repository
         return array_key_exists($alias, $this->closureResource);
     }
 
+    /** @internal */
     public function hasCompiledResolvers(): bool
     {
         return $this->compiledResolver instanceof Closure;
@@ -478,6 +538,7 @@ class Repository
         return $this->contextualBindings !== [];
     }
 
+    /** @internal */
     public function hasContextualBinding(string $consumer, string $dependency): bool
     {
         return array_key_exists($dependency, $this->contextualBindings[$consumer] ?? []);
@@ -498,21 +559,25 @@ class Repository
         return array_key_exists($key, $this->resolvedDefinition);
     }
 
+    /** @internal */
     public function hasResolvedResource(string $class): bool
     {
         return array_key_exists($class, $this->resolvedResource);
     }
 
+    /** @internal */
     public function hasResolvedScoped(string $scope, string $id): bool
     {
         return array_key_exists($id, $this->resolvedScoped[$scope] ?? []);
     }
 
+    /** @internal */
     public function hasResolvedSingleton(string $key): bool
     {
         return array_key_exists($key, $this->resolvedSingleton);
     }
 
+    /** @internal */
     public function hasScopeSeeds(): bool
     {
         return $this->scopeSeeds !== [];
@@ -538,6 +603,7 @@ class Repository
         return $this->enablePropertyAttribute;
     }
 
+    /** @internal */
     public function isResolved(string $id): bool
     {
         return isset($this->resolvedIds[$id]);
@@ -568,7 +634,9 @@ class Repository
         $this->isLocked = true;
     }
 
-    /** Create a short PSR-6-safe cache key while precomputing stable prefix work. */
+    /**
+     * Create a short PSR-6-safe cache key while reusing stable prefix hashes.
+     */
     public function makeDefinitionCacheKey(string $definition): string
     {
         $this->definitionCachePrefix ??= 'imx.'
@@ -587,6 +655,7 @@ class Repository
             . substr(hash('sha256', $definition . "\0" . ($this->environment ?? 'default')), 0, 16);
     }
 
+    /** @internal */
     public function markResolved(string $id): void
     {
         $this->resolvedIds[$id] = true;
@@ -660,11 +729,16 @@ class Repository
         if ($this->alias === $alias) {
             return;
         }
+
         $this->alias = $alias;
         $this->definitionCachePrefix = null;
         $this->invalidateResolutionConfiguration();
     }
 
+    /**
+     * @param array<string, mixed> $ids
+     * @internal
+     */
     public function setCompiledResolver(Closure $resolver, array $ids): void
     {
         $this->checkIfLocked();
@@ -680,6 +754,7 @@ class Repository
         ) {
             return;
         }
+
         $this->contextualBindings[$consumer][$dependency] = $give;
         $this->invalidateResolutionConfiguration();
     }
@@ -690,6 +765,7 @@ class Repository
         if ($this->defaultMethod === $method) {
             return;
         }
+
         $this->defaultMethod = $method;
         $this->invalidateResolutionConfiguration();
     }
@@ -714,8 +790,8 @@ class Repository
     }
 
     /**
-     * Atomic definition registration: update definition, metadata, and tag index,
-     * then invalidate exactly once.
+     * Register a definition and its metadata as one mutation so resolution
+     * state and compiled artifacts are invalidated exactly once.
      *
      * @param array<int, string> $tags
      */
@@ -745,7 +821,9 @@ class Repository
         $this->invalidateDefinition($id);
     }
 
-    /** @param array{lifetime?: LifetimeEnum, tags?: array<int, scalar|null>} $meta */
+    /**
+     * @param array{lifetime?: LifetimeEnum, tags?: array<int, scalar|null>} $meta
+     */
     public function setDefinitionMeta(string $id, array $meta): void
     {
         $this->checkIfLocked();
@@ -757,18 +835,22 @@ class Repository
         if (($this->definitionMeta[$id] ?? null) === $normalized) {
             return;
         }
+
         $this->definitionMeta[$id] = $normalized;
         $this->refreshResolvedSingletonIndex($id);
         $this->refreshBaseTagIndex($id, $oldTags, $normalizedTags);
         $this->invalidateDefinition($id);
     }
 
-    /** @param array{lifetime?: LifetimeEnum, tags?: array<int, scalar|null>} $meta */
+    /**
+     * @param array{lifetime?: LifetimeEnum, tags?: array<int, scalar|null>} $meta
+     */
     public function setDefinitionMetaForEnv(string $env, string $id, array $meta): void
     {
         $this->checkIfLocked();
         $existing = $this->definitionMetaByEnv[$env][$id] ?? [];
         $normalized = [];
+
         if (array_key_exists('lifetime', $meta)) {
             $normalized['lifetime'] = $meta['lifetime'];
         }
@@ -796,6 +878,7 @@ class Repository
         if ($this->environment === $env) {
             return;
         }
+
         $this->checkIfLocked();
         $this->environment = $env;
         $this->invalidateResolutionConfiguration();
@@ -812,6 +895,7 @@ class Repository
         ) {
             return;
         }
+
         $this->functionReference[$id] = $definition;
         $this->invalidateDefinition($id);
     }
@@ -824,6 +908,7 @@ class Repository
 
             return;
         }
+
         unset($this->resolvedSingleton[$id]);
     }
 
@@ -886,16 +971,14 @@ class Repository
         if (!is_array($value)) {
             return false;
         }
-        foreach ($value as $item) {
-            if (!$this->isSafeCachedDefinitionValue($item)) {
-                return false;
-            }
-        }
 
-        return true;
+        return array_all($value, fn($item) => $this->isSafeCachedDefinitionValue($item));
     }
 
-    /** @param array<int, string> $oldTags @param array<int, string> $newTags */
+    /**
+     * @param array<int, string> $oldTags
+     * @param array<int, string> $newTags
+     */
     private function refreshBaseTagIndex(string $id, array $oldTags, array $newTags): void
     {
         foreach ($oldTags as $tag) {
@@ -904,12 +987,16 @@ class Repository
                 unset($this->tagIndex[$tag]);
             }
         }
+
         foreach ($newTags as $tag) {
             $this->tagIndex[$tag][$id] = true;
         }
     }
 
-    /** @param array<int, string> $oldTags @param array<int, string> $newTags */
+    /**
+     * @param array<int, string> $oldTags
+     * @param array<int, string> $newTags
+     */
     private function refreshEnvTagIndex(string $env, string $id, array $oldTags, array $newTags): void
     {
         foreach ($oldTags as $tag) {
@@ -918,6 +1005,7 @@ class Repository
                 unset($this->tagIndexByEnv[$env][$tag]);
             }
         }
+
         foreach ($newTags as $tag) {
             $this->tagIndexByEnv[$env][$tag][$id] = true;
         }
@@ -932,6 +1020,7 @@ class Repository
 
             return;
         }
+
         unset($this->resolvedSingleton[$id]);
     }
 }
