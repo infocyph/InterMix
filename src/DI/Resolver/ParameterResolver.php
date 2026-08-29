@@ -49,10 +49,7 @@ class ParameterResolver
     /** @var array<string, array<int, array<int, ReflectionNamedType>>> */
     private array $typeGroupCache = [];
 
-    public function __construct(
-        private readonly Repository $repository,
-        private readonly DefinitionResolver $definitionResolver,
-    ) {}
+    public function __construct(private readonly Repository $repository) {}
 
     /**
      * @param array<int|string, mixed> $suppliedParameters
@@ -132,21 +129,9 @@ class ParameterResolver
                 $named->getName(),
                 $parameter->getDeclaringClass(),
             );
-
-            if ($hasScopeSeeds && $this->repository->findScopeSeed($typeName, $seeded)) {
-                return $seeded;
-            }
-
-            if ($this->repository->hasFunctionReference($typeName)) {
-                return $container->get($typeName);
-            }
-
-            if ($this->repository->hasMissingHooks()
-                && !$container->has($typeName)
-                && $this->repository->tryResolveMissing($typeName)
-                && $this->repository->hasFunctionReference($typeName)
-            ) {
-                return $container->get($typeName);
+            $resolved = $this->resolveNamedDefinitionType($typeName, $hasScopeSeeds, $seeded);
+            if ($resolved !== AttributeResolution::Unresolved) {
+                return $resolved;
             }
         }
 
@@ -490,6 +475,28 @@ class ParameterResolver
         $this->resolutionPlanCache[$key] = $value;
 
         return $value;
+    }
+
+    private function resolveNamedDefinitionType(string $name, bool $hasScopeSeeds, mixed &$seeded): mixed
+    {
+        if ($hasScopeSeeds && $this->repository->findScopeSeed($name, $seeded)) {
+            return $seeded;
+        }
+
+        $container = $this->repository->container();
+        if ($this->repository->hasFunctionReference($name)) {
+            return $container->get($name);
+        }
+
+        if (!$this->repository->hasMissingHooks()
+            || $container->has($name)
+            || !$this->repository->tryResolveMissing($name)
+            || !$this->repository->hasFunctionReference($name)
+        ) {
+            return AttributeResolution::Unresolved;
+        }
+
+        return $container->get($name);
     }
 
     /**
