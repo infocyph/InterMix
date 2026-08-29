@@ -45,20 +45,7 @@ class InvocationManager implements ArrayAccess
             return $this->callClosureResource($classOrClosure, $method);
         }
 
-        if (!$this->has($classOrClosure)) {
-            $activated = $this->repository->tryResolveMissing($classOrClosure);
-            if (!$activated && !interface_exists($classOrClosure)) {
-                throw new NotFoundException("No entry found for '$classOrClosure'.");
-            }
-        }
-        if ($this->repository->hasFunctionReference($classOrClosure)) {
-            return $this->callDefinition($classOrClosure, $method);
-        }
-
-        $targetMethod = $method === false ? false : (is_string($method) ? $method : null);
-        $resolved = $this->container->getCurrentResolver()->classSettler($classOrClosure, $targetMethod);
-
-        return $resolved->methodInvoked ? $resolved->returned : $resolved->instance;
+        return $this->callClass($classOrClosure, $method);
     }
 
     public function definitions(): DefinitionManager
@@ -96,21 +83,9 @@ class InvocationManager implements ArrayAccess
         }
 
         if (!$this->has($id)) {
-            if (!$this->repository->tryResolveMissing($id)) {
-                throw new NotFoundException("No entry found for '$id'.");
-            }
-
-            // A missing callback may register any lifetime. The pre-activation
-            // default (Singleton) is not authoritative.
-            $lifetime = $this->repository->getDefinitionLifetime($id);
-            if ($lifetime === LifetimeEnum::Scoped) {
-                $scope = $this->repository->getScope();
-                $resolved = $this->repository->getResolvedScopedEntry($scope, $id);
-                if ($resolved !== null || $this->repository->hasResolvedScoped($scope, $id)) {
-                    return $this->repository->fetchInstanceOrValue($resolved);
-                }
-            } else {
-                $scope = null;
+            [$lifetime, $scope, $wasResolved, $resolved] = $this->activateMissing($id);
+            if ($wasResolved) {
+                return $resolved;
             }
         }
 
@@ -121,7 +96,7 @@ class InvocationManager implements ArrayAccess
         return match ($lifetime) {
             LifetimeEnum::Singleton => $this->resolveAndCache($id, true, null),
             LifetimeEnum::Transient => $this->resolveAndCache($id, false, null),
-            LifetimeEnum::Scoped => $this->resolveAndCache($id, true, $scope ?? $this->repository->getScope()),
+            LifetimeEnum::Scoped => $this->resolveAndCache($id, true, $scope),
         };
     }
 
@@ -183,6 +158,29 @@ class InvocationManager implements ArrayAccess
         );
     }
 
+    /**
+     * @return array{LifetimeEnum, string|null, bool, mixed}
+     */
+    private function activateMissing(string $id): array
+    {
+        if (!$this->repository->tryResolveMissing($id)) {
+            throw new NotFoundException("No entry found for '$id'.");
+        }
+
+        $lifetime = $this->repository->getDefinitionLifetime($id);
+        if ($lifetime !== LifetimeEnum::Scoped) {
+            return [$lifetime, null, false, null];
+        }
+
+        $scope = $this->repository->getScope();
+        $resolved = $this->repository->getResolvedScopedEntry($scope, $id);
+        if ($resolved === null && !$this->repository->hasResolvedScoped($scope, $id)) {
+            return [$lifetime, $scope, false, null];
+        }
+
+        return [$lifetime, $scope, true, $this->repository->fetchInstanceOrValue($resolved)];
+    }
+
     private function callCallable(callable $callable, string|bool|null $method): mixed
     {
         if (is_string($method) && $method !== '') {
@@ -190,6 +188,24 @@ class InvocationManager implements ArrayAccess
         }
 
         return $this->container->getCurrentResolver()->closureSettler($callable);
+    }
+
+    private function callClass(string $class, string|bool|null $method): mixed
+    {
+        if (!$this->has($class)) {
+            $activated = $this->repository->tryResolveMissing($class);
+            if (!$activated && !interface_exists($class)) {
+                throw new NotFoundException("No entry found for '$class'.");
+            }
+        }
+        if ($this->repository->hasFunctionReference($class)) {
+            return $this->callDefinition($class, $method);
+        }
+
+        $targetMethod = $method === false ? false : (is_string($method) ? $method : null);
+        $resolved = $this->container->getCurrentResolver()->classSettler($class, $targetMethod);
+
+        return $resolved->methodInvoked ? $resolved->returned : $resolved->instance;
     }
 
     private function callClosureResource(string $alias, string|bool|null $method): mixed
