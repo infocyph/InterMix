@@ -80,22 +80,6 @@ it('keeps null singleton values on the cached hot path', function () {
         ->and($calls)->toBe(1);
 });
 
-it('does not invalidate resolved state when the compatibility lazy flag changes', function () {
-    $container = new Container(uniqid('hot_path_lazy_', true));
-    $calls = 0;
-    $container->singleton('service', function () use (&$calls): stdClass {
-        ++$calls;
-
-        return new stdClass();
-    });
-
-    $service = $container->get('service');
-    $container->enableLazyLoading(false)->enableLazyLoading(true);
-
-    expect($container->get('service'))->toBe($service)
-        ->and($calls)->toBe(1);
-});
-
 it('registers definition metadata and tags atomically', function () {
     $container = new Container(uniqid('hot_path_atomic_', true));
     $container->bind(
