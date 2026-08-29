@@ -21,6 +21,9 @@ final class ContainerBuilder
     /** @var null|array{compiled: list<string>, skipped: array<string, string>} */
     private ?array $compilationReport = null;
 
+    /** @var array<string, true> */
+    private array $dynamicServiceIds = [];
+
     public function __construct(?Container $development = null)
     {
         $this->development = $development ?? new Container();
@@ -69,7 +72,10 @@ final class ContainerBuilder
     public function compile(string $path): array
     {
         $generated = new StaticRuntimeGenerator()->generate(
-            DefinitionGraph::from($this->development->getRepository()),
+            DefinitionGraph::from(
+                $this->development->getRepository(),
+                array_keys($this->dynamicServiceIds),
+            ),
             $path,
         );
         $this->compilationReport = [
@@ -117,6 +123,7 @@ final class ContainerBuilder
 
     public function onResolved(string $id, callable $callback): self
     {
+        $this->dynamicServiceIds[$id] = true;
         $this->development->onResolved($id, $callback);
 
         return $this;
@@ -124,6 +131,7 @@ final class ContainerBuilder
 
     public function onResolving(string $id, callable $callback): self
     {
+        $this->dynamicServiceIds[$id] = true;
         $this->development->onResolving($id, $callback);
 
         return $this;
@@ -185,6 +193,7 @@ final class ContainerBuilder
     public function unbind(string $id): self
     {
         $this->development->unbind($id);
+        unset($this->dynamicServiceIds[$id]);
 
         return $this;
     }
