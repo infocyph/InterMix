@@ -51,10 +51,7 @@ final class StaticRuntimeIslandRenderer
         foreach ($properties as $property) {
             $runtime = $property['runtime'] ?? null;
             if ($runtime === 'attribute' || $runtime === 'registered') {
-                $method = $runtime === 'attribute'
-                    ? 'applyCompiledRuntimePropertyAttribute'
-                    : 'applyCompiledRuntimeRegisteredProperty';
-                $source .= "        \$this->{$method}("
+                $source .= '        $this->applyCompiledRuntimePropertyAttribute('
                     . $instance . ', '
                     . var_export($property['declaring'], true) . ', '
                     . var_export($property['property'], true)
