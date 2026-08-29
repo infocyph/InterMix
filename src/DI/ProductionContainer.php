@@ -6,6 +6,7 @@ namespace Infocyph\InterMix\DI;
 
 use Closure;
 use Infocyph\InterMix\DI\Internal\ScopeState;
+use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Container\ContainerInterface;
 use Throwable;
@@ -20,6 +21,9 @@ abstract class ProductionContainer implements ContainerInterface
     {
         $this->scope = new ScopeState('root');
         $this->fallback = $fallback;
+        if ($fallback instanceof Container) {
+            $this->installFallbackBridges($fallback);
+        }
     }
 
     abstract protected function slotFor(string $id): ?int;
@@ -27,6 +31,7 @@ abstract class ProductionContainer implements ContainerInterface
     /** @internal */
     public final function attachFallback(Container $fallback): void
     {
+        $this->installFallbackBridges($fallback);
         $this->fallback = $fallback;
         $this->synchronizeFallbackScopes($fallback);
     }
@@ -39,6 +44,12 @@ abstract class ProductionContainer implements ContainerInterface
         }
 
         return $this->dynamic()->call($classOrClosure, $method);
+    }
+
+    /** @return array<int, string> */
+    protected function compiledIds(): array
+    {
+        return [];
     }
 
     /** @param array<string, mixed> $instances */
@@ -104,7 +115,6 @@ abstract class ProductionContainer implements ContainerInterface
         return $this->dynamic()->getReturn($id);
     }
 
-    /** @return bool */
     protected function isCompiledDefinition(string $id): bool
     {
         return false;
@@ -192,10 +202,22 @@ abstract class ProductionContainer implements ContainerInterface
         }
 
         $fallback = new Container('intermix.production.dynamic.' . spl_object_id($this));
+        $this->installFallbackBridges($fallback);
         $this->synchronizeFallbackScopes($fallback);
         $this->fallback = $fallback;
 
         return $fallback;
+    }
+
+    private function installFallbackBridges(Container $fallback): void
+    {
+        foreach ($this->compiledIds() as $id) {
+            $fallback->bindFactory(
+                $id,
+                fn(Container $_container): mixed => $this->get($id),
+                LifetimeEnum::Transient,
+            );
+        }
     }
 
     private function synchronizeFallbackScopes(Container $fallback): void
