@@ -83,6 +83,18 @@ final class StaticInjectPlanner
             ?? "parameter '{$parameter->getName()}' has an unresolved #[Inject] target '{$target}'";
     }
 
+    private function isExportable(mixed $value): bool
+    {
+        if ($value === null || is_scalar($value)) {
+            return true;
+        }
+        if (!is_array($value)) {
+            return false;
+        }
+
+        return array_all($value, fn(mixed $item): bool => $this->isExportable($item));
+    }
+
     /** @return ServiceArgument|string */
     private function methodValuePlan(DefinitionGraph $graph, mixed $value, string $parameter): array|string
     {
@@ -102,18 +114,6 @@ final class StaticInjectPlanner
         }
 
         return ['kind' => 'value', 'code' => var_export($value, true)];
-    }
-
-    private function isExportable(mixed $value): bool
-    {
-        if ($value === null || is_scalar($value)) {
-            return true;
-        }
-        if (!is_array($value)) {
-            return false;
-        }
-
-        return array_all($value, fn(mixed $item): bool => $this->isExportable($item));
     }
 
     /** @return ServiceArgument|string|null */
