@@ -99,7 +99,7 @@ final class StaticMethodPlanner
 
         return array_any(
             $parameter->getAttributes(),
-            static fn(ReflectionAttribute $attribute): bool => $graph->hasAttributeType($attribute->getName()),
+            fn(ReflectionAttribute $attribute): bool => $graph->hasAttributeType($attribute->getName()),
         );
     }
 
