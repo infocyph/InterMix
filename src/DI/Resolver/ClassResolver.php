@@ -9,9 +9,7 @@ use Infocyph\InterMix\DI\Attribute\Inject;
 use Infocyph\InterMix\DI\Internal\ClassResolution;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Internal\ReflectionResource;
-use Psr\Cache\InvalidArgumentException;
 use ReflectionClass;
-use ReflectionException;
 use ReflectionMethod;
 
 class ClassResolver
@@ -26,7 +24,6 @@ class ClassResolver
         private readonly Repository $repository,
         private readonly ParameterResolver $parameterResolver,
         private readonly PropertyResolver $propertyResolver,
-        private readonly DefinitionResolver $definitionResolver,
     ) {}
 
     /**
@@ -98,7 +95,9 @@ class ClassResolver
         }
     }
 
-    /** @param ReflectionClass<object> $class */
+    /**
+     * @param ReflectionClass<object> $class
+     */
     public function resolveClassInstance(ReflectionClass $class): object
     {
         return $this->resolve($class)->instance;
@@ -110,6 +109,7 @@ class ClassResolver
         if (!is_array($typeData)) {
             return AttributeResolution::Unresolved;
         }
+
         $type = $typeData['type'] ?? null;
         $data = $typeData['data'] ?? [];
         if (!is_string($type) || $type === '') {
@@ -129,7 +129,9 @@ class ClassResolver
         return $this->resolveInjectFromClassOrInterface($type);
     }
 
-    /** @param ReflectionClass<object> $class */
+    /**
+     * @param ReflectionClass<object> $class
+     */
     private function getConcreteClassForInterface(ReflectionClass $class, mixed $supplied): ReflectionClass
     {
         if (!$class->isInterface()) {
@@ -162,7 +164,9 @@ class ClassResolver
         return $concrete;
     }
 
-    /** @param array<int|string, mixed> $supplied */
+    /**
+     * @param array<int|string, mixed> $supplied
+     */
     private function invokeResolvedMethod(
         string $className,
         string $method,
@@ -188,19 +192,25 @@ class ClassResolver
         return is_string($method) ? $method : null;
     }
 
-    /** @return array<int|string, mixed> */
+    /**
+     * @return array<int|string, mixed>
+     */
     private function readConstructorParams(string $className): array
     {
         return $this->readResourceParams($className, 'constructor');
     }
 
-    /** @return array<int|string, mixed> */
+    /**
+     * @return array<int|string, mixed>
+     */
     private function readMethodParams(string $className): array
     {
         return $this->readResourceParams($className, 'method');
     }
 
-    /** @return array<int|string, mixed> */
+    /**
+     * @return array<int|string, mixed>
+     */
     private function readResourceParams(string $className, string $scope): array
     {
         $resource = $this->repository->getClassResourceFor($className)[$scope] ?? null;
@@ -241,7 +251,9 @@ class ClassResolver
         }
     }
 
-    /** @param ReflectionClass<object> $class */
+    /**
+     * @param ReflectionClass<object> $class
+     */
     private function resolveConfiguredTargetMethod(
         ReflectionClass $class,
         string $className,
@@ -260,7 +272,10 @@ class ClassResolver
         return is_string($method) && $class->hasMethod($method) ? $method : null;
     }
 
-    /** @param ReflectionClass<object> $class @param array<int|string, mixed> $supplied */
+    /**
+     * @param ReflectionClass<object> $class
+     * @param array<int|string, mixed> $supplied
+     */
     private function resolveConstructor(ReflectionClass $class, array $supplied = []): object
     {
         $className = $class->getName();
@@ -317,7 +332,9 @@ class ClassResolver
             : AttributeResolution::Unresolved;
     }
 
-    /** @param array<int|string, mixed> $data */
+    /**
+     * @param array<int|string, mixed> $data
+     */
     private function resolveInjectFromFunction(string $type, array $data): mixed
     {
         if (!function_exists($type)) {
@@ -378,7 +395,10 @@ class ClassResolver
         );
     }
 
-    /** @param array<int|string, mixed> $supplied @return array<int|string, mixed> */
+    /**
+     * @param array<int|string, mixed> $supplied
+     * @return array<int|string, mixed>
+     */
     private function resolveMethodArguments(
         string $className,
         ReflectionMethod $refMethod,
@@ -407,7 +427,9 @@ class ClassResolver
         return new ClassResolution($resolved);
     }
 
-    /** @param ReflectionClass<object> $class */
+    /**
+     * @param ReflectionClass<object> $class
+     */
     private function resolveTargetMethod(
         ReflectionClass $class,
         string $className,
