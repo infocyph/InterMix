@@ -18,27 +18,6 @@ use ReflectionUnionType;
 final class StaticParameterPlanner
 {
     /**
-     * @param ReflectionClass<object> $class
-     * @return array{arguments: list<ServiceArgument>, dependencies: list<string>}|string
-     */
-    public function constructorPlan(DefinitionGraph $graph, ReflectionClass $class): array|string
-    {
-        $constructor = $class->getConstructor();
-        if ($constructor === null) {
-            return ['arguments' => [], 'dependencies' => []];
-        }
-
-        return $this->callablePlan(
-            $graph,
-            $class,
-            $constructor,
-            $this->resourceParameters($graph, $class->getName(), 'constructor'),
-            'constructor',
-            true,
-        );
-    }
-
-    /**
      * @param ReflectionClass<object> $consumer
      * @param array<int|string, mixed> $supplied
      * @return array{arguments: list<ServiceArgument>, dependencies: list<string>}|string
@@ -77,6 +56,27 @@ final class StaticParameterPlanner
         }
 
         return ['arguments' => $arguments, 'dependencies' => $dependencies];
+    }
+
+    /**
+     * @param ReflectionClass<object> $class
+     * @return array{arguments: list<ServiceArgument>, dependencies: list<string>}|string
+     */
+    public function constructorPlan(DefinitionGraph $graph, ReflectionClass $class): array|string
+    {
+        $constructor = $class->getConstructor();
+        if ($constructor === null) {
+            return ['arguments' => [], 'dependencies' => []];
+        }
+
+        return $this->callablePlan(
+            $graph,
+            $class,
+            $constructor,
+            $this->resourceParameters($graph, $class->getName(), 'constructor'),
+            'constructor',
+            true,
+        );
     }
 
     private function isExportable(mixed $value): bool
