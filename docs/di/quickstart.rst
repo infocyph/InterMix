@@ -170,6 +170,40 @@ Environment swap (prod vs. local)
 Lock & ship
 -----------
 
+For the InterMix 10 production runtime, configure through ``ContainerBuilder``,
+compile during build/deployment, and load the generated artifact at process
+bootstrap:
+
+.. code-block:: php
+
+   use Infocyph\InterMix\DI\ContainerBuilder;
+
+   $builder = ContainerBuilder::create('app')
+       ->setEnvironment('prod')
+       ->singleton(MailerInterface::class, Mailer::class)
+       ->singleton(App::class);
+
+   // Build/deploy step:
+   $report = $builder->compile(__DIR__ . '/bootstrap/cache/intermix.php');
+
+   // Runtime bootstrap; persist $report['sha256'] as trusted deployment metadata.
+   $runtime = $builder->productionPrevalidated(
+       __DIR__ . '/bootstrap/cache/intermix.php',
+       $report['sha256'],
+   );
+
+   $app = $runtime->get(App::class);
+
+The normal ``production()`` loader hashes and validates the artifact on boot.
+``productionPrevalidated()`` skips that file hash only when its digest came
+from trusted immutable deployment metadata. Never compile during a live
+request. See :doc:`compiled-resolvers` for dynamic-island and deployment rules.
+For complete side-by-side bootstraps and the reasons behind each choice, read
+:doc:`development-production`.
+
+For a dynamic-only application, lock after bootstrap to block accidental
+modifications:
+
 After bootstrap you may **lock** the container to block any further
 accidental modifications:
 

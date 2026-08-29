@@ -21,6 +21,8 @@ Scopes are logical container scopes for synchronous request/job execution and
 explicitly isolated container instances. InterMix does not provide automatic
 Fiber- or coroutine-local storage; concurrent contexts must use isolated
 container instances or application-managed execution-context storage.
+The generated ``ProductionContainer`` implements the same explicit scope and
+seed contract for compiled services and synchronizes dynamic fallback islands.
 
 API
 ---
@@ -107,6 +109,8 @@ Best practices 💡
   access unless eager-loaded.
 * **Seed runtime context** – pass request/job objects as scope seeds instead of
   rebinding their definitions for every operation.
+* **Long-running workers** – always leave the job/request scope; do not retain
+  scoped instances across work items.
 
 Related pages
 -------------

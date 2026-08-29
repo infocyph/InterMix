@@ -13,15 +13,17 @@ use ReflectionFunction;
 use ReflectionMethod;
 use Throwable;
 use UnitEnum;
+use WeakMap;
 
-/**
- * Utility class for managing reflection operations with caching.
- */
+/** Utility class for managing reflection operations with bounded caches. */
 final class ReflectionResource
 {
     private const int DEFAULT_CACHE_LIMIT = 2048;
 
     private static int $cacheLimit = self::DEFAULT_CACHE_LIMIT;
+
+    /** @var WeakMap<Closure, ReflectionFunction>|null */
+    private static ?WeakMap $closureReflectionCache = null;
 
     /**
      * @var array{
@@ -68,11 +70,11 @@ final class ReflectionResource
             'functions' => [],
             'methods' => [],
         ];
+        self::$closureReflectionCache = null;
     }
 
     /**
      * @param callable|array<array-key, mixed>|string|object $callable
-     *
      * @throws InvalidArgumentException|ReflectionException
      */
     public static function getCallableReflection(
@@ -81,11 +83,9 @@ final class ReflectionResource
         if ($callable instanceof Closure) {
             return self::getFunctionReflection($callable);
         }
-
         if (is_string($callable)) {
             return self::resolveStringCallable($callable);
         }
-
         if (is_array($callable)) {
             if (count($callable) !== 2
                 || (!is_string($callable[0]) && !is_object($callable[0]))
@@ -96,7 +96,6 @@ final class ReflectionResource
 
             return self::resolveArrayCallable($callable);
         }
-
         if (is_object($callable)) {
             return self::resolveObjectCallable($callable);
         }
@@ -104,18 +103,13 @@ final class ReflectionResource
         throw new InvalidArgumentException('Invalid callable provided.');
     }
 
-    /**
-     * @return ReflectionClass<object>
-     *
-     * @throws ReflectionException
-     */
+    /** @return ReflectionClass<object> */
     public static function getClassReflection(string|object $class): ReflectionClass
     {
         $className = is_object($class) ? $class::class : $class;
         if (isset(self::$reflectionCache['classes'][$className])) {
             return self::$reflectionCache['classes'][$className];
         }
-
         if (!class_exists($className) && !interface_exists($className)) {
             throw new ReflectionException("Class '$className' not found.");
         }
@@ -129,17 +123,12 @@ final class ReflectionResource
         return self::$reflectionCache['classes'][$className];
     }
 
-    /**
-     * @return ReflectionEnum<UnitEnum>
-     *
-     * @throws ReflectionException
-     */
+    /** @return ReflectionEnum<UnitEnum> */
     public static function getEnumReflection(string $enumName): ReflectionEnum
     {
         if (isset(self::$reflectionCache['enums'][$enumName])) {
             return self::$reflectionCache['enums'][$enumName];
         }
-
         if (!enum_exists($enumName)) {
             throw new ReflectionException("Enum '$enumName' not found.");
         }
@@ -156,26 +145,26 @@ final class ReflectionResource
     public static function getFunctionReflection(string|Closure $function): ReflectionFunction
     {
         if ($function instanceof Closure) {
-            return new ReflectionFunction($function);
+            self::$closureReflectionCache ??= new WeakMap();
+
+            return self::$closureReflectionCache[$function]
+                ??= new ReflectionFunction($function);
         }
 
-        $key = $function;
-        if (!isset(self::$reflectionCache['functions'][$key])) {
+        if (!isset(self::$reflectionCache['functions'][$function])) {
             self::rememberCachedEntry(
                 self::$reflectionCache['functions'],
-                $key,
+                $function,
                 new ReflectionFunction($function),
             );
         }
 
-        return self::$reflectionCache['functions'][$key];
+        return self::$reflectionCache['functions'][$function];
     }
 
     /**
      * @param string|object|callable|array{0: object|string, 1: string} $subject
      * @return ReflectionClass<object>|ReflectionEnum<UnitEnum>|ReflectionFunction|ReflectionMethod
-     *
-     * @throws InvalidArgumentException|ReflectionException
      */
     public static function getReflection(
         string|object|array|callable $subject,
@@ -183,12 +172,7 @@ final class ReflectionResource
         if ($subject instanceof Closure) {
             return self::getFunctionReflection($subject);
         }
-
-        if (is_callable($subject)) {
-            return self::getCallableReflection($subject);
-        }
-
-        if (is_array($subject)) {
+        if (is_callable($subject) || is_array($subject)) {
             return self::getCallableReflection($subject);
         }
 
@@ -223,8 +207,7 @@ final class ReflectionResource
             return;
         }
 
-        $oldestKey = array_key_first($cache);
-        unset($cache[$oldestKey]);
+        unset($cache[array_key_first($cache)]);
     }
 
     /**
@@ -237,7 +220,6 @@ final class ReflectionResource
         if (!isset($cache[$key])) {
             self::evictOldestIfNeeded($cache);
         }
-
         $cache[$key] = $value;
     }
 
@@ -261,11 +243,7 @@ final class ReflectionResource
         return self::$reflectionCache['methods'][$key];
     }
 
-    /**
-     * @param array{0: object|string, 1: string} $callable
-     *
-     * @throws InvalidArgumentException
-     */
+    /** @param array{0: object|string, 1: string} $callable */
     private static function resolveArrayCallable(array $callable): ReflectionMethod
     {
         [$class, $method] = $callable;
@@ -274,7 +252,6 @@ final class ReflectionResource
         if (isset(self::$reflectionCache['methods'][$key])) {
             return self::$reflectionCache['methods'][$key];
         }
-
         if (!method_exists($class, $method)) {
             throw new InvalidArgumentException("Method '$method' does not exist in class '$className'.");
         }
@@ -282,9 +259,6 @@ final class ReflectionResource
         return self::rememberMethod($key, $class, $method);
     }
 
-    /**
-     * @throws InvalidArgumentException
-     */
     private static function resolveObjectCallable(object $callable): ReflectionMethod
     {
         $className = $callable::class;
@@ -292,7 +266,6 @@ final class ReflectionResource
         if (isset(self::$reflectionCache['methods'][$key])) {
             return self::$reflectionCache['methods'][$key];
         }
-
         if (!method_exists($callable, '__invoke')) {
             throw new InvalidArgumentException('Object does not have an __invoke method.');
         }
@@ -300,9 +273,6 @@ final class ReflectionResource
         return self::rememberMethod($key, $callable, '__invoke');
     }
 
-    /**
-     * @throws InvalidArgumentException
-     */
     private static function resolveStaticMethodCallable(string $callable): ReflectionMethod
     {
         [$className, $method] = explode('::', $callable, 2);
@@ -310,7 +280,6 @@ final class ReflectionResource
         if (isset(self::$reflectionCache['methods'][$key])) {
             return self::$reflectionCache['methods'][$key];
         }
-
         if (!method_exists($className, $method)) {
             throw new InvalidArgumentException("Method '$method' does not exist in class '$className'.");
         }
@@ -318,15 +287,11 @@ final class ReflectionResource
         return self::rememberMethod($key, $className, $method);
     }
 
-    /**
-     * @throws InvalidArgumentException|ReflectionException
-     */
     private static function resolveStringCallable(string $callable): ReflectionMethod|ReflectionFunction
     {
         if (function_exists($callable)) {
             return self::getFunctionReflection($callable);
         }
-
         if (str_contains($callable, '::')) {
             return self::resolveStaticMethodCallable($callable);
         }
@@ -349,8 +314,7 @@ final class ReflectionResource
     private static function trimBucket(array &$bucket): void
     {
         while (self::$cacheLimit > 0 && count($bucket) > self::$cacheLimit) {
-            $oldestKey = array_key_first($bucket);
-            unset($bucket[$oldestKey]);
+            unset($bucket[array_key_first($bucket)]);
         }
     }
 }

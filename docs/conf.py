@@ -53,7 +53,6 @@ myst_enable_extensions = [
     "deflist",
     "attrs_block",
     "attrs_inline",
-    "tasklist",
     "fieldlist",
     "linkify",
 ]
@@ -69,9 +68,7 @@ napoleon_google_docstring = True
 napoleon_numpy_docstring  = False
 
 # Intersphinx (only inventories that exist)
-intersphinx_mapping = {
-    "python": ("https://docs.python.org/3", None),
-}
+intersphinx_mapping = {}
 
 # PHP manual shortcut: :php:`json_encode`
 extlinks = {

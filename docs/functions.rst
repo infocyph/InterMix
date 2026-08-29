@@ -13,6 +13,9 @@ Load helpers manually when you want them:
    require_once __DIR__ . '/vendor/infocyph/intermix/src/functions.php';
 
 This page documents each helper and its runtime behavior.
+The DI helpers target the dynamic ``Container`` aliases. They do not select,
+compile, or load a ``ContainerBuilder``/``ProductionContainer``; keep generated
+runtime bootstrap explicit in production applications.
 
 DI Helpers
 ----------

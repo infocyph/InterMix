@@ -114,4 +114,9 @@ Resolution Priority
 The lazy initializer used internally by the container is not an attribute or a
 supported application API.
 
+The production compiler specializes deterministic built-in attribute paths.
+Custom resolvers and runtime-only attribute work remain compatibility islands,
+so their behavior is preserved without putting registry lookup on unrelated
+generated paths.
+
 Next → :ref:`di.lifetimes`

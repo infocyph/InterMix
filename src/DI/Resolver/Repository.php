@@ -14,21 +14,16 @@ use Infocyph\InterMix\DI\Support\DebugTracer;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\CacheItemPoolInterface;
+use Psr\Container\ContainerInterface;
 
 /**
- * Central storage for the container’s definitions, resolved instances, etc.
- * Also includes optional toggles for:
- *   - environment-based overrides
- *   - lazy loading
- *   - debug mode
- *   - unified cache key generation
+ * Central storage for the container's definitions, resolved instances, and
+ * resolution configuration.
  */
 class Repository
 {
     use InvalidatesRepositoryState;
     use ResolvesMissingServices;
-
-    private string $alias = 'default';
 
     private ?AttributeRegistry $attributeRegistry = null;
 
@@ -47,6 +42,9 @@ class Repository
     /** @var array<string, array<string, string>> */
     private array $conditionalBindings = [];
 
+    /** @var (Closure(): void)|null */
+    private ?Closure $configurationMutationListener = null;
+
     /** @var array<string, array<string, mixed>> */
     private array $contextualBindings = [];
 
@@ -59,6 +57,8 @@ class Repository
     private bool $definitionCacheFailOpen = true;
 
     private ?string $definitionCacheGeneration = null;
+
+    private ?string $definitionCachePrefix = null;
 
     private int $definitionCacheRevision = 0;
 
@@ -130,26 +130,18 @@ class Repository
     private bool $tracingEnabled = false;
 
     /**
-     * Constructs a Repository instance.
-     *
-     * Initializes a new DebugTracer to track and log the execution flow
-     * and interactions within the container. This aids in debugging and
-     * tracing the service resolution process.
+     * Bootstrap immutable repository facts directly. A fresh repository has no
+     * runtime state to invalidate, so construction avoids the mutation path.
      */
-    public function __construct(private readonly Container $container) {}
+    public function __construct(
+        private readonly Container $container,
+        private string $alias = 'default',
+    ) {
+        $this->functionReference[ContainerInterface::class] = $container;
+    }
 
     /**
-     * Stores a class resource, with a key that can be 'constructor', 'method', 'property'.
-     *
-     * The given data is stored under its class and resource-type keys.
-     *
-     * This method ensures that the container is not locked before making modifications.
-     *
-     * @param string $class The class name.
-     * @param string $key The key for the class resource.
-     * @param array<string, mixed> $data The data for the class resource.
-     *
-     * @throws ContainerException if the container is locked.
+     * @param array<string, mixed> $data
      */
     public function addClassResource(string $class, string $key, array $data): void
     {
@@ -157,23 +149,13 @@ class Repository
         if (($this->classResource[$class][$key] ?? null) === $data) {
             return;
         }
+
         $this->classResource[$class][$key] = $data;
         $this->invalidateClass($class);
     }
 
     /**
-     * Adds a closure resource to the repository.
-     *
-     * This method stores a closure function with its associated alias and parameters
-     * in the closure resources array. The closure can be later retrieved and executed
-     * using its alias. Before adding the closure, it checks whether the container is
-     * locked to prevent modifications.
-     *
-     * @param string $alias The alias for the closure.
-     * @param callable $function The closure function to store.
-     * @param array<int|string, mixed> $params Optional parameters for the closure.
-     *
-     * @throws ContainerException if the container is locked.
+     * @param array<int|string, mixed> $params
      */
     public function addClosureResource(string $alias, callable $function, array $params = []): void
     {
@@ -182,38 +164,18 @@ class Repository
         $this->invalidateDefinition($alias);
     }
 
-    /**
-     * Retrieves the attribute registry instance.
-     *
-     * This method returns the attribute registry associated with the repository.
-     * The attribute registry is responsible for managing and resolving attribute
-     * definitions and their corresponding resolvers.
-     *
-     * @return AttributeRegistry The attribute registry instance.
-     */
     public function attributeRegistry(): AttributeRegistry
     {
         return $this->attributeRegistry ??= new AttributeRegistry($this->container);
     }
 
-    /**
-     * Binds a concrete implementation to an interface for a specific environment.
-     *
-     * The given interface will be resolved to the given concrete implementation
-     * only if the current environment matches the given environment.
-     *
-     * @param string $env the environment for which the binding should be applied
-     * @param string $interface the interface to bind
-     * @param string $concrete the concrete implementation to bind to
-     *
-     * @throws ContainerException if the container is locked
-     */
     public function bindInterfaceForEnv(string $env, string $interface, string $concrete): void
     {
         $this->checkIfLocked();
         if (($this->conditionalBindings[$env][$interface] ?? null) === $concrete) {
             return;
         }
+
         $this->conditionalBindings[$env][$interface] = $concrete;
         $this->invalidateResolutionConfiguration();
     }
@@ -246,14 +208,8 @@ class Repository
     }
 
     /**
-     * Enables or disables lazy loading for the repository.
-     *
-     * If lazy loading is enabled, some definitions or services
-     * can be "lazy" and not resolved until explicitly requested the first time.
-     *
-     * @param bool $lazy whether to enable lazy loading
-     *
-     * @throws ContainerException if the container is locked
+     * Enable or disable lazy loading and invalidate resolution configuration
+     * when the option changes, preserving the established container contract.
      */
     public function enableLazyLoading(bool $lazy): void
     {
@@ -261,59 +217,35 @@ class Repository
         if ($this->lazyLoading === $lazy) {
             return;
         }
+
         $this->lazyLoading = $lazy;
         $this->invalidateResolutionConfiguration();
     }
 
-    /**
-     * Enables or disables method attribute resolution.
-     *
-     * Method attributes are an InterMix feature that allows you to inject
-     * values into class methods. This method enables or disables the
-     * resolution of these attributes. If the container is locked, an exception
-     * will be thrown.
-     *
-     * @param bool $enable true to enable method attribute resolution, false to disable
-     *
-     * @throws ContainerException if the container is locked.
-     */
     public function enableMethodAttribute(bool $enable): void
     {
         $this->checkIfLocked();
         if ($this->enableMethodAttribute === $enable) {
             return;
         }
+
         $this->enableMethodAttribute = $enable;
         $this->invalidateResolutionConfiguration();
     }
 
-    /**
-     * Enables or disables property attribute resolution.
-     *
-     * Property attributes are an InterMix feature that allows you to inject
-     * values into class properties. This method enables or disables the
-     * resolution of these attributes. If the container is locked, an exception
-     * will be thrown.
-     *
-     * @param bool $enable true to enable property attribute resolution, false to disable
-     *
-     * @throws ContainerException if the container is locked.
-     */
     public function enablePropertyAttribute(bool $enable): void
     {
         $this->checkIfLocked();
         if ($this->enablePropertyAttribute === $enable) {
             return;
         }
+
         $this->enablePropertyAttribute = $enable;
         $this->invalidateResolutionConfiguration();
     }
 
     /**
-     * Enter a named logical scope.
-     *
      * @param array<string, mixed> $instances
-     * @throws ContainerException
      */
     public function enterScope(string $scope, array $instances = []): void
     {
@@ -328,10 +260,6 @@ class Repository
         }
     }
 
-    /**
-     * @param mixed $value The value to extract the instance from.
-     * @return mixed The instance or the original value.
-     */
     public function fetchInstanceOrValue(mixed $value): mixed
     {
         return $value instanceof ClassResolution ? $value->instance : $value;
@@ -359,24 +287,13 @@ class Repository
         return true;
     }
 
-    /**
-     * Returns the alias of this definition repository.
-     *
-     * The alias is a unique identifier for this repository. It is used to
-     * generate cache keys and to identify the repository when serializing
-     * or unserializing the container.
-     *
-     * @return string the alias of this repository
-     */
     public function getAlias(): string
     {
         return $this->alias;
     }
 
     /**
-     * Return lifetime and tag metadata keyed by definition ID.
-     *
-     * @return array<string, array{lifetime: LifetimeEnum, tags: array<int, string>}> An array of all the definition meta data.
+     * @return array<string, array{lifetime: LifetimeEnum, tags: array<int, string>}>
      */
     public function getAllDefinitionMeta(): array
     {
@@ -384,9 +301,7 @@ class Repository
     }
 
     /**
-     * Return registered constructor and method resources keyed by class.
-     *
-     * @return array<string, array<string, mixed>> the array of class resources
+     * @return array<string, array<string, mixed>>
      */
     public function getClassResource(): array
     {
@@ -402,9 +317,7 @@ class Repository
     }
 
     /**
-     * Return registered callables and arguments keyed by alias.
-     *
-     * @return array<string, array{on: callable, params: array<int|string, mixed>}> the array of closure resources
+     * @return array<string, array{on: callable, params: array<int|string, mixed>}>
      */
     public function getClosureResource(): array
     {
@@ -430,7 +343,7 @@ class Repository
     }
 
     /**
-     * @return array<string, array<int, string>> Contextual binding coordinates.
+     * @return array<string, array<int, string>>
      * @internal
      */
     public function getContextualBindingShape(): array
@@ -446,20 +359,11 @@ class Repository
         return $shape;
     }
 
-    /**
-     * Retrieves the default method to be called when resolving a class.
-     *
-     * Returns the default method name that is used when resolving a class
-     * resource. If no default method is set, this method returns null.
-     *
-     * @return string|null the default method name, or null if no default is set
-     */
     public function getDefaultMethod(): ?string
     {
         return $this->defaultMethod;
     }
 
-    /** Return the optional PSR-6 definition cache. */
     public function getDefinitionCache(): ?CacheItemPoolInterface
     {
         return $this->definitionCache;
@@ -470,22 +374,15 @@ class Repository
         $lifetime = $this->definitionMeta[$id]['lifetime'] ?? LifetimeEnum::Singleton;
         $env = $this->environment;
 
-        if ($env !== null
-            && isset($this->definitionMetaByEnv[$env][$id]['lifetime'])
-        ) {
-            $lifetime = $this->definitionMetaByEnv[$env][$id]['lifetime'];
+        if ($env !== null && isset($this->definitionMetaByEnv[$env][$id]['lifetime'])) {
+            return $this->definitionMetaByEnv[$env][$id]['lifetime'];
         }
 
         return $lifetime;
     }
 
     /**
-     * Returns the meta data for the given definition.
-     *
-     * @param string $id The id of the definition to retrieve meta data for.
-     * @return array{lifetime: LifetimeEnum, tags: array<int, string>} The meta data associated with the definition.
-     *                                                                 - lifetime: The lifetime of the definition. Defaults to Lifetime::Singleton.
-     *                                                                 - tags: An array of tags to associate with the definition. Defaults to an empty array.
+     * @return array{lifetime: LifetimeEnum, tags: array<int, string>}
      */
     public function getDefinitionMeta(string $id): array
     {
@@ -505,14 +402,6 @@ class Repository
         return $meta;
     }
 
-    /**
-     * Get the concrete implementation bound to an interface for the current environment.
-     *
-     * Return the environment-specific implementation when one is registered.
-     *
-     * @param string|null $interface the interface to get the concrete implementation for
-     * @return string|null the concrete implementation for the given interface in the current environment
-     */
     public function getEnvConcrete(?string $interface): ?string
     {
         if ($this->environment === null || $interface === null) {
@@ -522,11 +411,6 @@ class Repository
         return $this->conditionalBindings[$this->environment][$interface] ?? null;
     }
 
-    /**
-     * Retrieve the current environment.
-     *
-     * @return string|null the environment name, or null if not set
-     */
     public function getEnvironment(): ?string
     {
         return $this->environment;
@@ -576,7 +460,7 @@ class Repository
     }
 
     /**
-     * @return array<int, class-string> Registered attribute classes.
+     * @return array<int, class-string>
      * @internal
      */
     public function getRegisteredAttributeTypes(): array
@@ -585,14 +469,6 @@ class Repository
     }
 
     /**
-     * Returns the array of resolved resources.
-     *
-     * This method returns the array of resolved resources, where each key is the
-     * ID of the resource and the value is the resolved value (instance, closure, etc.).
-     *
-     * @return array the array of resolved resources
-     */
-    /**
      * @return array<string, mixed>
      */
     public function getResolved(): array
@@ -600,14 +476,6 @@ class Repository
         return $this->resolved;
     }
 
-    /**
-     * Returns the array of resolved definitions.
-     *
-     * This method returns the array of resolved definitions, where each key is the
-     * definition name and the value is the resolved value of that definition.
-     *
-     * @return array the array of resolved definitions
-     */
     /**
      * @return array<string, mixed>
      */
@@ -627,9 +495,16 @@ class Repository
     }
 
     /**
-     * Return class resolution state keyed by class name.
-     *
-     * @return array<string, ClassResolution> the resolved class resources
+     * @return array<int, string>
+     * @internal
+     */
+    public function getResolvedHookIds(): array
+    {
+        return array_keys($this->onResolvedHooks);
+    }
+
+    /**
+     * @return array<string, ClassResolution>
      */
     public function getResolvedResource(): array
     {
@@ -654,16 +529,26 @@ class Repository
     }
 
     /**
-     * Gets the current scope of the container.
-     *
-     * The scope is used to determine the lifetime of definitions. For example, if the
-     * scope is set to 'request', definitions will be resolved once per request.
-     *
-     * @return string The current scope. Defaults to 'root'.
+     * @return array<int, string>
+     * @internal
      */
+    public function getResolvingHookIds(): array
+    {
+        return array_keys($this->onResolvingHooks);
+    }
+
     public function getScope(): string
     {
         return $this->currentScope;
+    }
+
+    /**
+     * @return array<int, string>
+     * @internal
+     */
+    public function getScopeLeaveHookScopes(): array
+    {
+        return array_keys($this->onScopeLeaveHooks);
     }
 
     public function hasClosureResource(string $alias): bool
@@ -677,25 +562,18 @@ class Repository
         return $this->compiledResolver instanceof Closure;
     }
 
-    /**
-     * @param string $consumer Consumer class name.
-     * @param string $dependency Dependency class name.
-     * @internal
-     */
+    /** @internal */
     public function hasContextualBinding(string $consumer, string $dependency): bool
     {
         return array_key_exists($dependency, $this->contextualBindings[$consumer] ?? []);
     }
 
-    /**
-     * Checks if a function reference exists for the given identifier.
-     *
-     * This method determines whether a function reference is present in the
-     * repository for the provided function identifier.
-     *
-     * @param string $id The identifier of the function reference.
-     * @return bool True if the function reference exists, false otherwise.
-     */
+    /** @internal */
+    public function hasContextualBindings(): bool
+    {
+        return $this->contextualBindings !== [];
+    }
+
     public function hasFunctionReference(string $id): bool
     {
         return isset($this->functionReference[$id]) || array_key_exists($id, $this->functionReference);
@@ -740,39 +618,16 @@ class Repository
         return $this->definitionCacheFailOpen;
     }
 
-    /**
-     * Checks if lazy loading is enabled for the repository.
-     *
-     * @return bool whether lazy loading is enabled
-     */
     public function isLazyLoading(): bool
     {
         return $this->lazyLoading;
     }
 
-    /**
-     * Returns whether method attributes are enabled.
-     *
-     * Method attributes are an InterMix feature that allows you to inject
-     * values into class methods. This method returns true if method
-     * attributes are enabled, and false otherwise.
-     *
-     * @return bool true if method attributes are enabled, false otherwise
-     */
     public function isMethodAttributeEnabled(): bool
     {
         return $this->enableMethodAttribute;
     }
 
-    /**
-     * Returns whether property attributes are enabled.
-     *
-     * Property attributes are an InterMix feature that allows you to inject
-     * values into class properties. This method returns true if property
-     * attributes are enabled, and false otherwise.
-     *
-     * @return bool true if property attributes are enabled, false otherwise
-     */
     public function isPropertyAttributeEnabled(): bool
     {
         return $this->enablePropertyAttribute;
@@ -804,29 +659,30 @@ class Repository
         $this->currentScope = is_string($previous) ? $previous : 'root';
     }
 
-    /**
-     * Locks the container from future modifications.
-     *
-     * Once the container is locked, no more definitions, values, or options can be set.
-     * This method is useful for tests or other scenarios where you want to ensure that
-     * the container does not change after it has been configured.
-     */
     public function lock(): void
     {
         $this->isLocked = true;
     }
 
-    /** Create a short, backend-neutral key without exposing definition metadata. */
+    /**
+     * Create a short PSR-6-safe cache key while reusing stable prefix hashes.
+     */
     public function makeDefinitionCacheKey(string $definition): string
     {
-        $environment = $this->environment ?? 'default';
-        $generation = ($this->definitionCacheGeneration ?? 'default')
-            . "\0" . $this->definitionCacheRevision;
-
-        return 'imx.'
+        $this->definitionCachePrefix ??= 'imx.'
             . substr(hash('sha256', $this->alias), 0, 16)
-            . '.' . substr(hash('sha256', $generation), 0, 16)
-            . '.' . substr(hash('sha256', $definition . "\0" . $environment), 0, 16);
+            . '.' . substr(
+                hash(
+                    'sha256',
+                    ($this->definitionCacheGeneration ?? 'default') . "\0" . $this->definitionCacheRevision,
+                ),
+                0,
+                16,
+            )
+            . '.';
+
+        return $this->definitionCachePrefix
+            . substr(hash('sha256', $definition . "\0" . ($this->environment ?? 'default')), 0, 16);
     }
 
     /** @internal */
@@ -835,9 +691,18 @@ class Repository
         $this->resolvedIds[$id] = true;
     }
 
+    /** @internal */
+    public function notifyConfigurationMutation(): void
+    {
+        if ($this->configurationMutationListener instanceof Closure) {
+            ($this->configurationMutationListener)();
+        }
+    }
+
     public function onResolved(string $id, callable $hook): void
     {
         $this->checkIfLocked();
+        $this->notifyConfigurationMutation();
         $this->hasHooks = true;
         $this->onResolvedHooks[$id][] = $hook;
     }
@@ -845,6 +710,7 @@ class Repository
     public function onResolving(string $id, callable $hook): void
     {
         $this->checkIfLocked();
+        $this->notifyConfigurationMutation();
         $this->hasHooks = true;
         $this->onResolvingHooks[$id][] = $hook;
     }
@@ -852,6 +718,7 @@ class Repository
     public function onScopeLeave(string $scope, callable $hook): void
     {
         $this->checkIfLocked();
+        $this->notifyConfigurationMutation();
         $this->hasHooks = true;
         $this->onScopeLeaveHooks[$scope][] = $hook;
     }
@@ -882,14 +749,6 @@ class Repository
         $this->invalidateDefinition($id);
     }
 
-    /**
-     * Resets the current scope, removing all resolved resources that were
-     * created under the current scope.
-     *
-     * This method is useful when you want to reset the state of the container
-     * after a scope has been used (for example, after a request has been
-     * processed).
-     */
     public function resetScope(): void
     {
         $this->clearScopeResolvedEntries($this->currentScope);
@@ -899,36 +758,26 @@ class Repository
         $this->scopeSeeds = [];
     }
 
-    /** Rotate only InterMix's cache namespace; never clear a caller-owned pool. */
     public function rotateDefinitionCacheGeneration(): void
     {
         ++$this->definitionCacheRevision;
+        $this->definitionCachePrefix = null;
     }
 
-    /**
-     * Sets the alias of this definition repository.
-     *
-     * The alias is a unique identifier for this repository. It is used to
-     * generate cache keys and to identify the repository when serializing
-     * or unserializing the container.
-     *
-     * @param string $alias The alias to set.
-     *
-     * @throws ContainerException if the container is locked.
-     */
     public function setAlias(string $alias): void
     {
         $this->checkIfLocked();
         if ($this->alias === $alias) {
             return;
         }
+
         $this->alias = $alias;
+        $this->definitionCachePrefix = null;
         $this->invalidateResolutionConfiguration();
     }
 
     /**
-     * @param Closure $resolver Generated dispatcher accepting the container and service ID.
-     * @param array<string, mixed> $ids Validated compiled identifiers and fingerprints.
+     * @param array<string, mixed> $ids
      * @internal
      */
     public function setCompiledResolver(Closure $resolver, array $ids): void
@@ -936,6 +785,15 @@ class Repository
         $this->checkIfLocked();
         $this->compiledResolver = $resolver;
         $this->compiledResolverIds = $ids;
+    }
+
+    /**
+     * @param (Closure(): void)|null $listener
+     * @internal
+     */
+    public function setConfigurationMutationListener(?Closure $listener): void
+    {
+        $this->configurationMutationListener = $listener;
     }
 
     public function setContextualBinding(string $consumer, string $dependency, mixed $give): void
@@ -946,30 +804,54 @@ class Repository
         ) {
             return;
         }
+
         $this->contextualBindings[$consumer][$dependency] = $give;
         $this->invalidateResolutionConfiguration();
     }
 
-    /**
-     * Sets the default method to be called when resolving a class.
-     *
-     * The selected name applies when class resources provide no explicit method.
-     *
-     * @param string|null $method The default method name, or null to unset.
-     *
-     * @throws ContainerException if the container is locked.
-     */
     public function setDefaultMethod(?string $method): void
     {
         $this->checkIfLocked();
         if ($this->defaultMethod === $method) {
             return;
         }
+
         $this->defaultMethod = $method;
         $this->invalidateResolutionConfiguration();
     }
 
-    /** Configure the optional definition cache without invalidating resolver state. */
+    /**
+     * Register a definition and its metadata as one mutation so resolution
+     * state and compiled artifacts are invalidated exactly once.
+     *
+     * @param array<int, string> $tags
+     */
+    public function setDefinition(
+        string $id,
+        mixed $definition,
+        LifetimeEnum $lifetime = LifetimeEnum::Singleton,
+        array $tags = [],
+    ): void {
+        $this->checkIfLocked();
+        $normalizedTags = array_map(static fn(mixed $tag): string => (string) $tag, $tags);
+        $meta = ['lifetime' => $lifetime, 'tags' => $normalizedTags];
+        $definitionChanged = !array_key_exists($id, $this->functionReference)
+            || $this->functionReference[$id] !== $definition;
+        $metaChanged = ($this->definitionMeta[$id] ?? null) !== $meta;
+
+        if (!$definitionChanged && !$metaChanged) {
+            return;
+        }
+
+        $oldTags = $this->definitionMeta[$id]['tags'] ?? [];
+        $this->functionReference[$id] = $definition;
+        $this->definitionMeta[$id] = $meta;
+        if ($oldTags !== $normalizedTags) {
+            $this->refreshBaseTagIndex($id, $oldTags, $normalizedTags);
+        }
+        $this->invalidateDefinition($id);
+    }
+
     public function setDefinitionCache(
         CacheItemPoolInterface $cache,
         ?string $generation = null,
@@ -980,36 +862,39 @@ class Repository
             throw new ContainerException('Definition cache generation cannot be empty.');
         }
 
+        if ($this->definitionCache === $cache
+            && ($generation === null || $generation === $this->definitionCacheGeneration)
+            && $this->definitionCacheFailOpen === $failOpen
+        ) {
+            return;
+        }
+
+        $this->notifyConfigurationMutation();
+
         $this->definitionCache = $cache;
         $this->definitionCacheFailOpen = $failOpen;
         if ($generation !== null && $generation !== $this->definitionCacheGeneration) {
             $this->definitionCacheGeneration = $generation;
             $this->definitionCacheRevision = 0;
+            $this->definitionCachePrefix = null;
         }
     }
 
     /**
-     * @param string $id The id of the definition to set the meta for.
-     * @param array{lifetime?: LifetimeEnum, tags?: array<int, scalar|null>} $meta The meta data to set for the definition.
-     *                                                                             - lifetime: The lifetime of the definition. Defaults to Lifetime::Singleton.
-     *                                                                             - tags: An array of tags to associate with the definition. Defaults to an empty array.
-     *
-     * @throws ContainerException
+     * @param array{lifetime?: LifetimeEnum, tags?: array<int, scalar|null>} $meta
      */
     public function setDefinitionMeta(string $id, array $meta): void
     {
         $this->checkIfLocked();
         $normalized = $meta + ['lifetime' => LifetimeEnum::Singleton, 'tags' => []];
-        $normalizedTags = [];
-        foreach ($normalized['tags'] as $tag) {
-            $normalizedTags[] = (string) $tag;
-        }
+        $normalizedTags = array_map(static fn(mixed $tag): string => (string) $tag, $normalized['tags']);
         $normalized['tags'] = $normalizedTags;
         $oldTags = $this->definitionMeta[$id]['tags'] ?? [];
 
         if (($this->definitionMeta[$id] ?? null) === $normalized) {
             return;
         }
+
         $this->definitionMeta[$id] = $normalized;
         $this->refreshResolvedSingletonIndex($id);
         $this->refreshBaseTagIndex($id, $oldTags, $normalizedTags);
@@ -1017,41 +902,21 @@ class Repository
     }
 
     /**
-     * Override definition meta for a specific environment.
-     *
-     * Supported keys:
-     *  - lifetime: LifetimeEnum
-     *  - tags: array<int, string>
-     *
      * @param array{lifetime?: LifetimeEnum, tags?: array<int, scalar|null>} $meta
-     *
-     * @throws ContainerException
      */
-    public function setDefinitionMetaForEnv(
-        string $env,
-        string $id,
-        array $meta,
-    ): void {
+    public function setDefinitionMetaForEnv(string $env, string $id, array $meta): void
+    {
         $this->checkIfLocked();
         $existing = $this->definitionMetaByEnv[$env][$id] ?? [];
-
         $normalized = [];
+
         if (array_key_exists('lifetime', $meta)) {
             $normalized['lifetime'] = $meta['lifetime'];
         }
         if (array_key_exists('tags', $meta)) {
-            $tags = [];
-            foreach ($meta['tags'] as $tag) {
-                $tags[] = (string) $tag;
-            }
-            $normalized['tags'] = $tags;
+            $normalized['tags'] = array_map(static fn(mixed $tag): string => (string) $tag, $meta['tags']);
         }
-
-        if ($normalized === []) {
-            return;
-        }
-
-        if ($existing === ($normalized + $existing)) {
+        if ($normalized === [] || $existing === ($normalized + $existing)) {
             return;
         }
 
@@ -1067,24 +932,13 @@ class Repository
         $this->invalidateDefinition($id);
     }
 
-    /**
-     * Set the environment for this repository.
-     *
-     * The environment can be used to resolve environment-based interface mappings.
-     * If the environment is set to a non-empty string, we will check if there is
-     * a matching environment-based mapping for a given interface.
-     *
-     * @param string $env environment name
-     *
-     * @throws ContainerException if the container is locked
-     */
     public function setEnvironment(string $env): void
     {
         if ($this->environment === $env) {
             return;
         }
-        $this->checkIfLocked();
 
+        $this->checkIfLocked();
         $this->environment = $env;
         $this->invalidateResolutionConfiguration();
         $this->scopeStack = [];
@@ -1092,18 +946,6 @@ class Repository
         $this->currentScope = 'root';
     }
 
-    /**
-     * Sets a function reference for the given identifier.
-     *
-     * This method assigns a function definition to an identifier in the
-     * repository. It ensures that the container is not locked before
-     * making modifications.
-     *
-     * @param string $id The identifier for the function reference.
-     * @param mixed $definition The definition of the function reference.
-     *
-     * @throws ContainerException if the container is locked.
-     */
     public function setFunctionReference(string $id, mixed $definition): void
     {
         $this->checkIfLocked();
@@ -1112,16 +954,11 @@ class Repository
         ) {
             return;
         }
+
         $this->functionReference[$id] = $definition;
         $this->invalidateDefinition($id);
     }
 
-    /**
-     * Store a runtime resolution result without changing container definitions.
-     *
-     * @param string $id The ID of the resource.
-     * @param mixed $value The resolved value of the resource.
-     */
     public function setResolved(string $id, mixed $value): void
     {
         $this->resolved[$id] = $value;
@@ -1134,26 +971,11 @@ class Repository
         unset($this->resolvedSingleton[$id]);
     }
 
-    /**
-     * Stores a resolved definition value by name.
-     *
-     * This method takes the name of a definition and a value, and stores the
-     * value in the "resolvedDefinition" array with the definition name as the
-     * key.
-     *
-     * @param string $defName The name of the definition to store.
-     * @param mixed $value The value to store.
-     */
     public function setResolvedDefinition(string $defName, mixed $value): void
     {
         $this->resolvedDefinition[$defName] = $value;
     }
 
-    /**
-     * Stores a resolved resource for a class-based resource.
-     *
-     * @param string $className The class name of the resource.
-     */
     public function setResolvedResource(string $className, ClassResolution $data): void
     {
         $this->resolvedResource[$className] = $data;
@@ -1164,14 +986,6 @@ class Repository
         $this->resolvedScoped[$scope][$id] = $value;
     }
 
-    /**
-     * Set the current scope for the container.
-     *
-     * The scope is used to determine the lifetime of definitions. For example, if the
-     * scope is set to 'request', definitions will be resolved once per request.
-     *
-     * @param string $scope The scope to set. Defaults to 'root'.
-     */
     public function setScope(string $scope): void
     {
         $this->currentScope = $scope;
@@ -1182,13 +996,6 @@ class Repository
         return $this->isSafeCachedDefinitionValue($value);
     }
 
-    /**
-     * @return DebugTracer The debug tracer associated with this repository.
-     *
-     * The debug tracer is used to track and log the execution flow and
-     * interactions within the container, aiding in debugging and
-     * tracing the service resolution process.
-     */
     public function tracer(): DebugTracer
     {
         return $this->tracer ??= new DebugTracer(
@@ -1203,11 +1010,6 @@ class Repository
         unset($this->resolvedResource[$className]);
     }
 
-    /**
-     * Throw an exception if the container is locked and we try to set/modify values.
-     *
-     * @throws ContainerException
-     */
     private function checkIfLocked(): void
     {
         if ($this->isLocked) {
@@ -1225,20 +1027,11 @@ class Repository
         if (is_scalar($value) || $value === null) {
             return true;
         }
-
         if (!is_array($value)) {
             return false;
         }
 
-        $safe = true;
-        foreach ($value as $item) {
-            $safe = $this->isSafeCachedDefinitionValue($item);
-            if (!$safe) {
-                break;
-            }
-        }
-
-        return $safe;
+        return array_all($value, fn($item) => $this->isSafeCachedDefinitionValue($item));
     }
 
     /**

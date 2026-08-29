@@ -9,7 +9,7 @@ cache is an optional optimization: null, scalar, and recursively safe array
 values may be persisted; objects, Closures, and resources remain runtime-only.
 Scoped and transient definitions are never stored externally.
 
-CacheLayer 3.1 is the recommended Infocyph implementation and is continuously
+CacheLayer 3.2 is the recommended Infocyph implementation and is continuously
 integration-tested with InterMix, but it is not required at runtime. Symfony
 Cache, framework pools, custom pools, and every other conforming PSR-6
 implementation remain supported.
@@ -52,7 +52,7 @@ can surface backend failures:
 InterMix does not retry, lock, log, or trace cache failures automatically.
 
 --------------------------
-Recommended CacheLayer 3.1
+Recommended CacheLayer 3.2
 --------------------------
 
 Memory is deterministic and useful in tests:
@@ -152,10 +152,13 @@ They optimize different work. Compiled resolvers reduce reflection and object
 construction recipe overhead. Definition caching reuses safe scalar/array
 singleton results across containers. Production priority is generally:
 
-#. compiled resolver with OPcache or preload;
+#. generated production runtime (or compatible compiled resolver) with OPcache/preload;
 #. in-memory singleton/scoped reuse;
 #. optional PSR-6 definition caching.
 
 For object-heavy applications, compiled resolution is normally the larger win.
+The generated ``ProductionContainer`` keeps compiled values and object lifetime
+state in-process; it does not use PSR-6 for those generated slots. Dynamic
+fallback definitions can still use the configured definition cache.
 
 Next stop » :doc:`debug_tracing`

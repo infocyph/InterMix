@@ -21,6 +21,12 @@ trait ResolvesMissingServices
     private array $onMissingHooks = [];
 
     /** @internal */
+    public function hasMissingHooks(): bool
+    {
+        return $this->onMissingHooks !== [];
+    }
+
+    /** @internal */
     public function isOnMissingFailure(Throwable $throwable): bool
     {
         return $this->onMissingFailures !== null
@@ -30,17 +36,21 @@ trait ResolvesMissingServices
     public function onMissing(callable $hook): void
     {
         $this->checkIfLocked();
+        $this->notifyConfigurationMutation();
         $this->onMissingHooks[] = $hook;
     }
 
     /**
-     * Give host callbacks one guarded opportunity to register a missing ID.
-     *
      * @internal
      * @phpstan-impure
      */
     public function tryResolveMissing(string $id): bool
     {
+        // The overwhelmingly common case has no host activation hooks. Avoid a
+        // second broad Container::has() walk in that path.
+        if ($this->onMissingHooks === []) {
+            return false;
+        }
         if ($this->container->has($id)) {
             return true;
         }

@@ -38,7 +38,7 @@ final readonly class InjectedCall
     ) {
         $this->parameterCountCache = new WeakMap();
         $this->definitionResolver = new DefinitionResolver($this->repository);
-        $this->parameterResolver = new ParameterResolver($this->repository, $this->definitionResolver);
+        $this->parameterResolver = new ParameterResolver($this->repository);
 
         $propertyResolver = new PropertyResolver($this->repository);
 
@@ -46,7 +46,6 @@ final readonly class InjectedCall
             $this->repository,
             $this->parameterResolver,
             $propertyResolver,
-            $this->definitionResolver,
         );
 
         $this->definitionResolver->setResolverInstance($this->classResolver, $this->parameterResolver);

@@ -23,3 +23,5 @@ Contents
     remix
     functions
     benchmark
+    intermix-10-performance-architecture
+    intermix-10-final-checklist

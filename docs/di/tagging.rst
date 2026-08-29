@@ -43,6 +43,8 @@ Retrieve All by Tag 📬
   (or ``findByTagLazy()``).
 * Tag lookup is **environment-aware**. If you override tags with
   ``setDefinitionMetaForEnv(...)``, ``findByTag()`` uses the active environment.
+* Generated production runtimes emit an index for compiled IDs and merge it
+  with tagged dynamic-island definitions without duplicating IDs.
 
 Lazy variant:
 

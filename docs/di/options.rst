@@ -102,7 +102,7 @@ container and never reflects or autowires the factory parameters.
        ->enableDebugTracing()              // Node-level logs
        ->setEnvironment('local');
 
-**Production** – lazy, cached, minimal reflection:
+**Dynamic production** – lazy, cached, minimal reflection:
 
 .. code-block:: php
 
@@ -114,15 +114,20 @@ container and never reflects or autowires the factory parameters.
            propertyAttributes: false,
        )
        ->enableDebugTracing(false)         // fully off (TraceLevelEnum::Off)
-       ->enableLazyLoading(true)           // default – save memory
+       ->enableLazyLoading(true)           // default – defer unused construction
        ->setEnvironment('prod')
        ->end();
 
    // definition cache is configured on DefinitionManager with a PSR-6 pool
    $c->definitions()->enableDefinitionCache($pool);
 
+For the v10 generated runtime, apply these options through ``ContainerBuilder``
+before compilation. Static-compatible paths specialize the finalized settings;
+unsupported paths remain lazy dynamic islands. Any later configuration change
+requires recompilation.
+
 ----------------------------------------------------
-4 · Inspecting state
+4 · Tooling-level state
 ----------------------------------------------------
 
 .. code-block:: php
@@ -132,6 +137,9 @@ container and never reflects or autowires the factory parameters.
        'environment' => $repo->getEnvironment(),
        'lazy'        => $repo->isLazyLoading(),
    ]);
+
+``getRepository()`` is an internal/tooling surface, not an application
+configuration API. Prefer the public option methods in application code.
 
 ----------------------------------------------------
 Cheat-Sheet

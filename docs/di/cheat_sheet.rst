@@ -22,6 +22,8 @@ Container Entry Points
      - ``$c->definitions()`` / ``$c->registration()`` / ``$c->options()`` / ``$c->invocation()``
    * - Resolve by ID/class
      - ``$c->get($id)``
+   * - Distinguish lookup questions
+     - ``$c->has($id)`` (resolvable) / ``$c->definitions()->has($id)`` (explicit) / ``$c->isResolved($id)`` (already resolved)
    * - Activate unresolved IDs
      - ``$c->onMissing(fn (string $id, Container $c) => ...)``
    * - Bind direct factory
@@ -40,6 +42,8 @@ Container Entry Points
      - ``$c->lock()``
    * - Compile construction recipes
      - ``$c->compileTo($path)`` / ``$c->useCompiled($path)`` / ``$c->compilationReport()``
+   * - Finalize a v10 production runtime
+     - ``$builder->compile($path)`` / ``$builder->production($path)`` / ``$builder->productionPrevalidated($path, $sha256)``
 
 -----------------------------
 Managers At A Glance
@@ -52,7 +56,7 @@ Managers At A Glance
    * - Manager
      - Core methods
    * - ``definitions()``
-     - ``bind()``, ``addDefinitions()``, ``enableDefinitionCache($pool)``, ``warmDefinitionCache()``, ``setMetaForEnv()``
+     - ``bind()``, ``has()``, ``addDefinitions()``, ``enableDefinitionCache($pool)``, ``warmDefinitionCache()``, ``setMetaForEnv()``
    * - ``registration()``
      - ``registerClass()``, ``registerMethod()``, ``registerProperty()``, ``registerClosure()``, ``import()``
    * - ``options()``
@@ -61,6 +65,26 @@ Managers At A Glance
      - ``call()``, ``make()``, ``get()``, ``getReturn()``, ``has()``
 
 All managers use ``ManagerProxy``: ``$mgr('id')``, ``$mgr->id``, ``$mgr['id']``, proxied container methods and ``->end()`` to return to the container.
+
+----------------------
+Runtime Models
+----------------------
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 70
+
+   * - API
+     - Use
+   * - ``Container``
+     - Dynamic development/compatibility runtime; supports mutation and the
+       compatible ``compileTo()`` resolver map.
+   * - ``ContainerBuilder``
+     - Composition-root configuration, validation, build-time compilation and
+       production loading. Recompile after any graph mutation.
+   * - ``ProductionContainer``
+     - Generated runtime for request/job execution. Known paths are static;
+       unsupported behavior is delegated to lazy dynamic islands.
 
 ------------------------------------------
 Task Matrix (Fluent vs Shortcut)
@@ -162,4 +186,7 @@ Advanced Helpers
 * ``$c->getRepository()``: inspect low-level runtime state.
 * ``$c->setResolverClass(FooResolver::class)``: swap resolver implementation.
 
-See also: :ref:`di.quickstart`, :ref:`di.definitions`, :ref:`di.registration`, :ref:`di.options`, :ref:`di.invocation`, :ref:`di.scopes`, :ref:`di.environment`, :ref:`di.debug_tracing`
+These are internal/tooling surfaces. Application override checks should use
+``definitions()->has()`` rather than repository internals.
+
+See also: :ref:`di.quickstart`, :ref:`di.development_production`, :ref:`di.definitions`, :ref:`di.registration`, :ref:`di.options`, :ref:`di.invocation`, :ref:`di.scopes`, :ref:`di.environment`, :ref:`di.debug_tracing`

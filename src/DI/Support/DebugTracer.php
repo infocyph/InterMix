@@ -232,14 +232,12 @@ final class DebugTracer
         }
 
         $edgeKey = $type . '|' . $from . '|' . $to;
-        if (!isset($this->graphEdges[$edgeKey])) {
-            $this->graphEdges[$edgeKey] = [
-                'from' => $from,
-                'to' => $to,
-                'type' => $type,
-                'count' => 0,
-            ];
-        }
+        $this->graphEdges[$edgeKey] ??= [
+            'from' => $from,
+            'to' => $to,
+            'type' => $type,
+            'count' => 0,
+        ];
 
         $this->graphEdges[$edgeKey]['count']++;
     }

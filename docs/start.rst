@@ -21,6 +21,13 @@ infocyph/InterMix |version| requires the following:
 
 * PHP >= 8.4
 
+Closure serialization is optional. Install ``opis/closure`` only when the
+application uses :doc:`serializer`:
+
+.. code-block:: bash
+
+    composer require opis/closure
+
 Installation
 ############
 

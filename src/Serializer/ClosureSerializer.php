@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\Serializer;
 
 use Closure;
+use Infocyph\InterMix\Exceptions\RequirementException;
 use InvalidArgumentException;
 use Throwable;
 
@@ -23,6 +24,8 @@ final class ClosureSerializer
 
     public static function serialize(Closure $closure): string
     {
+        self::requireOpis();
+
         return self::PREFIX . base64_encode(opis_serialize($closure));
     }
 
@@ -53,6 +56,8 @@ final class ClosureSerializer
             throw new InvalidArgumentException('Invalid unsigned Closure payload body.');
         }
 
+        self::requireOpis();
+
         try {
             $closure = opis_unserialize($serialized);
         } catch (Throwable $throwable) {
@@ -64,5 +69,14 @@ final class ClosureSerializer
         }
 
         return $closure;
+    }
+
+    private static function requireOpis(): void
+    {
+        if (!function_exists('Opis\\Closure\\serialize') || !function_exists('Opis\\Closure\\unserialize')) {
+            throw new RequirementException(
+                'Closure serialization requires the optional opis/closure package (^4.5).',
+            );
+        }
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\Serializer;
 
 use Closure;
+use Infocyph\InterMix\Exceptions\RequirementException;
 use InvalidArgumentException;
 use Throwable;
 
@@ -31,6 +32,7 @@ final readonly class SignedClosureSerializer
 
     public function serialize(Closure $closure): string
     {
+        self::requireOpis();
         $serialized = opis_serialize($closure);
         $signature = hash_hmac(self::HMAC_ALGORITHM, $serialized, $this->key, true);
 
@@ -63,6 +65,8 @@ final readonly class SignedClosureSerializer
             throw new InvalidArgumentException('Signed Closure payload verification failed.');
         }
 
+        self::requireOpis();
+
         try {
             $closure = opis_unserialize($serialized);
         } catch (Throwable $throwable) {
@@ -74,5 +78,14 @@ final readonly class SignedClosureSerializer
         }
 
         return $closure;
+    }
+
+    private static function requireOpis(): void
+    {
+        if (!function_exists('Opis\\Closure\\serialize') || !function_exists('Opis\\Closure\\unserialize')) {
+            throw new RequirementException(
+                'Closure serialization requires the optional opis/closure package (^4.5).',
+            );
+        }
     }
 }
