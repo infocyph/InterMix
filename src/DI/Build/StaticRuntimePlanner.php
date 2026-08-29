@@ -7,7 +7,6 @@ namespace Infocyph\InterMix\DI\Build;
 use Infocyph\InterMix\DI\Support\AliasDefinition;
 use Infocyph\InterMix\DI\Support\FactoryDefinition;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
-use Infocyph\InterMix\DI\Support\ServiceReference;
 use Infocyph\InterMix\Internal\ReflectionResource;
 use ReflectionClass;
 
@@ -177,37 +176,6 @@ final class StaticRuntimePlanner
         return $plans;
     }
 
-    /** @return FactoryPlan */
-    private function factoryPlan(DefinitionGraph $graph, string $id, FactoryDefinition $definition): array
-    {
-        $arguments = [];
-        $dependencies = [];
-        $seenDependencies = [];
-        foreach ($definition->arguments as $argument) {
-            if ($argument instanceof ServiceReference) {
-                $arguments[] = ['kind' => 'service', 'id' => $argument->id];
-                if (!isset($seenDependencies[$argument->id])) {
-                    $seenDependencies[$argument->id] = true;
-                    $dependencies[] = $argument->id;
-                }
-
-                continue;
-            }
-
-            $arguments[] = ['kind' => 'value', 'code' => var_export($argument, true)];
-        }
-
-        return [
-            'kind' => 'factory',
-            'class' => $definition->class,
-            'method' => $definition->method,
-            'lifetime' => $graph->definitionMetaFor($id)['lifetime'],
-            'arguments' => $arguments,
-            'properties' => [],
-            'dependencies' => $dependencies,
-        ];
-    }
-
     /**
      * @param array<string, array{dependencies: list<string>}> $plans
      * @param array<string, true> $remaining
@@ -325,7 +293,7 @@ final class StaticRuntimePlanner
             return $this->planAlias($graph, $id, $definition);
         }
         if ($definition instanceof FactoryDefinition) {
-            return $this->factoryPlan($graph, $id, $definition);
+            return new StaticFactoryPlanner()->plan($graph, $id, $definition);
         }
 
         $valuePlan = $this->valuePlan($graph, $id, $definition);
