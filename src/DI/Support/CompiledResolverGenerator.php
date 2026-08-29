@@ -6,6 +6,7 @@ namespace Infocyph\InterMix\DI\Support;
 
 use Closure;
 use Composer\InstalledVersions;
+use Infocyph\InterMix\DI\Build\DefinitionGraph;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Internal\AtomicFileWriter;
@@ -30,7 +31,8 @@ final class CompiledResolverGenerator
      */
     public function generate(Container $container, string $filePath): array
     {
-        $definitions = $container->getRepository()->getFunctionReference();
+        $graph = DefinitionGraph::from($container->getRepository());
+        $definitions = $graph->definitions();
         ksort($definitions, SORT_STRING);
 
         $compiledCodeGroups = [];
@@ -39,7 +41,7 @@ final class CompiledResolverGenerator
         $skipped = [];
 
         foreach ($definitions as $id => $definition) {
-            $compiled = $this->compileEntry($container, $definition);
+            $compiled = $this->compileEntry($graph, $definition);
             if ($compiled['code'] === null || $compiled['signature'] === null) {
                 $skipped[$id] = $compiled['reason'];
 
@@ -51,20 +53,20 @@ final class CompiledResolverGenerator
             $compiledIds[] = $id;
         }
 
-        $identity = $this->artifactIdentity($container, $compiledFingerprints);
+        $identity = $this->artifactIdentity($graph, $compiledFingerprints);
         $fingerprint = self::stableHash($identity);
         $code = $this->renderArtifact($identity + ['fingerprint' => $fingerprint], $compiledCodeGroups);
 
         AtomicFileWriter::write(
             $filePath,
             $code,
-            function (string $temporaryPath) use ($container): void {
-                $this->load($container, $temporaryPath);
+            function (string $temporaryPath) use ($graph): void {
+                $this->loadAgainstGraph($graph, $temporaryPath);
             },
         );
 
         return [
-            ...$this->load($container, $filePath),
+            ...$this->loadAgainstGraph($graph, $filePath),
             'report' => [
                 'path' => $filePath,
                 'fingerprint' => $fingerprint,
@@ -87,44 +89,10 @@ final class CompiledResolverGenerator
      */
     public function load(Container $container, string $filePath): array
     {
-        if (!is_file($filePath) || !is_readable($filePath)) {
-            throw new ContainerException("Compiled resolver artifact is not readable: '$filePath'.");
-        }
-
-        $artifact = require $filePath;
-        if (!is_array($artifact)) {
-            throw new ContainerException('Compiled resolver file must return an artifact array.');
-        }
-
-        $metadata = $artifact['metadata'] ?? null;
-        $resolver = $artifact['resolver'] ?? null;
-        if (!is_array($metadata) || !$resolver instanceof Closure) {
-            throw new ContainerException('Compiled resolver artifact is malformed.');
-        }
-
-        $compiledFingerprints = $metadata['compiled'] ?? null;
-        $this->assertFingerprintMap($compiledFingerprints);
-        if (!is_string($metadata['definitions'] ?? null)
-            || !is_string($metadata['resolution'] ?? null)
-        ) {
-            throw new ContainerException('Compiled resolver fingerprints are missing or malformed.');
-        }
-
-        $expectedIdentity = $this->artifactIdentity($container, $compiledFingerprints);
-        if (($metadata['format'] ?? null) !== self::ARTIFACT_FORMAT
-            || ($metadata['php'] ?? null) !== $expectedIdentity['php']
-            || ($metadata['intermix'] ?? null) !== $expectedIdentity['intermix']
-            || ($metadata['environment'] ?? null) !== $expectedIdentity['environment']
-            || $metadata['definitions'] !== $expectedIdentity['definitions']
-            || $metadata['resolution'] !== $expectedIdentity['resolution']
-            || ($metadata['fingerprint'] ?? null) !== self::stableHash($expectedIdentity)
-        ) {
-            throw new ContainerException(
-                'Compiled resolver artifact is stale or incompatible; rebuild it after registration.',
-            );
-        }
-
-        return ['resolver' => $resolver, 'ids' => $compiledFingerprints];
+        return $this->loadAgainstGraph(
+            DefinitionGraph::from($container->getRepository()),
+            $filePath,
+        );
     }
 
     /**
@@ -182,7 +150,7 @@ final class CompiledResolverGenerator
     }
 
     /**
-     * @param Container $container Container providing environment and definitions.
+     * @param DefinitionGraph $graph Immutable build-time container state.
      * @param array<string, string> $compiledFingerprints Compilable recipe fingerprints.
      * @return array{
      *   format: int,
@@ -194,7 +162,7 @@ final class CompiledResolverGenerator
      *   compiled: array<string, string>
      * }
      */
-    private function artifactIdentity(Container $container, array $compiledFingerprints): array
+    private function artifactIdentity(DefinitionGraph $graph, array $compiledFingerprints): array
     {
         ksort($compiledFingerprints, SORT_STRING);
 
@@ -202,9 +170,9 @@ final class CompiledResolverGenerator
             'format' => self::ARTIFACT_FORMAT,
             'php' => PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION,
             'intermix' => $this->packageIdentity(),
-            'environment' => $container->getRepository()->getEnvironment(),
-            'definitions' => $this->currentDefinitionsFingerprint($container),
-            'resolution' => $this->currentResolutionFingerprint($container),
+            'environment' => $graph->environment(),
+            'definitions' => $this->currentDefinitionsFingerprint($graph),
+            'resolution' => $this->currentResolutionFingerprint($graph),
             'compiled' => $compiledFingerprints,
         ];
     }
@@ -240,21 +208,21 @@ final class CompiledResolverGenerator
     }
 
     /**
-     * @param Container $container Fully registered build-time container.
+     * @param DefinitionGraph $graph Immutable build-time container state.
      * @param string $definition Registered class-string definition.
      * @return array{code: string|null, signature: array<string, mixed>|null, reason: string}
      */
-    private function compileClassDefinition(Container $container, string $definition): array
+    private function compileClassDefinition(DefinitionGraph $graph, string $definition): array
     {
-        return new AutomaticClassCompiler()->compile($container, $definition);
+        return new AutomaticClassCompiler()->compile($graph, $definition);
     }
 
     /**
-     * @param Container $container Fully registered build-time container.
+     * @param DefinitionGraph $graph Immutable build-time container state.
      * @param mixed $definition Registered container definition.
      * @return array{code: string|null, signature: array<string, mixed>|null, reason: string}
      */
-    private function compileEntry(Container $container, mixed $definition): array
+    private function compileEntry(DefinitionGraph $graph, mixed $definition): array
     {
         if ($definition instanceof FactoryDefinition) {
             return $this->compileFactoryDefinition($definition);
@@ -272,7 +240,7 @@ final class CompiledResolverGenerator
             return $this->skipped('literal or non-class definition does not require compilation');
         }
 
-        return $this->compileClassDefinition($container, $definition);
+        return $this->compileClassDefinition($graph, $definition);
     }
 
     /**
@@ -316,9 +284,9 @@ final class CompiledResolverGenerator
         ];
     }
 
-    private function currentDefinitionsFingerprint(Container $container): string
+    private function currentDefinitionsFingerprint(DefinitionGraph $graph): string
     {
-        $definitions = $container->getRepository()->getFunctionReference();
+        $definitions = $graph->definitions();
         ksort($definitions, SORT_STRING);
         $signatures = [];
 
@@ -327,7 +295,7 @@ final class CompiledResolverGenerator
             if ($signature === null) {
                 continue;
             }
-            $metadata = $container->getRepository()->getDefinitionMeta($id);
+            $metadata = $graph->definitionMetaFor($id);
             $signatures[$id] = [
                 'definition' => $signature,
                 'lifetime' => $metadata['lifetime']->value,
@@ -338,14 +306,13 @@ final class CompiledResolverGenerator
         return self::stableHash($signatures);
     }
 
-    private function currentResolutionFingerprint(Container $container): string
+    private function currentResolutionFingerprint(DefinitionGraph $graph): string
     {
-        $repository = $container->getRepository();
-        $definitionIds = array_keys($repository->getFunctionReference());
+        $definitionIds = array_keys($graph->definitions());
         sort($definitionIds, SORT_STRING);
 
         $classResourceShape = [];
-        foreach ($repository->getClassResource() as $class => $resources) {
+        foreach ($graph->classResources() as $class => $resources) {
             $resourceTypes = array_keys($resources);
             sort($resourceTypes, SORT_STRING);
             $classResourceShape[$class] = $resourceTypes;
@@ -355,11 +322,11 @@ final class CompiledResolverGenerator
         return self::stableHash([
             'definition_ids' => $definitionIds,
             'class_resources' => $classResourceShape,
-            'contextual_bindings' => $repository->getContextualBindingShape(),
-            'attribute_types' => $repository->getRegisteredAttributeTypes(),
-            'method_attributes' => $repository->isMethodAttributeEnabled(),
-            'property_attributes' => $repository->isPropertyAttributeEnabled(),
-            'default_method' => $repository->getDefaultMethod(),
+            'contextual_bindings' => $graph->contextualBindingShape(),
+            'attribute_types' => $graph->registeredAttributeTypes(),
+            'method_attributes' => $graph->methodAttributesEnabled(),
+            'property_attributes' => $graph->propertyAttributesEnabled(),
+            'default_method' => $graph->defaultMethod(),
         ]);
     }
 
@@ -401,6 +368,53 @@ final class CompiledResolverGenerator
         }
 
         return ['callable' => $reflection, 'issue' => null];
+    }
+
+    /**
+     * @param DefinitionGraph $graph Immutable build-time container state.
+     * @param string $filePath Trusted compiled artifact path.
+     * @return array{resolver: Closure(Container, string): mixed, ids: array<string, string>}
+     */
+    private function loadAgainstGraph(DefinitionGraph $graph, string $filePath): array
+    {
+        if (!is_file($filePath) || !is_readable($filePath)) {
+            throw new ContainerException("Compiled resolver artifact is not readable: '$filePath'.");
+        }
+
+        $artifact = require $filePath;
+        if (!is_array($artifact)) {
+            throw new ContainerException('Compiled resolver file must return an artifact array.');
+        }
+
+        $metadata = $artifact['metadata'] ?? null;
+        $resolver = $artifact['resolver'] ?? null;
+        if (!is_array($metadata) || !$resolver instanceof Closure) {
+            throw new ContainerException('Compiled resolver artifact is malformed.');
+        }
+
+        $compiledFingerprints = $metadata['compiled'] ?? null;
+        $this->assertFingerprintMap($compiledFingerprints);
+        if (!is_string($metadata['definitions'] ?? null)
+            || !is_string($metadata['resolution'] ?? null)
+        ) {
+            throw new ContainerException('Compiled resolver fingerprints are missing or malformed.');
+        }
+
+        $expectedIdentity = $this->artifactIdentity($graph, $compiledFingerprints);
+        if (($metadata['format'] ?? null) !== self::ARTIFACT_FORMAT
+            || ($metadata['php'] ?? null) !== $expectedIdentity['php']
+            || ($metadata['intermix'] ?? null) !== $expectedIdentity['intermix']
+            || ($metadata['environment'] ?? null) !== $expectedIdentity['environment']
+            || $metadata['definitions'] !== $expectedIdentity['definitions']
+            || $metadata['resolution'] !== $expectedIdentity['resolution']
+            || ($metadata['fingerprint'] ?? null) !== self::stableHash($expectedIdentity)
+        ) {
+            throw new ContainerException(
+                'Compiled resolver artifact is stale or incompatible; rebuild it after registration.',
+            );
+        }
+
+        return ['resolver' => $resolver, 'ids' => $compiledFingerprints];
     }
 
     /**
