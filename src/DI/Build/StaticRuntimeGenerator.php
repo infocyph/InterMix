@@ -21,7 +21,8 @@ final class StaticRuntimeGenerator
      * @return array{
      *   runtime: ProductionContainer,
      *   compiled: list<string>,
-     *   skipped: array<string, string>
+     *   skipped: array<string, string>,
+     *   sha256: string
      * }
      */
     public function generate(
@@ -37,6 +38,7 @@ final class StaticRuntimeGenerator
         }
 
         $source = new StaticRuntimeRenderer()->render($graph, $plans, $slots);
+        $sha256 = hash('sha256', $source);
         AtomicFileWriter::write(
             $filePath,
             $source,
@@ -46,23 +48,70 @@ final class StaticRuntimeGenerator
         );
         $this->writeManifest(
             $filePath,
-            $source,
+            $sha256,
             array_keys($plans),
             $planned['skipped'],
             $graph->environment(),
         );
 
         return [
-            'runtime' => $this->load($filePath, $fallback),
+            'runtime' => $this->loadPrevalidated($filePath, $sha256, $fallback),
             'compiled' => array_keys($plans),
             'skipped' => $planned['skipped'],
+            'sha256' => $sha256,
         ];
     }
 
     public function load(string $filePath, ?Container $fallback = null): ProductionContainer
     {
         $this->validateManifest($filePath);
-        $runtime = $this->loadRuntime($filePath);
+
+        return $this->attachFallback($this->loadRuntime($filePath), $fallback);
+    }
+
+    /**
+     * Load an artifact whose SHA-256 digest was validated during deployment.
+     *
+     * This deliberately does not hash the runtime file. The caller must source
+     * the digest from trusted immutable deployment metadata.
+     */
+    public function loadPrevalidated(
+        string $filePath,
+        string $expectedSha256,
+        ?Container $fallback = null,
+    ): ProductionContainer {
+        $this->assertSha256($expectedSha256);
+        $manifest = $this->readManifest($filePath);
+        $this->assertManifestAbi($manifest);
+        if (!hash_equals($manifest['sha256'], $expectedSha256)) {
+            throw new ContainerException(
+                'Prevalidated static runtime does not match the active deployment digest.',
+            );
+        }
+
+        return $this->attachFallback($this->loadRuntime($filePath), $fallback);
+    }
+
+    private function assertManifestAbi(array $manifest): void
+    {
+        if ($manifest['abi'] !== self::ARTIFACT_ABI) {
+            throw new ContainerException(
+                "Unsupported static runtime ABI '{$manifest['abi']}'.",
+            );
+        }
+    }
+
+    private function assertSha256(string $sha256): void
+    {
+        if (preg_match('/^[a-f0-9]{64}$/D', $sha256) !== 1) {
+            throw new ContainerException(
+                'Prevalidated static runtime digest must be a SHA-256 hexadecimal value.',
+            );
+        }
+    }
+
+    private function attachFallback(ProductionContainer $runtime, ?Container $fallback): ProductionContainer
+    {
         if ($fallback instanceof Container) {
             $runtime->attachFallback($fallback);
         }
@@ -121,11 +170,7 @@ final class StaticRuntimeGenerator
     private function validateManifest(string $filePath): void
     {
         $manifest = $this->readManifest($filePath);
-        if ($manifest['abi'] !== self::ARTIFACT_ABI) {
-            throw new ContainerException(
-                "Unsupported static runtime ABI '{$manifest['abi']}'.",
-            );
-        }
+        $this->assertManifestAbi($manifest);
 
         $hash = hash_file('sha256', $filePath);
         if (!is_string($hash) || !hash_equals($manifest['sha256'], $hash)) {
@@ -139,7 +184,7 @@ final class StaticRuntimeGenerator
      */
     private function writeManifest(
         string $filePath,
-        string $source,
+        string $sha256,
         array $compiled,
         array $skipped,
         ?string $environment,
@@ -148,7 +193,7 @@ final class StaticRuntimeGenerator
             $manifest = json_encode(
                 [
                     'abi' => self::ARTIFACT_ABI,
-                    'sha256' => hash('sha256', $source),
+                    'sha256' => $sha256,
                     'environment' => $environment,
                     'compiled' => $compiled,
                     'skipped' => $skipped,
