@@ -79,10 +79,9 @@ final class RuntimeIslandResolver
     {
         $method = ReflectionResource::getClassReflection($className)->getMethod($methodName);
         $resource = $this->repository->getClassResourceFor($className)['method'] ?? null;
-        $parameters = is_array($resource) ? ($resource['params'] ?? []) : [];
-        if (!is_array($parameters)) {
-            $parameters = [];
-        }
+        $parameters = is_array($resource) && is_array($resource['params'] ?? null)
+            ? $resource['params']
+            : [];
 
         return $method->invokeArgs(
             $method->isStatic() ? null : $instance,
