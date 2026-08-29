@@ -6,7 +6,6 @@ namespace Infocyph\InterMix\DI\Build;
 
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\Internal\ReflectionResource;
-use ReflectionClass;
 
 /**
  * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
