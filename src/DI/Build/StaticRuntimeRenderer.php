@@ -8,9 +8,10 @@ use Infocyph\InterMix\DI\Support\LifetimeEnum;
 
 /**
  * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
+ * @phpstan-type AliasPlan array{kind: 'alias', target: string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, dependencies: list<string>}
  * @phpstan-type ClassPlan array{kind: 'class', class: class-string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, dependencies: list<string>}
  * @phpstan-type ValuePlan array{kind: 'value', code: string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, dependencies: list<string>}
- * @phpstan-type ServicePlan ClassPlan|ValuePlan
+ * @phpstan-type ServicePlan AliasPlan|ClassPlan|ValuePlan
  * @internal
  */
 final class StaticRuntimeRenderer
@@ -24,12 +25,14 @@ final class StaticRuntimeRenderer
         $source = "<?php\n\ndeclare(strict_types=1);\n\n";
         $source .= "use Infocyph\\InterMix\\DI\\ProductionContainer;\n\n";
         $source .= "return new class extends ProductionContainer\n{\n";
+        $source .= $this->renderAliasSingletonProperties($plans);
         $source .= $this->renderSingletonProperties($plans, $slots);
         $source .= $this->renderGet($plans, $slots);
         $source .= $this->renderHas($plans);
         $source .= $this->renderSlotMap($slots);
         $source .= $this->renderCompiledIds($plans);
         $source .= $this->renderDefinitionMap($graph, $plans);
+        $source .= $this->renderFreshMap($plans, $slots);
         $source .= $this->renderTags($graph, $plans);
         $source .= $this->renderServiceMethods($plans, $slots);
 
@@ -50,6 +53,45 @@ final class StaticRuntimeRenderer
         }
 
         return 'new \\' . ltrim($plan['class'], '\\') . '(' . implode(', ', $arguments) . ')';
+    }
+
+    /** @param array<string, ServicePlan> $plans */
+    private function renderAliasSingletonProperties(array $plans): string
+    {
+        foreach ($plans as $plan) {
+            if ($plan['kind'] === 'alias' && $plan['lifetime'] === LifetimeEnum::Singleton) {
+                return "    /** @var array<int, mixed> */\n    private array \$aliasSingletons = [];\n\n";
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param AliasPlan $plan
+     * @param array<string, int> $slots
+     */
+    private function renderAliasMethod(int $slot, array $plan, array $slots): string
+    {
+        $target = '$this->s' . $slots[$plan['target']] . '()';
+        $source = "    private function s{$slot}(): mixed\n    {\n";
+        $source .= $this->renderSeedGuard($slot);
+
+        if ($plan['lifetime'] === LifetimeEnum::Scoped) {
+            $source .= "        if (array_key_exists({$slot}, \$this->scope->resolved)) {\n";
+            $source .= "            return \$this->scope->resolved[{$slot}];\n";
+            $source .= "        }\n\n";
+            $source .= "        return \$this->scope->resolved[{$slot}] = {$target};\n";
+        } elseif ($plan['lifetime'] === LifetimeEnum::Singleton) {
+            $source .= "        if (array_key_exists({$slot}, \$this->aliasSingletons)) {\n";
+            $source .= "            return \$this->aliasSingletons[{$slot}];\n";
+            $source .= "        }\n\n";
+            $source .= "        return \$this->aliasSingletons[{$slot}] = {$target};\n";
+        } else {
+            $source .= "        return {$target};\n";
+        }
+
+        return $source . "    }\n\n";
     }
 
     /** @param array<string, ServicePlan> $plans */
@@ -83,6 +125,31 @@ final class StaticRuntimeRenderer
             . "            default => false,\n"
             . "        };\n"
             . "    }\n\n";
+    }
+
+    /**
+     * @param array<string, ServicePlan> $plans
+     * @param array<string, int> $slots
+     */
+    private function renderFreshMap(array $plans, array $slots): string
+    {
+        $fresh = [];
+        foreach ($plans as $id => $plan) {
+            if ($plan['kind'] === 'class' && $id === $plan['class']) {
+                $fresh[$id] = $this->classConstruction($plan, $slots);
+            }
+        }
+        if ($fresh === []) {
+            return '';
+        }
+
+        $source = "    protected function freshCompiled(string \$class): ?object\n    {\n        return match (\$class) {\n";
+        foreach ($fresh as $class => $construction) {
+            $source .= '            ' . var_export($class, true) . " => {$construction},\n";
+        }
+        $source .= "            default => null,\n";
+
+        return $source . "        };\n    }\n\n";
     }
 
     /**
@@ -152,9 +219,11 @@ final class StaticRuntimeRenderer
     {
         $source = '';
         foreach ($plans as $id => $plan) {
-            $source .= $plan['kind'] === 'value'
-                ? $this->renderValueMethod($slots[$id], $plan)
-                : $this->renderClassMethod($slots[$id], $plan, $slots);
+            $source .= match ($plan['kind']) {
+                'alias' => $this->renderAliasMethod($slots[$id], $plan, $slots),
+                'class' => $this->renderClassMethod($slots[$id], $plan, $slots),
+                'value' => $this->renderValueMethod($slots[$id], $plan),
+            };
         }
 
         return $source;
