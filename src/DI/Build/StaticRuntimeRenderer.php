@@ -55,18 +55,6 @@ final class StaticRuntimeRenderer
         return 'new \\' . ltrim($plan['class'], '\\') . '(' . implode(', ', $arguments) . ')';
     }
 
-    /** @param array<string, ServicePlan> $plans */
-    private function renderAliasSingletonProperties(array $plans): string
-    {
-        foreach ($plans as $plan) {
-            if ($plan['kind'] === 'alias' && $plan['lifetime'] === LifetimeEnum::Singleton) {
-                return "    /** @var array<int, mixed> */\n    private array \$aliasSingletons = [];\n\n";
-            }
-        }
-
-        return '';
-    }
-
     /**
      * @param AliasPlan $plan
      * @param array<string, int> $slots
@@ -89,6 +77,42 @@ final class StaticRuntimeRenderer
             $source .= "        return \$this->aliasSingletons[{$slot}] = {$target};\n";
         } else {
             $source .= "        return {$target};\n";
+        }
+
+        return $source . "    }\n\n";
+    }
+
+    /** @param array<string, ServicePlan> $plans */
+    private function renderAliasSingletonProperties(array $plans): string
+    {
+        foreach ($plans as $plan) {
+            if ($plan['kind'] === 'alias' && $plan['lifetime'] === LifetimeEnum::Singleton) {
+                return "    /** @var array<int, mixed> */\n    private array \$aliasSingletons = [];\n\n";
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param ClassPlan $plan
+     * @param array<string, int> $slots
+     */
+    private function renderClassMethod(int $slot, array $plan, array $slots): string
+    {
+        $construction = $this->classConstruction($plan, $slots);
+        $source = "    private function s{$slot}(): mixed\n    {\n";
+        $source .= $this->renderSeedGuard($slot);
+
+        if ($plan['lifetime'] === LifetimeEnum::Scoped) {
+            $source .= "        if (array_key_exists({$slot}, \$this->scope->resolved)) {\n";
+            $source .= "            return \$this->scope->resolved[{$slot}];\n";
+            $source .= "        }\n\n";
+            $source .= "        return \$this->scope->resolved[{$slot}] = {$construction};\n";
+        } elseif ($plan['lifetime'] === LifetimeEnum::Singleton) {
+            $source .= "        return \$this->v{$slot} ??= {$construction};\n";
+        } else {
+            $source .= "        return {$construction};\n";
         }
 
         return $source . "    }\n\n";
@@ -178,30 +202,6 @@ final class StaticRuntimeRenderer
         $source .= "            default => \$this->fallbackHas(\$id),\n";
 
         return $source . "        };\n    }\n\n";
-    }
-
-    /**
-     * @param ClassPlan $plan
-     * @param array<string, int> $slots
-     */
-    private function renderClassMethod(int $slot, array $plan, array $slots): string
-    {
-        $construction = $this->classConstruction($plan, $slots);
-        $source = "    private function s{$slot}(): mixed\n    {\n";
-        $source .= $this->renderSeedGuard($slot);
-
-        if ($plan['lifetime'] === LifetimeEnum::Scoped) {
-            $source .= "        if (array_key_exists({$slot}, \$this->scope->resolved)) {\n";
-            $source .= "            return \$this->scope->resolved[{$slot}];\n";
-            $source .= "        }\n\n";
-            $source .= "        return \$this->scope->resolved[{$slot}] = {$construction};\n";
-        } elseif ($plan['lifetime'] === LifetimeEnum::Singleton) {
-            $source .= "        return \$this->v{$slot} ??= {$construction};\n";
-        } else {
-            $source .= "        return {$construction};\n";
-        }
-
-        return $source . "    }\n\n";
     }
 
     private function renderSeedGuard(int $slot): string

@@ -29,7 +29,7 @@ abstract class ProductionContainer implements ContainerInterface
     abstract protected function slotFor(string $id): ?int;
 
     /** @internal */
-    public final function attachFallback(Container $fallback): void
+    final public function attachFallback(Container $fallback): void
     {
         $this->installFallbackBridges($fallback);
         $this->fallback = $fallback;
@@ -37,7 +37,7 @@ abstract class ProductionContainer implements ContainerInterface
     }
 
     /** @throws ContainerException|\ReflectionException|\Psr\Cache\InvalidArgumentException */
-    public final function call(string|Closure|callable $classOrClosure, string|bool|null $method = null): mixed
+    final public function call(string|Closure|callable $classOrClosure, string|bool|null $method = null): mixed
     {
         if (is_string($classOrClosure) && $this->isCompiledDefinition($classOrClosure)) {
             return $this->callCompiledDefinition($classOrClosure, $method);
@@ -46,14 +46,8 @@ abstract class ProductionContainer implements ContainerInterface
         return $this->dynamic()->call($classOrClosure, $method);
     }
 
-    /** @return array<int, string> */
-    protected function compiledIds(): array
-    {
-        return [];
-    }
-
     /** @param array<string, mixed> $instances */
-    public final function enterScope(string $scope, array $instances = []): static
+    final public function enterScope(string $scope, array $instances = []): static
     {
         if ($scope === 'root' || $this->scope->contains($scope)) {
             throw new ContainerException("Scope \"{$scope}\" is already active.");
@@ -74,7 +68,7 @@ abstract class ProductionContainer implements ContainerInterface
     }
 
     /** @return array<string, mixed> */
-    public final function findByTag(string $tag): array
+    final public function findByTag(string $tag): array
     {
         $matches = [];
         foreach ($this->taggedIds($tag) as $id) {
@@ -91,7 +85,7 @@ abstract class ProductionContainer implements ContainerInterface
     }
 
     /** @return iterable<string, callable(): mixed> */
-    public final function findByTagLazy(string $tag): iterable
+    final public function findByTagLazy(string $tag): iterable
     {
         foreach ($this->taggedIds($tag) as $id) {
             yield $id => fn() => $this->get($id);
@@ -110,7 +104,7 @@ abstract class ProductionContainer implements ContainerInterface
     }
 
     /** @throws ContainerException|\ReflectionException|\Psr\Cache\InvalidArgumentException */
-    public final function getReturn(string $id): mixed
+    final public function getReturn(string $id): mixed
     {
         if ($this->isCompiledDefinition($id)) {
             return $this->get($id);
@@ -119,12 +113,7 @@ abstract class ProductionContainer implements ContainerInterface
         return $this->dynamic()->getReturn($id);
     }
 
-    protected function isCompiledDefinition(string $id): bool
-    {
-        return false;
-    }
-
-    public final function leaveScope(): static
+    final public function leaveScope(): static
     {
         $this->fallback?->leaveScope();
         $parent = $this->scope->parent;
@@ -134,7 +123,7 @@ abstract class ProductionContainer implements ContainerInterface
     }
 
     /** @throws ContainerException|\ReflectionException */
-    public final function make(string $class, string|bool $method = false): mixed
+    final public function make(string $class, string|bool $method = false): mixed
     {
         if ($method === false) {
             $fresh = $this->freshCompiled($class);
@@ -150,7 +139,7 @@ abstract class ProductionContainer implements ContainerInterface
      * @param string|array{0:string,1:string}|Closure|callable|null $spec
      * @param array<int|string, mixed> $parameters
      */
-    public final function resolveNow(
+    final public function resolveNow(
         string|Closure|callable|array|null $spec,
         array $parameters = [],
     ): mixed {
@@ -169,13 +158,13 @@ abstract class ProductionContainer implements ContainerInterface
     }
 
     /** @return iterable<string, callable(): mixed> */
-    public final function tagged(string $tag): iterable
+    final public function tagged(string $tag): iterable
     {
         return $this->findByTagLazy($tag);
     }
 
     /** @param array<string, mixed> $instances */
-    public final function withinScope(string $scope, callable $callback, array $instances = []): mixed
+    final public function withinScope(string $scope, callable $callback, array $instances = []): mixed
     {
         $this->enterScope($scope, $instances);
 
@@ -186,12 +175,18 @@ abstract class ProductionContainer implements ContainerInterface
         }
     }
 
-    protected final function fallbackGet(string $id): mixed
+    /** @return array<int, string> */
+    protected function compiledIds(): array
+    {
+        return [];
+    }
+
+    final protected function fallbackGet(string $id): mixed
     {
         return $this->dynamic()->get($id);
     }
 
-    protected final function fallbackHas(string $id): bool
+    final protected function fallbackHas(string $id): bool
     {
         return $this->dynamic()->has($id);
     }
@@ -199,6 +194,11 @@ abstract class ProductionContainer implements ContainerInterface
     protected function freshCompiled(string $class): ?object
     {
         return null;
+    }
+
+    protected function isCompiledDefinition(string $id): bool
+    {
+        return false;
     }
 
     /** @return array<int, string> */

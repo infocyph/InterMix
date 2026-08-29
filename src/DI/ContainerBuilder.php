@@ -69,6 +69,12 @@ final class ContainerBuilder
         return $this;
     }
 
+    /** @return null|array{compiled: list<string>, skipped: array<string, string>} */
+    public function compilationReport(): ?array
+    {
+        return $this->compilationReport;
+    }
+
     /** @return array{compiled: list<string>, skipped: array<string, string>} */
     public function compile(string $path): array
     {
@@ -84,12 +90,6 @@ final class ContainerBuilder
             'skipped' => $generated['skipped'],
         ];
 
-        return $this->compilationReport;
-    }
-
-    /** @return null|array{compiled: list<string>, skipped: array<string, string>} */
-    public function compilationReport(): ?array
-    {
         return $this->compilationReport;
     }
 

@@ -67,7 +67,7 @@ final readonly class DefinitionGraph
             classResources: $repository->getClassResource(),
             closureResources: $repository->getClosureResource(),
             contextualBindings: $contextualBindings,
-            environmentBindings: (new EnvironmentBindingSnapshot())->capture(
+            environmentBindings: new EnvironmentBindingSnapshot()->capture(
                 $repository,
                 $definitions,
                 $contextualBindings,

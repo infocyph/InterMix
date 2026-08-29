@@ -72,7 +72,7 @@ final class StaticRuntimePlanner
             return 'class definition is not instantiable';
         }
 
-        $dynamicReason = (new StaticFeatureClassifier())->dynamicReason($graph, $class);
+        $dynamicReason = new StaticFeatureClassifier()->dynamicReason($graph, $class);
         if ($dynamicReason !== null) {
             return $dynamicReason;
         }
@@ -82,7 +82,7 @@ final class StaticRuntimePlanner
             return "class invokes implicit method '$method'";
         }
 
-        $constructor = (new StaticParameterPlanner())->constructorPlan($graph, $class);
+        $constructor = new StaticParameterPlanner()->constructorPlan($graph, $class);
         if (is_string($constructor)) {
             return $constructor;
         }
@@ -120,6 +120,7 @@ final class StaticRuntimePlanner
                     foreach (array_slice($path, $positions[$current]) as $cycleId) {
                         $cyclic[$cycleId] = true;
                     }
+
                     break;
                 }
 
@@ -210,6 +211,26 @@ final class StaticRuntimePlanner
         return $class->hasMethod('__invoke') ? '__invoke' : null;
     }
 
+    private function isCallableArrayDefinition(mixed $definition): bool
+    {
+        return is_array($definition)
+            && isset($definition[0])
+            && is_string($definition[0])
+            && class_exists($definition[0]);
+    }
+
+    private function isExportable(mixed $value): bool
+    {
+        if ($value === null || is_scalar($value)) {
+            return true;
+        }
+        if (!is_array($value)) {
+            return false;
+        }
+
+        return array_all($value, fn(mixed $item): bool => $this->isExportable($item));
+    }
+
     /**
      * @param array<string, ServicePlan> $plans
      * @param array<string, string> $skipped
@@ -223,18 +244,6 @@ final class StaticRuntimePlanner
         return isset($plans[$dependency])
             || isset($skipped[$dependency])
             || $graph->hasDefinition($dependency);
-    }
-
-    private function isExportable(mixed $value): bool
-    {
-        if ($value === null || is_scalar($value)) {
-            return true;
-        }
-        if (!is_array($value)) {
-            return false;
-        }
-
-        return array_all($value, fn(mixed $item): bool => $this->isExportable($item));
     }
 
     /** @return AliasPlan */
@@ -357,13 +366,5 @@ final class StaticRuntimePlanner
             'arguments' => [],
             'dependencies' => [],
         ];
-    }
-
-    private function isCallableArrayDefinition(mixed $definition): bool
-    {
-        return is_array($definition)
-            && isset($definition[0])
-            && is_string($definition[0])
-            && class_exists($definition[0]);
     }
 }

@@ -29,14 +29,14 @@ final class StaticRuntimeGenerator
         string $filePath,
         ?Container $fallback = null,
     ): array {
-        $planned = (new StaticRuntimePlanner())->plan($graph);
+        $planned = new StaticRuntimePlanner()->plan($graph);
         $plans = $planned['plans'];
         $slots = [];
         foreach (array_keys($plans) as $slot => $id) {
             $slots[$id] = $slot;
         }
 
-        $source = (new StaticRuntimeRenderer())->render($graph, $plans, $slots);
+        $source = new StaticRuntimeRenderer()->render($graph, $plans, $slots);
         AtomicFileWriter::write(
             $filePath,
             $source,
@@ -167,6 +167,7 @@ final class StaticRuntimeGenerator
                 if (!is_string($contents)) {
                     throw new ContainerException('Unable to validate static runtime manifest.');
                 }
+
                 try {
                     $decoded = json_decode($contents, true, flags: JSON_THROW_ON_ERROR);
                 } catch (JsonException $exception) {
