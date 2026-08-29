@@ -66,7 +66,7 @@ final class StaticPropertyPlanner
         $dependencies[] = $argument['id'];
     }
 
-    /** @return ServiceArgument|string|null */
+    /** @return array{kind: 'service', id: string}|string|null */
     private function attributeArgument(DefinitionGraph $graph, ReflectionProperty $property): array|string|null
     {
         foreach ($property->getAttributes() as $attribute) {
