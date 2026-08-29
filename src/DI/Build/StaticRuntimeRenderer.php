@@ -41,6 +41,7 @@ final class StaticRuntimeRenderer
         $source .= $this->renderDefinitionMap($graph, $plans);
         $source .= $this->renderFreshMap($plans, $slots);
         $source .= $this->renderFreshMethods($plans, $slots);
+        $source .= new StaticFreshInvocationRenderer()->render($plans, $slots);
         $source .= $this->renderCompiledSingletonValues($plans, $slots);
         $source .= $this->renderTags($graph, $plans);
         $source .= $this->renderServiceMethods($plans, $slots, $invocationRenderer);
