@@ -27,56 +27,43 @@ final class StaticPropertyPlanner
         $seenDependencies = [];
 
         for ($current = $class; $current instanceof ReflectionClass; $current = $current->getParentClass()) {
-            $declaring = $current->getName();
-            $registered = $this->registeredProperties($graph, $declaring);
+            $registered = $this->registeredProperties($graph, $current->getName());
 
             foreach ($current->getProperties() as $property) {
-                if ($property->getDeclaringClass()->getName() !== $declaring) {
+                if ($property->getDeclaringClass()->getName() !== $current->getName()) {
                     continue;
                 }
 
-                $argument = null;
-                $name = $property->getName();
-                if (array_key_exists($name, $registered)) {
-                    if (!$property->isPublic() || $property->isReadOnly()) {
-                        return "property '{$declaring}::\${$name}' requires reflection-based injection";
-                    }
-                    if (!$this->isExportable($registered[$name])) {
-                        return "property '{$declaring}::\${$name}' has a non-exportable registered value";
-                    }
-                    $argument = [
-                        'kind' => 'value',
-                        'code' => var_export($registered[$name], true),
-                    ];
-                } elseif ($graph->propertyAttributesEnabled()) {
-                    $argument = $this->attributeArgument($graph, $property);
-                    if (is_string($argument)) {
-                        return $argument;
-                    }
-                    if ($argument !== null && (!$property->isPublic() || $property->isReadOnly())) {
-                        return "property '{$declaring}::\${$name}' requires reflection-based attribute injection";
-                    }
+                $plan = $this->propertyPlan($graph, $property, $registered);
+                if (is_string($plan)) {
+                    return $plan;
                 }
-
-                if (!is_array($argument)) {
+                if ($plan === null) {
                     continue;
                 }
 
-                if ($argument['kind'] === 'service' && !isset($seenDependencies[$argument['id']])) {
-                    $seenDependencies[$argument['id']] = true;
-                    $dependencies[] = $argument['id'];
-                }
-
-                $properties[] = [
-                    'declaring' => $declaring,
-                    'property' => $name,
-                    'static' => $property->isStatic(),
-                    'argument' => $argument,
-                ];
+                $properties[] = $plan;
+                $this->appendDependency($plan, $dependencies, $seenDependencies);
             }
         }
 
         return ['properties' => $properties, 'dependencies' => $dependencies];
+    }
+
+    /**
+     * @param PropertyPlan $plan
+     * @param list<string> $dependencies
+     * @param array<string, true> $seenDependencies
+     */
+    private function appendDependency(array $plan, array &$dependencies, array &$seenDependencies): void
+    {
+        $argument = $plan['argument'];
+        if ($argument['kind'] !== 'service' || isset($seenDependencies[$argument['id']])) {
+            return;
+        }
+
+        $seenDependencies[$argument['id']] = true;
+        $dependencies[] = $argument['id'];
     }
 
     /** @return ServiceArgument|string|null */
@@ -140,6 +127,49 @@ final class StaticPropertyPlanner
         return $type;
     }
 
+    /**
+     * @param array<string, mixed> $registered
+     * @return PropertyPlan|string|null
+     */
+    private function propertyPlan(
+        DefinitionGraph $graph,
+        ReflectionProperty $property,
+        array $registered,
+    ): array|string|null {
+        $name = $property->getName();
+        $argument = null;
+
+        if (array_key_exists($name, $registered)) {
+            if (!$property->isPublic() || $property->isReadOnly()) {
+                return "property '{$property->getDeclaringClass()->getName()}::\${$name}' requires reflection-based injection";
+            }
+            if (!$this->isExportable($registered[$name])) {
+                return "property '{$property->getDeclaringClass()->getName()}::\${$name}' has a non-exportable registered value";
+            }
+
+            $argument = ['kind' => 'value', 'code' => var_export($registered[$name], true)];
+        } elseif ($graph->propertyAttributesEnabled()) {
+            $argument = $this->attributeArgument($graph, $property);
+            if (is_string($argument)) {
+                return $argument;
+            }
+            if ($argument !== null && (!$property->isPublic() || $property->isReadOnly())) {
+                return "property '{$property->getDeclaringClass()->getName()}::\${$name}' requires reflection-based attribute injection";
+            }
+        }
+
+        if ($argument === null) {
+            return null;
+        }
+
+        return [
+            'declaring' => $property->getDeclaringClass()->getName(),
+            'property' => $name,
+            'static' => $property->isStatic(),
+            'argument' => $argument,
+        ];
+    }
+
     /** @return array<string, mixed> */
     private function registeredProperties(DefinitionGraph $graph, string $class): array
     {
@@ -158,7 +188,7 @@ final class StaticPropertyPlanner
         return $properties;
     }
 
-    /** @return ServiceArgument|string */
+    /** @return array{kind: 'service', id: string}|string */
     private function serviceArgument(DefinitionGraph $graph, string $target): array|string
     {
         if ($graph->hasDefinition($target)) {
