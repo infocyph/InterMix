@@ -21,11 +21,11 @@ final class AdvancedInjectedProperty
     public AdvancedCompiledDependency $dependency;
 }
 
-final readonly class AdvancedInjectedConstructor
+final readonly class AdvancedConstructorAttribute
 {
     public function __construct(
         #[Inject('advanced.dep')]
-        public object $dependency,
+        public AdvancedCompiledDependency $dependency,
     ) {}
 }
 
@@ -100,12 +100,10 @@ it('compiles registered public property injection directly', function () {
     }
 });
 
-it('compiles deterministic property and constructor Inject attributes', function () {
+it('compiles deterministic property Inject attributes', function () {
     $builder = ContainerBuilder::create(uniqid('advanced_inject_'));
     $builder->singleton(AdvancedCompiledDependency::class)
-        ->singleton('advanced.dep', AdvancedCompiledDependency::class)
-        ->singleton(AdvancedInjectedProperty::class)
-        ->singleton(AdvancedInjectedConstructor::class);
+        ->singleton(AdvancedInjectedProperty::class);
     $builder->options()->setOptions(propertyAttributes: true);
 
     $path = advancedCompilationArtifactPath();
@@ -113,14 +111,32 @@ it('compiles deterministic property and constructor Inject attributes', function
         $report = $builder->compile($path);
         $runtime = $builder->production($path);
         $property = $runtime->get(AdvancedInjectedProperty::class);
-        $constructor = $runtime->get(AdvancedInjectedConstructor::class);
 
-        expect($report['compiled'])->toContain(
-            AdvancedInjectedProperty::class,
-            AdvancedInjectedConstructor::class,
-        )
-            ->and($property->dependency)->toBe($runtime->get(AdvancedCompiledDependency::class))
-            ->and($constructor->dependency)->toBe($runtime->get('advanced.dep'));
+        expect($report['compiled'])->toContain(AdvancedInjectedProperty::class)
+            ->and($property->dependency)->toBe($runtime->get(AdvancedCompiledDependency::class));
+    } finally {
+        removeAdvancedCompilationArtifact($path);
+    }
+});
+
+it('keeps constructor parameter attributes on the current dynamic semantics', function () {
+    $builder = ContainerBuilder::create(uniqid('advanced_constructor_attr_'));
+    $builder->singleton(AdvancedCompiledDependency::class)
+        ->singleton('advanced.dep', AdvancedCompiledDependency::class)
+        ->singleton(AdvancedConstructorAttribute::class);
+
+    $path = advancedCompilationArtifactPath();
+    try {
+        $report = $builder->compile($path);
+        $runtime = $builder->production($path);
+        $constructor = $runtime->get(AdvancedConstructorAttribute::class);
+        $typed = $runtime->get(AdvancedCompiledDependency::class);
+        $explicit = $runtime->get('advanced.dep');
+
+        expect($report['compiled'])->not->toContain(AdvancedConstructorAttribute::class)
+            ->and($report['skipped'][AdvancedConstructorAttribute::class])->toContain('has attributes')
+            ->and($constructor->dependency)->toBe($typed)
+            ->and($constructor->dependency)->not->toBe($explicit);
     } finally {
         removeAdvancedCompilationArtifact($path);
     }
