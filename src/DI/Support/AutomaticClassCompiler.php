@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Support;
 
 use Infocyph\InterMix\DI\Attribute\Inject;
-use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Build\DefinitionGraph;
 use Infocyph\InterMix\Internal\ReflectionResource;
 use ReflectionClass;
 use ReflectionIntersectionType;
@@ -22,18 +22,18 @@ use ReflectionUnionType;
 final class AutomaticClassCompiler
 {
     /**
-     * @param Container $container Fully registered build-time container.
+     * @param DefinitionGraph $graph Immutable build-time container state.
      * @param string $definition Registered class-string definition.
      * @return array{code: string|null, signature: array<string, mixed>|null, reason: string}
      */
-    public function compile(Container $container, string $definition): array
+    public function compile(DefinitionGraph $graph, string $definition): array
     {
         $class = ReflectionResource::getClassReflection($definition);
         if (!$class->isInstantiable()) {
             return $this->skipped('class definition is not instantiable');
         }
 
-        $issue = $this->eligibilityIssue($container, $class);
+        $issue = $this->eligibilityIssue($graph, $class);
         if ($issue !== null) {
             return $this->skipped($issue);
         }
@@ -81,13 +81,13 @@ final class AutomaticClassCompiler
     }
 
     /**
-     * @param Container $container Fully registered build-time container.
+     * @param DefinitionGraph $graph Immutable build-time container state.
      * @param ReflectionClass<object> $class Constructor owner.
      * @param ReflectionParameter $parameter Constructor parameter being inspected.
      * @param array<string, true> $resolvedTypes Previously inspected dependency types.
      */
     private function constructorParameterIssue(
-        Container $container,
+        DefinitionGraph $graph,
         ReflectionClass $class,
         ReflectionParameter $parameter,
         array &$resolvedTypes,
@@ -118,11 +118,10 @@ final class AutomaticClassCompiler
             return "constructor parameter '{$parameter->getName()}' has an unsupported relative type";
         }
 
-        $repository = $container->getRepository();
-        if ($repository->hasFunctionReference($parameter->getName())) {
+        if ($graph->hasDefinition($parameter->getName())) {
             return "constructor parameter '{$parameter->getName()}' is shadowed by a named definition";
         }
-        if ($repository->hasContextualBinding($class->getName(), $dependency)) {
+        if ($graph->hasContextualBinding($class->getName(), $dependency)) {
             return "constructor dependency '$dependency' has a contextual binding";
         }
         if (isset($resolvedTypes[$dependency])) {
@@ -134,25 +133,24 @@ final class AutomaticClassCompiler
     }
 
     /**
-     * @param Container $container Fully registered build-time container.
+     * @param DefinitionGraph $graph Immutable build-time container state.
      * @param ReflectionClass<object> $class Reflected automatic class definition.
      */
-    private function eligibilityIssue(Container $container, ReflectionClass $class): ?string
+    private function eligibilityIssue(DefinitionGraph $graph, ReflectionClass $class): ?string
     {
-        $repository = $container->getRepository();
         $className = $class->getName();
-        $resources = array_keys($repository->getClassResourceFor($className));
+        $resources = array_keys($graph->classResourcesFor($className));
         if ($resources !== []) {
             sort($resources, SORT_STRING);
 
             return 'class has registered ' . implode(', ', $resources) . ' resources';
         }
 
-        $method = $this->implicitMethod($container, $class);
+        $method = $this->implicitMethod($graph, $class);
         if ($method !== null) {
             return "class invokes implicit method '$method'";
         }
-        if ($this->hasInjectablePropertyAttribute($container, $class)) {
+        if ($this->hasInjectablePropertyAttribute($graph, $class)) {
             return 'class has an enabled injectable property attribute';
         }
 
@@ -163,7 +161,7 @@ final class AutomaticClassCompiler
 
         $resolvedTypes = [];
         foreach ($constructor->getParameters() as $parameter) {
-            $issue = $this->constructorParameterIssue($container, $class, $parameter, $resolvedTypes);
+            $issue = $this->constructorParameterIssue($graph, $class, $parameter, $resolvedTypes);
             if ($issue !== null) {
                 return $issue;
             }
@@ -173,19 +171,19 @@ final class AutomaticClassCompiler
     }
 
     /**
-     * @param Container $container Fully registered build-time container.
+     * @param DefinitionGraph $graph Immutable build-time container state.
      * @param ReflectionClass<object> $class Class being inspected.
      */
-    private function hasInjectablePropertyAttribute(Container $container, ReflectionClass $class): bool
+    private function hasInjectablePropertyAttribute(DefinitionGraph $graph, ReflectionClass $class): bool
     {
-        if (!$container->getRepository()->isPropertyAttributeEnabled()) {
+        if (!$graph->propertyAttributesEnabled()) {
             return false;
         }
 
         for ($current = $class; $current instanceof ReflectionClass; $current = $current->getParentClass()) {
             foreach ($current->getProperties() as $property) {
                 if ($property->getDeclaringClass()->getName() === $current->getName()
-                    && $this->propertyHasRegisteredAttribute($container, $property)
+                    && $this->propertyHasRegisteredAttribute($graph, $property)
                 ) {
                     return true;
                 }
@@ -196,10 +194,10 @@ final class AutomaticClassCompiler
     }
 
     /**
-     * @param Container $container Fully registered build-time container.
+     * @param DefinitionGraph $graph Immutable build-time container state.
      * @param ReflectionClass<object> $class Class being inspected.
      */
-    private function implicitMethod(Container $container, ReflectionClass $class): ?string
+    private function implicitMethod(DefinitionGraph $graph, ReflectionClass $class): ?string
     {
         $constant = $class->hasConstant('CALL_ON') ? 'CALL_ON' : 'callOn';
         $callOn = $class->hasConstant($constant) ? $class->getConstant($constant) : null;
@@ -207,7 +205,7 @@ final class AutomaticClassCompiler
             return $callOn;
         }
 
-        $default = $container->getRepository()->getDefaultMethod();
+        $default = $graph->defaultMethod();
         if (is_string($default) && $default !== '' && $class->hasMethod($default)) {
             return $default;
         }
@@ -246,13 +244,13 @@ final class AutomaticClassCompiler
     }
 
     /**
-     * @param Container $container Fully registered build-time container.
+     * @param DefinitionGraph $graph Immutable build-time container state.
      * @param ReflectionProperty $property Property being inspected.
      */
-    private function propertyHasRegisteredAttribute(Container $container, ReflectionProperty $property): bool
+    private function propertyHasRegisteredAttribute(DefinitionGraph $graph, ReflectionProperty $property): bool
     {
         return array_any($property->getAttributes(), fn($attribute) => $attribute->getName() === Inject::class
-            || $container->attributeRegistry()->has($attribute->getName()));
+            || $graph->hasAttributeType($attribute->getName()));
     }
 
     /**
