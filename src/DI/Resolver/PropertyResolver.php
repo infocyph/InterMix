@@ -33,9 +33,6 @@ class PropertyResolver
      */
     public function resolve(ReflectionClass $class, object $instance): void
     {
-        // Constructor injection is by far the common path. Do not enumerate a
-        // class hierarchy's properties merely to discover that property
-        // injection is disabled and no registered property values exist.
         if (!$this->hasPropertyWork($class)) {
             return;
         }
