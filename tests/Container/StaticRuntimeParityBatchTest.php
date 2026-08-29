@@ -72,7 +72,7 @@ it('keeps lifecycle-hooked services in the dynamic island without deoptimizing n
     }
 });
 
-it('classifies only property-attributed services as dynamic when property attributes are enabled', function () {
+it('compiles deterministic property attributes when property attributes are enabled', function () {
     $builder = ContainerBuilder::create(uniqid('static_batch_property_'));
     $builder->singleton(StaticBatchStableService::class)
         ->singleton('attributed', StaticBatchAttributedPropertyService::class);
@@ -85,9 +85,7 @@ it('classifies only property-attributed services as dynamic when property attrib
         $stable = $runtime->get(StaticBatchStableService::class);
         $attributed = $runtime->get('attributed');
 
-        expect($report['compiled'])->toContain(StaticBatchStableService::class)
-            ->and($report['compiled'])->not->toContain('attributed')
-            ->and($report['skipped']['attributed'])->toContain('runtime property attributes')
+        expect($report['compiled'])->toContain(StaticBatchStableService::class, 'attributed')
             ->and($attributed)->toBeInstanceOf(StaticBatchAttributedPropertyService::class)
             ->and($attributed->stable)->toBe($stable);
     } finally {
