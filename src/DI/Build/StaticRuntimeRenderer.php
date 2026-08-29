@@ -28,6 +28,7 @@ final class StaticRuntimeRenderer
         $source .= $this->renderGet($plans, $slots);
         $source .= $this->renderHas($plans);
         $source .= $this->renderSlotMap($slots);
+        $source .= $this->renderCompiledIds($plans);
         $source .= $this->renderDefinitionMap($graph, $plans);
         $source .= $this->renderTags($graph, $plans);
         $source .= $this->renderServiceMethods($plans, $slots);
@@ -49,6 +50,15 @@ final class StaticRuntimeRenderer
         }
 
         return 'new \\' . ltrim($plan['class'], '\\') . '(' . implode(', ', $arguments) . ')';
+    }
+
+    /** @param array<string, ServicePlan> $plans */
+    private function renderCompiledIds(array $plans): string
+    {
+        return "    protected function compiledIds(): array\n"
+            . "    {\n"
+            . '        return ' . var_export(array_keys($plans), true) . ";\n"
+            . "    }\n\n";
     }
 
     /** @param array<string, ServicePlan> $plans */
