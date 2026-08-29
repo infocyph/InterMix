@@ -116,7 +116,7 @@ final class StaticInjectPlanner
         return ['kind' => 'value', 'code' => var_export($value, true)];
     }
 
-    /** @return ServiceArgument|string|null */
+    /** @return array{kind: 'service', id: string}|string|null */
     private function serviceTargetPlan(DefinitionGraph $graph, string $target, string $parameter): array|string|null
     {
         if ($graph->hasDefinition($target)) {
