@@ -5,16 +5,20 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Build;
 
 use Infocyph\InterMix\DI\Support\AliasDefinition;
+use Infocyph\InterMix\DI\Support\FactoryDefinition;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
+use Infocyph\InterMix\DI\Support\ServiceReference;
 use Infocyph\InterMix\Internal\ReflectionResource;
 use ReflectionClass;
 
 /**
  * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
- * @phpstan-type AliasPlan array{kind: 'alias', target: string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, dependencies: list<string>}
- * @phpstan-type ClassPlan array{kind: 'class', class: class-string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, dependencies: list<string>}
- * @phpstan-type ValuePlan array{kind: 'value', code: string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, dependencies: list<string>}
- * @phpstan-type ServicePlan AliasPlan|ClassPlan|ValuePlan
+ * @phpstan-type PropertyPlan array{declaring: class-string, property: string, static: bool, argument: ServiceArgument}
+ * @phpstan-type AliasPlan array{kind: 'alias', target: string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
+ * @phpstan-type ClassPlan array{kind: 'class', class: class-string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
+ * @phpstan-type FactoryPlan array{kind: 'factory', class: class-string, method: string|null, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
+ * @phpstan-type ValuePlan array{kind: 'value', code: string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
+ * @phpstan-type ServicePlan AliasPlan|ClassPlan|FactoryPlan|ValuePlan
  * @internal
  */
 final class StaticRuntimePlanner
@@ -86,13 +90,21 @@ final class StaticRuntimePlanner
         if (is_string($constructor)) {
             return $constructor;
         }
+        $property = new StaticPropertyPlanner()->plan($graph, $class);
+        if (is_string($property)) {
+            return $property;
+        }
 
         return [
             'kind' => 'class',
             'class' => $class->getName(),
             'lifetime' => $graph->definitionMetaFor($id)['lifetime'],
             'arguments' => $constructor['arguments'],
-            'dependencies' => $constructor['dependencies'],
+            'properties' => $property['properties'],
+            'dependencies' => array_values(array_unique([
+                ...$constructor['dependencies'],
+                ...$property['dependencies'],
+            ])),
         ];
     }
 
@@ -163,6 +175,40 @@ final class StaticRuntimePlanner
         } while ($changed);
 
         return $plans;
+    }
+
+    /**
+     * @param FactoryDefinition $definition
+     * @return FactoryPlan
+     */
+    private function factoryPlan(DefinitionGraph $graph, string $id, FactoryDefinition $definition): array
+    {
+        $arguments = [];
+        $dependencies = [];
+        $seenDependencies = [];
+        foreach ($definition->arguments as $argument) {
+            if ($argument instanceof ServiceReference) {
+                $arguments[] = ['kind' => 'service', 'id' => $argument->id];
+                if (!isset($seenDependencies[$argument->id])) {
+                    $seenDependencies[$argument->id] = true;
+                    $dependencies[] = $argument->id;
+                }
+
+                continue;
+            }
+
+            $arguments[] = ['kind' => 'value', 'code' => var_export($argument, true)];
+        }
+
+        return [
+            'kind' => 'factory',
+            'class' => $definition->class,
+            'method' => $definition->method,
+            'lifetime' => $graph->definitionMetaFor($id)['lifetime'],
+            'arguments' => $arguments,
+            'properties' => [],
+            'dependencies' => $dependencies,
+        ];
     }
 
     /**
@@ -266,6 +312,7 @@ final class StaticRuntimePlanner
             'target' => $target,
             'lifetime' => $graph->definitionMetaFor($id)['lifetime'],
             'arguments' => [],
+            'properties' => [],
             'dependencies' => [$target],
         ];
     }
@@ -279,6 +326,9 @@ final class StaticRuntimePlanner
 
         if ($definition instanceof AliasDefinition) {
             return $this->planAlias($graph, $id, $definition);
+        }
+        if ($definition instanceof FactoryDefinition) {
+            return $this->factoryPlan($graph, $id, $definition);
         }
 
         $valuePlan = $this->valuePlan($graph, $id, $definition);
@@ -364,6 +414,7 @@ final class StaticRuntimePlanner
             'code' => var_export($definition, true),
             'lifetime' => $graph->definitionMetaFor($id)['lifetime'],
             'arguments' => [],
+            'properties' => [],
             'dependencies' => [],
         ];
     }
