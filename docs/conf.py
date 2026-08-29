@@ -24,6 +24,7 @@ version = get_version()
 release = version
 language = "en"
 root_doc = "index"  # Sphinx 8
+exclude_patterns = ["intermix-10-*.md"]
 
 # --- PHP highlighting --------------------------------------------------------
 from pygments.lexers.web import PhpLexer
