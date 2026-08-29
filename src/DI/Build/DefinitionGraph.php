@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Build;
 
+use Infocyph\InterMix\DI\Invoker\GenericCall;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 
@@ -38,6 +39,7 @@ final readonly class DefinitionGraph
         private array $dynamicServiceIds,
         private ?string $environment,
         private ?string $defaultMethod,
+        private bool $injectionEnabled,
         private bool $methodAttributes,
         private bool $propertyAttributes,
     ) {}
@@ -76,6 +78,7 @@ final readonly class DefinitionGraph
             dynamicServiceIds: array_fill_keys($dynamicServiceIds, true),
             environment: $repository->getEnvironment(),
             defaultMethod: $repository->getDefaultMethod(),
+            injectionEnabled: !$repository->container()->getCurrentResolver() instanceof GenericCall,
             methodAttributes: $repository->isMethodAttributeEnabled(),
             propertyAttributes: $repository->isPropertyAttributeEnabled(),
         );
@@ -164,6 +167,11 @@ final readonly class DefinitionGraph
     public function hasDefinition(string $id): bool
     {
         return isset($this->definitions[$id]) || array_key_exists($id, $this->definitions);
+    }
+
+    public function injectionEnabled(): bool
+    {
+        return $this->injectionEnabled;
     }
 
     public function methodAttributesEnabled(): bool
