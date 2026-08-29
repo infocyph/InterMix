@@ -124,7 +124,7 @@ class PropertyResolver
             return true;
         }
 
-        if ($this->repository->getClassResource() === []) {
+        if (!$this->repository->hasPropertyResources()) {
             return false;
         }
 
