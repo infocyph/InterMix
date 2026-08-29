@@ -68,12 +68,20 @@ final class CompiledCall
      */
     public function resolveByDefinition(string $name): mixed
     {
+        if (!$this->repository->hasCompiledResolvers()) {
+            return $this->dynamicResolver()->resolveByDefinition($name);
+        }
+
         return $this->definitionResolver->resolve($name);
     }
 
     /** Resolve a warmup miss without another PSR-6 lookup. */
     public function resolveDefinitionForWarmup(string $name): mixed
     {
+        if (!$this->repository->hasCompiledResolvers()) {
+            return $this->dynamicResolver()->resolveDefinitionForWarmup($name);
+        }
+
         return $this->definitionResolver->resolveForDefinitionCacheWarmup($name);
     }
 
