@@ -29,7 +29,7 @@ final class StaticParameterPlanner
         ReflectionFunctionAbstract $reflector,
         array $supplied = [],
         string $label = 'parameter',
-        bool $rejectAttributes = false,
+        bool $applyParameterAttributes = false,
         array $attributeArguments = [],
     ): array|string {
         $parameters = $reflector->getParameters();
@@ -39,13 +39,21 @@ final class StaticParameterPlanner
         $seenDependencies = [];
 
         foreach ($parameters as $parameter) {
+            if ($parameter->isVariadic()) {
+                if ($supplied !== []) {
+                    return "{$label} parameter '{$parameter->getName()}' has runtime variadic arguments";
+                }
+
+                continue;
+            }
+
             $argument = $this->parameterPlan(
                 $graph,
                 $consumer,
                 $parameter,
                 $supplied,
                 $label,
-                $rejectAttributes,
+                $applyParameterAttributes,
                 $attributeArguments,
             );
             if (is_string($argument)) {
@@ -78,7 +86,7 @@ final class StaticParameterPlanner
             $constructor,
             $this->resourceParameters($graph, $class->getName(), 'constructor'),
             'constructor',
-            true,
+            false,
         );
     }
 
@@ -86,9 +94,9 @@ final class StaticParameterPlanner
     private function attributeParameterPlan(
         DefinitionGraph $graph,
         ReflectionParameter $parameter,
-        bool $rejectAttributes,
+        bool $applyParameterAttributes,
     ): array|string|null {
-        if ($rejectAttributes || !$graph->methodAttributesEnabled()) {
+        if (!$applyParameterAttributes || !$graph->methodAttributesEnabled()) {
             return null;
         }
 
@@ -155,20 +163,14 @@ final class StaticParameterPlanner
         ReflectionParameter $parameter,
         array $supplied,
         string $label,
-        bool $rejectAttributes,
+        bool $applyParameterAttributes,
         array $attributeArguments,
     ): array|string {
         $name = $parameter->getName();
-        if ($parameter->isVariadic()) {
-            return "{$label} parameter '{$name}' is variadic";
-        }
 
         $suppliedPlan = $this->suppliedParameterPlan($parameter, $supplied, $label);
         if ($suppliedPlan !== null) {
             return $suppliedPlan;
-        }
-        if ($rejectAttributes && $parameter->getAttributes() !== []) {
-            return "{$label} parameter '{$name}' has attributes";
         }
 
         $untypedDefinition = $this->untypedDefinitionPlan($graph, $parameter);
@@ -184,7 +186,7 @@ final class StaticParameterPlanner
             return $attributeArguments[$name];
         }
 
-        $attributePlan = $this->attributeParameterPlan($graph, $parameter, $rejectAttributes);
+        $attributePlan = $this->attributeParameterPlan($graph, $parameter, $applyParameterAttributes);
         if ($attributePlan !== null) {
             return $attributePlan;
         }
