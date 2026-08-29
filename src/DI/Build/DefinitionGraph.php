@@ -25,6 +25,7 @@ final readonly class DefinitionGraph
      * @param array<string, array<string, mixed>> $contextualBindings
      * @param array<string, string> $environmentBindings
      * @param array<string, true> $attributeTypes
+     * @param array<string, true> $dynamicServiceIds
      */
     private function __construct(
         private array $definitions,
@@ -34,13 +35,15 @@ final readonly class DefinitionGraph
         private array $contextualBindings,
         private array $environmentBindings,
         private array $attributeTypes,
+        private array $dynamicServiceIds,
         private ?string $environment,
         private ?string $defaultMethod,
         private bool $methodAttributes,
         private bool $propertyAttributes,
     ) {}
 
-    public static function from(Repository $repository): self
+    /** @param array<int, string> $dynamicServiceIds */
+    public static function from(Repository $repository, array $dynamicServiceIds = []): self
     {
         $definitions = $repository->getFunctionReference();
         $definitionMeta = [];
@@ -70,6 +73,7 @@ final readonly class DefinitionGraph
                 $contextualBindings,
             ),
             attributeTypes: array_fill_keys($repository->getRegisteredAttributeTypes(), true),
+            dynamicServiceIds: array_fill_keys($dynamicServiceIds, true),
             environment: $repository->getEnvironment(),
             defaultMethod: $repository->getDefaultMethod(),
             methodAttributes: $repository->isMethodAttributeEnabled(),
@@ -176,5 +180,10 @@ final readonly class DefinitionGraph
     public function registeredAttributeTypes(): array
     {
         return array_keys($this->attributeTypes);
+    }
+
+    public function requiresDynamicService(string $id): bool
+    {
+        return isset($this->dynamicServiceIds[$id]);
     }
 }
