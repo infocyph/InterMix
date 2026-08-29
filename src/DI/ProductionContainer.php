@@ -37,6 +37,8 @@ abstract class ProductionContainer implements ContainerInterface
         }
     }
 
+    abstract protected function slotFor(string $id): ?int;
+
     /** @internal */
     final public function attachFallback(Container $fallback): void
     {
@@ -223,8 +225,6 @@ abstract class ProductionContainer implements ContainerInterface
         }
     }
 
-    abstract protected function slotFor(string $id): ?int;
-
     /** @return array<int, string> */
     protected function compiledIds(): array
     {
@@ -252,14 +252,14 @@ abstract class ProductionContainer implements ContainerInterface
         return null;
     }
 
-    final protected function isDeoptimized(): bool
-    {
-        return $this->deoptimized;
-    }
-
     protected function isCompiledDefinition(string $id): bool
     {
         return false;
+    }
+
+    final protected function isDeoptimized(): bool
+    {
+        return $this->deoptimized;
     }
 
     /** @return array<int, string> */
