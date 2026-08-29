@@ -4,15 +4,17 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Build;
 
+use Infocyph\InterMix\DI\Support\AliasDefinition;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\Internal\ReflectionResource;
 use ReflectionClass;
 
 /**
  * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
+ * @phpstan-type AliasPlan array{kind: 'alias', target: string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, dependencies: list<string>}
  * @phpstan-type ClassPlan array{kind: 'class', class: class-string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, dependencies: list<string>}
  * @phpstan-type ValuePlan array{kind: 'value', code: string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, dependencies: list<string>}
- * @phpstan-type ServicePlan ClassPlan|ValuePlan
+ * @phpstan-type ServicePlan AliasPlan|ClassPlan|ValuePlan
  * @internal
  */
 final class StaticRuntimePlanner
@@ -35,9 +37,16 @@ final class StaticRuntimePlanner
         $plans = [];
         $skipped = [];
         $definitions = $graph->definitions();
+        $aliasCycles = $this->detectAliasCycles($graph, $definitions);
         ksort($definitions, SORT_STRING);
 
         foreach ($definitions as $id => $definition) {
+            if (isset($aliasCycles[$id])) {
+                $skipped[$id] = 'alias graph contains a cycle';
+
+                continue;
+            }
+
             $plan = $this->planDefinition($graph, $id, $definition);
             if (is_string($plan)) {
                 $skipped[$id] = $plan;
@@ -85,6 +94,39 @@ final class StaticRuntimePlanner
             'arguments' => $constructor['arguments'],
             'dependencies' => $constructor['dependencies'],
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $definitions
+     * @return array<string, true>
+     */
+    private function detectAliasCycles(DefinitionGraph $graph, array $definitions): array
+    {
+        $cyclic = [];
+        foreach ($definitions as $id => $definition) {
+            if (!$definition instanceof AliasDefinition) {
+                continue;
+            }
+
+            $path = [];
+            $positions = [];
+            $current = $id;
+            while (($definitions[$current] ?? null) instanceof AliasDefinition) {
+                if (isset($positions[$current])) {
+                    foreach (array_slice($path, $positions[$current]) as $cycleId) {
+                        $cyclic[$cycleId] = true;
+                    }
+                    break;
+                }
+
+                $positions[$current] = count($path);
+                $path[] = $current;
+                $alias = $definitions[$current];
+                $current = $alias->target;
+            }
+        }
+
+        return $cyclic;
     }
 
     /**
@@ -192,11 +234,37 @@ final class StaticRuntimePlanner
         return array_all($value, fn(mixed $item): bool => $this->isExportable($item));
     }
 
+    /** @return AliasPlan */
+    private function planAlias(DefinitionGraph $graph, string $id, AliasDefinition $definition): array
+    {
+        $target = $definition->target;
+        $definitions = $graph->definitions();
+
+        while (($definitions[$target] ?? null) instanceof AliasDefinition) {
+            if ($graph->definitionMetaFor($target)['lifetime'] !== LifetimeEnum::Transient) {
+                break;
+            }
+            $target = $definitions[$target]->target;
+        }
+
+        return [
+            'kind' => 'alias',
+            'target' => $target,
+            'lifetime' => $graph->definitionMetaFor($id)['lifetime'],
+            'arguments' => [],
+            'dependencies' => [$target],
+        ];
+    }
+
     /** @return ServicePlan|string */
     private function planDefinition(DefinitionGraph $graph, string $id, mixed $definition): array|string
     {
         if ($graph->requiresDynamicService($id)) {
             return 'service has lifecycle hooks and requires the dynamic runtime';
+        }
+
+        if ($definition instanceof AliasDefinition) {
+            return $this->planAlias($graph, $id, $definition);
         }
 
         $valuePlan = $this->valuePlan($graph, $id, $definition);
