@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Resolver;
 
-use Closure;
 use Infocyph\InterMix\DI\Attribute\AttributeResolution;
 use Infocyph\InterMix\DI\Attribute\Inject;
 use Infocyph\InterMix\DI\Resolver\Concerns\ResolvesAssociativeParameters;
@@ -15,14 +14,12 @@ use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Internal\ReflectionResource;
 use ReflectionAttribute;
 use ReflectionClass;
-use ReflectionFunction;
 use ReflectionFunctionAbstract;
 use ReflectionIntersectionType;
 use ReflectionMethod;
 use ReflectionNamedType;
 use ReflectionParameter;
 use ReflectionUnionType;
-use WeakMap;
 
 class ParameterResolver
 {
@@ -40,18 +37,6 @@ class ParameterResolver
 
     private ClassResolver $classResolver;
 
-    /** @var WeakMap<Closure, array<int, ReflectionAttribute<Inject>>> */
-    private WeakMap $closureInjectCache;
-
-    /** @var WeakMap<Closure, array<int, array{inject: array<int, ReflectionAttribute<Inject>>, all: array<int, ReflectionAttribute<object>>}>> */
-    private WeakMap $closureParameterAttributePlanCache;
-
-    /** @var WeakMap<Closure, array<string, array{availableParams: array<int, ReflectionParameter>, applyAttribute: bool, attributeData: array<string, mixed>}>> */
-    private WeakMap $closureResolutionPlanCache;
-
-    /** @var WeakMap<Closure, array<int, array<int, array<int, ReflectionNamedType>>>> */
-    private WeakMap $closureTypeGroupCache;
-
     /** @var array<string, array<int, ReflectionAttribute<Inject>>> */
     private array $injectCache = [];
 
@@ -67,12 +52,7 @@ class ParameterResolver
     public function __construct(
         private readonly Repository $repository,
         private readonly DefinitionResolver $definitionResolver,
-    ) {
-        $this->closureInjectCache = new WeakMap();
-        $this->closureParameterAttributePlanCache = new WeakMap();
-        $this->closureResolutionPlanCache = new WeakMap();
-        $this->closureTypeGroupCache = new WeakMap();
-    }
+    ) {}
 
     /**
      * @param array<int|string, mixed> $suppliedParameters
@@ -268,13 +248,6 @@ class ParameterResolver
         };
     }
 
-    private function closureFor(ReflectionFunctionAbstract $reflector): ?Closure
-    {
-        return $reflector instanceof ReflectionFunction && $reflector->isClosure()
-            ? $reflector->getClosure()
-            : null;
-    }
-
     /**
      * @template TValue
      * @param array<string, TValue> $cache
@@ -309,16 +282,9 @@ class ParameterResolver
      */
     private function extractTypeGroups(ReflectionParameter $parameter): array
     {
-        $closure = $this->closureFor($parameter->getDeclaringFunction());
-        if ($closure instanceof Closure) {
-            $plans = $this->closureTypeGroupCache[$closure] ?? [];
-            $position = $parameter->getPosition();
-            if (!array_key_exists($position, $plans)) {
-                $plans[$position] = $this->buildTypeGroups($parameter);
-                $this->closureTypeGroupCache[$closure] = $plans;
-            }
-
-            return $plans[$position];
+        $declaring = $parameter->getDeclaringFunction();
+        if ($declaring->isClosure()) {
+            return $this->buildTypeGroups($parameter);
         }
 
         $key = $this->makeParameterTypeGroupKey($parameter);
@@ -338,10 +304,8 @@ class ParameterResolver
      */
     private function getInjectAttributes(ReflectionFunctionAbstract $reflector): array
     {
-        $closure = $this->closureFor($reflector);
-        if ($closure instanceof Closure) {
-            return $this->closureInjectCache[$closure]
-                ??= $reflector->getAttributes(Inject::class);
+        if ($reflector->isClosure()) {
+            return $reflector->getAttributes(Inject::class);
         }
 
         $key = $this->reflectorCacheKey($reflector);
@@ -360,19 +324,11 @@ class ParameterResolver
      */
     private function getParameterAttributePlan(ReflectionParameter $parameter): array
     {
-        $closure = $this->closureFor($parameter->getDeclaringFunction());
-        if ($closure instanceof Closure) {
-            $plans = $this->closureParameterAttributePlanCache[$closure] ?? [];
-            $position = $parameter->getPosition();
-            if (!isset($plans[$position])) {
-                $plans[$position] = [
-                    'inject' => $parameter->getAttributes(Inject::class),
-                    'all' => $parameter->getAttributes(),
-                ];
-                $this->closureParameterAttributePlanCache[$closure] = $plans;
-            }
-
-            return $plans[$position];
+        if ($parameter->getDeclaringFunction()->isClosure()) {
+            return [
+                'inject' => $parameter->getAttributes(Inject::class),
+                'all' => $parameter->getAttributes(),
+            ];
         }
 
         $key = $this->makeParameterAttributePlanKey($parameter);
@@ -388,18 +344,8 @@ class ParameterResolver
      */
     private function getResolutionPlan(ReflectionFunctionAbstract $reflector, string $type): array
     {
-        $closure = $this->closureFor($reflector);
-        if ($closure instanceof Closure) {
-            $cacheKey = $type . '|ma:' . ($this->repository->isMethodAttributeEnabled() ? '1' : '0');
-            $plans = $this->closureResolutionPlanCache[$closure] ?? [];
-            if (isset($plans[$cacheKey])) {
-                return $plans[$cacheKey];
-            }
-
-            $plans[$cacheKey] = $this->buildResolutionPlan($reflector, $type);
-            $this->closureResolutionPlanCache[$closure] = $plans;
-
-            return $plans[$cacheKey];
+        if ($reflector->isClosure()) {
+            return $this->buildResolutionPlan($reflector, $type);
         }
 
         $key = $this->makeResolutionPlanKey($reflector, $type);
@@ -497,13 +443,7 @@ class ParameterResolver
             return $reflector->getDeclaringClass()->getName() . '::' . $reflector->getName();
         }
 
-        if (!$reflector->isClosure()) {
-            return $reflector->getName();
-        }
-
-        return ($reflector->getFileName() ?: 'unknown')
-            . ':' . ($reflector->getStartLine() ?: 0)
-            . ':' . ($reflector->getEndLine() ?: 0);
+        return $reflector->getName();
     }
 
     /**
