@@ -58,7 +58,7 @@
         ]
     },
     "scripts": {
-        "bench:intermix": "@php vendor/bin/phpbench run benchmarks/CompiledRuntimeBench.php --report=aggregate"
+        "bench:intermix": "@php vendor/bin/phpbench run benchmarks/CompiledRuntimeBench.php --bootstrap=vendor/autoload.php --report=aggregate"
     },
     "config": {
         "allow-plugins": {
