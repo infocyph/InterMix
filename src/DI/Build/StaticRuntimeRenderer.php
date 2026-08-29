@@ -8,8 +8,8 @@ use Infocyph\InterMix\DI\Support\LifetimeEnum;
 
 /**
  * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
- * @phpstan-type PropertyPlan array{declaring: class-string, property: string, static: bool, argument: ServiceArgument}
- * @phpstan-type MethodPlan array{method: string, arguments: list<ServiceArgument>, dependencies: list<string>}
+ * @phpstan-type PropertyPlan array{declaring: class-string, property: string, static: bool, argument: ServiceArgument|null, runtime?: 'attribute'|'assign'}
+ * @phpstan-type MethodPlan array{method: string, arguments: list<ServiceArgument>, dependencies: list<string>, runtime?: bool}
  * @phpstan-type AliasPlan array{kind: 'alias', target: string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
  * @phpstan-type ClassPlan array{kind: 'class', class: class-string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, postMethod: MethodPlan|null, dependencies: list<string>}
  * @phpstan-type FactoryPlan array{kind: 'factory', class: class-string, method: string|null, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
@@ -89,18 +89,8 @@ final class StaticRuntimeRenderer
      */
     private function classInitializationStatements(array $plan, array $slots): string
     {
-        $source = '        $instance = ' . $this->classConstruction($plan, $slots) . ";\n";
-        foreach ($plan['properties'] as $property) {
-            $value = $this->argumentExpression($property['argument'], $slots);
-            if ($property['static']) {
-                $class = '\\' . ltrim($property['declaring'], '\\');
-                $source .= '        ' . $class . '::$' . $property['property'] . " = {$value};\n";
-            } else {
-                $source .= '        $instance->' . $property['property'] . " = {$value};\n";
-            }
-        }
-
-        return $source;
+        return '        $instance = ' . $this->classConstruction($plan, $slots) . ";\n"
+            . new StaticRuntimeIslandRenderer()->propertyStatements($plan['properties'], $slots);
     }
 
     /**
@@ -115,18 +105,13 @@ final class StaticRuntimeRenderer
             return $source;
         }
 
-        $arguments = [];
-        foreach ($postMethod['arguments'] as $argument) {
-            $arguments[] = $this->argumentExpression($argument, $slots);
-        }
+        $expression = new StaticRuntimeIslandRenderer()->methodExpression(
+            $plan['class'],
+            $postMethod,
+            $slots,
+        );
 
-        return $source
-            . "\n        "
-            . '$instance->'
-            . $postMethod['method']
-            . '('
-            . implode(', ', $arguments)
-            . ");\n";
+        return $source . "\n        {$expression};\n";
     }
 
     /**
