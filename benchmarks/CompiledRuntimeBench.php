@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\Benchmarks;
 
+use Infocyph\InterMix\DI\Build\DefinitionGraph;
+use Infocyph\InterMix\DI\Build\StaticRuntimeGenerator;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use PhpBench\Attributes\Iterations;
 use PhpBench\Attributes\Revs;
 use PhpBench\Attributes\Warmup;
+use Psr\Container\ContainerInterface;
 
 #[Iterations(5)]
 #[Warmup(1)]
@@ -43,6 +46,14 @@ final class CompiledRuntimeBench
     }
 
     #[Revs(1000)]
+    public function benchStaticTransientGraph(): void
+    {
+        static $container;
+        $container ??= $this->staticTransientContainer();
+        $this->sink = $container->get('root');
+    }
+
+    #[Revs(1000)]
     public function benchDynamicWarmSingleton(): void
     {
         static $container;
@@ -58,21 +69,12 @@ final class CompiledRuntimeBench
         $this->sink = $container->get('root');
     }
 
-    #[Revs(100)]
-    public function benchCompiledContainerBootstrap(): void
+    #[Revs(1000)]
+    public function benchStaticWarmSingleton(): void
     {
-        $path = $this->compiledPath();
-        $source = new Container($this->alias('bootstrap-source'));
-        $source->transient('root', CompiledBenchRoot::class);
-        $source->compileTo($path);
-        $fingerprint = (string) $source->compilationReport()['fingerprint'];
-
-        $runtime = new Container($this->alias('bootstrap-runtime'));
-        $runtime->transient('root', CompiledBenchRoot::class);
-        $runtime->usePrevalidated($path, $fingerprint);
-        $this->sink = $runtime;
-
-        $this->removeCompiledPath($path);
+        static $container;
+        $container ??= $this->staticSingletonContainer();
+        $this->sink = $container->get('root');
     }
 
     private function alias(string $purpose): string
@@ -87,8 +89,7 @@ final class CompiledRuntimeBench
 
     private function compiledSingletonContainer(): Container
     {
-        $container = new Container($this->alias('compiled-singleton'));
-        $container->singleton('root', CompiledBenchRoot::class);
+        $container = $this->registeredGraph('compiled-singleton', LifetimeEnum::Singleton);
         $path = $this->compiledPath();
         $container->compileTo($path, load: true);
         $container->get('root');
@@ -99,8 +100,7 @@ final class CompiledRuntimeBench
 
     private function compiledTransientContainer(): Container
     {
-        $container = new Container($this->alias('compiled-transient'));
-        $container->transient('root', CompiledBenchRoot::class);
+        $container = $this->registeredGraph('compiled-transient', LifetimeEnum::Transient);
         $path = $this->compiledPath();
         $container->compileTo($path, load: true);
         $this->removeCompiledPath($path);
@@ -110,8 +110,7 @@ final class CompiledRuntimeBench
 
     private function dynamicSingletonContainer(): Container
     {
-        $container = new Container($this->alias('dynamic-singleton'));
-        $container->singleton('root', CompiledBenchRoot::class);
+        $container = $this->registeredGraph('dynamic-singleton', LifetimeEnum::Singleton);
         $container->get('root');
 
         return $container;
@@ -119,8 +118,15 @@ final class CompiledRuntimeBench
 
     private function dynamicTransientContainer(): Container
     {
-        $container = new Container($this->alias('dynamic-transient'));
-        $container->transient('root', CompiledBenchRoot::class);
+        return $this->registeredGraph('dynamic-transient', LifetimeEnum::Transient);
+    }
+
+    private function registeredGraph(string $purpose, LifetimeEnum $lifetime): Container
+    {
+        $container = new Container($this->alias($purpose));
+        $container->bind(CompiledBenchLeaf::class, CompiledBenchLeaf::class, $lifetime);
+        $container->bind(CompiledBenchMiddle::class, CompiledBenchMiddle::class, $lifetime);
+        $container->bind('root', CompiledBenchRoot::class, $lifetime);
 
         return $container;
     }
@@ -130,6 +136,29 @@ final class CompiledRuntimeBench
         if (is_file($path)) {
             unlink($path);
         }
+    }
+
+    private function staticSingletonContainer(): ContainerInterface
+    {
+        return $this->staticRuntime('static-singleton', LifetimeEnum::Singleton);
+    }
+
+    private function staticTransientContainer(): ContainerInterface
+    {
+        return $this->staticRuntime('static-transient', LifetimeEnum::Transient);
+    }
+
+    private function staticRuntime(string $purpose, LifetimeEnum $lifetime): ContainerInterface
+    {
+        $source = $this->registeredGraph($purpose, $lifetime);
+        $path = $this->compiledPath();
+        $runtime = new StaticRuntimeGenerator()->generate(
+            DefinitionGraph::from($source->getRepository()),
+            $path,
+        )['runtime'];
+        $this->removeCompiledPath($path);
+
+        return $runtime;
     }
 }
 
