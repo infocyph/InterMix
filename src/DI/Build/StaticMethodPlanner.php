@@ -16,42 +16,45 @@ final class StaticMethodPlanner
 {
     /**
      * @param ReflectionClass<object> $class
+     * @param array<int|string, mixed> $supplied
+     * @return MethodPlan|string
+     */
+    public function explicitPlan(
+        DefinitionGraph $graph,
+        ReflectionClass $class,
+        string $methodName,
+        array $supplied = [],
+    ): array|string {
+        if (!$class->hasMethod($methodName)) {
+            return "method '{$class->getName()}::{$methodName}()' does not exist";
+        }
+
+        $resource = $graph->classResourcesFor($class->getName())['method'] ?? null;
+
+        return $this->planMethod(
+            $graph,
+            $class->getMethod($methodName),
+            $supplied + $this->resourceParameters($resource),
+        );
+    }
+
+    /**
+     * @param ReflectionClass<object> $class
      * @return MethodPlan|null|string
      */
     public function plan(DefinitionGraph $graph, ReflectionClass $class): array|string|null
     {
         $resource = $graph->classResourcesFor($class->getName())['method'] ?? null;
-        $supplied = $this->resourceParameters($resource);
         $methodName = $this->targetMethod($graph, $class, $resource);
         if ($methodName === null) {
             return null;
         }
 
-        $method = $class->getMethod($methodName);
-        if (!$method->isPublic() || $method->isStatic()) {
-            return "method '{$class->getName()}::{$methodName}()' requires reflection-based invocation";
-        }
-        if ($this->hasDynamicAttributes($graph, $method)) {
-            return "method '{$class->getName()}::{$methodName}()' has runtime attributes";
-        }
-
-        $parameters = new StaticParameterPlanner()->callablePlan(
+        return $this->planMethod(
             $graph,
-            $method->getDeclaringClass(),
-            $method,
-            $supplied,
-            'method',
-            false,
+            $class->getMethod($methodName),
+            $this->resourceParameters($resource),
         );
-        if (is_string($parameters)) {
-            return $parameters;
-        }
-
-        return [
-            'method' => $methodName,
-            'arguments' => $parameters['arguments'],
-            'dependencies' => $parameters['dependencies'],
-        ];
     }
 
     /**
@@ -83,6 +86,40 @@ final class StaticMethodPlanner
             $method->getParameters(),
             static fn(\ReflectionParameter $parameter): bool => $parameter->getAttributes() !== [],
         );
+    }
+
+    /**
+     * @param array<int|string, mixed> $supplied
+     * @return MethodPlan|string
+     */
+    private function planMethod(DefinitionGraph $graph, ReflectionMethod $method, array $supplied): array|string
+    {
+        $className = $method->getDeclaringClass()->getName();
+        $methodName = $method->getName();
+        if (!$method->isPublic() || $method->isStatic()) {
+            return "method '{$className}::{$methodName}()' requires reflection-based invocation";
+        }
+        if ($this->hasDynamicAttributes($graph, $method)) {
+            return "method '{$className}::{$methodName}()' has runtime attributes";
+        }
+
+        $parameters = new StaticParameterPlanner()->callablePlan(
+            $graph,
+            $method->getDeclaringClass(),
+            $method,
+            $supplied,
+            'method',
+            false,
+        );
+        if (is_string($parameters)) {
+            return $parameters;
+        }
+
+        return [
+            'method' => $methodName,
+            'arguments' => $parameters['arguments'],
+            'dependencies' => $parameters['dependencies'],
+        ];
     }
 
     /** @return array<int|string, mixed> */
