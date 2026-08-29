@@ -6,6 +6,80 @@ This design is governed by PHPForge's `resources/engineering-principles.md`.
 
 The implementation must remain framework-agnostic, correctness/security/data-integrity/stability are non-negotiable, and sustained successful production-equivalent RPM is the primary performance objective. Prefer simple, explicit and measurable solutions; avoid speculative abstractions and unnecessary runtime layers. Optional diagnostics and dynamic machinery must remain off the common hot path, bootstrap must be deterministic and minimal, and every architectural performance decision must be validated with representative measurement rather than syntax-level assumptions.
 
+## Implementation status checker
+
+This is the authoritative release checklist for this draft. Update it whenever implementation changes. InterMix 10 is not considered complete merely because CI is green; completion means the relevant architecture items below are either `[x]` or intentionally deferred with an explicit reason.
+
+Legend:
+
+- `[x]` complete and covered by implementation/tests.
+- `[-]` partially implemented; the remaining gap is stated inline.
+- `[ ]` not implemented or not yet validated.
+
+### Dynamic/runtime baseline
+
+- [x] Cached-first singleton/scoped resolution in `InvocationManager::get()`.
+- [x] Correct cached `null` singleton/scoped semantics.
+- [x] Missing-service hook fast flag keeps hook traversal off the common path.
+- [x] Missing-service activation preserves scoped/transient lifetime after registration.
+- [x] Contextual-binding fast flag avoids work when no contextual bindings exist.
+- [x] Property resolution exits early when no property work exists.
+- [x] WeakMap Closure reflection cache avoids unbounded identity retention.
+- [-] Parameter/type-group plans are cached for stable named callables; Closure plan caching is deliberately bypassed until identity-safe reuse is proven.
+- [x] Tracing stacks/dependency recording are skipped when tracing is disabled.
+- [x] Definition registration is atomic and performs one invalidation.
+- [x] Fresh container bootstrap avoids unnecessary mutation/invalidation paths.
+- [x] Compiled resolver activation replaces an already-materialized dynamic resolver.
+- [-] Ordinary class resolution removed one duplicate `ClassResolution` allocation, but the base wrapper still exists in the dynamic resolver path.
+- [ ] Add/confirm a repository-wide property-resource fast flag so classes without registered property resources avoid hierarchy scans when property attributes are disabled.
+- [ ] Confirm compiled-resolver invalidation cannot leave a stale `CompiledCall` dispatcher as the fallback after configuration mutation.
+
+### InterMix 10 architecture implementation order
+
+- [-] 1. Freeze InterMix 9 semantic behavior with regression tests. Existing regression coverage is strong, but full dev/prod/deoptimized parity coverage is still pending.
+- [x] 2. Treat `perf/di-hot-path` as the optimized dynamic baseline.
+- [x] 3. Introduce an internal normalized definition graph (`DefinitionGraph`).
+- [ ] 4. Introduce `ContainerBuilder`.
+- [ ] 5. Move mutation/configuration ownership into the builder.
+- [ ] 6. Build an explicit `DevelopmentContainer` boundary on the normalized graph; the optimized `Container` currently remains the development engine.
+- [-] 7. Confirm the full current test suite against development mode. Current `Container` tests are green, but a distinct development boundary does not yet exist.
+- [-] 8. Introduce compiler IR/plans only where required. `StaticRuntimeGenerator` has a minimal constructor/lifetime plan, not the complete production IR.
+- [ ] 9. Add production environment folding.
+- [ ] 10. Add alias flattening and build-time alias-cycle handling in the static production compiler.
+- [-] 11. Add constructor/parameter planning. Simple named class dependencies/defaults/null are supported; attributes, union/intersection/DNF and other strategies remain dynamic/skipped.
+- [-] 12. Add lifetime planning. Singleton/transient are generated; compiled scoped lifetime is still pending.
+- [ ] 13. Add contextual-binding planning to generated recipes.
+- [ ] 14. Add attribute/property/method planning to generated recipes.
+- [x] 15. Add static dependency-cycle validation for the current static candidate.
+- [x] 16. Generate service slots/per-service methods with direct internal dependency calls for supported static graphs.
+- [-] 17. Implement a minimal production runtime boundary. A tiny generated PSR-11 anonymous runtime exists, but no explicit `ProductionContainer` loader/fallback boundary exists yet.
+- [-] 18. Implement singleton/scoped runtime state. Generated singleton state exists; compiled scope state/seeds/nesting remain pending.
+- [x] 19. Implement direct compiled internal dependency calls for supported static graphs; internal edges do not recurse through public string `get()`.
+- [ ] 20. Compile tags and lifecycle/scope-leave hooks.
+- [ ] 21. Implement compiled `call()` / `make()` / invocation paths.
+- [ ] 22. Implement arbitrary dynamic invocation fallback without deoptimizing known compiled services.
+- [ ] 23. Implement runtime Closure/dynamic-definition islands and `DirectFactory` integration in the production runtime.
+- [ ] 24. Implement production deoptimization for true configuration mutation while preserving singleton/scope identity.
+- [ ] 25. Separate diagnostic/compiler metadata from the hot runtime artifact.
+- [-] 26. Move artifact validation fully to build/deployment. Atomic generation/loading exists; complete ABI/manifest/prevalidated production loading separation remains pending.
+- [ ] 27. Add safe constant folding/transient inlining only after parity and measurements prove it safe/useful.
+- [-] 28. Benchmark alternative generated representations. Dynamic/static/native comparison exists, but the representation matrix is not complete.
+- [ ] 29. Remove obsolete Repository/manager/resolver machinery from the production runtime once the production boundary is complete.
+- [ ] 30. Run the full development/compiled/deoptimized semantic parity matrix.
+- [-] 31. Run the PHPBench matrix. Benchmarks exist; native PHPForge `ic:bench:quick` must pass without any project-level `ic:*` override.
+- [ ] 32. Run external Webrick benchmark after the InterMix standalone gates are green.
+- [ ] 33. Finalize the InterMix 10 public migration API only after the runtime architecture and downstream validation are complete.
+
+### Current release gates
+
+- [x] Existing Pest/PHPCS/PHPProbe/Deptrac/Pint/Rector quality gates pass on the reviewed branch revisions.
+- [-] PHPStan: two exact annotation findings were identified by a temporary diagnostic workflow and patched; normal workflow must confirm green.
+- [ ] Psalm/security analysis must be green on the final head.
+- [ ] Native PHPForge `ic:bench:quick` must be green on PHP 8.4 and 8.5.
+- [x] Project `composer.json` does not override PHPForge `ic:*` commands.
+- [ ] Remove the temporary PHPStan diagnostic workflow after the normal workflow confirms the fix.
+- [ ] Final diff review: no accidental public contract loss, no benchmark-only production code, and no temporary CI/debug artifacts.
+
 ## 1. Objective
 
 InterMix 10 should treat dependency injection as a two-phase system:
