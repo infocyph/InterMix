@@ -20,6 +20,7 @@ final class StaticParameterPlanner
     /**
      * @param ReflectionClass<object> $consumer
      * @param array<int|string, mixed> $supplied
+     * @param array<string, ServiceArgument> $attributeArguments
      * @return array{arguments: list<ServiceArgument>, dependencies: list<string>}|string
      */
     public function callablePlan(
@@ -29,6 +30,7 @@ final class StaticParameterPlanner
         array $supplied = [],
         string $label = 'parameter',
         bool $rejectAttributes = false,
+        array $attributeArguments = [],
     ): array|string {
         $parameters = $reflector->getParameters();
         $supplied = $this->normalizeSuppliedParameters($parameters, $supplied);
@@ -44,6 +46,7 @@ final class StaticParameterPlanner
                 $supplied,
                 $label,
                 $rejectAttributes,
+                $attributeArguments,
             );
             if (is_string($argument)) {
                 return $argument;
@@ -77,6 +80,19 @@ final class StaticParameterPlanner
             'constructor',
             true,
         );
+    }
+
+    /** @return ServiceArgument|string|null */
+    private function attributeParameterPlan(
+        DefinitionGraph $graph,
+        ReflectionParameter $parameter,
+        bool $rejectAttributes,
+    ): array|string|null {
+        if ($rejectAttributes || !$graph->methodAttributesEnabled()) {
+            return null;
+        }
+
+        return new StaticInjectPlanner()->parameterArgument($graph, $parameter);
     }
 
     private function isExportable(mixed $value): bool
@@ -130,6 +146,7 @@ final class StaticParameterPlanner
     /**
      * @param ReflectionClass<object> $consumer
      * @param array<int|string, mixed> $supplied
+     * @param array<string, ServiceArgument> $attributeArguments
      * @return ServiceArgument|string
      */
     private function parameterPlan(
@@ -139,6 +156,7 @@ final class StaticParameterPlanner
         array $supplied,
         string $label,
         bool $rejectAttributes,
+        array $attributeArguments,
     ): array|string {
         $name = $parameter->getName();
         if ($parameter->isVariadic()) {
@@ -153,9 +171,22 @@ final class StaticParameterPlanner
             return "{$label} parameter '{$name}' has attributes";
         }
 
+        $untypedDefinition = $this->untypedDefinitionPlan($graph, $parameter);
+        if ($untypedDefinition !== null) {
+            return $untypedDefinition;
+        }
+
         $typePlan = $this->typeParameterPlan($graph, $consumer, $parameter, $label);
         if ($typePlan !== null) {
             return $typePlan;
+        }
+        if (isset($attributeArguments[$name])) {
+            return $attributeArguments[$name];
+        }
+
+        $attributePlan = $this->attributeParameterPlan($graph, $parameter, $rejectAttributes);
+        if ($attributePlan !== null) {
+            return $attributePlan;
         }
         if ($parameter->isDefaultValueAvailable() && $this->isExportable($parameter->getDefaultValue())) {
             return ['kind' => 'value', 'code' => var_export($parameter->getDefaultValue(), true)];
@@ -281,5 +312,15 @@ final class StaticParameterPlanner
         }
 
         return null;
+    }
+
+    /** @return array{kind: 'service', id: string}|null */
+    private function untypedDefinitionPlan(DefinitionGraph $graph, ReflectionParameter $parameter): ?array
+    {
+        if ($parameter->getType() !== null || !$graph->hasDefinition($parameter->getName())) {
+            return null;
+        }
+
+        return ['kind' => 'service', 'id' => $parameter->getName()];
     }
 }
