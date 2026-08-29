@@ -89,7 +89,7 @@ it('specializes singleton identity inside the generated runtime', function () {
 });
 
 it('rejects unknown identifiers using the PSR not-found contract', function () {
-    expect(NotFoundException::class)->toImplement(NotFoundExceptionInterface::class);
+    expect(is_a(NotFoundException::class, NotFoundExceptionInterface::class, true))->toBeTrue();
 
     $container = new Container(uniqid('static_runtime_not_found_'));
     $container->singleton(StaticRuntimeLeaf::class);
