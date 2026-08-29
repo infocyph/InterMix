@@ -146,41 +146,6 @@ final class StaticRuntimeRenderer
         return $graph->hasResolvingHook($id) || $graph->hasResolvedHook($id);
     }
 
-    private function renderHookedExpressionMethod(
-        DefinitionGraph $graph,
-        int $slot,
-        string $id,
-        LifetimeEnum $lifetime,
-        string $expression,
-        string $singletonStore,
-    ): string {
-        $source = "    private function s{$slot}(): mixed\n    {\n";
-        $source .= $this->renderSeedGuard($slot);
-        if ($lifetime === LifetimeEnum::Scoped) {
-            $source .= "        if (array_key_exists({$slot}, \$this->scope->resolved)) {\n";
-            $source .= "            return \$this->scope->resolved[{$slot}];\n";
-            $source .= "        }\n\n";
-        } elseif ($lifetime === LifetimeEnum::Singleton) {
-            $source .= "        if (array_key_exists({$slot}, \$this->{$singletonStore})) {\n";
-            $source .= "            return \$this->{$singletonStore}[{$slot}];\n";
-            $source .= "        }\n\n";
-        }
-        if ($graph->hasResolvingHook($id)) {
-            $source .= '        $this->dispatchCompiledResolvingHooks(' . var_export($id, true) . ");\n\n";
-        }
-        $source .= "        \$value = {$expression};\n";
-        if ($lifetime === LifetimeEnum::Scoped) {
-            $source .= "        \$this->scope->resolved[{$slot}] = \$value;\n";
-        } elseif ($lifetime === LifetimeEnum::Singleton) {
-            $source .= "        \$this->{$singletonStore}[{$slot}] = \$value;\n";
-        }
-        if ($graph->hasResolvedHook($id)) {
-            $source .= '        $this->dispatchCompiledResolvedHooks(' . var_export($id, true) . ", \$value);\n";
-        }
-
-        return $source . "\n        return \$value;\n    }\n\n";
-    }
-
     /**
      * @param AliasPlan $plan
      * @param array<string, int> $slots
@@ -284,44 +249,6 @@ final class StaticRuntimeRenderer
         }
 
         return $source . "    }\n\n";
-    }
-
-    /**
-     * @param ClassPlan $plan
-     * @param array<string, int> $slots
-     */
-    private function renderHookedClassMethod(
-        DefinitionGraph $graph,
-        string $id,
-        int $slot,
-        array $plan,
-        array $slots,
-    ): string {
-        $source = "    private function s{$slot}(): mixed\n    {\n";
-        $source .= $this->renderSeedGuard($slot);
-        if ($plan['lifetime'] === LifetimeEnum::Scoped) {
-            $source .= "        if (array_key_exists({$slot}, \$this->scope->resolved)) {\n";
-            $source .= "            return \$this->scope->resolved[{$slot}];\n";
-            $source .= "        }\n\n";
-        } elseif ($plan['lifetime'] === LifetimeEnum::Singleton) {
-            $source .= "        if (\$this->v{$slot} !== null) {\n";
-            $source .= "            return \$this->v{$slot};\n";
-            $source .= "        }\n\n";
-        }
-        if ($graph->hasResolvingHook($id)) {
-            $source .= '        $this->dispatchCompiledResolvingHooks(' . var_export($id, true) . ");\n\n";
-        }
-        $source .= $this->classServiceStatements($plan, $slots);
-        if ($plan['lifetime'] === LifetimeEnum::Scoped) {
-            $source .= "\n        \$this->scope->resolved[{$slot}] = \$instance;\n";
-        } elseif ($plan['lifetime'] === LifetimeEnum::Singleton) {
-            $source .= "\n        \$this->v{$slot} = \$instance;\n";
-        }
-        if ($graph->hasResolvedHook($id)) {
-            $source .= '        $this->dispatchCompiledResolvedHooks(' . var_export($id, true) . ", \$instance);\n";
-        }
-
-        return $source . "\n        return \$instance;\n    }\n\n";
     }
 
     /** @param array<string, ServicePlan> $plans */
@@ -552,6 +479,79 @@ final class StaticRuntimeRenderer
         $source .= "            default => \$this->fallbackHas(\$id),\n";
 
         return $source . "        };\n    }\n\n";
+    }
+
+    /**
+     * @param ClassPlan $plan
+     * @param array<string, int> $slots
+     */
+    private function renderHookedClassMethod(
+        DefinitionGraph $graph,
+        string $id,
+        int $slot,
+        array $plan,
+        array $slots,
+    ): string {
+        $source = "    private function s{$slot}(): mixed\n    {\n";
+        $source .= $this->renderSeedGuard($slot);
+        if ($plan['lifetime'] === LifetimeEnum::Scoped) {
+            $source .= "        if (array_key_exists({$slot}, \$this->scope->resolved)) {\n";
+            $source .= "            return \$this->scope->resolved[{$slot}];\n";
+            $source .= "        }\n\n";
+        } elseif ($plan['lifetime'] === LifetimeEnum::Singleton) {
+            $source .= "        if (\$this->v{$slot} !== null) {\n";
+            $source .= "            return \$this->v{$slot};\n";
+            $source .= "        }\n\n";
+        }
+        if ($graph->hasResolvingHook($id)) {
+            $source .= '        $this->dispatchCompiledResolvingHooks(' . var_export($id, true) . ");\n\n";
+        }
+        $source .= $this->classServiceStatements($plan, $slots);
+        if ($plan['lifetime'] === LifetimeEnum::Scoped) {
+            $source .= "\n        \$this->scope->resolved[{$slot}] = \$instance;\n";
+        } elseif ($plan['lifetime'] === LifetimeEnum::Singleton) {
+            $source .= "\n        \$this->v{$slot} = \$instance;\n";
+        }
+        if ($graph->hasResolvedHook($id)) {
+            $source .= '        $this->dispatchCompiledResolvedHooks(' . var_export($id, true) . ", \$instance);\n";
+        }
+
+        return $source . "\n        return \$instance;\n    }\n\n";
+    }
+
+    private function renderHookedExpressionMethod(
+        DefinitionGraph $graph,
+        int $slot,
+        string $id,
+        LifetimeEnum $lifetime,
+        string $expression,
+        string $singletonStore,
+    ): string {
+        $source = "    private function s{$slot}(): mixed\n    {\n";
+        $source .= $this->renderSeedGuard($slot);
+        if ($lifetime === LifetimeEnum::Scoped) {
+            $source .= "        if (array_key_exists({$slot}, \$this->scope->resolved)) {\n";
+            $source .= "            return \$this->scope->resolved[{$slot}];\n";
+            $source .= "        }\n\n";
+        } elseif ($lifetime === LifetimeEnum::Singleton) {
+            $source .= "        if (array_key_exists({$slot}, \$this->{$singletonStore})) {\n";
+            $source .= "            return \$this->{$singletonStore}[{$slot}];\n";
+            $source .= "        }\n\n";
+        }
+        if ($graph->hasResolvingHook($id)) {
+            $source .= '        $this->dispatchCompiledResolvingHooks(' . var_export($id, true) . ");\n\n";
+        }
+        $source .= "        \$value = {$expression};\n";
+        if ($lifetime === LifetimeEnum::Scoped) {
+            $source .= "        \$this->scope->resolved[{$slot}] = \$value;\n";
+        } elseif ($lifetime === LifetimeEnum::Singleton) {
+            $source .= "        \$this->{$singletonStore}[{$slot}] = \$value;\n";
+        }
+        if ($graph->hasResolvedHook($id)) {
+            $source .= '        $this->dispatchCompiledResolvedHooks(' . var_export($id, true) . ", \$value);\n";
+        }
+
+        return $source . "\n        return \$value;\n    }\n\n";
     }
 
     /** @param array<string, ServicePlan> $plans */
