@@ -7,13 +7,26 @@ namespace Infocyph\InterMix\DI\Resolver\Concerns;
 /** @internal */
 trait InvalidatesRepositoryState
 {
+    private bool $hasPropertyResources = false;
+
     public function assertMutable(): void
     {
         $this->checkIfLocked();
     }
 
+    /** @internal */
+    public function hasPropertyResources(): bool
+    {
+        return $this->hasPropertyResources;
+    }
+
     public function invalidateClass(string $class): void
     {
+        if (!$this->hasPropertyResources) {
+            $properties = $this->classResource[$class]['property'] ?? null;
+            $this->hasPropertyResources = is_array($properties) && $properties !== [];
+        }
+
         unset($this->resolvedResource[$class], $this->resolved[$class], $this->resolvedSingleton[$class]);
         foreach (array_keys($this->resolvedScoped) as $scope) {
             unset($this->resolvedScoped[$scope][$class]);
