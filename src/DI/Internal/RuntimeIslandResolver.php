@@ -52,6 +52,19 @@ final class RuntimeIslandResolver
         }
     }
 
+    public function applyRegisteredProperty(object $instance, string $declaringClass, string $propertyName): void
+    {
+        $properties = $this->repository->getClassResourceFor($declaringClass)['property'] ?? null;
+        if (!is_array($properties) || !array_key_exists($propertyName, $properties)) {
+            throw new ContainerException(
+                "Compiled property island {$declaringClass}::\${$propertyName} requires its registered runtime value.",
+            );
+        }
+
+        $property = ReflectionResource::getClassReflection($declaringClass)->getProperty($propertyName);
+        $this->setPropertyValue($property, $instance, $properties[$propertyName]);
+    }
+
     public function assignProperty(
         object $instance,
         string $declaringClass,
