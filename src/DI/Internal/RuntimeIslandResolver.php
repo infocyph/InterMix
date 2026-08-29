@@ -39,6 +39,13 @@ final class RuntimeIslandResolver
     public function applyAttributedProperty(object $instance, string $declaringClass, string $propertyName): void
     {
         $property = ReflectionResource::getClassReflection($declaringClass)->getProperty($propertyName);
+        $registered = $this->repository->getClassResourceFor($declaringClass)['property'] ?? null;
+        if (is_array($registered) && array_key_exists($propertyName, $registered)) {
+            $this->setPropertyValue($property, $instance, $registered[$propertyName]);
+
+            return;
+        }
+
         if ($this->repository->isTracingEnabled()) {
             $this->repository->tracer()->push(
                 "prop {$propertyName} of {$declaringClass}",
@@ -50,19 +57,6 @@ final class RuntimeIslandResolver
         if ($value !== AttributeResolution::Unresolved) {
             $this->setPropertyValue($property, $instance, $value);
         }
-    }
-
-    public function applyRegisteredProperty(object $instance, string $declaringClass, string $propertyName): void
-    {
-        $properties = $this->repository->getClassResourceFor($declaringClass)['property'] ?? null;
-        if (!is_array($properties) || !array_key_exists($propertyName, $properties)) {
-            throw new ContainerException(
-                "Compiled property island {$declaringClass}::\${$propertyName} requires its registered runtime value.",
-            );
-        }
-
-        $property = ReflectionResource::getClassReflection($declaringClass)->getProperty($propertyName);
-        $this->setPropertyValue($property, $instance, $properties[$propertyName]);
     }
 
     public function assignProperty(
