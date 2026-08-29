@@ -144,31 +144,18 @@ final class StaticParameterPlanner
         if ($parameter->isVariadic()) {
             return "{$label} parameter '{$name}' is variadic";
         }
-        if (array_key_exists($name, $supplied)) {
-            if (!$this->isExportable($supplied[$name])) {
-                return "{$label} parameter '{$name}' has a non-exportable supplied value";
-            }
 
-            return ['kind' => 'value', 'code' => var_export($supplied[$name], true)];
+        $suppliedPlan = $this->suppliedParameterPlan($parameter, $supplied, $label);
+        if ($suppliedPlan !== null) {
+            return $suppliedPlan;
         }
         if ($rejectAttributes && $parameter->getAttributes() !== []) {
             return "{$label} parameter '{$name}' has attributes";
         }
 
-        $type = $parameter->getType();
-        if ($type instanceof ReflectionUnionType || $type instanceof ReflectionIntersectionType) {
-            $compound = new StaticCompoundTypePlanner()->plan(
-                $graph,
-                $consumer,
-                $parameter,
-                $type,
-                $label,
-            );
-            if ($compound !== null) {
-                return $compound;
-            }
-        } elseif ($type instanceof ReflectionNamedType && !$type->isBuiltin()) {
-            return $this->typedParameterPlan($graph, $consumer, $parameter, $type, $label);
+        $typePlan = $this->typeParameterPlan($graph, $consumer, $parameter, $label);
+        if ($typePlan !== null) {
+            return $typePlan;
         }
         if ($parameter->isDefaultValueAvailable() && $this->isExportable($parameter->getDefaultValue())) {
             return ['kind' => 'value', 'code' => var_export($parameter->getDefaultValue(), true)];
@@ -191,6 +178,53 @@ final class StaticParameterPlanner
         $parameters = $resource['params'] ?? [];
 
         return is_array($parameters) ? $parameters : [];
+    }
+
+    /**
+     * @param array<int|string, mixed> $supplied
+     * @return ServiceArgument|string|null
+     */
+    private function suppliedParameterPlan(
+        ReflectionParameter $parameter,
+        array $supplied,
+        string $label,
+    ): array|string|null {
+        $name = $parameter->getName();
+        if (!array_key_exists($name, $supplied)) {
+            return null;
+        }
+        if (!$this->isExportable($supplied[$name])) {
+            return "{$label} parameter '{$name}' has a non-exportable supplied value";
+        }
+
+        return ['kind' => 'value', 'code' => var_export($supplied[$name], true)];
+    }
+
+    /**
+     * @param ReflectionClass<object> $consumer
+     * @return ServiceArgument|string|null
+     */
+    private function typeParameterPlan(
+        DefinitionGraph $graph,
+        ReflectionClass $consumer,
+        ReflectionParameter $parameter,
+        string $label,
+    ): array|string|null {
+        $type = $parameter->getType();
+        if ($type instanceof ReflectionUnionType || $type instanceof ReflectionIntersectionType) {
+            return new StaticCompoundTypePlanner()->plan(
+                $graph,
+                $consumer,
+                $parameter,
+                $type,
+                $label,
+            );
+        }
+        if ($type instanceof ReflectionNamedType && !$type->isBuiltin()) {
+            return $this->typedParameterPlan($graph, $consumer, $parameter, $type, $label);
+        }
+
+        return null;
     }
 
     /**
