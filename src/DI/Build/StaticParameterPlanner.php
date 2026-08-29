@@ -172,6 +172,19 @@ final class StaticParameterPlanner
         return "{$label} parameter '{$name}' cannot be represented statically";
     }
 
+    /** @return array<int|string, mixed> */
+    private function resourceParameters(DefinitionGraph $graph, string $class, string $scope): array
+    {
+        $resource = $graph->classResourcesFor($class)[$scope] ?? null;
+        if (!is_array($resource)) {
+            return [];
+        }
+
+        $parameters = $resource['params'] ?? [];
+
+        return is_array($parameters) ? $parameters : [];
+    }
+
     /**
      * @param ReflectionClass<object> $consumer
      * @return array{kind: 'service', id: string}|string
@@ -195,19 +208,6 @@ final class StaticParameterPlanner
         }
 
         return $this->typedServicePlan($graph, $consumer->getName(), $dependency, $label);
-    }
-
-    /** @return array<int|string, mixed> */
-    private function resourceParameters(DefinitionGraph $graph, string $class, string $scope): array
-    {
-        $resource = $graph->classResourcesFor($class)[$scope] ?? null;
-        if (!is_array($resource)) {
-            return [];
-        }
-
-        $parameters = $resource['params'] ?? [];
-
-        return is_array($parameters) ? $parameters : [];
     }
 
     /** @return array{kind: 'service', id: string}|string */
