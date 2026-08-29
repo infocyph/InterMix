@@ -34,6 +34,10 @@ abstract class ProductionContainer implements ContainerInterface
     /** @throws ContainerException|\ReflectionException|\Psr\Cache\InvalidArgumentException */
     public final function call(string|Closure|callable $classOrClosure, string|bool|null $method = null): mixed
     {
+        if (is_string($classOrClosure) && $this->isCompiledDefinition($classOrClosure)) {
+            return $this->callCompiledDefinition($classOrClosure, $method);
+        }
+
         return $this->dynamic()->call($classOrClosure, $method);
     }
 
@@ -100,6 +104,12 @@ abstract class ProductionContainer implements ContainerInterface
         return $this->dynamic()->getReturn($id);
     }
 
+    /** @return bool */
+    protected function isCompiledDefinition(string $id): bool
+    {
+        return false;
+    }
+
     public final function leaveScope(): static
     {
         $this->fallback?->leaveScope();
@@ -160,6 +170,19 @@ abstract class ProductionContainer implements ContainerInterface
         return match ($tag) {
             default => [],
         };
+    }
+
+    private function callCompiledDefinition(string $id, string|bool|null $method): mixed
+    {
+        $service = $this->get($id);
+        if (!is_string($method) || $method === '') {
+            return $service;
+        }
+        if (!is_object($service) || !method_exists($service, $method)) {
+            throw new ContainerException("Method {$id}::{$method}() does not exist.");
+        }
+
+        return $service->{$method}();
     }
 
     private function dynamic(): Container
