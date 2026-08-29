@@ -14,8 +14,7 @@ use ReflectionParameter;
 use ReflectionUnionType;
 
 /**
- * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
- * @phpstan-type TypeGroup list<ReflectionNamedType>
+ * @phpstan-type ServiceReference array{kind: 'service', id: string}
  * @phpstan-type DefinitionClass array{known: bool, class: class-string|null}
  * @internal
  */
@@ -23,7 +22,7 @@ final class StaticCompoundTypePlanner
 {
     /**
      * @param ReflectionClass<object> $consumer
-     * @return ServiceArgument|string|null
+     * @return ServiceReference|string|null
      */
     public function plan(
         DefinitionGraph $graph,
@@ -68,8 +67,45 @@ final class StaticCompoundTypePlanner
     }
 
     /**
-     * @param list<TypeGroup> $groups
-     * @return ServiceArgument|null
+     * @param array<string, true> $seen
+     * @return DefinitionClass
+     */
+    private function aliasDefinitionClass(
+        DefinitionGraph $graph,
+        AliasDefinition $definition,
+        array $seen,
+    ): array {
+        if ($graph->hasDefinition($definition->target)) {
+            return $this->definitionClass($graph, $definition->target, $seen);
+        }
+        if (class_exists($definition->target)) {
+            return ['known' => true, 'class' => $definition->target];
+        }
+
+        return ['known' => false, 'class' => null];
+    }
+
+    /**
+     * @param array<int|string, mixed> $definition
+     * @return DefinitionClass
+     */
+    private function arrayDefinitionClass(array $definition): array
+    {
+        $class = $definition[0] ?? null;
+        $method = $definition[1] ?? null;
+        if (is_string($class) && class_exists($class) && !is_string($method)) {
+            return ['known' => true, 'class' => $class];
+        }
+
+        return is_string($method)
+            ? ['known' => false, 'class' => null]
+            : ['known' => true, 'class' => null];
+    }
+
+    /**
+     * @param ReflectionClass<object> $consumer
+     * @param list<list<ReflectionNamedType>> $groups
+     * @return ServiceReference|null
      */
     private function autowirePlan(DefinitionGraph $graph, ReflectionClass $consumer, array $groups): ?array
     {
@@ -96,8 +132,92 @@ final class StaticCompoundTypePlanner
     }
 
     /**
-     * @param list<TypeGroup> $groups
-     * @return ServiceArgument|string|null
+     * @param array<string, true> $seen
+     * @return DefinitionClass
+     */
+    private function classFromDefinition(DefinitionGraph $graph, mixed $definition, array $seen): array
+    {
+        if ($definition instanceof AliasDefinition) {
+            return $this->aliasDefinitionClass($graph, $definition, $seen);
+        }
+        if ($definition instanceof FactoryDefinition || $definition instanceof Closure) {
+            return ['known' => false, 'class' => null];
+        }
+        if (is_string($definition)) {
+            return $this->stringDefinitionClass($graph, $definition, $seen);
+        }
+        if (is_array($definition)) {
+            return $this->arrayDefinitionClass($definition);
+        }
+        if (is_object($definition)) {
+            return ['known' => true, 'class' => $definition::class];
+        }
+
+        return ['known' => true, 'class' => null];
+    }
+
+    /**
+     * @param ReflectionClass<object> $consumer
+     * @param class-string $class
+     * @param list<list<ReflectionNamedType>> $groups
+     */
+    private function classSatisfiesAnyGroup(ReflectionClass $consumer, string $class, array $groups): bool
+    {
+        return array_any(
+            $groups,
+            fn(array $group): bool => $this->classSatisfiesGroup($consumer, $class, $group),
+        );
+    }
+
+    /**
+     * @param ReflectionClass<object> $consumer
+     * @param class-string $class
+     * @param list<ReflectionNamedType> $group
+     */
+    private function classSatisfiesGroup(ReflectionClass $consumer, string $class, array $group): bool
+    {
+        foreach ($group as $named) {
+            if ($named->isBuiltin()) {
+                return false;
+            }
+            $required = $this->normalizeType($consumer, $named->getName());
+            if ($required === null || !is_a($class, $required, true)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /** @return array{id: string, class: class-string}|string|null */
+    private function contextualCandidate(DefinitionGraph $graph, string $binding): array|string|null
+    {
+        if ($graph->hasDefinition($binding)) {
+            $resolved = $this->definitionClass($graph, $binding);
+            if (!$resolved['known']) {
+                return "contextual service '$binding' has an unknown runtime type";
+            }
+
+            return $resolved['class'] === null
+                ? null
+                : ['id' => $binding, 'class' => $resolved['class']];
+        }
+        if (!class_exists($binding) && !interface_exists($binding)) {
+            return null;
+        }
+
+        $concrete = $graph->environmentConcrete($binding) ?? $binding;
+        if (!class_exists($concrete)) {
+            return "contextual type '$binding' does not resolve to an instantiable class";
+        }
+
+        return ['id' => $concrete, 'class' => $concrete];
+    }
+
+    /**
+     * @param ReflectionClass<object> $consumer
+     * @param list<list<ReflectionNamedType>> $groups
+     * @return ServiceReference|string|null
      */
     private function contextualPlan(
         DefinitionGraph $graph,
@@ -136,34 +256,24 @@ final class StaticCompoundTypePlanner
         return null;
     }
 
-    /** @return array{id: string, class: class-string}|string|null */
-    private function contextualCandidate(DefinitionGraph $graph, string $binding): array|string|null
+    /**
+     * @param array<string, true> $seen
+     * @return DefinitionClass
+     */
+    private function definitionClass(DefinitionGraph $graph, string $id, array $seen = []): array
     {
-        if ($graph->hasDefinition($binding)) {
-            $resolved = $this->definitionClass($graph, $binding);
-            if (!$resolved['known']) {
-                return "contextual service '$binding' has an unknown runtime type";
-            }
-
-            return $resolved['class'] === null
-                ? null
-                : ['id' => $binding, 'class' => $resolved['class']];
+        if (isset($seen[$id])) {
+            return ['known' => false, 'class' => null];
         }
-        if (!class_exists($binding) && !interface_exists($binding)) {
-            return null;
-        }
+        $seen[$id] = true;
 
-        $concrete = $graph->environmentConcrete($binding) ?? $binding;
-        if (!class_exists($concrete)) {
-            return "contextual type '$binding' does not resolve to an instantiable class";
-        }
-
-        return ['id' => $concrete, 'class' => $concrete];
+        return $this->classFromDefinition($graph, $graph->definitions()[$id] ?? null, $seen);
     }
 
     /**
-     * @param list<TypeGroup> $groups
-     * @return ServiceArgument|string|null
+     * @param ReflectionClass<object> $consumer
+     * @param list<list<ReflectionNamedType>> $groups
+     * @return ServiceReference|string|null
      */
     private function definitionPlan(
         DefinitionGraph $graph,
@@ -189,88 +299,10 @@ final class StaticCompoundTypePlanner
         return ['kind' => 'service', 'id' => $id];
     }
 
-    /** @return DefinitionClass */
-    private function definitionClass(DefinitionGraph $graph, string $id, array $seen = []): array
-    {
-        if (isset($seen[$id])) {
-            return ['known' => false, 'class' => null];
-        }
-        $seen[$id] = true;
-        $definition = $graph->definitions()[$id] ?? null;
-
-        if ($definition instanceof AliasDefinition) {
-            if ($graph->hasDefinition($definition->target)) {
-                return $this->definitionClass($graph, $definition->target, $seen);
-            }
-            if (class_exists($definition->target)) {
-                return ['known' => true, 'class' => $definition->target];
-            }
-
-            return ['known' => false, 'class' => null];
-        }
-        if ($definition instanceof FactoryDefinition || $definition instanceof Closure) {
-            return ['known' => false, 'class' => null];
-        }
-        if (is_string($definition)) {
-            if (class_exists($definition)) {
-                return ['known' => true, 'class' => $definition];
-            }
-            if ($graph->hasDefinition($definition)) {
-                return $this->definitionClass($graph, $definition, $seen);
-            }
-
-            return ['known' => true, 'class' => null];
-        }
-        if (is_array($definition)) {
-            $class = $definition[0] ?? null;
-            $method = $definition[1] ?? null;
-            if (is_string($class) && class_exists($class) && !is_string($method)) {
-                return ['known' => true, 'class' => $class];
-            }
-
-            return is_string($method)
-                ? ['known' => false, 'class' => null]
-                : ['known' => true, 'class' => null];
-        }
-        if (is_object($definition)) {
-            return ['known' => true, 'class' => $definition::class];
-        }
-
-        return ['known' => true, 'class' => null];
-    }
-
     /**
-     * @param class-string $class
-     * @param list<TypeGroup> $groups
+     * @param list<list<ReflectionNamedType>> $groups
+     * @return list<ReflectionNamedType>
      */
-    private function classSatisfiesAnyGroup(ReflectionClass $consumer, string $class, array $groups): bool
-    {
-        return array_any(
-            $groups,
-            fn(array $group): bool => $this->classSatisfiesGroup($consumer, $class, $group),
-        );
-    }
-
-    /**
-     * @param class-string $class
-     * @param TypeGroup $group
-     */
-    private function classSatisfiesGroup(ReflectionClass $consumer, string $class, array $group): bool
-    {
-        foreach ($group as $named) {
-            if ($named->isBuiltin()) {
-                return false;
-            }
-            $required = $this->normalizeType($consumer, $named->getName());
-            if ($required === null || !is_a($class, $required, true)) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /** @param list<TypeGroup> $groups @return list<ReflectionNamedType> */
     private function flattenGroups(array $groups): array
     {
         $types = [];
@@ -281,6 +313,19 @@ final class StaticCompoundTypePlanner
         }
 
         return $types;
+    }
+
+    /** @return list<ReflectionNamedType> */
+    private function namedIntersectionMembers(ReflectionIntersectionType $type): array
+    {
+        $members = [];
+        foreach ($type->getTypes() as $member) {
+            if ($member instanceof ReflectionNamedType) {
+                $members[] = $member;
+            }
+        }
+
+        return $members;
     }
 
     /** @param ReflectionClass<object> $consumer */
@@ -298,20 +343,23 @@ final class StaticCompoundTypePlanner
         return $type === 'static' ? null : $type;
     }
 
-    /** @return list<ReflectionNamedType> */
-    private function namedIntersectionMembers(ReflectionIntersectionType $type): array
+    /**
+     * @param array<string, true> $seen
+     * @return DefinitionClass
+     */
+    private function stringDefinitionClass(DefinitionGraph $graph, string $definition, array $seen): array
     {
-        $members = [];
-        foreach ($type->getTypes() as $member) {
-            if ($member instanceof ReflectionNamedType) {
-                $members[] = $member;
-            }
+        if (class_exists($definition)) {
+            return ['known' => true, 'class' => $definition];
+        }
+        if ($graph->hasDefinition($definition)) {
+            return $this->definitionClass($graph, $definition, $seen);
         }
 
-        return $members;
+        return ['known' => true, 'class' => null];
     }
 
-    /** @return list<TypeGroup> */
+    /** @return list<list<ReflectionNamedType>> */
     private function typeGroups(ReflectionUnionType|ReflectionIntersectionType $type): array
     {
         if ($type instanceof ReflectionIntersectionType) {
