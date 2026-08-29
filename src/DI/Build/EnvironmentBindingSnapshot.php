@@ -6,7 +6,10 @@ namespace Infocyph\InterMix\DI\Build;
 
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\Internal\ReflectionResource;
+use ReflectionIntersectionType;
 use ReflectionNamedType;
+use ReflectionType;
+use ReflectionUnionType;
 
 /** @internal */
 final class EnvironmentBindingSnapshot
@@ -61,19 +64,55 @@ final class EnvironmentBindingSnapshot
         }
 
         foreach ($constructor->getParameters() as $parameter) {
-            $parameterType = $parameter->getType();
-            if (!$parameterType instanceof ReflectionNamedType || $parameterType->isBuiltin()) {
-                continue;
-            }
-            $dependency = $parameterType->getName();
-            $concrete = $repository->getEnvConcrete($dependency);
-            if ($concrete !== null && class_exists($concrete)) {
-                $bindings[$dependency] = $concrete;
-                $pending[] = $concrete;
-            } elseif (class_exists($dependency)) {
-                $pending[] = $dependency;
+            foreach ($this->namedTypes($parameter->getType()) as $parameterType) {
+                if ($parameterType->isBuiltin()) {
+                    continue;
+                }
+                $this->appendDependency($repository, $parameterType->getName(), $pending, $bindings);
             }
         }
+    }
+
+    /**
+     * @param list<string> $pending
+     * @param array<string, string> $bindings
+     */
+    private function appendDependency(
+        Repository $repository,
+        string $dependency,
+        array &$pending,
+        array &$bindings,
+    ): void {
+        $concrete = $repository->getEnvConcrete($dependency);
+        if ($concrete !== null && class_exists($concrete)) {
+            $bindings[$dependency] = $concrete;
+            $pending[] = $concrete;
+
+            return;
+        }
+        if (class_exists($dependency)) {
+            $pending[] = $dependency;
+        }
+    }
+
+    /** @return list<ReflectionNamedType> */
+    private function namedTypes(?ReflectionType $type): array
+    {
+        if ($type instanceof ReflectionNamedType) {
+            return [$type];
+        }
+        if (!$type instanceof ReflectionUnionType && !$type instanceof ReflectionIntersectionType) {
+            return [];
+        }
+
+        $types = [];
+        foreach ($type->getTypes() as $member) {
+            foreach ($this->namedTypes($member) as $named) {
+                $types[] = $named;
+            }
+        }
+
+        return $types;
     }
 
     /**
