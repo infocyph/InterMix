@@ -190,19 +190,19 @@ it('compiles the configured default method when it is statically resolvable', fu
     }
 });
 
-it('keeps non-public implicit methods in the reflection island', function () {
+it('keeps non-public implicit methods as targeted reflection islands', function () {
     $builder = ContainerBuilder::create(uniqid('method_protected_'));
     $builder->singleton(MethodProtectedInvocation::class);
 
     $path = methodCompilationArtifactPath();
     try {
         $report = $builder->compile($path);
+        $source = file_get_contents($path);
         $runtime = $builder->production($path);
         $service = $runtime->get(MethodProtectedInvocation::class);
 
-        expect($report['compiled'])->not->toContain(MethodProtectedInvocation::class)
-            ->and($report['skipped'][MethodProtectedInvocation::class])
-            ->toContain('reflection-based invocation')
+        expect($report['compiled'])->toContain(MethodProtectedInvocation::class)
+            ->and($source)->toContain('invokeCompiledRuntimeMethod')
             ->and($service->called)->toBeTrue();
     } finally {
         removeMethodCompilationArtifact($path);
