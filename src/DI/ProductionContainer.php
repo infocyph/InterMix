@@ -361,8 +361,12 @@ abstract class ProductionContainer implements ContainerInterface
         }
     }
 
-    private function transferCompiledState(Container $fallback): void
+    private function transferCompiledState(?Container $fallback): void
     {
+        if (!$fallback instanceof Container) {
+            return;
+        }
+
         $repository = $fallback->getRepository();
         foreach ($this->compiledSingletonValues() as $id => $value) {
             $repository->setResolved($id, $value);
