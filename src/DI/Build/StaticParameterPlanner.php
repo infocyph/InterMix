@@ -110,7 +110,7 @@ final class StaticParameterPlanner
 
     /**
      * @param ReflectionClass<object> $class
-     * @return ServiceArgument|string
+     * @return array{kind: 'service', id: string}|string
      */
     private function typedParameterPlan(
         DefinitionGraph $graph,
