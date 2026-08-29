@@ -37,8 +37,6 @@ abstract class ProductionContainer implements ContainerInterface
         }
     }
 
-    abstract protected function slotFor(string $id): ?int;
-
     /** @internal */
     final public function attachFallback(Container $fallback): void
     {
@@ -224,6 +222,8 @@ abstract class ProductionContainer implements ContainerInterface
             $this->leaveScope();
         }
     }
+
+    abstract protected function slotFor(string $id): ?int;
 
     /** @return array<int, string> */
     protected function compiledIds(): array
