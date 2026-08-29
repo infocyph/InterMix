@@ -25,6 +25,9 @@ final class ContainerBuilder
     /** @var array<string, true> */
     private array $dynamicServiceIds = [];
 
+    /** @var list<ProductionContainer> */
+    private array $productionRuntimes = [];
+
     public function __construct(?Container $development = null)
     {
         $this->development = $development ?? new Container();
@@ -40,6 +43,7 @@ final class ContainerBuilder
         string $target,
         LifetimeEnum $lifetime = LifetimeEnum::Singleton,
     ): self {
+        $this->beforeMutation();
         $this->development->bind($id, new AliasDefinition($target), $lifetime);
 
         return $this;
@@ -52,6 +56,7 @@ final class ContainerBuilder
         LifetimeEnum $lifetime = LifetimeEnum::Singleton,
         array $tags = [],
     ): self {
+        $this->beforeMutation();
         $this->development->bind($id, $definition, $lifetime, $tags);
 
         return $this;
@@ -64,6 +69,7 @@ final class ContainerBuilder
         LifetimeEnum $lifetime = LifetimeEnum::Singleton,
         array $tags = [],
     ): self {
+        $this->beforeMutation();
         $this->development->bindFactory($id, $factory, $lifetime, $tags);
 
         return $this;
@@ -78,6 +84,7 @@ final class ContainerBuilder
     /** @return array{compiled: list<string>, skipped: array<string, string>} */
     public function compile(string $path): array
     {
+        $this->beforeMutation();
         $generated = new StaticRuntimeGenerator()->generate(
             DefinitionGraph::from(
                 $this->development->getRepository(),
@@ -95,6 +102,8 @@ final class ContainerBuilder
 
     public function definitions(): DefinitionManager
     {
+        $this->beforeMutation();
+
         return $this->development->definitions();
     }
 
@@ -105,6 +114,7 @@ final class ContainerBuilder
 
     public function enableLazyLoading(bool $lazy = true): self
     {
+        $this->beforeMutation();
         $this->development->enableLazyLoading($lazy);
 
         return $this;
@@ -112,11 +122,14 @@ final class ContainerBuilder
 
     public function factory(string $id, Closure $factory): PendingFactoryBinding
     {
+        $this->beforeMutation();
+
         return $this->development->factory($id, $factory);
     }
 
     public function onMissing(callable $callback): self
     {
+        $this->beforeMutation();
         $this->development->onMissing($callback);
 
         return $this;
@@ -124,6 +137,7 @@ final class ContainerBuilder
 
     public function onResolved(string $id, callable $callback): self
     {
+        $this->beforeMutation();
         $this->dynamicServiceIds[$id] = true;
         $this->development->onResolved($id, $callback);
 
@@ -132,6 +146,7 @@ final class ContainerBuilder
 
     public function onResolving(string $id, callable $callback): self
     {
+        $this->beforeMutation();
         $this->dynamicServiceIds[$id] = true;
         $this->development->onResolving($id, $callback);
 
@@ -140,6 +155,7 @@ final class ContainerBuilder
 
     public function onScopeLeave(string $scope, callable $callback): self
     {
+        $this->beforeMutation();
         $this->development->onScopeLeave($scope, $callback);
 
         return $this;
@@ -147,22 +163,30 @@ final class ContainerBuilder
 
     public function options(): OptionsManager
     {
+        $this->beforeMutation();
+
         return $this->development->options();
     }
 
     public function production(string $path): ProductionContainer
     {
-        return new StaticRuntimeGenerator()->load($path, $this->development);
+        $runtime = new StaticRuntimeGenerator()->load($path, $this->development);
+        $this->productionRuntimes[] = $runtime;
+
+        return $runtime;
     }
 
     public function registration(): RegistrationManager
     {
+        $this->beforeMutation();
+
         return $this->development->registration();
     }
 
     /** @param array<int, string> $tags */
     public function scoped(string $id, mixed $definition = null, array $tags = []): self
     {
+        $this->beforeMutation();
         $this->development->scoped($id, $definition, $tags);
 
         return $this;
@@ -170,6 +194,7 @@ final class ContainerBuilder
 
     public function setEnvironment(string $environment): self
     {
+        $this->beforeMutation();
         $this->development->setEnvironment($environment);
 
         return $this;
@@ -178,6 +203,7 @@ final class ContainerBuilder
     /** @param array<int, string> $tags */
     public function singleton(string $id, mixed $definition = null, array $tags = []): self
     {
+        $this->beforeMutation();
         $this->development->singleton($id, $definition, $tags);
 
         return $this;
@@ -186,6 +212,7 @@ final class ContainerBuilder
     /** @param array<int, string> $tags */
     public function transient(string $id, mixed $definition = null, array $tags = []): self
     {
+        $this->beforeMutation();
         $this->development->transient($id, $definition, $tags);
 
         return $this;
@@ -193,6 +220,7 @@ final class ContainerBuilder
 
     public function unbind(string $id): self
     {
+        $this->beforeMutation();
         $this->development->unbind($id);
         unset($this->dynamicServiceIds[$id]);
 
@@ -207,6 +235,7 @@ final class ContainerBuilder
 
     public function value(string $id, mixed $value): self
     {
+        $this->beforeMutation();
         $this->development->value($id, $value);
 
         return $this;
@@ -214,6 +243,20 @@ final class ContainerBuilder
 
     public function when(string $consumer): ContextualBindingBuilder
     {
+        $this->beforeMutation();
+
         return $this->development->when($consumer);
+    }
+
+    private function beforeMutation(): void
+    {
+        if ($this->productionRuntimes === []) {
+            return;
+        }
+
+        foreach ($this->productionRuntimes as $runtime) {
+            $runtime->deoptimize();
+        }
+        $this->productionRuntimes = [];
     }
 }
