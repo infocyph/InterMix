@@ -8,8 +8,12 @@ final class StaticGetReturnSingleton
 {
     public const string CALL_ON = 'boot';
 
+    public bool $booted = false;
+
     public function boot(): string
     {
+        $this->booted = true;
+
         return 'singleton-return';
     }
 }
@@ -18,8 +22,12 @@ final class StaticGetReturnScoped
 {
     public const string CALL_ON = 'boot';
 
+    public bool $booted = false;
+
     public function boot(): string
     {
+        $this->booted = true;
+
         return 'scoped-return';
     }
 }
@@ -28,8 +36,12 @@ final class StaticGetReturnTransient
 {
     public const string CALL_ON = 'boot';
 
+    public bool $booted = false;
+
     public function boot(): string
     {
+        $this->booted = true;
+
         return 'transient-return';
     }
 }
@@ -48,7 +60,7 @@ function removeStaticGetReturnArtifact(string $path): void
     }
 }
 
-it('preserves getReturn parity for singleton scoped and transient compiled classes', function () {
+it('preserves registered getReturn semantics while still invoking configured methods', function () {
     $builder = ContainerBuilder::create(uniqid('get_return_'));
     $builder->singleton('singleton', StaticGetReturnSingleton::class)
         ->scoped('scoped', StaticGetReturnScoped::class)
@@ -66,14 +78,25 @@ it('preserves getReturn parity for singleton scoped and transient compiled class
         $report = $builder->compile($path);
         $runtime = $builder->productionPrevalidated($path, $report['sha256']);
         $runtime->enterScope('request');
+        $productionSingleton = $runtime->getReturn('singleton');
+        $productionScoped = $runtime->getReturn('scoped');
+        $productionTransient = $runtime->getReturn('transient');
 
         expect($report['compiled'])->toContain('singleton', 'scoped', 'transient')
-            ->and($developmentSingleton)->toBe('singleton-return')
-            ->and($developmentScoped)->toBe('scoped-return')
+            ->and($developmentSingleton)->toBeInstanceOf(StaticGetReturnSingleton::class)
+            ->and($developmentScoped)->toBeInstanceOf(StaticGetReturnScoped::class)
             ->and($developmentTransient)->toBeInstanceOf(StaticGetReturnTransient::class)
-            ->and($runtime->getReturn('singleton'))->toBe($developmentSingleton)
-            ->and($runtime->getReturn('scoped'))->toBe($developmentScoped)
-            ->and($runtime->getReturn('transient'))->toBeInstanceOf(StaticGetReturnTransient::class);
+            ->and($developmentSingleton->booted)->toBeTrue()
+            ->and($developmentScoped->booted)->toBeTrue()
+            ->and($developmentTransient->booted)->toBeTrue()
+            ->and($productionSingleton)->toBeInstanceOf(StaticGetReturnSingleton::class)
+            ->and($productionScoped)->toBeInstanceOf(StaticGetReturnScoped::class)
+            ->and($productionTransient)->toBeInstanceOf(StaticGetReturnTransient::class)
+            ->and($productionSingleton->booted)->toBeTrue()
+            ->and($productionScoped->booted)->toBeTrue()
+            ->and($productionTransient->booted)->toBeTrue()
+            ->and($runtime->getReturn('singleton'))->toBe($productionSingleton)
+            ->and($runtime->getReturn('scoped'))->toBe($productionScoped);
 
         $runtime->leaveScope();
     } finally {
