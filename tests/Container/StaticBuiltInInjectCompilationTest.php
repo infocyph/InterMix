@@ -101,7 +101,7 @@ it('compiles deterministic parameter-level Inject service targets', function () 
     }
 });
 
-it('keeps typed method-level Inject semantics in the dynamic island until their precedence is compiled', function () {
+it('keeps typed method-level Inject precedence as a targeted runtime method island', function () {
     $builder = ContainerBuilder::create(uniqid('static_typed_method_inject_'));
     $builder->options()->setOptions(methodAttributes: true);
     $builder->singleton('dep', StaticInjectLiteralDependency::class);
@@ -110,10 +110,11 @@ it('keeps typed method-level Inject semantics in the dynamic island until their 
 
     try {
         $report = $builder->compile($path);
+        $source = file_get_contents($path);
         $consumer = $builder->productionPrevalidated($path, $report['sha256'])->get('consumer');
 
-        expect($report['compiled'])->not->toContain('consumer')
-            ->and($report['skipped']['consumer'])->toContain('typed method-level #[Inject] semantics')
+        expect($report['compiled'])->toContain('consumer')
+            ->and($source)->toContain('invokeCompiledRuntimeMethod')
             ->and($consumer->dependency)->toBeInstanceOf(StaticInjectLiteralDependency::class);
     } finally {
         removeStaticBuiltInInjectArtifact($path);
