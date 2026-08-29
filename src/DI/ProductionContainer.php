@@ -193,7 +193,7 @@ abstract class ProductionContainer implements ContainerInterface
     }
 
     /**
-     * @param string|array{0:string,1:string}|Closure|callable|null $spec
+     * @param string|array<array-key, mixed>|Closure|callable|null $spec
      * @param array<int|string, mixed> $parameters
      */
     final public function resolveNow(
@@ -205,20 +205,9 @@ abstract class ProductionContainer implements ContainerInterface
         }
 
         if (!$this->deoptimized && $parameters === []) {
-            if (is_string($spec)) {
-                $fresh = $this->freshCompiled($spec);
-                if ($fresh !== null) {
-                    return $fresh;
-                }
-            } elseif (is_array($spec)) {
-                $class = $spec[0] ?? null;
-                $method = $spec[1] ?? null;
-                if (is_string($class) && is_string($method)) {
-                    $result = null;
-                    if ($this->freshCompiledInvocation($class, $method, $result)) {
-                        return $result;
-                    }
-                }
+            $result = null;
+            if ($this->resolveFreshCompiledSpec($spec, $result)) {
+                return $result;
             }
         }
 
@@ -348,6 +337,33 @@ abstract class ProductionContainer implements ContainerInterface
                 LifetimeEnum::Transient,
             );
         }
+    }
+
+    /**
+     * @param string|array<array-key, mixed>|Closure|callable $spec
+     */
+    private function resolveFreshCompiledSpec(string|Closure|callable|array $spec, mixed &$result): bool
+    {
+        if (is_string($spec)) {
+            $fresh = $this->freshCompiled($spec);
+            if ($fresh === null) {
+                return false;
+            }
+
+            $result = $fresh;
+
+            return true;
+        }
+        if (!is_array($spec)
+            || count($spec) !== 2
+            || !isset($spec[0], $spec[1])
+            || !is_string($spec[0])
+            || !is_string($spec[1])
+        ) {
+            return false;
+        }
+
+        return $this->freshCompiledInvocation($spec[0], $spec[1], $result);
     }
 
     private function restoreFallbackDefinitions(Container $fallback): void
