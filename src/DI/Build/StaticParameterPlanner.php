@@ -182,7 +182,7 @@ final class StaticParameterPlanner
 
     /**
      * @param array<int|string, mixed> $supplied
-     * @return ServiceArgument|string|null
+     * @return array{kind: 'value', code: string}|string|null
      */
     private function suppliedParameterPlan(
         ReflectionParameter $parameter,
@@ -202,7 +202,7 @@ final class StaticParameterPlanner
 
     /**
      * @param ReflectionClass<object> $consumer
-     * @return ServiceArgument|string|null
+     * @return array{kind: 'service', id: string}|string|null
      */
     private function typeParameterPlan(
         DefinitionGraph $graph,
