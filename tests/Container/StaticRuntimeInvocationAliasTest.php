@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use Infocyph\InterMix\DI\Build\DefinitionGraph;
+use Infocyph\InterMix\DI\Build\StaticRuntimePlanner;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\DI\Invoker\CompiledCall;
@@ -57,6 +59,21 @@ it('preserves alias lifetime barriers while flattening transient alias links', f
     } finally {
         removeInvocationAliasArtifact($path);
     }
+});
+
+it('flattens pure transient alias chains to their final build-time target', function () {
+    $builder = ContainerBuilder::create(uniqid('alias_flatten_'));
+    $builder->singleton('target', InvocationAliasLeaf::class)
+        ->alias('middle', 'target', LifetimeEnum::Transient)
+        ->alias('root', 'middle', LifetimeEnum::Transient);
+
+    $planned = new StaticRuntimePlanner()->plan(
+        DefinitionGraph::from($builder->development()->getRepository()),
+    );
+
+    expect($planned['plans']['root']['kind'])->toBe('alias')
+        ->and($planned['plans']['root']['target'])->toBe('target')
+        ->and($planned['plans']['root']['dependencies'])->toBe(['target']);
 });
 
 it('rejects alias cycles during static planning', function () {
