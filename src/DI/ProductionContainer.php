@@ -175,10 +175,17 @@ abstract class ProductionContainer implements ContainerInterface
     /** @throws ContainerException|\ReflectionException */
     final public function make(string $class, string|bool $method = false): mixed
     {
-        if (!$this->deoptimized && $method === false) {
-            $fresh = $this->freshCompiled($class);
-            if ($fresh !== null) {
-                return $fresh;
+        if (!$this->deoptimized) {
+            if ($method === false) {
+                $fresh = $this->freshCompiled($class);
+                if ($fresh !== null) {
+                    return $fresh;
+                }
+            } elseif (is_string($method)) {
+                $result = null;
+                if ($this->freshCompiledInvocation($class, $method, $result)) {
+                    return $result;
+                }
             }
         }
 
@@ -197,10 +204,21 @@ abstract class ProductionContainer implements ContainerInterface
             return $this;
         }
 
-        if (!$this->deoptimized && $parameters === [] && is_string($spec)) {
-            $fresh = $this->freshCompiled($spec);
-            if ($fresh !== null) {
-                return $fresh;
+        if (!$this->deoptimized && $parameters === []) {
+            if (is_string($spec)) {
+                $fresh = $this->freshCompiled($spec);
+                if ($fresh !== null) {
+                    return $fresh;
+                }
+            } elseif (is_array($spec)) {
+                $class = $spec[0] ?? null;
+                $method = $spec[1] ?? null;
+                if (is_string($class) && is_string($method)) {
+                    $result = null;
+                    if ($this->freshCompiledInvocation($class, $method, $result)) {
+                        return $result;
+                    }
+                }
             }
         }
 
@@ -250,6 +268,11 @@ abstract class ProductionContainer implements ContainerInterface
     protected function freshCompiled(string $class): ?object
     {
         return null;
+    }
+
+    protected function freshCompiledInvocation(string $class, string $method, mixed &$result): bool
+    {
+        return false;
     }
 
     protected function isCompiledDefinition(string $id): bool
