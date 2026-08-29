@@ -88,6 +88,11 @@ final readonly class DefinitionGraph
         return $this->closureResources;
     }
 
+    public function contextualBinding(string $consumer, string $dependency): mixed
+    {
+        return $this->contextualBindings[$consumer][$dependency] ?? null;
+    }
+
     /** @return array<string, array<int, string>> */
     public function contextualBindingShape(): array
     {
@@ -100,11 +105,6 @@ final readonly class DefinitionGraph
         ksort($shape, SORT_STRING);
 
         return $shape;
-    }
-
-    public function contextualBinding(string $consumer, string $dependency): mixed
-    {
-        return $this->contextualBindings[$consumer][$dependency] ?? null;
     }
 
     public function defaultMethod(): ?string

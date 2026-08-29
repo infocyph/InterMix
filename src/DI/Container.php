@@ -37,7 +37,9 @@ final class Container implements ContainerInterface, ArrayAccess
     use ContainerProxy;
 
     public const string DEFAULT_ALIAS = 'intermix.default';
+
     public const string DI_ALIAS = 'intermix.di';
+
     public const string DIRECT_ALIAS = 'intermix.direct';
 
     private const int CALLABLE_DESCRIPTOR_CACHE_LIMIT = 512;
@@ -46,10 +48,15 @@ final class Container implements ContainerInterface, ArrayAccess
     protected static array $instances = [];
 
     protected ?DefinitionManager $definitionManager = null;
+
     protected InvocationManager $invocationManager;
+
     protected ?OptionsManager $optionsManager = null;
+
     protected ?RegistrationManager $registrationManager = null;
+
     protected Repository $repository;
+
     protected Closure|CompiledCall|InjectedCall|GenericCall $resolver;
 
     /** @var null|array{path: string, fingerprint: string, compiled: array<int, string>, skipped: array<string, string>} */
@@ -528,20 +535,6 @@ final class Container implements ContainerInterface, ArrayAccess
         }
     }
 
-    private function resolverFactory(): Closure
-    {
-        return function (): CompiledCall|InjectedCall|GenericCall {
-            if ($this->resolverClass === GenericCall::class) {
-                return new GenericCall($this->repository);
-            }
-            if ($this->repository->hasCompiledResolvers()) {
-                return new CompiledCall($this->repository);
-            }
-
-            return new InjectedCall($this->repository);
-        };
-    }
-
     /**
      * @param array<array-key, mixed> $spec
      * @return array{kind:'method',class:string,method:string}
@@ -605,6 +598,7 @@ final class Container implements ContainerInterface, ArrayAccess
                     'Invalid callable array. Expected [class, method] with non-empty strings.',
                 );
             }
+
             throw new ContainerException(
                 sprintf(
                     'Invalid callable string "%s". Expected non-empty class and method around "%s".',
@@ -687,6 +681,20 @@ final class Container implements ContainerInterface, ArrayAccess
         }
 
         return $this->getCurrentResolver()->closureSettler($callback, $parameters);
+    }
+
+    private function resolverFactory(): Closure
+    {
+        return function (): CompiledCall|InjectedCall|GenericCall {
+            if ($this->resolverClass === GenericCall::class) {
+                return new GenericCall($this->repository);
+            }
+            if ($this->repository->hasCompiledResolvers()) {
+                return new CompiledCall($this->repository);
+            }
+
+            return new InjectedCall($this->repository);
+        };
     }
 
     /** @return array<int, string> */

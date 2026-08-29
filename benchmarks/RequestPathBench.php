@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\Benchmarks;
 
-use Closure;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use PhpBench\Attributes\Iterations;
@@ -33,24 +32,16 @@ final class RequestPathBench
         $this->sink = $this->registeredContainer(10, 'register-10');
     }
 
-    #[Revs(20)]
-    public function benchColdRegister50(): void
-    {
-        $this->sink = $this->registeredContainer(50, 'register-50');
-    }
-
     #[Revs(10)]
     public function benchColdRegister100(): void
     {
         $this->sink = $this->registeredContainer(100, 'register-100');
     }
 
-    #[Revs(100)]
-    public function benchFirstSingletonResolution(): void
+    #[Revs(20)]
+    public function benchColdRegister50(): void
     {
-        $container = new Container($this->alias('first-singleton'));
-        $container->singleton('service', RequestBenchRoot::class);
-        $this->sink = $container->get('service');
+        $this->sink = $this->registeredContainer(50, 'register-50');
     }
 
     #[Revs(100)]
@@ -85,25 +76,12 @@ final class RequestPathBench
         $container->leaveScope();
     }
 
-    #[Revs(1000)]
-    public function benchHotSingletonResolution(): void
+    #[Revs(100)]
+    public function benchFirstSingletonResolution(): void
     {
-        static $container;
-        $container ??= $this->hotContainer();
-        $this->sink = $container->get('root');
-    }
-
-    #[Revs(1000)]
-    public function benchHotScopedResolution(): void
-    {
-        static $container;
-        if (!$container instanceof Container) {
-            $container = new Container($this->alias('hot-scope'));
-            $container->scoped('root', RequestBenchRoot::class);
-            $container->enterScope('request');
-            $container->get('root');
-        }
-        $this->sink = $container->get('root');
+        $container = new Container($this->alias('first-singleton'));
+        $container->singleton('service', RequestBenchRoot::class);
+        $this->sink = $container->get('service');
     }
 
     #[Revs(1000)]
@@ -120,6 +98,27 @@ final class RequestPathBench
     }
 
     #[Revs(1000)]
+    public function benchHotScopedResolution(): void
+    {
+        static $container;
+        if (!$container instanceof Container) {
+            $container = new Container($this->alias('hot-scope'));
+            $container->scoped('root', RequestBenchRoot::class);
+            $container->enterScope('request');
+            $container->get('root');
+        }
+        $this->sink = $container->get('root');
+    }
+
+    #[Revs(1000)]
+    public function benchHotSingletonResolution(): void
+    {
+        static $container;
+        $container ??= $this->hotContainer();
+        $this->sink = $container->get('root');
+    }
+
+    #[Revs(1000)]
     public function benchNativeGraph(): void
     {
         $this->sink = (new RequestBenchRoot(
@@ -130,6 +129,15 @@ final class RequestPathBench
     private function alias(string $purpose): string
     {
         return '__request_path_' . $purpose . '_' . (++$this->sequence);
+    }
+
+    private function hotContainer(): Container
+    {
+        $container = new Container($this->alias('hot'));
+        $container->singleton('root', RequestBenchRoot::class);
+        $container->get('root');
+
+        return $container;
     }
 
     private function registeredContainer(int $count, string $purpose): Container
@@ -143,15 +151,6 @@ final class RequestPathBench
                 ['request-path'],
             );
         }
-
-        return $container;
-    }
-
-    private function hotContainer(): Container
-    {
-        $container = new Container($this->alias('hot'));
-        $container->singleton('root', RequestBenchRoot::class);
-        $container->get('root');
 
         return $container;
     }

@@ -71,23 +71,6 @@ class PropertyResolver
         $this->classResolver = $classResolver;
     }
 
-    /** @param ReflectionClass<object> $class */
-    private function hasPropertyWork(ReflectionClass $class): bool
-    {
-        if ($this->repository->isPropertyAttributeEnabled()) {
-            return true;
-        }
-
-        for ($current = $class; $current instanceof ReflectionClass; $current = $current->getParentClass()) {
-            $properties = $this->repository->getClassResourceFor($current->getName())['property'] ?? null;
-            if (is_array($properties) && $properties !== []) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     /**
      * @param ReflectionClass<object> $class
      * @return array<int, ReflectionProperty>
@@ -132,6 +115,23 @@ class PropertyResolver
         }
 
         return $registered;
+    }
+
+    /** @param ReflectionClass<object> $class */
+    private function hasPropertyWork(ReflectionClass $class): bool
+    {
+        if ($this->repository->isPropertyAttributeEnabled()) {
+            return true;
+        }
+
+        for ($current = $class; $current instanceof ReflectionClass; $current = $current->getParentClass()) {
+            $properties = $this->repository->getClassResourceFor($current->getName())['property'] ?? null;
+            if (is_array($properties) && $properties !== []) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** @throws ContainerException|ReflectionException|InvalidArgumentException */

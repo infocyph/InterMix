@@ -307,6 +307,7 @@ final class StaticRuntimeGenerator
                     $skipped[$id] = "dependency '$dependency' is not statically compiled";
                     unset($plans[$id]);
                     $changed = true;
+
                     break;
                 }
             }

@@ -154,6 +154,7 @@ class ClassResolver
             $provided = is_scalar($supplied) || $supplied === null
                 ? (string) $supplied
                 : get_debug_type($supplied);
+
             throw new ContainerException("Resolution failed ($provided) for interface $className");
         }
 

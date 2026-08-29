@@ -144,6 +144,38 @@ class DefinitionResolver
         return $method !== null ? $resolved->returned : $resolved->instance;
     }
 
+    /** @param array<int|string, mixed> $definition */
+    private function resolveArrayDefinitionTracked(string $name, array $definition): mixed
+    {
+        $class = $definition[0] ?? null;
+        if ($this->repository->isTracingEnabled() && is_string($class)) {
+            $this->repository->tracer()->recordDependency($name, $class, 'definition-class');
+        }
+
+        return $this->resolveArrayDefinition(array_values($definition));
+    }
+
+    private function resolveClassDefinition(string $name, string $definition): mixed
+    {
+        [$classResolver] = $this->resolvers();
+        if ($this->repository->isTracingEnabled()) {
+            $this->repository->tracer()->recordDependency($name, $definition, 'definition-class');
+        }
+
+        return $classResolver->resolve(
+            ReflectionResource::getClassReflection($definition),
+            make: true,
+        )->instance;
+    }
+
+    private function resolveClosure(Closure $definition): mixed
+    {
+        [, $parameterResolver] = $this->resolvers();
+        $reflectionFn = ReflectionResource::getFunctionReflection($definition);
+
+        return $definition(...$parameterResolver->resolve($reflectionFn, [], 'constructor'));
+    }
+
     /** @return array{ClassResolver, ParameterResolver} */
     private function resolvers(): array
     {
@@ -167,6 +199,7 @@ class DefinitionResolver
         }
 
         $cacheKey = $this->repository->makeDefinitionCacheKey($name);
+
         try {
             [$item, $hit, $cachedValue] = $this->readCachedDefinition($definitionCache, $cacheKey);
             if ($hit) {
@@ -203,6 +236,7 @@ class DefinitionResolver
         }
 
         $this->entriesResolving[$name] = true;
+
         try {
             $resolved = $this->getFromCacheOrResolve($name, $skipExternalCache);
             $this->repository->markResolved($name);
@@ -214,37 +248,5 @@ class DefinitionResolver
                 array_pop($this->definitionStack);
             }
         }
-    }
-
-    private function resolveClosure(Closure $definition): mixed
-    {
-        [, $parameterResolver] = $this->resolvers();
-        $reflectionFn = ReflectionResource::getFunctionReflection($definition);
-
-        return $definition(...$parameterResolver->resolve($reflectionFn, [], 'constructor'));
-    }
-
-    /** @param array<int|string, mixed> $definition */
-    private function resolveArrayDefinitionTracked(string $name, array $definition): mixed
-    {
-        $class = $definition[0] ?? null;
-        if ($this->repository->isTracingEnabled() && is_string($class)) {
-            $this->repository->tracer()->recordDependency($name, $class, 'definition-class');
-        }
-
-        return $this->resolveArrayDefinition(array_values($definition));
-    }
-
-    private function resolveClassDefinition(string $name, string $definition): mixed
-    {
-        [$classResolver] = $this->resolvers();
-        if ($this->repository->isTracingEnabled()) {
-            $this->repository->tracer()->recordDependency($name, $definition, 'definition-class');
-        }
-
-        return $classResolver->resolve(
-            ReflectionResource::getClassReflection($definition),
-            make: true,
-        )->instance;
     }
 }

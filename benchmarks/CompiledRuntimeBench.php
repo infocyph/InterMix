@@ -22,22 +22,6 @@ final class CompiledRuntimeBench
     private mixed $sink;
 
     #[Revs(1000)]
-    public function benchNativeTransientGraph(): void
-    {
-        $this->sink = new CompiledBenchRoot(
-            new CompiledBenchMiddle(new CompiledBenchLeaf()),
-        );
-    }
-
-    #[Revs(1000)]
-    public function benchDynamicTransientGraph(): void
-    {
-        static $container;
-        $container ??= $this->dynamicTransientContainer();
-        $this->sink = $container->get('root');
-    }
-
-    #[Revs(1000)]
     public function benchCompiledTransientGraph(): void
     {
         static $container;
@@ -46,10 +30,18 @@ final class CompiledRuntimeBench
     }
 
     #[Revs(1000)]
-    public function benchStaticTransientGraph(): void
+    public function benchCompiledWarmSingleton(): void
     {
         static $container;
-        $container ??= $this->staticTransientContainer();
+        $container ??= $this->compiledSingletonContainer();
+        $this->sink = $container->get('root');
+    }
+
+    #[Revs(1000)]
+    public function benchDynamicTransientGraph(): void
+    {
+        static $container;
+        $container ??= $this->dynamicTransientContainer();
         $this->sink = $container->get('root');
     }
 
@@ -62,10 +54,18 @@ final class CompiledRuntimeBench
     }
 
     #[Revs(1000)]
-    public function benchCompiledWarmSingleton(): void
+    public function benchNativeTransientGraph(): void
+    {
+        $this->sink = new CompiledBenchRoot(
+            new CompiledBenchMiddle(new CompiledBenchLeaf()),
+        );
+    }
+
+    #[Revs(1000)]
+    public function benchStaticTransientGraph(): void
     {
         static $container;
-        $container ??= $this->compiledSingletonContainer();
+        $container ??= $this->staticTransientContainer();
         $this->sink = $container->get('root');
     }
 
@@ -138,16 +138,6 @@ final class CompiledRuntimeBench
         }
     }
 
-    private function staticSingletonContainer(): ContainerInterface
-    {
-        return $this->staticRuntime('static-singleton', LifetimeEnum::Singleton);
-    }
-
-    private function staticTransientContainer(): ContainerInterface
-    {
-        return $this->staticRuntime('static-transient', LifetimeEnum::Transient);
-    }
-
     private function staticRuntime(string $purpose, LifetimeEnum $lifetime): ContainerInterface
     {
         $source = $this->registeredGraph($purpose, $lifetime);
@@ -159,6 +149,16 @@ final class CompiledRuntimeBench
         $this->removeCompiledPath($path);
 
         return $runtime;
+    }
+
+    private function staticSingletonContainer(): ContainerInterface
+    {
+        return $this->staticRuntime('static-singleton', LifetimeEnum::Singleton);
+    }
+
+    private function staticTransientContainer(): ContainerInterface
+    {
+        return $this->staticRuntime('static-transient', LifetimeEnum::Transient);
     }
 }
 

@@ -533,15 +533,15 @@ class Repository
     }
 
     /** @internal */
-    public function hasContextualBindings(): bool
-    {
-        return $this->contextualBindings !== [];
-    }
-
-    /** @internal */
     public function hasContextualBinding(string $consumer, string $dependency): bool
     {
         return array_key_exists($dependency, $this->contextualBindings[$consumer] ?? []);
+    }
+
+    /** @internal */
+    public function hasContextualBindings(): bool
+    {
+        return $this->contextualBindings !== [];
     }
 
     public function hasFunctionReference(string $id): bool
@@ -770,25 +770,6 @@ class Repository
         $this->invalidateResolutionConfiguration();
     }
 
-    public function setDefinitionCache(
-        CacheItemPoolInterface $cache,
-        ?string $generation = null,
-        bool $failOpen = true,
-    ): void {
-        $this->checkIfLocked();
-        if ($generation === '') {
-            throw new ContainerException('Definition cache generation cannot be empty.');
-        }
-
-        $this->definitionCache = $cache;
-        $this->definitionCacheFailOpen = $failOpen;
-        if ($generation !== null && $generation !== $this->definitionCacheGeneration) {
-            $this->definitionCacheGeneration = $generation;
-            $this->definitionCacheRevision = 0;
-            $this->definitionCachePrefix = null;
-        }
-    }
-
     /**
      * Register a definition and its metadata as one mutation so resolution
      * state and compiled artifacts are invalidated exactly once.
@@ -819,6 +800,25 @@ class Repository
             $this->refreshBaseTagIndex($id, $oldTags, $normalizedTags);
         }
         $this->invalidateDefinition($id);
+    }
+
+    public function setDefinitionCache(
+        CacheItemPoolInterface $cache,
+        ?string $generation = null,
+        bool $failOpen = true,
+    ): void {
+        $this->checkIfLocked();
+        if ($generation === '') {
+            throw new ContainerException('Definition cache generation cannot be empty.');
+        }
+
+        $this->definitionCache = $cache;
+        $this->definitionCacheFailOpen = $failOpen;
+        if ($generation !== null && $generation !== $this->definitionCacheGeneration) {
+            $this->definitionCacheGeneration = $generation;
+            $this->definitionCacheRevision = 0;
+            $this->definitionCachePrefix = null;
+        }
     }
 
     /**
