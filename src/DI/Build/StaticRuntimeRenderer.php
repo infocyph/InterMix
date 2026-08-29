@@ -219,7 +219,7 @@ final class StaticRuntimeRenderer
         $construction = $hasSetup ? null : $this->classConstruction($plan, $slots);
 
         if ($plan['lifetime'] === LifetimeEnum::Scoped) {
-            $source .= "        if (array_key_exists({$slot}, \$this->scope->resolved)) {\n";
+            $source .= "        if (isset(\$this->scope->resolved[{$slot}])) {\n";
             $source .= "            return \$this->scope->resolved[{$slot}];\n";
             $source .= "        }\n\n";
             if ($hasSetup) {

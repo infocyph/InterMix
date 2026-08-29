@@ -30,17 +30,18 @@
     ],
     "require": {
         "php": ">=8.4",
-        "opis/closure": "^4.5",
         "psr/cache": "^3.0",
         "psr/container": "^2.0"
     },
     "require-dev": {
         "infocyph/cachelayer": "^3.2.0",
-        "infocyph/phpforge": "dev-main@dev"
+        "infocyph/phpforge": "dev-main@dev",
+        "opis/closure": "^4.5"
     },
     "suggest": {
         "ext-mbstring": "Recommended for development tools output formatting (Pest/Termwind)",
-        "infocyph/cachelayer": "Recommended PSR-6 cache implementation with memory, APCu, SQLite, Redis/Valkey, tiered and node-local adapters"
+        "infocyph/cachelayer": "Recommended PSR-6 cache implementation with memory, APCu, SQLite, Redis/Valkey, tiered and node-local adapters",
+        "opis/closure": "Required only when using InterMix Closure serialization"
     },
     "minimum-stability": "stable",
     "prefer-stable": true,

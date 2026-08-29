@@ -27,7 +27,7 @@ final class StaticLifecycleHookRenderer
         $source = "    private function s{$slot}(): mixed\n    {\n";
         $source .= $this->seedGuard($slot);
         if ($lifetime === LifetimeEnum::Scoped) {
-            $source .= "        if (array_key_exists({$slot}, \$this->scope->resolved)) {\n";
+            $source .= "        if (isset(\$this->scope->resolved[{$slot}])) {\n";
             $source .= "            return \$this->scope->resolved[{$slot}];\n";
             $source .= "        }\n\n";
         } elseif ($lifetime === LifetimeEnum::Singleton) {
