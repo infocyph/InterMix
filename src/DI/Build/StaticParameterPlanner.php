@@ -202,33 +202,6 @@ final class StaticParameterPlanner
 
     /**
      * @param ReflectionClass<object> $consumer
-     * @return array{kind: 'service', id: string}|string|null
-     */
-    private function typeParameterPlan(
-        DefinitionGraph $graph,
-        ReflectionClass $consumer,
-        ReflectionParameter $parameter,
-        string $label,
-    ): array|string|null {
-        $type = $parameter->getType();
-        if ($type instanceof ReflectionUnionType || $type instanceof ReflectionIntersectionType) {
-            return new StaticCompoundTypePlanner()->plan(
-                $graph,
-                $consumer,
-                $parameter,
-                $type,
-                $label,
-            );
-        }
-        if ($type instanceof ReflectionNamedType && !$type->isBuiltin()) {
-            return $this->typedParameterPlan($graph, $consumer, $parameter, $type, $label);
-        }
-
-        return null;
-    }
-
-    /**
-     * @param ReflectionClass<object> $consumer
      * @return array{kind: 'service', id: string}|string
      */
     private function typedParameterPlan(
@@ -281,5 +254,32 @@ final class StaticParameterPlanner
             'kind' => 'service',
             'id' => $graph->environmentConcrete($binding) ?? $binding,
         ];
+    }
+
+    /**
+     * @param ReflectionClass<object> $consumer
+     * @return array{kind: 'service', id: string}|string|null
+     */
+    private function typeParameterPlan(
+        DefinitionGraph $graph,
+        ReflectionClass $consumer,
+        ReflectionParameter $parameter,
+        string $label,
+    ): array|string|null {
+        $type = $parameter->getType();
+        if ($type instanceof ReflectionUnionType || $type instanceof ReflectionIntersectionType) {
+            return new StaticCompoundTypePlanner()->plan(
+                $graph,
+                $consumer,
+                $parameter,
+                $type,
+                $label,
+            );
+        }
+        if ($type instanceof ReflectionNamedType && !$type->isBuiltin()) {
+            return $this->typedParameterPlan($graph, $consumer, $parameter, $type, $label);
+        }
+
+        return null;
     }
 }
