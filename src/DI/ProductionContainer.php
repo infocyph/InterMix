@@ -193,7 +193,7 @@ abstract class ProductionContainer implements ContainerInterface
     }
 
     /**
-     * @param string|array<array-key, mixed>|Closure|callable|null $spec
+     * @param string|array{0:string,1:string}|Closure|callable|null $spec
      * @param array<int|string, mixed> $parameters
      */
     final public function resolveNow(
@@ -209,6 +209,9 @@ abstract class ProductionContainer implements ContainerInterface
             if ($this->resolveFreshCompiledSpec($spec, $result)) {
                 return $result;
             }
+        }
+        if (is_array($spec) && !is_string($spec[0])) {
+            return $this->dynamic()->resolveNow(Closure::fromCallable($spec), $parameters);
         }
 
         return $this->dynamic()->resolveNow($spec, $parameters);
@@ -339,9 +342,7 @@ abstract class ProductionContainer implements ContainerInterface
         }
     }
 
-    /**
-     * @param string|array<array-key, mixed>|Closure|callable $spec
-     */
+    /** @param string|array<array-key, mixed>|Closure|callable $spec */
     private function resolveFreshCompiledSpec(string|Closure|callable|array $spec, mixed &$result): bool
     {
         if (is_string($spec)) {
