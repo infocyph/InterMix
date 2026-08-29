@@ -72,7 +72,7 @@ final class CompiledRuntimeBench
         $runtime->usePrevalidated($path, $fingerprint);
         $this->sink = $runtime;
 
-        @unlink($path);
+        $this->removeCompiledPath($path);
     }
 
     private function alias(string $purpose): string
@@ -92,7 +92,7 @@ final class CompiledRuntimeBench
         $path = $this->compiledPath();
         $container->compileTo($path, load: true);
         $container->get('root');
-        @unlink($path);
+        $this->removeCompiledPath($path);
 
         return $container;
     }
@@ -103,7 +103,7 @@ final class CompiledRuntimeBench
         $container->transient('root', CompiledBenchRoot::class);
         $path = $this->compiledPath();
         $container->compileTo($path, load: true);
-        @unlink($path);
+        $this->removeCompiledPath($path);
 
         return $container;
     }
@@ -123,6 +123,13 @@ final class CompiledRuntimeBench
         $container->transient('root', CompiledBenchRoot::class);
 
         return $container;
+    }
+
+    private function removeCompiledPath(string $path): void
+    {
+        if (is_file($path)) {
+            unlink($path);
+        }
     }
 }
 
