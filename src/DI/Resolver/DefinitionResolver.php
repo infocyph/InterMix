@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Resolver;
 
 use Closure;
+use Infocyph\InterMix\DI\Support\AliasDefinition;
 use Infocyph\InterMix\DI\Support\DirectFactory;
 use Infocyph\InterMix\DI\Support\FactoryDefinition;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
@@ -64,6 +65,7 @@ class DefinitionResolver
         $definition = $this->repository->getFunctionDefinition($name);
 
         return match (true) {
+            $definition instanceof AliasDefinition => $this->resolveAliasDefinition($name, $definition),
             $definition instanceof DirectFactory => $definition->resolve(),
             $definition instanceof Closure => $this->resolveClosure($definition),
             $definition instanceof FactoryDefinition => $definition->resolve($this->repository->container()),
@@ -123,6 +125,15 @@ class DefinitionResolver
         $hit = $hit && $this->repository->shouldPersistDefinitionValue($value);
 
         return [$item, $hit, $value];
+    }
+
+    private function resolveAliasDefinition(string $name, AliasDefinition $definition): mixed
+    {
+        if ($this->repository->isTracingEnabled()) {
+            $this->repository->tracer()->recordDependency($name, $definition->target, 'alias');
+        }
+
+        return $this->repository->container()->get($definition->target);
     }
 
     /** @param array<int, mixed> $definition */
