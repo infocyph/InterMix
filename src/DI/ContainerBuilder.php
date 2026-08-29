@@ -19,7 +19,7 @@ final class ContainerBuilder
 {
     private readonly Container $development;
 
-    /** @var null|array{compiled: list<string>, skipped: array<string, string>} */
+    /** @var null|array{compiled: list<string>, skipped: array<string, string>, sha256: string} */
     private ?array $compilationReport = null;
 
     /** @var array<string, true> */
@@ -75,13 +75,13 @@ final class ContainerBuilder
         return $this;
     }
 
-    /** @return null|array{compiled: list<string>, skipped: array<string, string>} */
+    /** @return null|array{compiled: list<string>, skipped: array<string, string>, sha256: string} */
     public function compilationReport(): ?array
     {
         return $this->compilationReport;
     }
 
-    /** @return array{compiled: list<string>, skipped: array<string, string>} */
+    /** @return array{compiled: list<string>, skipped: array<string, string>, sha256: string} */
     public function compile(string $path): array
     {
         $this->beforeMutation();
@@ -95,6 +95,7 @@ final class ContainerBuilder
         $this->compilationReport = [
             'compiled' => $generated['compiled'],
             'skipped' => $generated['skipped'],
+            'sha256' => $generated['sha256'],
         ];
 
         return $this->compilationReport;
@@ -172,10 +173,20 @@ final class ContainerBuilder
 
     public function production(string $path): ProductionContainer
     {
-        $runtime = new StaticRuntimeGenerator()->load($path, $this->development);
-        $this->productionRuntimes[] = $runtime;
+        return $this->rememberProductionRuntime(
+            new StaticRuntimeGenerator()->load($path, $this->development),
+        );
+    }
 
-        return $runtime;
+    public function productionPrevalidated(string $path, string $sha256): ProductionContainer
+    {
+        return $this->rememberProductionRuntime(
+            new StaticRuntimeGenerator()->loadPrevalidated(
+                $path,
+                $sha256,
+                $this->development,
+            ),
+        );
     }
 
     public function registration(): RegistrationManager
@@ -262,5 +273,12 @@ final class ContainerBuilder
             $runtime->deoptimize();
         }
         $this->productionRuntimes = [];
+    }
+
+    private function rememberProductionRuntime(ProductionContainer $runtime): ProductionContainer
+    {
+        $this->productionRuntimes[] = $runtime;
+
+        return $runtime;
     }
 }
