@@ -13,6 +13,11 @@ final class StaticBatchStableService {}
 
 final class StaticBatchDynamicService {}
 
+final readonly class StaticBatchDynamicConsumer
+{
+    public function __construct(public StaticBatchStableService $stable) {}
+}
+
 final class StaticBatchCallableService
 {
     public function ping(): string
@@ -77,13 +82,14 @@ it('classifies only property-attributed services as dynamic when property attrib
     try {
         $report = $builder->compile($path);
         $runtime = $builder->production($path);
+        $stable = $runtime->get(StaticBatchStableService::class);
         $attributed = $runtime->get('attributed');
 
         expect($report['compiled'])->toContain(StaticBatchStableService::class)
             ->and($report['compiled'])->not->toContain('attributed')
             ->and($report['skipped']['attributed'])->toContain('runtime property attributes')
             ->and($attributed)->toBeInstanceOf(StaticBatchAttributedPropertyService::class)
-            ->and($attributed->stable)->toBeInstanceOf(StaticBatchStableService::class);
+            ->and($attributed->stable)->toBe($stable);
     } finally {
         removeStaticBatchArtifact($path);
     }
@@ -108,21 +114,33 @@ it('uses the compiled service for calls to known definition ids', function () {
 
 it('keeps direct factories and closure definitions as isolated dynamic services', function () {
     $builder = ContainerBuilder::create(uniqid('static_batch_dynamic_defs_'));
-    $builder->singleton('stable', StaticBatchStableService::class)
-        ->bindFactory('factory', static fn(Container $container): object => new StaticBatchDynamicService())
-        ->bind('closure', static fn(): object => new StaticBatchDynamicService());
+    $builder->singleton(StaticBatchStableService::class)
+        ->bindFactory(
+            'factory',
+            static fn(Container $container): object => new StaticBatchDynamicConsumer(
+                $container->get(StaticBatchStableService::class),
+            ),
+        )
+        ->bind(
+            'closure',
+            static fn(StaticBatchStableService $stable): object => new StaticBatchDynamicConsumer($stable),
+        );
 
     $path = staticBatchArtifactPath();
     try {
         $report = $builder->compile($path);
         $runtime = $builder->production($path);
-        $stable = $runtime->get('stable');
+        $stable = $runtime->get(StaticBatchStableService::class);
+        $factory = $runtime->get('factory');
+        $closure = $runtime->get('closure');
 
-        expect($report['compiled'])->toContain('stable')
+        expect($report['compiled'])->toContain(StaticBatchStableService::class)
             ->and($report['compiled'])->not->toContain('factory', 'closure')
-            ->and($runtime->get('factory'))->toBeInstanceOf(StaticBatchDynamicService::class)
-            ->and($runtime->get('closure'))->toBeInstanceOf(StaticBatchDynamicService::class)
-            ->and($runtime->get('stable'))->toBe($stable);
+            ->and($factory)->toBeInstanceOf(StaticBatchDynamicConsumer::class)
+            ->and($closure)->toBeInstanceOf(StaticBatchDynamicConsumer::class)
+            ->and($factory->stable)->toBe($stable)
+            ->and($closure->stable)->toBe($stable)
+            ->and($runtime->get(StaticBatchStableService::class))->toBe($stable);
     } finally {
         removeStaticBatchArtifact($path);
     }
@@ -130,16 +148,18 @@ it('keeps direct factories and closure definitions as isolated dynamic services'
 
 it('falls back for arbitrary autowireable classes without replacing compiled state', function () {
     $builder = ContainerBuilder::create(uniqid('static_batch_arbitrary_'));
-    $builder->singleton('stable', StaticBatchStableService::class);
+    $builder->singleton(StaticBatchStableService::class);
 
     $path = staticBatchArtifactPath();
     try {
         $builder->compile($path);
         $runtime = $builder->production($path);
-        $stable = $runtime->get('stable');
+        $stable = $runtime->get(StaticBatchStableService::class);
+        $dynamic = $runtime->get(StaticBatchDynamicConsumer::class);
 
-        expect($runtime->get(StaticBatchDynamicService::class))->toBeInstanceOf(StaticBatchDynamicService::class)
-            ->and($runtime->get('stable'))->toBe($stable);
+        expect($dynamic)->toBeInstanceOf(StaticBatchDynamicConsumer::class)
+            ->and($dynamic->stable)->toBe($stable)
+            ->and($runtime->get(StaticBatchStableService::class))->toBe($stable);
     } finally {
         removeStaticBatchArtifact($path);
     }
