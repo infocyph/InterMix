@@ -11,7 +11,7 @@ use Infocyph\InterMix\DI\Support\LifetimeEnum;
  * @phpstan-type PropertyPlan array{declaring: class-string, property: string, static: bool, argument: ServiceArgument}
  * @phpstan-type MethodPlan array{method: string, arguments: list<ServiceArgument>, dependencies: list<string>}
  * @phpstan-type AliasPlan array{kind: 'alias', target: string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
- * @phpstan-type ClassPlan array{kind: 'class', class: class-string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, method: MethodPlan|null, dependencies: list<string>}
+ * @phpstan-type ClassPlan array{kind: 'class', class: class-string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, postMethod: MethodPlan|null, dependencies: list<string>}
  * @phpstan-type FactoryPlan array{kind: 'factory', class: class-string, method: string|null, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
  * @phpstan-type ValuePlan array{kind: 'value', code: string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
  * @phpstan-type ServicePlan AliasPlan|ClassPlan|FactoryPlan|ValuePlan
@@ -97,20 +97,20 @@ final class StaticRuntimeRenderer
     private function classServiceStatements(array $plan, array $slots): string
     {
         $source = $this->classInitializationStatements($plan, $slots);
-        $method = $plan['method'];
-        if (!is_array($method)) {
+        $postMethod = $plan['postMethod'];
+        if (!is_array($postMethod)) {
             return $source;
         }
 
         $arguments = [];
-        foreach ($method['arguments'] as $argument) {
+        foreach ($postMethod['arguments'] as $argument) {
             $arguments[] = $this->argumentExpression($argument, $slots);
         }
 
         return $source
             . "\n        "
             . '$instance->'
-            . $method['method']
+            . $postMethod['method']
             . '('
             . implode(', ', $arguments)
             . ");\n";
@@ -182,7 +182,7 @@ final class StaticRuntimeRenderer
     {
         $source = "    private function s{$slot}(): mixed\n    {\n";
         $source .= $this->renderSeedGuard($slot);
-        $hasSetup = $plan['properties'] !== [] || $plan['method'] !== null;
+        $hasSetup = $plan['properties'] !== [] || $plan['postMethod'] !== null;
         $construction = $hasSetup ? null : $this->classConstruction($plan, $slots);
 
         if ($plan['lifetime'] === LifetimeEnum::Scoped) {
