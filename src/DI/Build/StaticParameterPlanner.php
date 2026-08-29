@@ -36,11 +36,9 @@ final class StaticParameterPlanner
             if (is_string($argument)) {
                 return $argument;
             }
-            if ($argument['kind'] === 'service') {
-                if (!isset($seenDependencies[$argument['id']])) {
-                    $seenDependencies[$argument['id']] = true;
-                    $dependencies[] = $argument['id'];
-                }
+            if ($argument['kind'] === 'service' && !isset($seenDependencies[$argument['id']])) {
+                $seenDependencies[$argument['id']] = true;
+                $dependencies[] = $argument['id'];
             }
             $arguments[] = $argument;
         }
@@ -83,7 +81,7 @@ final class StaticParameterPlanner
             return "constructor parameter '{$parameter->getName()}' has a dynamic #[Inject] target";
         }
 
-        return $this->serviceTargetPlan($graph, $class->getName(), $target);
+        return $this->serviceTargetPlan($graph, $target);
     }
 
     private function isExportable(mixed $value): bool
@@ -149,16 +147,10 @@ final class StaticParameterPlanner
     }
 
     /** @return array{kind: 'service', id: string}|string */
-    private function serviceTargetPlan(
-        DefinitionGraph $graph,
-        string $consumer,
-        string $target,
-    ): array|string {
+    private function serviceTargetPlan(DefinitionGraph $graph, string $target): array|string
+    {
         if ($graph->hasDefinition($target)) {
             return ['kind' => 'service', 'id' => $target];
-        }
-        if ($graph->hasContextualBinding($consumer, $target)) {
-            return $this->typedServicePlan($graph, $consumer, $target);
         }
 
         $environment = $graph->environmentConcrete($target);
@@ -200,7 +192,7 @@ final class StaticParameterPlanner
         string $dependency,
     ): array|string {
         if (!$graph->hasContextualBinding($consumer, $dependency)) {
-            return $this->serviceTargetPlan($graph, $consumer, $dependency);
+            return $this->serviceTargetPlan($graph, $dependency);
         }
 
         $binding = $graph->contextualBinding($consumer, $dependency);
