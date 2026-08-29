@@ -210,10 +210,10 @@ final class StaticRuntimePlanner
         );
     }
 
-    private function isCallableArrayDefinition(mixed $definition): bool
+    /** @param array<int|string, mixed> $definition */
+    private function isCallableArrayDefinition(array $definition): bool
     {
-        return is_array($definition)
-            && isset($definition[0])
+        return isset($definition[0])
             && is_string($definition[0])
             && class_exists($definition[0]);
     }
@@ -270,7 +270,10 @@ final class StaticRuntimePlanner
         ];
     }
 
-    /** @return ServicePlan|string */
+    /**
+     * @param array<int|string, mixed> $definition
+     * @return ClassPlan|InvocationPlan|string
+     */
     private function planArrayDefinition(DefinitionGraph $graph, string $id, array $definition): array|string
     {
         $className = $definition[0] ?? null;
@@ -303,7 +306,7 @@ final class StaticRuntimePlanner
         if ($definition instanceof FactoryDefinition) {
             return new StaticFactoryPlanner()->plan($graph, $id, $definition);
         }
-        if ($this->isCallableArrayDefinition($definition)) {
+        if (is_array($definition) && $this->isCallableArrayDefinition($definition)) {
             return $this->planArrayDefinition($graph, $id, $definition);
         }
 
@@ -378,7 +381,7 @@ final class StaticRuntimePlanner
     /** @return ValuePlan|null */
     private function valuePlan(DefinitionGraph $graph, string $id, mixed $definition): ?array
     {
-        if (!$this->isExportable($definition) || $this->isCallableArrayDefinition($definition)) {
+        if (!$this->isExportable($definition) || (is_array($definition) && $this->isCallableArrayDefinition($definition))) {
             return null;
         }
         if (is_string($definition) && class_exists($definition)) {
