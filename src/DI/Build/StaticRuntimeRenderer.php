@@ -13,8 +13,9 @@ use Infocyph\InterMix\DI\Support\LifetimeEnum;
  * @phpstan-type AliasPlan array{kind: 'alias', target: string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
  * @phpstan-type ClassPlan array{kind: 'class', class: class-string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, postMethod: MethodPlan|null, dependencies: list<string>}
  * @phpstan-type FactoryPlan array{kind: 'factory', class: class-string, method: string|null, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
+ * @phpstan-type InvocationPlan array{kind: 'invocation', class: class-string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, invocation: MethodPlan, dependencies: list<string>}
  * @phpstan-type ValuePlan array{kind: 'value', code: string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
- * @phpstan-type ServicePlan AliasPlan|ClassPlan|FactoryPlan|ValuePlan
+ * @phpstan-type ServicePlan AliasPlan|ClassPlan|FactoryPlan|InvocationPlan|ValuePlan
  * @internal
  */
 final class StaticRuntimeRenderer
@@ -30,6 +31,7 @@ final class StaticRuntimeRenderer
         $source .= "return new class extends ProductionContainer\n{\n";
         $source .= $this->renderAliasSingletonProperties($plans);
         $source .= $this->renderFactorySingletonProperties($plans);
+        $source .= $this->renderInvocationSingletonProperties($plans);
         $source .= $this->renderSingletonProperties($plans, $slots);
         $source .= $this->renderGet($plans, $slots);
         $source .= $this->renderHas($plans);
@@ -133,6 +135,39 @@ final class StaticRuntimeRenderer
         }
 
         return $class . '::' . $plan['method'] . '(' . implode(', ', $arguments) . ')';
+    }
+
+    /**
+     * @param InvocationPlan $plan
+     * @param array<string, int> $slots
+     */
+    private function invocationStatements(array $plan, array $slots): string
+    {
+        $constructorArguments = [];
+        foreach ($plan['arguments'] as $argument) {
+            $constructorArguments[] = $this->argumentExpression($argument, $slots);
+        }
+
+        $class = '\\' . ltrim($plan['class'], '\\');
+        $source = '        $instance = new ' . $class . '(' . implode(', ', $constructorArguments) . ");\n";
+        foreach ($plan['properties'] as $property) {
+            $value = $this->argumentExpression($property['argument'], $slots);
+            if ($property['static']) {
+                $declaring = '\\' . ltrim($property['declaring'], '\\');
+                $source .= '        ' . $declaring . '::$' . $property['property'] . " = {$value};\n";
+            } else {
+                $source .= '        $instance->' . $property['property'] . " = {$value};\n";
+            }
+        }
+
+        $methodArguments = [];
+        foreach ($plan['invocation']['arguments'] as $argument) {
+            $methodArguments[] = $this->argumentExpression($argument, $slots);
+        }
+        $source .= '        $result = $instance->' . $plan['invocation']['method']
+            . '(' . implode(', ', $methodArguments) . ");\n";
+
+        return $source;
     }
 
     /**
@@ -253,6 +288,12 @@ final class StaticRuntimeRenderer
                     'guard' => "array_key_exists({$slot}, \$this->factorySingletons)",
                     'id' => $id,
                     'value' => "\$this->factorySingletons[{$slot}]",
+                ];
+            } elseif ($plan['kind'] === 'invocation') {
+                $entries[] = [
+                    'guard' => "array_key_exists({$slot}, \$this->invocationSingletons)",
+                    'id' => $id,
+                    'value' => "\$this->invocationSingletons[{$slot}]",
                 ];
             }
         }
@@ -414,6 +455,47 @@ final class StaticRuntimeRenderer
         return $source . "        };\n    }\n\n";
     }
 
+    /**
+     * @param InvocationPlan $plan
+     * @param array<string, int> $slots
+     */
+    private function renderInvocationMethod(int $slot, array $plan, array $slots): string
+    {
+        $source = "    private function s{$slot}(): mixed\n    {\n";
+        $source .= $this->renderSeedGuard($slot);
+
+        if ($plan['lifetime'] === LifetimeEnum::Scoped) {
+            $source .= "        if (array_key_exists({$slot}, \$this->scope->resolved)) {\n";
+            $source .= "            return \$this->scope->resolved[{$slot}];\n";
+            $source .= "        }\n\n";
+            $source .= $this->invocationStatements($plan, $slots);
+            $source .= "\n        return \$this->scope->resolved[{$slot}] = \$result;\n";
+        } elseif ($plan['lifetime'] === LifetimeEnum::Singleton) {
+            $source .= "        if (array_key_exists({$slot}, \$this->invocationSingletons)) {\n";
+            $source .= "            return \$this->invocationSingletons[{$slot}];\n";
+            $source .= "        }\n\n";
+            $source .= $this->invocationStatements($plan, $slots);
+            $source .= "\n        return \$this->invocationSingletons[{$slot}] = \$result;\n";
+        } else {
+            $source .= $this->invocationStatements($plan, $slots);
+            $source .= "\n        return \$result;\n";
+        }
+
+        return $source . "    }\n\n";
+    }
+
+    /** @param array<string, ServicePlan> $plans */
+    private function renderInvocationSingletonProperties(array $plans): string
+    {
+        foreach ($plans as $plan) {
+            if ($plan['kind'] === 'invocation' && $plan['lifetime'] === LifetimeEnum::Singleton) {
+                return "    /** @var array<int, mixed> */\n    private array \$invocationSingletons = [];\n\n";
+            }
+        }
+
+        return '';
+    }
+
     private function renderSeedGuard(int $slot): string
     {
         return "        if (\$this->scope->parent !== null && array_key_exists({$slot}, \$this->scope->seeds)) {\n"
@@ -433,6 +515,7 @@ final class StaticRuntimeRenderer
                 'alias' => $this->renderAliasMethod($slots[$id], $plan, $slots),
                 'class' => $this->renderClassMethod($slots[$id], $plan, $slots),
                 'factory' => $this->renderFactoryMethod($slots[$id], $plan, $slots),
+                'invocation' => $this->renderInvocationMethod($slots[$id], $plan, $slots),
                 'value' => $this->renderValueMethod($slots[$id], $plan),
             };
         }
