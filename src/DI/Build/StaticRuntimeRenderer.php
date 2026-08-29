@@ -28,6 +28,7 @@ final class StaticRuntimeRenderer
         $source .= $this->renderGet($plans, $slots);
         $source .= $this->renderHas($plans);
         $source .= $this->renderSlotMap($slots);
+        $source .= $this->renderDefinitionMap($graph, $plans);
         $source .= $this->renderTags($graph, $plans);
         $source .= $this->renderServiceMethods($plans, $slots);
 
@@ -48,6 +49,30 @@ final class StaticRuntimeRenderer
         }
 
         return 'new \\' . ltrim($plan['class'], '\\') . '(' . implode(', ', $arguments) . ')';
+    }
+
+    /** @param array<string, ServicePlan> $plans */
+    private function renderDefinitionMap(DefinitionGraph $graph, array $plans): string
+    {
+        $definitions = [];
+        foreach (array_keys($plans) as $id) {
+            if ($graph->hasDefinition($id)) {
+                $definitions[] = $id;
+            }
+        }
+        if ($definitions === []) {
+            return '';
+        }
+
+        $ids = implode(', ', array_map(static fn(string $id): string => var_export($id, true), $definitions));
+
+        return "    protected function isCompiledDefinition(string \$id): bool\n"
+            . "    {\n"
+            . "        return match (\$id) {\n"
+            . "            {$ids} => true,\n"
+            . "            default => false,\n"
+            . "        };\n"
+            . "    }\n\n";
     }
 
     /**
