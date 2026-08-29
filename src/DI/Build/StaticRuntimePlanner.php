@@ -62,11 +62,10 @@ final class StaticRuntimePlanner
         if (!$class->isInstantiable()) {
             return 'class definition is not instantiable';
         }
-        if ($graph->classResourcesFor($class->getName()) !== []) {
-            return 'class has registered runtime resources';
-        }
-        if ($graph->propertyAttributesEnabled()) {
-            return 'property attributes are enabled for the graph';
+
+        $dynamicReason = (new StaticFeatureClassifier())->dynamicReason($graph, $class);
+        if ($dynamicReason !== null) {
+            return $dynamicReason;
         }
 
         $method = $this->implicitMethod($graph, $class);
@@ -196,6 +195,10 @@ final class StaticRuntimePlanner
     /** @return ServicePlan|string */
     private function planDefinition(DefinitionGraph $graph, string $id, mixed $definition): array|string
     {
+        if ($graph->requiresDynamicService($id)) {
+            return 'service has lifecycle hooks and requires the dynamic runtime';
+        }
+
         $valuePlan = $this->valuePlan($graph, $id, $definition);
         if ($valuePlan !== null) {
             return $valuePlan;
