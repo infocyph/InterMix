@@ -16,10 +16,15 @@ use Infocyph\InterMix\DI\Support\PendingFactoryBinding;
 
 final class ContainerBuilder
 {
+    private readonly Container $development;
+
     /** @var null|array{compiled: list<string>, skipped: array<string, string>} */
     private ?array $compilationReport = null;
 
-    public function __construct(private readonly Container $development = new Container()) {}
+    public function __construct(?Container $development = null)
+    {
+        $this->development = $development ?? new Container();
+    }
 
     public static function create(string $alias = Container::DEFAULT_ALIAS): self
     {
@@ -60,9 +65,7 @@ final class ContainerBuilder
         return $this;
     }
 
-    /**
-     * @return array{compiled: list<string>, skipped: array<string, string>}
-     */
+    /** @return array{compiled: list<string>, skipped: array<string, string>} */
     public function compile(string $path): array
     {
         $generated = new StaticRuntimeGenerator()->generate(
