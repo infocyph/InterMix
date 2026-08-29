@@ -109,6 +109,8 @@ final class ContainerBuilder
 
     public function development(): Container
     {
+        $this->beforeMutation();
+
         return $this->development;
     }
 
@@ -230,6 +232,8 @@ final class ContainerBuilder
     /** @return array<int, string> */
     public function validate(bool $strict = false, bool $resolveFactories = false): array
     {
+        $this->beforeMutation();
+
         return $this->development->validate($strict, $resolveFactories);
     }
 
