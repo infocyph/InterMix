@@ -60,7 +60,7 @@ final class StaticInjectPlanner
         return $planned;
     }
 
-    /** @return ServiceArgument|string|null */
+    /** @return array{kind: 'service', id: string}|string|null */
     public function parameterArgument(DefinitionGraph $graph, ReflectionParameter $parameter): array|string|null
     {
         $attribute = $parameter->getAttributes(Inject::class)[0] ?? null;
