@@ -27,6 +27,9 @@ final readonly class DefinitionGraph
      * @param array<string, string> $environmentBindings
      * @param array<string, true> $attributeTypes
      * @param array<string, true> $dynamicServiceIds
+     * @param array<string, true> $resolvingHookIds
+     * @param array<string, true> $resolvedHookIds
+     * @param array<string, true> $scopeLeaveHookScopes
      */
     private function __construct(
         private array $definitions,
@@ -37,6 +40,9 @@ final readonly class DefinitionGraph
         private array $environmentBindings,
         private array $attributeTypes,
         private array $dynamicServiceIds,
+        private array $resolvingHookIds,
+        private array $resolvedHookIds,
+        private array $scopeLeaveHookScopes,
         private ?string $environment,
         private ?string $defaultMethod,
         private bool $injectionEnabled,
@@ -44,9 +50,19 @@ final readonly class DefinitionGraph
         private bool $propertyAttributes,
     ) {}
 
-    /** @param array<int, string> $dynamicServiceIds */
-    public static function from(Repository $repository, array $dynamicServiceIds = []): self
-    {
+    /**
+     * @param array<int, string> $dynamicServiceIds
+     * @param array<int, string> $resolvingHookIds
+     * @param array<int, string> $resolvedHookIds
+     * @param array<int, string> $scopeLeaveHookScopes
+     */
+    public static function from(
+        Repository $repository,
+        array $dynamicServiceIds = [],
+        array $resolvingHookIds = [],
+        array $resolvedHookIds = [],
+        array $scopeLeaveHookScopes = [],
+    ): self {
         $definitions = $repository->getFunctionReference();
         $definitionMeta = [];
         foreach ($definitions as $id => $_definition) {
@@ -76,6 +92,9 @@ final readonly class DefinitionGraph
             ),
             attributeTypes: array_fill_keys($repository->getRegisteredAttributeTypes(), true),
             dynamicServiceIds: array_fill_keys($dynamicServiceIds, true),
+            resolvingHookIds: array_fill_keys($resolvingHookIds, true),
+            resolvedHookIds: array_fill_keys($resolvedHookIds, true),
+            scopeLeaveHookScopes: array_fill_keys($scopeLeaveHookScopes, true),
             environment: $repository->getEnvironment(),
             defaultMethod: $repository->getDefaultMethod(),
             injectionEnabled: !$repository->container()->getCurrentResolver() instanceof GenericCall,
@@ -169,6 +188,21 @@ final readonly class DefinitionGraph
         return isset($this->definitions[$id]) || array_key_exists($id, $this->definitions);
     }
 
+    public function hasResolvedHook(string $id): bool
+    {
+        return isset($this->resolvedHookIds[$id]);
+    }
+
+    public function hasResolvingHook(string $id): bool
+    {
+        return isset($this->resolvingHookIds[$id]);
+    }
+
+    public function hasScopeLeaveHook(string $scope): bool
+    {
+        return isset($this->scopeLeaveHookScopes[$scope]);
+    }
+
     public function injectionEnabled(): bool
     {
         return $this->injectionEnabled;
@@ -193,5 +227,11 @@ final readonly class DefinitionGraph
     public function requiresDynamicService(string $id): bool
     {
         return isset($this->dynamicServiceIds[$id]);
+    }
+
+    /** @return array<int, string> */
+    public function scopeLeaveHookScopes(): array
+    {
+        return array_keys($this->scopeLeaveHookScopes);
     }
 }
