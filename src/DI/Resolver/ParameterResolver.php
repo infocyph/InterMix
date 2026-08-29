@@ -13,10 +13,8 @@ use Infocyph\InterMix\DI\Resolver\Concerns\ResolvesParameterAttributes;
 use Infocyph\InterMix\DI\Support\TraceLevelEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Internal\ReflectionResource;
-use Psr\Cache\InvalidArgumentException;
 use ReflectionAttribute;
 use ReflectionClass;
-use ReflectionException;
 use ReflectionFunction;
 use ReflectionFunctionAbstract;
 use ReflectionIntersectionType;
@@ -33,8 +31,11 @@ class ParameterResolver
     use ResolvesParameterAttributes;
 
     private const int INJECT_CACHE_LIMIT = 1024;
+
     private const int PARAM_ATTRIBUTE_PLAN_CACHE_LIMIT = 4096;
+
     private const int RESOLUTION_PLAN_CACHE_LIMIT = 2048;
+
     private const int TYPE_GROUP_CACHE_LIMIT = 4096;
 
     private ClassResolver $classResolver;
@@ -47,6 +48,9 @@ class ParameterResolver
 
     /** @var WeakMap<Closure, array<string, array{availableParams: array<int, ReflectionParameter>, applyAttribute: bool, attributeData: array<string, mixed>}>> */
     private WeakMap $closureResolutionPlanCache;
+
+    /** @var WeakMap<Closure, array<int, array<int, array<int, ReflectionNamedType>>>> */
+    private WeakMap $closureTypeGroupCache;
 
     /** @var array<string, array<int, ReflectionAttribute<Inject>>> */
     private array $injectCache = [];
@@ -67,6 +71,7 @@ class ParameterResolver
         $this->closureInjectCache = new WeakMap();
         $this->closureParameterAttributePlanCache = new WeakMap();
         $this->closureResolutionPlanCache = new WeakMap();
+        $this->closureTypeGroupCache = new WeakMap();
     }
 
     /**
@@ -142,6 +147,7 @@ class ParameterResolver
             if ($named->isBuiltin()) {
                 continue;
             }
+
             $typeName = $this->normalizeSelfParent(
                 $named->getName(),
                 $parameter->getDeclaringClass(),
@@ -150,6 +156,7 @@ class ParameterResolver
             if ($hasScopeSeeds && $this->repository->findScopeSeed($typeName, $seeded)) {
                 return $seeded;
             }
+
             if ($this->repository->hasFunctionReference($typeName)) {
                 return $container->get($typeName);
             }
@@ -166,7 +173,9 @@ class ParameterResolver
         return AttributeResolution::Unresolved;
     }
 
-    /** @param ReflectionClass<object> $dependency */
+    /**
+     * @param ReflectionClass<object> $dependency
+     */
     public function resolveContextualDependency(string $consumer, ReflectionClass $dependency): mixed
     {
         if ($consumer === ''
@@ -176,6 +185,7 @@ class ParameterResolver
         }
 
         $binding = $this->repository->getContextualBinding($consumer, $dependency->getName());
+
         if (is_callable($binding)) {
             return $binding($this->repository->container());
         }
@@ -184,6 +194,7 @@ class ParameterResolver
             if ($this->repository->hasFunctionReference($binding)) {
                 return $this->repository->container()->get($binding);
             }
+
             if (class_exists($binding) || interface_exists($binding)) {
                 return $this->classResolver->resolveClassInstance(
                     ReflectionResource::getClassReflection($this->applyEnvOverride($binding)),
@@ -203,16 +214,12 @@ class ParameterResolver
         $this->classResolver = $classResolver;
     }
 
-    /** @param array<int|string, mixed> $parameters */
+    /**
+     * @param array<int|string, mixed> $parameters
+     */
     private function alreadyExist(string $className, array $parameters): bool
     {
-        foreach ($parameters as $value) {
-            if ($value instanceof $className) {
-                return true;
-            }
-        }
-
-        return false;
+        return array_any($parameters, fn($value) => $value instanceof $className);
     }
 
     private function applyEnvOverride(string $fqcn): string
@@ -222,12 +229,13 @@ class ParameterResolver
         return $concrete !== null && class_exists($concrete) ? $concrete : $fqcn;
     }
 
-    /** @return array{availableParams: array<int, ReflectionParameter>, applyAttribute: bool, attributeData: array<string, mixed>} */
+    /**
+     * @return array{availableParams: array<int, ReflectionParameter>, applyAttribute: bool, attributeData: array<string, mixed>}
+     */
     private function buildResolutionPlan(ReflectionFunctionAbstract $reflector, string $type): array
     {
         $availableParams = $reflector->getParameters();
 
-        // Precompute immutable type-shape work once with the reflection plan.
         foreach ($availableParams as $parameter) {
             $this->extractTypeGroups($parameter);
         }
@@ -245,6 +253,21 @@ class ParameterResolver
         ];
     }
 
+    /**
+     * @return array<int, array<int, ReflectionNamedType>>
+     */
+    private function buildTypeGroups(ReflectionParameter $parameter): array
+    {
+        $type = $parameter->getType();
+
+        return match (true) {
+            $type instanceof ReflectionNamedType => [[$type]],
+            $type instanceof ReflectionIntersectionType => [$this->namedIntersectionMembers($type)],
+            !$type instanceof ReflectionUnionType => [],
+            default => $this->unionTypeGroups($type),
+        };
+    }
+
     private function closureFor(ReflectionFunctionAbstract $reflector): ?Closure
     {
         return $reflector instanceof ReflectionFunction && $reflector->isClosure()
@@ -252,7 +275,10 @@ class ParameterResolver
             : null;
     }
 
-    /** @template TValue @param array<string, TValue> $cache */
+    /**
+     * @template TValue
+     * @param array<string, TValue> $cache
+     */
     private function evictCacheKeyIfNeeded(array &$cache, string $key, int $limit): void
     {
         if (!isset($cache[$key]) && count($cache) >= $limit) {
@@ -263,7 +289,9 @@ class ParameterResolver
         }
     }
 
-    /** @return array<int, ReflectionNamedType> */
+    /**
+     * @return array<int, ReflectionNamedType>
+     */
     private function extractNamedTypeCandidates(ReflectionParameter $parameter): array
     {
         $types = [];
@@ -276,28 +304,38 @@ class ParameterResolver
         return $types;
     }
 
-    /** @return array<int, array<int, ReflectionNamedType>> */
+    /**
+     * @return array<int, array<int, ReflectionNamedType>>
+     */
     private function extractTypeGroups(ReflectionParameter $parameter): array
     {
+        $closure = $this->closureFor($parameter->getDeclaringFunction());
+        if ($closure instanceof Closure) {
+            $plans = $this->closureTypeGroupCache[$closure] ?? [];
+            $position = $parameter->getPosition();
+            if (!array_key_exists($position, $plans)) {
+                $plans[$position] = $this->buildTypeGroups($parameter);
+                $this->closureTypeGroupCache[$closure] = $plans;
+            }
+
+            return $plans[$position];
+        }
+
         $key = $this->makeParameterTypeGroupKey($parameter);
         if (isset($this->typeGroupCache[$key])) {
             return $this->typeGroupCache[$key];
         }
 
-        $type = $parameter->getType();
-        $groups = match (true) {
-            $type instanceof ReflectionNamedType => [[$type]],
-            $type instanceof ReflectionIntersectionType => [$this->namedIntersectionMembers($type)],
-            !$type instanceof ReflectionUnionType => [],
-            default => $this->unionTypeGroups($type),
-        };
-
+        $groups = $this->buildTypeGroups($parameter);
         $this->evictCacheKeyIfNeeded($this->typeGroupCache, $key, self::TYPE_GROUP_CACHE_LIMIT);
+        $this->typeGroupCache[$key] = $groups;
 
-        return $this->typeGroupCache[$key] = $groups;
+        return $groups;
     }
 
-    /** @return array<int, ReflectionAttribute<Inject>> */
+    /**
+     * @return array<int, ReflectionAttribute<Inject>>
+     */
     private function getInjectAttributes(ReflectionFunctionAbstract $reflector): array
     {
         $closure = $this->closureFor($reflector);
@@ -314,7 +352,12 @@ class ParameterResolver
         );
     }
 
-    /** @return array{inject: array<int, ReflectionAttribute<Inject>>, all: array<int, ReflectionAttribute<object>>} */
+    /**
+     * @return array{
+     *   inject: array<int, ReflectionAttribute<Inject>>,
+     *   all: array<int, ReflectionAttribute<object>>
+     * }
+     */
     private function getParameterAttributePlan(ReflectionParameter $parameter): array
     {
         $closure = $this->closureFor($parameter->getDeclaringFunction());
@@ -340,7 +383,9 @@ class ParameterResolver
         ]);
     }
 
-    /** @return array{availableParams: array<int, ReflectionParameter>, applyAttribute: bool, attributeData: array<string, mixed>} */
+    /**
+     * @return array{availableParams: array<int, ReflectionParameter>, applyAttribute: bool, attributeData: array<string, mixed>}
+     */
     private function getResolutionPlan(ReflectionFunctionAbstract $reflector, string $type): array
     {
         $closure = $this->closureFor($reflector);
@@ -350,6 +395,7 @@ class ParameterResolver
             if (isset($plans[$cacheKey])) {
                 return $plans[$cacheKey];
             }
+
             $plans[$cacheKey] = $this->buildResolutionPlan($reflector, $type);
             $this->closureResolutionPlanCache[$closure] = $plans;
 
@@ -381,7 +427,9 @@ class ParameterResolver
             . ($this->repository->isMethodAttributeEnabled() ? '1' : '0');
     }
 
-    /** @return array<int, ReflectionNamedType> */
+    /**
+     * @return array<int, ReflectionNamedType>
+     */
     private function namedIntersectionMembers(ReflectionIntersectionType $type): array
     {
         $members = [];
@@ -394,12 +442,15 @@ class ParameterResolver
         return $members;
     }
 
-    /** @param ReflectionClass<object>|null $declaring */
+    /**
+     * @param ReflectionClass<object>|null $declaring
+     */
     private function normalizeSelfParent(string $className, ?ReflectionClass $declaring): string
     {
         if ($className === 'self') {
             return $declaring?->getName() ?? $className;
         }
+
         if ($className === 'parent') {
             $parent = $declaring?->getParentClass();
             if (!$parent instanceof ReflectionClass) {
@@ -423,6 +474,7 @@ class ParameterResolver
             if ($parameter->isVariadic() || !array_key_exists($position, $supplied)) {
                 continue;
             }
+
             if (!array_key_exists($parameter->getName(), $supplied)) {
                 $supplied[$parameter->getName()] = $supplied[$position];
             }
@@ -444,6 +496,7 @@ class ParameterResolver
         if ($reflector instanceof ReflectionMethod) {
             return $reflector->getDeclaringClass()->getName() . '::' . $reflector->getName();
         }
+
         if (!$reflector->isClosure()) {
             return $reflector->getName();
         }
@@ -453,15 +506,28 @@ class ParameterResolver
             . ':' . ($reflector->getEndLine() ?: 0);
     }
 
-    /** @param array<int, ReflectionAttribute<Inject>> $value @return array<int, ReflectionAttribute<Inject>> */
+    /**
+     * @param array<int, ReflectionAttribute<Inject>> $value
+     * @return array<int, ReflectionAttribute<Inject>>
+     */
     private function rememberInject(string $key, array $value): array
     {
         $this->evictCacheKeyIfNeeded($this->injectCache, $key, self::INJECT_CACHE_LIMIT);
+        $this->injectCache[$key] = $value;
 
-        return $this->injectCache[$key] = $value;
+        return $value;
     }
 
-    /** @param array{inject: array<int, ReflectionAttribute<Inject>>, all: array<int, ReflectionAttribute<object>>} $value */
+    /**
+     * @param array{
+     *   inject: array<int, ReflectionAttribute<Inject>>,
+     *   all: array<int, ReflectionAttribute<object>>
+     * } $value
+     * @return array{
+     *   inject: array<int, ReflectionAttribute<Inject>>,
+     *   all: array<int, ReflectionAttribute<object>>
+     * }
+     */
     private function rememberParameterAttributePlan(string $key, array $value): array
     {
         $this->evictCacheKeyIfNeeded(
@@ -469,19 +535,26 @@ class ParameterResolver
             $key,
             self::PARAM_ATTRIBUTE_PLAN_CACHE_LIMIT,
         );
+        $this->parameterAttributePlanCache[$key] = $value;
 
-        return $this->parameterAttributePlanCache[$key] = $value;
+        return $value;
     }
 
-    /** @param array{availableParams: array<int, ReflectionParameter>, applyAttribute: bool, attributeData: array<string, mixed>} $value */
+    /**
+     * @param array{availableParams: array<int, ReflectionParameter>, applyAttribute: bool, attributeData: array<string, mixed>} $value
+     * @return array{availableParams: array<int, ReflectionParameter>, applyAttribute: bool, attributeData: array<string, mixed>}
+     */
     private function rememberResolutionPlan(string $key, array $value): array
     {
         $this->evictCacheKeyIfNeeded($this->resolutionPlanCache, $key, self::RESOLUTION_PLAN_CACHE_LIMIT);
+        $this->resolutionPlanCache[$key] = $value;
 
-        return $this->resolutionPlanCache[$key] = $value;
+        return $value;
     }
 
-    /** @return array<int, array<int, ReflectionNamedType>> */
+    /**
+     * @return array<int, array<int, ReflectionNamedType>>
+     */
     private function unionTypeGroups(ReflectionUnionType $type): array
     {
         $groups = [];
