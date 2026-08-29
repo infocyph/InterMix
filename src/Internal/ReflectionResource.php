@@ -197,7 +197,10 @@ final class ReflectionResource
         self::trimAllCachesIfNeeded();
     }
 
-    /** @template T @param array<string, T> $cache */
+    /**
+     * @template T
+     * @param array<string, T> $cache
+     */
     private static function evictOldestIfNeeded(array &$cache): void
     {
         if (self::$cacheLimit <= 0 || count($cache) < self::$cacheLimit) {
@@ -207,7 +210,11 @@ final class ReflectionResource
         unset($cache[array_key_first($cache)]);
     }
 
-    /** @template T @param array<string, T> $cache @param T $value */
+    /**
+     * @template T
+     * @param array<string, T> $cache
+     * @param T $value
+     */
     private static function rememberCachedEntry(array &$cache, string $key, mixed $value): void
     {
         if (!isset($cache[$key])) {
@@ -300,7 +307,10 @@ final class ReflectionResource
         self::trimBucket(self::$reflectionCache['methods']);
     }
 
-    /** @template T @param array<string, T> $bucket */
+    /**
+     * @template T
+     * @param array<string, T> $bucket
+     */
     private static function trimBucket(array &$bucket): void
     {
         while (self::$cacheLimit > 0 && count($bucket) > self::$cacheLimit) {
