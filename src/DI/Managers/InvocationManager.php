@@ -30,9 +30,7 @@ class InvocationManager implements ArrayAccess
         protected Container $container,
     ) {}
 
-    /**
-     * @throws ContainerException|ReflectionException|InvalidArgumentException
-     */
+    /** @throws ContainerException|ReflectionException|InvalidArgumentException */
     public function call(string|Closure|callable $classOrClosure, string|bool|null $method = null): mixed
     {
         if (is_string($classOrClosure) && $this->repository->hasFunctionReference($classOrClosure)) {
@@ -47,8 +45,11 @@ class InvocationManager implements ArrayAccess
             return $this->callClosureResource($classOrClosure, $method);
         }
 
-        if (!$this->has($classOrClosure) && !$this->repository->tryResolveMissing($classOrClosure)) {
-            throw new NotFoundException("No entry found for '$classOrClosure'.");
+        if (!$this->has($classOrClosure)) {
+            $activated = $this->repository->tryResolveMissing($classOrClosure);
+            if (!$activated && !interface_exists($classOrClosure)) {
+                throw new NotFoundException("No entry found for '$classOrClosure'.");
+            }
         }
         if ($this->repository->hasFunctionReference($classOrClosure)) {
             return $this->callDefinition($classOrClosure, $method);
@@ -66,9 +67,9 @@ class InvocationManager implements ArrayAccess
     }
 
     /**
-     * Cached singleton and scoped entries are returned before any broad
-     * resolvability checks. Mutations already invalidate these indexes, so a hot
-     * lookup does not need to prove the service exists again.
+     * Cached singleton and scoped entries are returned before broad resolvability
+     * checks. Definition mutation invalidates those indexes, so a hot lookup does
+     * not need to prove that the service exists again.
      *
      * @throws ContainerException|InvalidArgumentException|ReflectionException
      */
@@ -94,8 +95,23 @@ class InvocationManager implements ArrayAccess
             }
         }
 
-        if (!$this->has($id) && !$this->repository->tryResolveMissing($id)) {
-            throw new NotFoundException("No entry found for '$id'.");
+        if (!$this->has($id)) {
+            if (!$this->repository->tryResolveMissing($id)) {
+                throw new NotFoundException("No entry found for '$id'.");
+            }
+
+            // A missing callback may register any lifetime. The pre-activation
+            // default (Singleton) is not authoritative.
+            $lifetime = $this->repository->getDefinitionLifetime($id);
+            if ($lifetime === LifetimeEnum::Scoped) {
+                $scope = $this->repository->getScope();
+                $resolved = $this->repository->getResolvedScopedEntry($scope, $id);
+                if ($resolved !== null || $this->repository->hasResolvedScoped($scope, $id)) {
+                    return $this->repository->fetchInstanceOrValue($resolved);
+                }
+            } else {
+                $scope = null;
+            }
         }
 
         if ($this->repository->isTracingEnabled()) {
@@ -109,9 +125,7 @@ class InvocationManager implements ArrayAccess
         };
     }
 
-    /**
-     * @throws ContainerException|InvalidArgumentException|ReflectionException
-     */
+    /** @throws ContainerException|InvalidArgumentException|ReflectionException */
     public function getReturn(string $id): mixed
     {
         $resolved = $this->get($id);
@@ -134,9 +148,7 @@ class InvocationManager implements ArrayAccess
             || (interface_exists($id) && $this->repository->getEnvConcrete($id) !== null);
     }
 
-    /**
-     * @throws ContainerException|ReflectionException
-     */
+    /** @throws ContainerException|ReflectionException */
     public function make(string $class, string|bool $method = false): mixed
     {
         $activated = false;
@@ -163,9 +175,7 @@ class InvocationManager implements ArrayAccess
         return $this->container->registration();
     }
 
-    /**
-     * @throws ContainerException|InvalidArgumentException|ReflectionException
-     */
+    /** @throws ContainerException|InvalidArgumentException|ReflectionException */
     protected function resolveDefinition(string $id): mixed
     {
         return $this->repository->fetchInstanceOrValue(
