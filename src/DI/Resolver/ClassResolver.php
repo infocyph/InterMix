@@ -131,6 +131,7 @@ class ClassResolver
 
     /**
      * @param ReflectionClass<object> $class
+     * @return ReflectionClass<object>
      */
     private function getConcreteClassForInterface(ReflectionClass $class, mixed $supplied): ReflectionClass
     {
