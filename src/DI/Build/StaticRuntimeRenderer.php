@@ -34,7 +34,10 @@ final class StaticRuntimeRenderer
         return rtrim($source) . "\n};\n";
     }
 
-    /** @param ClassPlan $plan */
+    /**
+     * @param ClassPlan $plan
+     * @param array<string, int> $slots
+     */
     private function classConstruction(array $plan, array $slots): string
     {
         $arguments = [];
@@ -75,7 +78,10 @@ final class StaticRuntimeRenderer
         return $source . "        };\n    }\n\n";
     }
 
-    /** @param ClassPlan $plan */
+    /**
+     * @param ClassPlan $plan
+     * @param array<string, int> $slots
+     */
     private function renderClassMethod(int $slot, array $plan, array $slots): string
     {
         $construction = $this->classConstruction($plan, $slots);
