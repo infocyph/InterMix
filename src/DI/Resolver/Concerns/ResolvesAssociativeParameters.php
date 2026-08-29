@@ -21,16 +21,7 @@ trait ResolvesAssociativeParameters
      * @param array<int, ReflectionParameter> $availableParams
      * @param array<int|string, mixed> $suppliedParameters
      * @param array<string, mixed> $parameterAttribute
-     * @return array{
-     *   availableParams: array<int, ReflectionParameter>,
-     *   processed: array<string, mixed>,
-     *   availableSupply: array<int|string, mixed>,
-     *   sort: array<string, int>
-     * }
-     *
-     * @throws ContainerException
-     * @throws ReflectionException
-     * @throws InvalidArgumentException
+     * @return array{availableParams: array<int, ReflectionParameter>, processed: array<string, mixed>, availableSupply: array<int|string, mixed>, sort: array<string, int>}
      */
     private function resolveAssociativeParameters(
         ReflectionFunctionAbstract $reflector,
@@ -46,7 +37,6 @@ trait ResolvesAssociativeParameters
         foreach ($availableParams as $key => $param) {
             $paramName = $param->getName();
             $sort[$paramName] = $key;
-
             if ($param->isVariadic()) {
                 $paramsLeft[] = $param;
 
@@ -61,13 +51,11 @@ trait ResolvesAssociativeParameters
                 $parameterAttribute,
                 $processed,
             );
-
             if ($resolvedValue !== AttributeResolution::Unresolved) {
                 $processed[$paramName] = $resolvedValue;
 
                 continue;
             }
-
             $paramsLeft[] = $param;
         }
 
@@ -90,20 +78,21 @@ trait ResolvesAssociativeParameters
         array $processed,
         array $groups,
     ): mixed {
+        $declaring = $parameter->getDeclaringClass();
         foreach ($groups as $group) {
             foreach ($group as $named) {
                 if ($named->isBuiltin()) {
                     continue;
                 }
-                $name = $this->normalizeSelfParent($named->getName(), $parameter->getDeclaringClass());
-                $name = $this->applyEnvOverride($name);
+                $name = $this->applyEnvOverride(
+                    $this->normalizeSelfParent($named->getName(), $declaring),
+                );
                 if (!class_exists($name)) {
                     continue;
                 }
+
                 $reflection = ReflectionResource::getClassReflection($name);
-                if ($type === 'constructor'
-                    && $parameter->getDeclaringClass()?->getName() === $reflection->getName()
-                ) {
+                if ($type === 'constructor' && $declaring?->getName() === $reflection->getName()) {
                     throw new ContainerException("Circular dependency on {$reflection->getName()}");
                 }
                 if ($this->alreadyExist($reflection->getName(), $processed)) {
@@ -113,8 +102,9 @@ trait ResolvesAssociativeParameters
                         . "::{$reflector->getShortName()}()",
                     );
                 }
+
                 $resolved = $this->resolveClassDependency($reflection);
-                if ($this->satisfiesTypeGroup($resolved, $group, $parameter->getDeclaringClass())) {
+                if ($this->satisfiesTypeGroup($resolved, $group, $declaring)) {
                     return $resolved;
                 }
             }
@@ -123,32 +113,41 @@ trait ResolvesAssociativeParameters
         return AttributeResolution::Unresolved;
     }
 
-    /**
-     * @param ReflectionClass<object> $class
-     * @throws ContainerException
-     * @throws ReflectionException
-     * @throws InvalidArgumentException
-     */
-    private function resolveClassDependency(
-        ReflectionClass $class,
-    ): object {
+    /** @param ReflectionClass<object> $class */
+    private function resolveClassDependency(ReflectionClass $class): object
+    {
         return $this->classResolver->resolveClassInstance($class);
     }
 
     /** @param array<int, array<int, \ReflectionNamedType>> $groups */
     private function resolveContextualGroups(ReflectionFunctionAbstract $reflector, array $groups): mixed
     {
+        if ($groups === [] || !$this->repository->hasContextualBindings()) {
+            return AttributeResolution::Unresolved;
+        }
+
+        $declaring = $reflector instanceof ReflectionMethod
+            ? $reflector->getDeclaringClass()
+            : null;
+        $consumer = $this->ownerFor($reflector);
+        if ($consumer === '') {
+            return AttributeResolution::Unresolved;
+        }
+
         foreach ($groups as $group) {
             foreach ($group as $named) {
                 if ($named->isBuiltin()) {
                     continue;
                 }
-                $declaring = $reflector instanceof ReflectionMethod
-                    ? $reflector->getDeclaringClass()
-                    : null;
                 $name = $this->normalizeSelfParent($named->getName(), $declaring);
-                $reflection = ReflectionResource::getClassReflection($name);
-                $resolved = $this->resolveContextualDependency($this->ownerFor($reflector), $reflection);
+                if (!$this->repository->hasContextualBinding($consumer, $name)) {
+                    continue;
+                }
+
+                $resolved = $this->resolveContextualDependency(
+                    $consumer,
+                    ReflectionResource::getClassReflection($name),
+                );
                 if ($resolved !== AttributeResolution::Unresolved
                     && $this->satisfiesAnyTypeGroupsForDeclaring($resolved, $groups, $declaring)
                 ) {
@@ -160,11 +159,6 @@ trait ResolvesAssociativeParameters
         return AttributeResolution::Unresolved;
     }
 
-    /**
-     * @throws ContainerException
-     * @throws ReflectionException
-     * @throws InvalidArgumentException
-     */
     private function resolveIndividualAttribute(
         ReflectionParameter $param,
         mixed $attributeValue,
@@ -177,7 +171,6 @@ trait ResolvesAssociativeParameters
         if ($definition !== AttributeResolution::Unresolved) {
             return $definition;
         }
-
         if (function_exists($attributeValue)) {
             $reflectionFn = ReflectionResource::getFunctionReflection($attributeValue);
 
@@ -198,8 +191,7 @@ trait ResolvesAssociativeParameters
             return [];
         }
 
-        $instance = $first->newInstance();
-        $arguments = $instance->getMethodArguments();
+        $arguments = $first->newInstance()->getMethodArguments();
         if (!is_array($arguments)) {
             return [];
         }
@@ -214,16 +206,21 @@ trait ResolvesAssociativeParameters
         return $normalized;
     }
 
-    /**
-     * @param array<int, array<int, \ReflectionNamedType>> $groups
-     */
+    /** @param array<int, array<int, \ReflectionNamedType>> $groups */
     private function satisfiesAnyTypeGroup(mixed $value, array $groups, ReflectionParameter $parameter): bool
     {
         if ($groups === []) {
             return true;
         }
 
-        return array_any($groups, fn($group) => $this->satisfiesTypeGroup($value, $group, $parameter->getDeclaringClass()));
+        $declaring = $parameter->getDeclaringClass();
+        foreach ($groups as $group) {
+            if ($this->satisfiesTypeGroup($value, $group, $declaring)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -232,7 +229,13 @@ trait ResolvesAssociativeParameters
      */
     private function satisfiesAnyTypeGroupsForDeclaring(mixed $value, array $groups, ?ReflectionClass $declaring): bool
     {
-        return array_any($groups, fn($group) => $this->satisfiesTypeGroup($value, $group, $declaring));
+        foreach ($groups as $group) {
+            if ($this->satisfiesTypeGroup($value, $group, $declaring)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -262,10 +265,6 @@ trait ResolvesAssociativeParameters
      * @param array<int|string, mixed> $suppliedParameters
      * @param array<string, mixed> $parameterAttribute
      * @param array<string, mixed> $processed
-     *
-     * @throws ContainerException
-     * @throws ReflectionException
-     * @throws InvalidArgumentException
      */
     private function tryResolveAssociative(
         ReflectionFunctionAbstract $reflector,
@@ -276,15 +275,16 @@ trait ResolvesAssociativeParameters
         array $processed,
     ): mixed {
         $paramName = $param->getName();
-
         if (array_key_exists($paramName, $suppliedParameters)) {
             return $suppliedParameters[$paramName];
         }
 
         $groups = $this->extractTypeGroups($param);
-        $contextual = $this->resolveContextualGroups($reflector, $groups);
-        if ($contextual !== AttributeResolution::Unresolved) {
-            return $contextual;
+        if ($groups !== []) {
+            $contextual = $this->resolveContextualGroups($reflector, $groups);
+            if ($contextual !== AttributeResolution::Unresolved) {
+                return $contextual;
+            }
         }
 
         $definition = $this->resolveByDefinitionType($paramName, $param);
@@ -301,11 +301,8 @@ trait ResolvesAssociativeParameters
             }
         }
 
-        $resolved = $this->resolveAutowireGroups($reflector, $param, $type, $processed, $groups);
-        if ($resolved !== AttributeResolution::Unresolved) {
-            return $resolved;
-        }
-
-        return AttributeResolution::Unresolved;
+        return $groups === []
+            ? AttributeResolution::Unresolved
+            : $this->resolveAutowireGroups($reflector, $param, $type, $processed, $groups);
     }
 }
