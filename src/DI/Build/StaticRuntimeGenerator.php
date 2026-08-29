@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Build;
 
+use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\ProductionContainer;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Internal\AtomicFileWriter;
 use Infocyph\InterMix\Internal\ReflectionResource;
-use Psr\Container\ContainerInterface;
 use ReflectionClass;
 use ReflectionIntersectionType;
 use ReflectionNamedType;
@@ -20,14 +21,18 @@ final class StaticRuntimeGenerator
 {
     /**
      * @return array{
-     *   runtime: ContainerInterface,
+     *   runtime: ProductionContainer,
      *   compiled: list<string>,
      *   skipped: array<string, string>
      * }
      */
-    public function generate(DefinitionGraph $graph, string $filePath): array
-    {
+    public function generate(
+        DefinitionGraph $graph,
+        string $filePath,
+        ?Container $fallback = null,
+    ): array {
         [$plans, $skipped] = $this->buildPlans($graph);
+        $plans = $this->expandImplicitClasses($graph, $plans, $skipped);
         $plans = $this->pruneUnavailableDependencies($plans, $skipped);
         $plans = $this->pruneCycles($plans, $skipped);
         ksort($plans, SORT_STRING);
@@ -37,7 +42,7 @@ final class StaticRuntimeGenerator
             $slots[$id] = $slot;
         }
 
-        $source = $this->renderRuntime($plans, $slots);
+        $source = $this->renderRuntime($graph, $plans, $slots);
         AtomicFileWriter::write(
             $filePath,
             $source,
@@ -47,21 +52,24 @@ final class StaticRuntimeGenerator
         );
 
         return [
-            'runtime' => $this->load($filePath),
+            'runtime' => $this->load($filePath, $fallback),
             'compiled' => array_keys($plans),
             'skipped' => $skipped,
         ];
     }
 
-    public function load(string $filePath): ContainerInterface
+    public function load(string $filePath, ?Container $fallback = null): ProductionContainer
     {
         if (!is_file($filePath) || !is_readable($filePath)) {
             throw new ContainerException("Static runtime artifact is not readable: '$filePath'.");
         }
 
         $runtime = require $filePath;
-        if (!$runtime instanceof ContainerInterface) {
-            throw new ContainerException('Static runtime artifact must return a PSR-11 container.');
+        if (!$runtime instanceof ProductionContainer) {
+            throw new ContainerException('Static runtime artifact must return a production container.');
+        }
+        if ($fallback instanceof Container) {
+            $runtime->attachFallback($fallback);
         }
 
         return $runtime;
@@ -69,7 +77,7 @@ final class StaticRuntimeGenerator
 
     /**
      * @return array{
-     *   array<string, array{class: class-string, lifetime: LifetimeEnum, arguments: list<array{kind: 'service', id: string}|array{kind: 'value', code: string}>, dependencies: list<string>}>,
+     *   array<string, array{kind: 'class'|'value', class?: class-string, code?: string, lifetime: LifetimeEnum, arguments: list<array{kind: 'service', id: string}|array{kind: 'value', code: string}>, dependencies: list<string>}>,
      *   array<string, string>
      * }
      */
@@ -123,6 +131,45 @@ final class StaticRuntimeGenerator
         }
 
         return ['arguments' => $arguments, 'dependencies' => $dependencies];
+    }
+
+    /**
+     * @param array<string, array{kind: 'class'|'value', class?: class-string, code?: string, lifetime: LifetimeEnum, arguments: list<array{kind: 'service', id: string}|array{kind: 'value', code: string}>, dependencies: list<string>}> $plans
+     * @param array<string, string> $skipped
+     * @return array<string, array{kind: 'class'|'value', class?: class-string, code?: string, lifetime: LifetimeEnum, arguments: list<array{kind: 'service', id: string}|array{kind: 'value', code: string}>, dependencies: list<string>}>
+     */
+    private function expandImplicitClasses(
+        DefinitionGraph $graph,
+        array $plans,
+        array &$skipped,
+    ): array {
+        do {
+            $changed = false;
+            foreach ($plans as $plan) {
+                foreach ($plan['dependencies'] as $dependency) {
+                    if (isset($plans[$dependency]) || isset($skipped[$dependency]) || $graph->hasDefinition($dependency)) {
+                        continue;
+                    }
+                    if (!class_exists($dependency)) {
+                        $skipped[$dependency] = 'implicit dependency is not an autowireable class';
+
+                        continue;
+                    }
+
+                    $implicit = $this->planDefinition($graph, $dependency, $dependency);
+                    if (is_string($implicit)) {
+                        $skipped[$dependency] = $implicit;
+
+                        continue;
+                    }
+
+                    $plans[$dependency] = $implicit;
+                    $changed = true;
+                }
+            }
+        } while ($changed);
+
+        return $plans;
     }
 
     /**
@@ -229,17 +276,30 @@ final class StaticRuntimeGenerator
     }
 
     /**
-     * @return array{class: class-string, lifetime: LifetimeEnum, arguments: list<array{kind: 'service', id: string}|array{kind: 'value', code: string}>, dependencies: list<string>}|string
+     * @return array{kind: 'class'|'value', class?: class-string, code?: string, lifetime: LifetimeEnum, arguments: list<array{kind: 'service', id: string}|array{kind: 'value', code: string}>, dependencies: list<string>}|string
      */
     private function planDefinition(DefinitionGraph $graph, string $id, mixed $definition): array|string
     {
-        if (!is_string($definition) || !class_exists($definition)) {
-            return 'definition is not a concrete class-string';
+        $meta = $graph->definitionMetaFor($id);
+
+        if ($this->isExportable($definition)
+            && !(is_array($definition)
+                && isset($definition[0])
+                && is_string($definition[0])
+                && class_exists($definition[0]))
+            && !(is_string($definition) && class_exists($definition))
+        ) {
+            return [
+                'kind' => 'value',
+                'code' => var_export($definition, true),
+                'lifetime' => $meta['lifetime'],
+                'arguments' => [],
+                'dependencies' => [],
+            ];
         }
 
-        $meta = $graph->definitionMetaFor($id);
-        if ($meta['lifetime'] === LifetimeEnum::Scoped) {
-            return 'scoped lifetime is not implemented by the static runtime candidate';
+        if (!is_string($definition) || !class_exists($definition)) {
+            return 'definition requires the dynamic runtime';
         }
 
         $class = ReflectionResource::getClassReflection($definition);
@@ -264,6 +324,7 @@ final class StaticRuntimeGenerator
         }
 
         return [
+            'kind' => 'class',
             'class' => $class->getName(),
             'lifetime' => $meta['lifetime'],
             'arguments' => $constructor['arguments'],
@@ -272,9 +333,9 @@ final class StaticRuntimeGenerator
     }
 
     /**
-     * @param array<string, array{class: class-string, lifetime: LifetimeEnum, arguments: list<array{kind: 'service', id: string}|array{kind: 'value', code: string}>, dependencies: list<string>}> $plans
+     * @param array<string, array{kind: 'class'|'value', class?: class-string, code?: string, lifetime: LifetimeEnum, arguments: list<array{kind: 'service', id: string}|array{kind: 'value', code: string}>, dependencies: list<string>}> $plans
      * @param array<string, string> $skipped
-     * @return array<string, array{class: class-string, lifetime: LifetimeEnum, arguments: list<array{kind: 'service', id: string}|array{kind: 'value', code: string}>, dependencies: list<string>}>
+     * @return array<string, array{kind: 'class'|'value', class?: class-string, code?: string, lifetime: LifetimeEnum, arguments: list<array{kind: 'service', id: string}|array{kind: 'value', code: string}>, dependencies: list<string>}>
      */
     private function pruneCycles(array $plans, array &$skipped): array
     {
@@ -299,9 +360,9 @@ final class StaticRuntimeGenerator
     }
 
     /**
-     * @param array<string, array{class: class-string, lifetime: LifetimeEnum, arguments: list<array{kind: 'service', id: string}|array{kind: 'value', code: string}>, dependencies: list<string>}> $plans
+     * @param array<string, array{kind: 'class'|'value', class?: class-string, code?: string, lifetime: LifetimeEnum, arguments: list<array{kind: 'service', id: string}|array{kind: 'value', code: string}>, dependencies: list<string>}> $plans
      * @param array<string, string> $skipped
-     * @return array<string, array{class: class-string, lifetime: LifetimeEnum, arguments: list<array{kind: 'service', id: string}|array{kind: 'value', code: string}>, dependencies: list<string>}>
+     * @return array<string, array{kind: 'class'|'value', class?: class-string, code?: string, lifetime: LifetimeEnum, arguments: list<array{kind: 'service', id: string}|array{kind: 'value', code: string}>, dependencies: list<string>}>
      */
     private function pruneUnavailableDependencies(array $plans, array &$skipped): array
     {
@@ -325,11 +386,18 @@ final class StaticRuntimeGenerator
     }
 
     /**
-     * @param array{class: class-string, lifetime: LifetimeEnum, arguments: list<array{kind: 'service', id: string}|array{kind: 'value', code: string}>, dependencies: list<string>} $plan
+     * @param array{kind: 'class'|'value', class?: class-string, code?: string, lifetime: LifetimeEnum, arguments: list<array{kind: 'service', id: string}|array{kind: 'value', code: string}>, dependencies: list<string>} $plan
      * @param array<string, int> $slots
      */
     private function renderMethod(int $slot, array $plan, array $slots): string
     {
+        if ($plan['kind'] === 'value') {
+            return "    private function s{$slot}(): mixed\n"
+                . "    {\n"
+                . '        return ' . $plan['code'] . ";\n"
+                . "    }\n\n";
+        }
+
         $arguments = [];
         foreach ($plan['arguments'] as $argument) {
             $arguments[] = $argument['kind'] === 'service'
@@ -337,10 +405,24 @@ final class StaticRuntimeGenerator
                 : $argument['code'];
         }
 
-        $construction = 'new \\' . ltrim($plan['class'], '\\') . '(' . implode(', ', $arguments) . ')';
-        $return = $plan['lifetime'] === LifetimeEnum::Singleton
-            ? '$this->v' . $slot . ' ??= ' . $construction
-            : $construction;
+        $class = $plan['class'];
+        $construction = 'new \\' . ltrim($class, '\\') . '(' . implode(', ', $arguments) . ')';
+        if ($plan['lifetime'] === LifetimeEnum::Singleton) {
+            $return = '$this->v' . $slot . ' ??= ' . $construction;
+        } elseif ($plan['lifetime'] === LifetimeEnum::Scoped) {
+            return "    private function s{$slot}(): mixed\n"
+                . "    {\n"
+                . "        if (array_key_exists({$slot}, \$this->scope->resolved)) {\n"
+                . "            return \$this->scope->resolved[{$slot}];\n"
+                . "        }\n"
+                . "        if (array_key_exists({$slot}, \$this->scope->seeds)) {\n"
+                . "            return \$this->scope->resolved[{$slot}] = \$this->scope->seeds[{$slot}];\n"
+                . "        }\n\n"
+                . "        return \$this->scope->resolved[{$slot}] = {$construction};\n"
+                . "    }\n\n";
+        } else {
+            $return = $construction;
+        }
 
         return "    private function s{$slot}(): mixed\n"
             . "    {\n"
@@ -349,18 +431,17 @@ final class StaticRuntimeGenerator
     }
 
     /**
-     * @param array<string, array{class: class-string, lifetime: LifetimeEnum, arguments: list<array{kind: 'service', id: string}|array{kind: 'value', code: string}>, dependencies: list<string>}> $plans
+     * @param array<string, array{kind: 'class'|'value', class?: class-string, code?: string, lifetime: LifetimeEnum, arguments: list<array{kind: 'service', id: string}|array{kind: 'value', code: string}>, dependencies: list<string>}> $plans
      * @param array<string, int> $slots
      */
-    private function renderRuntime(array $plans, array $slots): string
+    private function renderRuntime(DefinitionGraph $graph, array $plans, array $slots): string
     {
         $source = "<?php\n\ndeclare(strict_types=1);\n\n";
-        $source .= "use Infocyph\\InterMix\\Exceptions\\NotFoundException;\n";
-        $source .= "use Psr\\Container\\ContainerInterface;\n\n";
-        $source .= "return new class implements ContainerInterface\n{\n";
+        $source .= "use Infocyph\\InterMix\\DI\\ProductionContainer;\n\n";
+        $source .= "return new class extends ProductionContainer\n{\n";
 
         foreach ($plans as $id => $plan) {
-            if ($plan['lifetime'] !== LifetimeEnum::Singleton) {
+            if ($plan['kind'] !== 'class' || $plan['lifetime'] !== LifetimeEnum::Singleton) {
                 continue;
             }
             $slot = $slots[$id];
@@ -375,7 +456,7 @@ final class StaticRuntimeGenerator
         foreach ($plans as $id => $_plan) {
             $source .= '            ' . var_export($id, true) . ' => $this->s' . $slots[$id] . "(),\n";
         }
-        $source .= "            default => throw new NotFoundException('Unknown static runtime identifier.'),\n";
+        $source .= "            default => \$this->fallbackGet(\$id),\n";
         $source .= "        };\n    }\n\n";
 
         $source .= "    public function has(string \$id): bool\n    {\n        return match (\$id) {\n";
@@ -383,7 +464,28 @@ final class StaticRuntimeGenerator
             $ids = implode(', ', array_map(static fn(string $id): string => var_export($id, true), array_keys($plans)));
             $source .= "            {$ids} => true,\n";
         }
-        $source .= "            default => false,\n        };\n    }\n\n";
+        $source .= "            default => \$this->fallbackHas(\$id),\n        };\n    }\n\n";
+
+        $source .= "    protected function slotFor(string \$id): ?int\n    {\n        return match (\$id) {\n";
+        foreach ($slots as $id => $slot) {
+            $source .= '            ' . var_export($id, true) . " => {$slot},\n";
+        }
+        $source .= "            default => null,\n        };\n    }\n\n";
+
+        $tags = [];
+        foreach (array_keys($plans) as $id) {
+            foreach ($graph->definitionMetaFor($id)['tags'] as $tag) {
+                $tags[$tag][] = $id;
+            }
+        }
+        if ($tags !== []) {
+            ksort($tags, SORT_STRING);
+            $source .= "    protected function taggedIds(string \$tag): array\n    {\n        return match (\$tag) {\n";
+            foreach ($tags as $tag => $ids) {
+                $source .= '            ' . var_export($tag, true) . ' => ' . var_export($ids, true) . ",\n";
+            }
+            $source .= "            default => [],\n        };\n    }\n\n";
+        }
 
         foreach ($plans as $id => $plan) {
             $source .= $this->renderMethod($slots[$id], $plan, $slots);
