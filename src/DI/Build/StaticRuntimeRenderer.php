@@ -27,13 +27,14 @@ final class StaticRuntimeRenderer
     public function render(DefinitionGraph $graph, array $plans, array $slots): string
     {
         $invocationRenderer = new StaticInvocationRenderer();
+        $lifecycleRenderer = new StaticLifecycleHookRenderer();
         $source = "<?php\n\ndeclare(strict_types=1);\n\n";
         $source .= "use Infocyph\\InterMix\\DI\\ProductionContainer;\n\n";
         $source .= "return new class extends ProductionContainer\n{\n";
         $source .= $this->renderAliasSingletonProperties($plans);
         $source .= $this->renderFactorySingletonProperties($plans);
         $source .= $invocationRenderer->renderSingletonProperties($plans);
-        $source .= $this->renderHookedValueSingletonProperties($graph, $plans);
+        $source .= $lifecycleRenderer->renderValueSingletonProperties($graph, $plans);
         $source .= $this->renderSingletonProperties($plans, $slots);
         $source .= $this->renderGet($plans, $slots);
         $source .= $this->renderHas($plans);
@@ -43,10 +44,16 @@ final class StaticRuntimeRenderer
         $source .= $this->renderFreshMap($plans, $slots);
         $source .= $this->renderFreshMethods($plans, $slots);
         $source .= new StaticFreshInvocationRenderer()->render($plans, $slots);
-        $source .= $this->renderCompiledSingletonValues($graph, $plans, $slots);
+        $source .= $this->renderCompiledSingletonValues($graph, $plans, $slots, $lifecycleRenderer);
         $source .= $this->renderTags($graph, $plans);
-        $source .= $this->renderScopeLeaveHooks($graph);
-        $source .= $this->renderServiceMethods($graph, $plans, $slots, $invocationRenderer);
+        $source .= $lifecycleRenderer->renderScopeLeaveHooks($graph);
+        $source .= $this->renderServiceMethods(
+            $graph,
+            $plans,
+            $slots,
+            $invocationRenderer,
+            $lifecycleRenderer,
+        );
 
         return rtrim($source) . "\n};\n";
     }
@@ -141,11 +148,6 @@ final class StaticRuntimeRenderer
         return $class . '::' . $plan['method'] . '(' . implode(', ', $arguments) . ')';
     }
 
-    private function hasResolutionHooks(DefinitionGraph $graph, string $id): bool
-    {
-        return $graph->hasResolvingHook($id) || $graph->hasResolvedHook($id);
-    }
-
     /**
      * @param AliasPlan $plan
      * @param array<string, int> $slots
@@ -156,10 +158,11 @@ final class StaticRuntimeRenderer
         int $slot,
         array $plan,
         array $slots,
+        StaticLifecycleHookRenderer $lifecycleRenderer,
     ): string {
         $target = '$this->s' . $slots[$plan['target']] . '()';
-        if ($this->hasResolutionHooks($graph, $id)) {
-            return $this->renderHookedExpressionMethod(
+        if ($lifecycleRenderer->hasResolutionHooks($graph, $id)) {
+            return $lifecycleRenderer->renderExpressionMethod(
                 $graph,
                 $slot,
                 $id,
@@ -211,9 +214,16 @@ final class StaticRuntimeRenderer
         int $slot,
         array $plan,
         array $slots,
+        StaticLifecycleHookRenderer $lifecycleRenderer,
     ): string {
-        if ($this->hasResolutionHooks($graph, $id)) {
-            return $this->renderHookedClassMethod($graph, $id, $slot, $plan, $slots);
+        if ($lifecycleRenderer->hasResolutionHooks($graph, $id)) {
+            return $lifecycleRenderer->renderClassMethod(
+                $graph,
+                $slot,
+                $id,
+                $plan['lifetime'],
+                $this->classServiceStatements($plan, $slots),
+            );
         }
 
         $source = "    private function s{$slot}(): mixed\n    {\n";
@@ -268,6 +278,7 @@ final class StaticRuntimeRenderer
         DefinitionGraph $graph,
         array $plans,
         array $slots,
+        StaticLifecycleHookRenderer $lifecycleRenderer,
     ): string {
         $entries = [];
         foreach ($plans as $id => $plan) {
@@ -299,7 +310,7 @@ final class StaticRuntimeRenderer
                     'id' => $id,
                     'value' => "\$this->invocationSingletons[{$slot}]",
                 ];
-            } elseif ($plan['kind'] === 'value' && $this->hasResolutionHooks($graph, $id)) {
+            } elseif ($lifecycleRenderer->hasResolutionHooks($graph, $id)) {
                 $entries[] = [
                     'guard' => "array_key_exists({$slot}, \$this->hookedValueSingletons)",
                     'id' => $id,
@@ -356,10 +367,11 @@ final class StaticRuntimeRenderer
         int $slot,
         array $plan,
         array $slots,
+        StaticLifecycleHookRenderer $lifecycleRenderer,
     ): string {
         $expression = $this->factoryExpression($plan, $slots);
-        if ($this->hasResolutionHooks($graph, $id)) {
-            return $this->renderHookedExpressionMethod(
+        if ($lifecycleRenderer->hasResolutionHooks($graph, $id)) {
+            return $lifecycleRenderer->renderExpressionMethod(
                 $graph,
                 $slot,
                 $id,
@@ -481,112 +493,6 @@ final class StaticRuntimeRenderer
         return $source . "        };\n    }\n\n";
     }
 
-    /**
-     * @param ClassPlan $plan
-     * @param array<string, int> $slots
-     */
-    private function renderHookedClassMethod(
-        DefinitionGraph $graph,
-        string $id,
-        int $slot,
-        array $plan,
-        array $slots,
-    ): string {
-        $source = "    private function s{$slot}(): mixed\n    {\n";
-        $source .= $this->renderSeedGuard($slot);
-        if ($plan['lifetime'] === LifetimeEnum::Scoped) {
-            $source .= "        if (array_key_exists({$slot}, \$this->scope->resolved)) {\n";
-            $source .= "            return \$this->scope->resolved[{$slot}];\n";
-            $source .= "        }\n\n";
-        } elseif ($plan['lifetime'] === LifetimeEnum::Singleton) {
-            $source .= "        if (\$this->v{$slot} !== null) {\n";
-            $source .= "            return \$this->v{$slot};\n";
-            $source .= "        }\n\n";
-        }
-        if ($graph->hasResolvingHook($id)) {
-            $source .= '        $this->dispatchCompiledResolvingHooks(' . var_export($id, true) . ");\n\n";
-        }
-        $source .= $this->classServiceStatements($plan, $slots);
-        if ($plan['lifetime'] === LifetimeEnum::Scoped) {
-            $source .= "\n        \$this->scope->resolved[{$slot}] = \$instance;\n";
-        } elseif ($plan['lifetime'] === LifetimeEnum::Singleton) {
-            $source .= "\n        \$this->v{$slot} = \$instance;\n";
-        }
-        if ($graph->hasResolvedHook($id)) {
-            $source .= '        $this->dispatchCompiledResolvedHooks(' . var_export($id, true) . ", \$instance);\n";
-        }
-
-        return $source . "\n        return \$instance;\n    }\n\n";
-    }
-
-    private function renderHookedExpressionMethod(
-        DefinitionGraph $graph,
-        int $slot,
-        string $id,
-        LifetimeEnum $lifetime,
-        string $expression,
-        string $singletonStore,
-    ): string {
-        $source = "    private function s{$slot}(): mixed\n    {\n";
-        $source .= $this->renderSeedGuard($slot);
-        if ($lifetime === LifetimeEnum::Scoped) {
-            $source .= "        if (array_key_exists({$slot}, \$this->scope->resolved)) {\n";
-            $source .= "            return \$this->scope->resolved[{$slot}];\n";
-            $source .= "        }\n\n";
-        } elseif ($lifetime === LifetimeEnum::Singleton) {
-            $source .= "        if (array_key_exists({$slot}, \$this->{$singletonStore})) {\n";
-            $source .= "            return \$this->{$singletonStore}[{$slot}];\n";
-            $source .= "        }\n\n";
-        }
-        if ($graph->hasResolvingHook($id)) {
-            $source .= '        $this->dispatchCompiledResolvingHooks(' . var_export($id, true) . ");\n\n";
-        }
-        $source .= "        \$value = {$expression};\n";
-        if ($lifetime === LifetimeEnum::Scoped) {
-            $source .= "        \$this->scope->resolved[{$slot}] = \$value;\n";
-        } elseif ($lifetime === LifetimeEnum::Singleton) {
-            $source .= "        \$this->{$singletonStore}[{$slot}] = \$value;\n";
-        }
-        if ($graph->hasResolvedHook($id)) {
-            $source .= '        $this->dispatchCompiledResolvedHooks(' . var_export($id, true) . ", \$value);\n";
-        }
-
-        return $source . "\n        return \$value;\n    }\n\n";
-    }
-
-    /** @param array<string, ServicePlan> $plans */
-    private function renderHookedValueSingletonProperties(DefinitionGraph $graph, array $plans): string
-    {
-        foreach ($plans as $id => $plan) {
-            if ($plan['kind'] === 'value'
-                && $plan['lifetime'] === LifetimeEnum::Singleton
-                && $this->hasResolutionHooks($graph, $id)
-            ) {
-                return "    /** @var array<int, mixed> */\n    private array \$hookedValueSingletons = [];\n\n";
-            }
-        }
-
-        return '';
-    }
-
-    private function renderScopeLeaveHooks(DefinitionGraph $graph): string
-    {
-        $scopes = $graph->scopeLeaveHookScopes();
-        if ($scopes === []) {
-            return '';
-        }
-        sort($scopes, SORT_STRING);
-        $values = implode(', ', array_map(static fn(string $scope): string => var_export($scope, true), $scopes));
-
-        return "    protected function requiresScopeLeaveHook(string \$scope): bool\n"
-            . "    {\n"
-            . "        return match (\$scope) {\n"
-            . "            {$values} => true,\n"
-            . "            default => false,\n"
-            . "        };\n"
-            . "    }\n\n";
-    }
-
     private function renderSeedGuard(int $slot): string
     {
         return "        if (\$this->scope->parent !== null && array_key_exists({$slot}, \$this->scope->seeds)) {\n"
@@ -603,13 +509,35 @@ final class StaticRuntimeRenderer
         array $plans,
         array $slots,
         StaticInvocationRenderer $invocationRenderer,
+        StaticLifecycleHookRenderer $lifecycleRenderer,
     ): string {
         $source = '';
         foreach ($plans as $id => $plan) {
             $source .= match ($plan['kind']) {
-                'alias' => $this->renderAliasMethod($graph, $id, $slots[$id], $plan, $slots),
-                'class' => $this->renderClassMethod($graph, $id, $slots[$id], $plan, $slots),
-                'factory' => $this->renderFactoryMethod($graph, $id, $slots[$id], $plan, $slots),
+                'alias' => $this->renderAliasMethod(
+                    $graph,
+                    $id,
+                    $slots[$id],
+                    $plan,
+                    $slots,
+                    $lifecycleRenderer,
+                ),
+                'class' => $this->renderClassMethod(
+                    $graph,
+                    $id,
+                    $slots[$id],
+                    $plan,
+                    $slots,
+                    $lifecycleRenderer,
+                ),
+                'factory' => $this->renderFactoryMethod(
+                    $graph,
+                    $id,
+                    $slots[$id],
+                    $plan,
+                    $slots,
+                    $lifecycleRenderer,
+                ),
                 'invocation' => $invocationRenderer->renderMethod(
                     $slots[$id],
                     $plan,
@@ -618,7 +546,13 @@ final class StaticRuntimeRenderer
                     $graph->hasResolvingHook($id),
                     $graph->hasResolvedHook($id),
                 ),
-                'value' => $this->renderValueMethod($graph, $id, $slots[$id], $plan),
+                'value' => $this->renderValueMethod(
+                    $graph,
+                    $id,
+                    $slots[$id],
+                    $plan,
+                    $lifecycleRenderer,
+                ),
             };
         }
 
@@ -684,9 +618,10 @@ final class StaticRuntimeRenderer
         string $id,
         int $slot,
         array $plan,
+        StaticLifecycleHookRenderer $lifecycleRenderer,
     ): string {
-        if ($this->hasResolutionHooks($graph, $id)) {
-            return $this->renderHookedExpressionMethod(
+        if ($lifecycleRenderer->hasResolutionHooks($graph, $id)) {
+            return $lifecycleRenderer->renderExpressionMethod(
                 $graph,
                 $slot,
                 $id,
