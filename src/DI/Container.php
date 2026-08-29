@@ -141,7 +141,6 @@ final class Container implements ContainerInterface, ArrayAccess
             $tracer->setLevel(TraceLevelEnum::Verbose);
             $this->get($id);
         } catch (Throwable) {
-            // Trace collection intentionally survives resolution failure.
         } finally {
             $tracer->setCaptureLocation($previousCaptureLocation);
             $tracer->setLevel($previousLevel);
@@ -524,15 +523,11 @@ final class Container implements ContainerInterface, ArrayAccess
 
     private function activateCompiledResolver(): void
     {
-        // Generic mode deliberately opts out of injection semantics. In injected
-        // mode, activating an artifact must replace an already-materialized
-        // InjectedCall as well as an untouched resolver factory.
         if ($this->resolverClass !== GenericCall::class) {
             $this->resolver = new CompiledCall($this->repository);
         }
     }
 
-    /** @return Closure(): CompiledCall|InjectedCall|GenericCall */
     private function resolverFactory(): Closure
     {
         return function (): CompiledCall|InjectedCall|GenericCall {
@@ -547,7 +542,10 @@ final class Container implements ContainerInterface, ArrayAccess
         };
     }
 
-    /** @param array<array-key, mixed> $spec @return array{kind:'method',class:string,method:string} */
+    /**
+     * @param array<array-key, mixed> $spec
+     * @return array{kind:'method',class:string,method:string}
+     */
     private function parseArrayMethodCallable(array $spec): array
     {
         [$class, $method] = array_values($spec);
@@ -638,7 +636,10 @@ final class Container implements ContainerInterface, ArrayAccess
         return ['kind' => 'method', 'class' => $class, 'method' => $method];
     }
 
-    /** @return array{kind:'method',class:string,method:string} */
+    /**
+     * @param non-empty-string $separator
+     * @return array{kind:'method',class:string,method:string}
+     */
     private function parseClassMethodString(string $spec, string $separator): array
     {
         [$class, $method] = explode($separator, $spec, 2);
