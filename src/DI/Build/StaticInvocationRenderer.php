@@ -8,8 +8,8 @@ use Infocyph\InterMix\DI\Support\LifetimeEnum;
 
 /**
  * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
- * @phpstan-type PropertyPlan array{declaring: class-string, property: string, static: bool, argument: ServiceArgument}
- * @phpstan-type MethodPlan array{method: string, arguments: list<ServiceArgument>, dependencies: list<string>}
+ * @phpstan-type PropertyPlan array{declaring: class-string, property: string, static: bool, argument: ServiceArgument|null, runtime?: 'attribute'|'assign'}
+ * @phpstan-type MethodPlan array{method: string, arguments: list<ServiceArgument>, dependencies: list<string>, runtime?: bool}
  * @phpstan-type InvocationPlan array{kind: 'invocation', class: class-string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, invocation: MethodPlan, dependencies: list<string>}
  * @internal
  */
@@ -147,22 +147,10 @@ final class StaticInvocationRenderer
 
         $class = '\\' . ltrim($plan['class'], '\\');
         $source = '        $instance = new ' . $class . '(' . implode(', ', $constructorArguments) . ");\n";
-        foreach ($plan['properties'] as $property) {
-            $value = $this->argumentExpression($property['argument'], $slots);
-            if ($property['static']) {
-                $declaring = '\\' . ltrim($property['declaring'], '\\');
-                $source .= '        ' . $declaring . '::$' . $property['property'] . " = {$value};\n";
-            } else {
-                $source .= '        $instance->' . $property['property'] . " = {$value};\n";
-            }
-        }
+        $islands = new StaticRuntimeIslandRenderer();
+        $source .= $islands->propertyStatements($plan['properties'], $slots);
+        $method = $islands->methodExpression($plan['class'], $plan['invocation'], $slots);
 
-        $methodArguments = [];
-        foreach ($plan['invocation']['arguments'] as $argument) {
-            $methodArguments[] = $this->argumentExpression($argument, $slots);
-        }
-
-        return $source . ('        $result = $instance->' . $plan['invocation']['method']
-            . '(' . implode(', ', $methodArguments) . ");\n");
+        return $source . "        \$result = {$method};\n";
     }
 }
