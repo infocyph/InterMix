@@ -10,6 +10,7 @@ use Infocyph\InterMix\DI\Build\StaticRuntimeGenerator;
 use Infocyph\InterMix\DI\Managers\DefinitionManager;
 use Infocyph\InterMix\DI\Managers\OptionsManager;
 use Infocyph\InterMix\DI\Managers\RegistrationManager;
+use Infocyph\InterMix\DI\Support\AliasDefinition;
 use Infocyph\InterMix\DI\Support\ContextualBindingBuilder;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\DI\Support\PendingFactoryBinding;
@@ -39,7 +40,7 @@ final class ContainerBuilder
         string $target,
         LifetimeEnum $lifetime = LifetimeEnum::Singleton,
     ): self {
-        $this->development->alias($id, $target, $lifetime);
+        $this->development->bind($id, new AliasDefinition($target), $lifetime);
 
         return $this;
     }
