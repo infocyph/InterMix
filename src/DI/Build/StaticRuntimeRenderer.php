@@ -44,7 +44,10 @@ final class StaticRuntimeRenderer
         return rtrim($source) . "\n};\n";
     }
 
-    /** @param ServiceArgument $argument */
+    /**
+     * @param ServiceArgument $argument
+     * @param array<string, int> $slots
+     */
     private function argumentExpression(array $argument, array $slots): string
     {
         return $argument['kind'] === 'service'
