@@ -133,8 +133,10 @@ final class CompiledRuntimeBench
 
     private function removeCompiledPath(string $path): void
     {
-        if (is_file($path)) {
-            unlink($path);
+        foreach ([$path, $path . '.meta.json'] as $artifact) {
+            if (is_file($artifact)) {
+                unlink($artifact);
+            }
         }
     }
 
