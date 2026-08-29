@@ -31,17 +31,13 @@ use Psr\Container\ContainerInterface;
 use ReflectionException;
 use Throwable;
 
-/**
- * @implements ArrayAccess<string, mixed>
- */
+/** @implements ArrayAccess<string, mixed> */
 final class Container implements ContainerInterface, ArrayAccess
 {
     use ContainerProxy;
 
     public const string DEFAULT_ALIAS = 'intermix.default';
-
     public const string DI_ALIAS = 'intermix.di';
-
     public const string DIRECT_ALIAS = 'intermix.direct';
 
     private const int CALLABLE_DESCRIPTOR_CACHE_LIMIT = 512;
@@ -50,70 +46,30 @@ final class Container implements ContainerInterface, ArrayAccess
     protected static array $instances = [];
 
     protected ?DefinitionManager $definitionManager = null;
-
     protected InvocationManager $invocationManager;
-
     protected ?OptionsManager $optionsManager = null;
-
     protected ?RegistrationManager $registrationManager = null;
-
     protected Repository $repository;
+    protected Closure|CompiledCall|InjectedCall|GenericCall $resolver;
 
-    protected closure|CompiledCall|InjectedCall|GenericCall $resolver;
-
-    /**
-     * @var null|array{path: string, fingerprint: string, compiled: array<int, string>, skipped: array<string, string>}
-     */
+    /** @var null|array{path: string, fingerprint: string, compiled: array<int, string>, skipped: array<string, string>} */
     private ?array $compilationReport = null;
 
     /** @var class-string<InjectedCall|GenericCall> */
     private string $resolverClass = InjectedCall::class;
 
-    /**
-     * Container constructor.
-     *
-     * @param string $instanceAlias Optional alias for this Container instance.
-     *                              Defaults to 'default'.
-     * @throws ContainerException
-     */
     public function __construct(private readonly string $instanceAlias = self::DEFAULT_ALIAS)
     {
-        $this->repository = new Repository($this);
-        $this->repository->setAlias($this->instanceAlias);
-        $this->repository->setFunctionReference(
-            ContainerInterface::class,
-            $this,
-        );
-        $this->resolver = fn() => $this->repository->hasCompiledResolvers()
-            ? new CompiledCall($this->repository)
-            : new InjectedCall($this->repository);
+        $this->repository = new Repository($this, $this->instanceAlias);
+        $this->resolver = $this->resolverFactory();
         $this->invocationManager = new InvocationManager($this->repository, $this);
     }
 
-    /**
-     * Gets or creates a container instance by alias.
-     *
-     * If a container with the given alias already exists, it is returned.
-     * Otherwise, a new container instance is created and stored in the registry.
-     *
-     * @param string $instanceAlias The alias of the container instance to get or create.
-     *                              Defaults to 'default'.
-     *
-     * @return self The container instance.
-     * @throws ContainerException
-     */
     public static function instance(string $instanceAlias = self::DEFAULT_ALIAS): self
     {
-        if (!isset(self::$instances[$instanceAlias])) {
-            self::$instances[$instanceAlias] = new self($instanceAlias);
-        }
-
-        return self::$instances[$instanceAlias];
+        return self::$instances[$instanceAlias] ??= new self($instanceAlias);
     }
 
-    /**
-     * @throws ContainerException
-     */
     public function alias(string $id, string $target, LifetimeEnum $lifetime = LifetimeEnum::Singleton): self
     {
         $this->definitions()->bind($id, $target, $lifetime);
@@ -121,24 +77,12 @@ final class Container implements ContainerInterface, ArrayAccess
         return $this;
     }
 
-    /**
-     * Retrieve the attribute registry.
-     *
-     * The attribute registry is responsible for managing and resolving attribute
-     * definitions and their corresponding resolvers. This method provides access
-     * to the attribute registry associated with the repository.
-     *
-     * @return AttributeRegistry The attribute registry instance.
-     */
     public function attributeRegistry(): AttributeRegistry
     {
         return $this->repository->attributeRegistry();
     }
 
-    /**
-     * @param array<int, string> $tags
-     * @throws ContainerException
-     */
+    /** @param array<int, string> $tags */
     public function bind(
         string $id,
         mixed $definition,
@@ -150,20 +94,7 @@ final class Container implements ContainerInterface, ArrayAccess
         return $this;
     }
 
-    /**
-     * Bind a factory whose dependencies are captured explicitly.
-     *
-     * Unlike a regular Closure definition, a direct factory is invoked without
-     * reflection or parameter autowiring. The container is supplied as the
-     * first argument. Resolution follows the selected lifetime in both injected
-     * and non-injected container modes.
-     *
-     * @param string $id Service identifier.
-     * @param Closure $factory Factory called as ``$factory($this)``.
-     * @param LifetimeEnum $lifetime Singleton, Scoped, or Transient.
-     * @param array<int, string> $tags Optional lookup tags.
-     * @throws ContainerException
-     */
+    /** @param array<int, string> $tags */
     public function bindFactory(
         string $id,
         Closure $factory,
@@ -173,62 +104,32 @@ final class Container implements ContainerInterface, ArrayAccess
         return $this->bind($id, new DirectFactory($factory, $this), $lifetime, $tags);
     }
 
-    /**
-     * Resolves a class with method name (if provided) and executes the method with optional parameters.
-     *
-     * This method is a convenience wrapper for the InvocationManager's call() method.
-     *
-     * @param string|Closure|callable $classOrClosure The class name or closure to be resolved and executed.
-     * @param string|bool|null $method The method to call on the resolved class (or null if no method should be called).
-     * @return mixed The result of executing the resolved class or closure.
-     * @throws ContainerException
-     * @throws ReflectionException|\Psr\Cache\InvalidArgumentException
-     */
+    /** @throws ContainerException|ReflectionException|\Psr\Cache\InvalidArgumentException */
     public function call(string|Closure|callable $classOrClosure, string|bool|null $method = null): mixed
     {
         return $this->invocationManager->call($classOrClosure, $method);
     }
 
-    /**
-     * Return the result of the most recent successful resolver compilation.
-     *
-     * @return null|array{
-     *   path: string,
-     *   fingerprint: string,
-     *   compiled: array<int, string>,
-     *   skipped: array<string, string>
-     * }
-     */
+    /** @return null|array{path: string, fingerprint: string, compiled: array<int, string>, skipped: array<string, string>} */
     public function compilationReport(): ?array
     {
         return $this->compilationReport;
     }
 
-    /**
-     * @throws ContainerException|ReflectionException
-     */
+    /** @throws ContainerException|ReflectionException */
     public function compileTo(string $path, bool $load = false): self
     {
         $compiled = new CompiledResolverGenerator()->generate($this, $path);
         $this->compilationReport = $compiled['report'];
         if ($load) {
             $this->repository->setCompiledResolver($compiled['resolver'], $compiled['ids']);
+            $this->activateCompiledResolver();
         }
 
         return $this;
     }
 
-    /**
-     * Debugs the service resolution process for a given ID.
-     *
-     * This method attempts to retrieve the service instance for the given ID,
-     * and returns the current debug trace. If any errors occur during the
-     * service resolution process, they are caught and ignored, as the goal
-     * here is to obtain a debug trace, not to actually use the service.
-     *
-     * @param string $id The ID of the service to debug.
-     * @return array<int|string, mixed> The debug trace for the service resolution process.
-     */
+    /** @return array<int|string, mixed> */
     public function debug(string $id): array
     {
         $tracer = $this->repository->tracer();
@@ -240,7 +141,7 @@ final class Container implements ContainerInterface, ArrayAccess
             $tracer->setLevel(TraceLevelEnum::Verbose);
             $this->get($id);
         } catch (Throwable) {
-            // swallow; we still want trace
+            // Trace collection intentionally survives resolution failure.
         } finally {
             $tracer->setCaptureLocation($previousCaptureLocation);
             $tracer->setLevel($previousLevel);
@@ -249,30 +150,11 @@ final class Container implements ContainerInterface, ArrayAccess
         return $tracer->toArray();
     }
 
-    /**
-     * Retrieve the definition manager.
-     *
-     * The definition manager is responsible for storing and retrieving
-     * definitions from the container. It provides methods for adding,
-     * retrieving, and removing definitions.
-     */
     public function definitions(): DefinitionManager
     {
         return $this->definitionManager ??= new DefinitionManager($this->repository, $this);
     }
 
-    /**
-     * Enables or disables lazy loading for the container.
-     *
-     * When lazy loading is enabled, services or definitions
-     * are not resolved until explicitly requested for the first time.
-     * This can improve performance by deferring the initialization
-     * of services until they are actually needed.
-     *
-     * @param bool $lazy Whether to enable lazy loading. Defaults to true.
-     * @return self The container instance for method chaining.
-     * @throws ContainerException
-     */
     public function enableLazyLoading(bool $lazy = true): self
     {
         $this->repository->enableLazyLoading($lazy);
@@ -280,18 +162,7 @@ final class Container implements ContainerInterface, ArrayAccess
         return $this;
     }
 
-    /**
-     * Enter a named scope for scoped-lifetime services.
-     *
-     * Scopes allow you to create isolated contexts for services with scoped lifetime.
-     * Services registered with scoped lifetime will be unique within each scope
-     * but shared across multiple requests within the same scope.
-     *
-     * @param string $scope The name of the scope to enter.
-     * @param array<string, mixed> $instances Ready instances exposed only inside this scope.
-     * @return self The container instance for method chaining.
-     * @throws ContainerException If the scope cannot be entered.
-     */
+    /** @param array<string, mixed> $instances */
     public function enterScope(string $scope, array $instances = []): self
     {
         $this->repository->enterScope($scope, $instances);
@@ -299,22 +170,7 @@ final class Container implements ContainerInterface, ArrayAccess
         return $this;
     }
 
-    /**
-     * Export dependency graph data collected by tracer instrumentation.
-     *
-     * This method provides a detailed graph of service dependencies that have been
-     * resolved during the container's operation. The graph can be used for analysis,
-     * debugging, or visualization of the dependency structure.
-     *
-     * If $warmFromId is provided, the container will resolve that service first
-     * to ensure its dependencies are included in the graph.
-     *
-     * @param string|null $warmFromId Optional service ID to resolve before exporting the graph.
-     * @param bool $clear Whether to clear the tracer data after exporting. Defaults to false.
-     * @return array<string, mixed> An array representing the dependency graph with nodes and edges.
-     * @throws \Exception If there's an error during service resolution or graph generation.
-     * @throws \Psr\Cache\InvalidArgumentException If there's an issue with cache operations during tracing.
-     */
+    /** @return array<string, mixed> */
     public function exportGraph(?string $warmFromId = null, bool $clear = false): array
     {
         if ($warmFromId !== null) {
@@ -324,34 +180,12 @@ final class Container implements ContainerInterface, ArrayAccess
         return $this->repository->tracer()->dependencyGraph($clear);
     }
 
-    /**
-     * Begin a reflection-free factory binding.
-     *
-     * Call singleton(), scoped(), or transient() on the returned pending
-     * binding to register the factory. The factory receives this container as
-     * its first argument and is never parameter-autowired.
-     *
-     * @param string $id Service identifier.
-     * @param Closure $factory Factory called as ``$factory($this)``.
-     * @throws ContainerException
-     */
     public function factory(string $id, Closure $factory): PendingFactoryBinding
     {
         return new PendingFactoryBinding($this, $id, $factory);
     }
 
-    /**
-     * Finds and retrieves all service definitions tagged with a specified tag.
-     *
-     * This method iterates over the repository's definition metadata,
-     * checking each definition's tags for a match against the provided tag.
-     * If a match is found, the service definition is resolved and added to
-     * the result array.
-     *
-     * @param string $tag The tag to search for among service definitions.
-     * @return array<string, mixed> An array of resolved service definitions matching the provided tag.
-     * @throws \Psr\Cache\InvalidArgumentException
-     */
+    /** @return array<string, mixed> */
     public function findByTag(string $tag): array
     {
         $matches = [];
@@ -362,9 +196,7 @@ final class Container implements ContainerInterface, ArrayAccess
         return $matches;
     }
 
-    /**
-     * @return iterable<string, callable(): mixed>
-     */
+    /** @return iterable<string, callable(): mixed> */
     public function findByTagLazy(string $tag): iterable
     {
         foreach ($this->repository->getIdsByTag($tag) as $id) {
@@ -372,20 +204,7 @@ final class Container implements ContainerInterface, ArrayAccess
         }
     }
 
-    /**
-     * Retrieves a value from the container.
-     *
-     * The container will first try to find a definition matching the given ID.
-     * If a matching definition is found, the container will attempt to resolve
-     * the definition and return the result. If no matching definition is found,
-     * the container may attempt to auto-resolve the ID if it is a class or
-     * closure.
-     *
-     * @param string $id The ID of the value to retrieve.
-     *
-     * @return mixed The retrieved value.
-     * @throws \Exception|\Psr\Cache\InvalidArgumentException If the container is unable to retrieve the value.
-     */
+    /** @throws \Exception|\Psr\Cache\InvalidArgumentException */
     public function get(string $id): mixed
     {
         try {
@@ -404,12 +223,7 @@ final class Container implements ContainerInterface, ArrayAccess
         }
     }
 
-    /**
-     * Retrieves the class name of the current resolver being used by the repository.
-     *
-     * @return CompiledCall|InjectedCall|GenericCall The resolver currently active in the container.
-     * @internal
-     */
+    /** @internal */
     public function getCurrentResolver(): CompiledCall|InjectedCall|GenericCall
     {
         if ($this->resolver instanceof Closure) {
@@ -433,82 +247,34 @@ final class Container implements ContainerInterface, ArrayAccess
         return $this->resolver;
     }
 
-    /**
-     * INTERNAL – tooling helper, *not* a public API promise.
-     *
-     * @internal
-     */
+    /** @internal */
     public function getRepository(): Repository
     {
         return $this->repository;
     }
 
-    /**
-     * Resolves a definition ID and returns the result of the resolved instance.
-     *
-     * If the resolved instance is a closure, it is called with no arguments and
-     * the result is returned. Otherwise, the resolved instance itself is returned.
-     *
-     * @param string $id The ID of the definition to resolve and return.
-     *
-     * @return mixed The result of the resolved instance, or the resolved instance itself.
-     * @throws ContainerException
-     * @throws ReflectionException
-     * @throws \Psr\Cache\InvalidArgumentException
-     */
+    /** @throws ContainerException|ReflectionException|\Psr\Cache\InvalidArgumentException */
     public function getReturn(string $id): mixed
     {
         return $this->invocationManager->getReturn($id);
     }
 
-    /**
-     * Determine whether an ID can be resolved by the container.
-     *
-     * This broad PSR-style check includes explicit registrations, resolved
-     * entries, autowireable classes, and active environment interface mappings.
-     * It does not resolve the entry.
-     *
-     * @phpstan-impure
-     */
+    /** @phpstan-impure */
     public function has(string $id): bool
     {
         return $this->invocationManager->has($id);
     }
 
-    /**
-     * Retrieve the invocation manager.
-     *
-     * The invocation manager is responsible for resolving definitions into values,
-     * and for calling methods and functions with the resolved values as arguments.
-     *
-     * @return InvocationManager The invocation manager.
-     */
     public function invocation(): InvocationManager
     {
         return $this->invocationManager;
     }
 
-    /**
-     * Determine whether a service has been resolved at least once by this container.
-     *
-     * Resolution history is independent of definition existence, current cache
-     * contents, scope resets, and broad PSR-style resolvability.
-     */
     public function isResolved(string $id): bool
     {
         return $this->repository->isResolved($id);
     }
 
-    /**
-     * Leave the current scope and reset scoped instances for it.
-     *
-     * This method exits the current scope and cleans up any service instances
-     * that were created within that scope. Subsequent requests for scoped services
-     * will create new instances within the parent scope or default context.
-     *
-     * @return self The container instance for method chaining.
-     * @throws ContainerException If the scope cannot be left properly.
-     */
     public function leaveScope(): self
     {
         $this->repository->leaveScope();
@@ -516,51 +282,19 @@ final class Container implements ContainerInterface, ArrayAccess
         return $this;
     }
 
-    /**
-     * Locks the container from future modifications.
-     *
-     * Once the container is locked, no more definitions, values, or options can be set.
-     * This method is useful for tests or other scenarios where you want to ensure that
-     * the container does not change after it has been configured.
-     *
-     * @return self The container instance.
-     */
     public function lock(): self
     {
-        // Let the repository handle the lock
         $this->repository->lock();
 
         return $this;
     }
 
-    /**
-     * Creates a new instance of the given class with dependency injection
-     * and optionally calls a method on the instance.
-     *
-     * This method is a convenience wrapper for the InvocationManager's
-     * make() method, providing the ability to create objects with their
-     * dependencies injected and optionally execute a specified method.
-     *
-     * @param string $class The class name to create a new instance of.
-     * @param string|bool $method The method to call on the instance, or false to not call a method.
-     * @return mixed The newly created instance, or the result of the called method.
-     * @throws ContainerException
-     * @throws ReflectionException
-     */
+    /** @throws ContainerException|ReflectionException */
     public function make(string $class, string|bool $method = false): mixed
     {
         return $this->invocationManager->make($class, $method);
     }
 
-    /**
-     * Register a host callback that may define an otherwise unresolved service.
-     *
-     * Callbacks run in registration order and receive the missing ID and this
-     * container. Their return values are ignored; resolution succeeds only when
-     * the callback makes the ID normally resolvable.
-     *
-     * @throws ContainerException
-     */
     public function onMissing(callable $callback): self
     {
         $this->repository->onMissing($callback);
@@ -568,9 +302,6 @@ final class Container implements ContainerInterface, ArrayAccess
         return $this;
     }
 
-    /**
-     * @throws ContainerException
-     */
     public function onResolved(string $id, callable $callback): self
     {
         $this->repository->onResolved($id, $callback);
@@ -578,9 +309,6 @@ final class Container implements ContainerInterface, ArrayAccess
         return $this;
     }
 
-    /**
-     * @throws ContainerException
-     */
     public function onResolving(string $id, callable $callback): self
     {
         $this->repository->onResolving($id, $callback);
@@ -588,9 +316,6 @@ final class Container implements ContainerInterface, ArrayAccess
         return $this;
     }
 
-    /**
-     * @throws ContainerException
-     */
     public function onScopeLeave(string $scope, callable $callback): self
     {
         $this->repository->onScopeLeave($scope, $callback);
@@ -598,34 +323,14 @@ final class Container implements ContainerInterface, ArrayAccess
         return $this;
     }
 
-    /**
-     * Retrieve the options manager.
-     *
-     * The options manager is responsible for setting toggles such as injection,
-     * method attributes, property attributes, environment, debug, and lazy
-     * loading.
-     *
-     * @return OptionsManager The options manager.
-     */
     public function options(): OptionsManager
     {
         return $this->optionsManager ??= new OptionsManager($this->repository, $this);
     }
 
     /**
-     * Parse a supported callable string, array, closure, function, or object.
-     *
-     * Class-method targets are validated eagerly, so referenced classes must be
-     * autoloadable and methods must exist at parse time.
-     *
-     * @param string|array<array-key, mixed>|Closure|callable $spec The callable string/array to parse.
-     * @return array{kind:'closure',closure:callable}
-     *                                                |array{kind:'class',class:string}
-     *                                                |array{kind:'method',class:string,method:string}
-     *                                                |array{kind:'function',function:string}
-     * @throws ContainerException If the callable spec is invalid.
-     * @throws InvalidArgumentException If no argument is provided.
-     * @internal
+     * @param string|array<array-key, mixed>|Closure|callable $spec
+     * @return array{kind:'closure',closure:callable}|array{kind:'class',class:string}|array{kind:'method',class:string,method:string}|array{kind:'function',function:string}
      */
     public function parseCallable(string|array|Closure|callable $spec): array
     {
@@ -650,7 +355,6 @@ final class Container implements ContainerInterface, ArrayAccess
         }
 
         $descriptor = $this->parseCallableDescriptor($spec);
-
         if ($cacheKey !== null && $descriptor['kind'] !== 'closure') {
             if (count($descriptorCache) >= self::CALLABLE_DESCRIPTOR_CACHE_LIMIT) {
                 unset($descriptorCache[array_key_first($descriptorCache)]);
@@ -666,30 +370,14 @@ final class Container implements ContainerInterface, ArrayAccess
         return new TaggedPipeline($this, $tag);
     }
 
-    /**
-     * Retrieve the registration manager.
-     *
-     * The registration manager is responsible for registering closures, classes, methods, and properties
-     * with the container. It provides methods for registering each of these types of definitions.
-     *
-     * @return RegistrationManager The registration manager.
-     */
     public function registration(): RegistrationManager
     {
         return $this->registrationManager ??= new RegistrationManager($this->repository, $this);
     }
 
     /**
-     * Register the spec and immediately resolve/return the result.
-     *
-     * Mirrors RegistrationManager signatures exactly:
-     * - registerClass(string $class, array $params = [])
-     * - registerMethod(string $class, string $method, array $params = [])
-     *
      * @param string|array{0:string,1:string}|Closure|callable|null $spec
      * @param array<int|string, mixed> $parameters
-     *
-     * @throws ContainerException|\ReflectionException|InvalidArgumentException
      */
     public function resolveNow(
         string|Closure|callable|array|null $spec,
@@ -707,33 +395,14 @@ final class Container implements ContainerInterface, ArrayAccess
         };
     }
 
-    /**
-     * @param array<int, string> $tags
-     * @throws ContainerException
-     */
+    /** @param array<int, string> $tags */
     public function scoped(string $id, mixed $definition = null, array $tags = []): self
     {
-        $this->definitions()->bind(
-            $id,
-            $definition ?? $id,
-            LifetimeEnum::Scoped,
-            $tags,
-        );
+        $this->definitions()->bind($id, $definition ?? $id, LifetimeEnum::Scoped, $tags);
 
         return $this;
     }
 
-    /**
-     * Sets the environment for the container.
-     *
-     * This method allows setting the environment, which can be used
-     * to resolve environment-based interface mappings. It delegates
-     * the environment setting to the repository.
-     *
-     * @param string $env The environment name.
-     * @return self The container instance for method chaining.
-     * @throws ContainerException
-     */
     public function setEnvironment(string $env): self
     {
         $this->repository->setEnvironment($env);
@@ -742,11 +411,7 @@ final class Container implements ContainerInterface, ArrayAccess
     }
 
     /**
-     * Sets the class name of the resolver to be used by the repository.
-     *
-     * The supplied resolver must satisfy the supported dynamic-call contract.
-     *
-     * @param class-string<InjectedCall|GenericCall> $resolverClass The fully qualified class name of the new resolver.
+     * @param class-string<InjectedCall|GenericCall> $resolverClass
      * @internal
      */
     public function setResolverClass(string $resolverClass): void
@@ -757,61 +422,32 @@ final class Container implements ContainerInterface, ArrayAccess
         }
         $this->repository->invalidateResolutionConfiguration();
         $this->resolverClass = $resolverClass;
-        $this->resolver = fn() => new $resolverClass($this->repository);
+        $this->resolver = $this->resolverFactory();
     }
 
-    /**
-     * @param array<int, string> $tags
-     * @throws ContainerException
-     */
+    /** @param array<int, string> $tags */
     public function singleton(string $id, mixed $definition = null, array $tags = []): self
     {
-        $this->definitions()->bind(
-            $id,
-            $definition ?? $id,
-            LifetimeEnum::Singleton,
-            $tags,
-        );
+        $this->definitions()->bind($id, $definition ?? $id, LifetimeEnum::Singleton, $tags);
 
         return $this;
     }
 
-    /**
-     * @return iterable<string, callable(): mixed>
-     * @throws ContainerException
-     */
+    /** @return iterable<string, callable(): mixed> */
     public function tagged(string $tag): iterable
     {
         return $this->findByTagLazy($tag);
     }
 
-    /**
-     * Retrieves the debug tracer instance.
-     *
-     * This method returns the debug tracer associated with the container.
-     * The tracer is used to track and log the execution flow and
-     * interactions within the container, aiding in debugging and
-     * tracing the service resolution process.
-     *
-     * @return DebugTracer The debug tracer instance.
-     */
     public function tracer(): DebugTracer
     {
         return $this->repository->tracer();
     }
 
-    /**
-     * @param array<int, string> $tags
-     * @throws ContainerException
-     */
+    /** @param array<int, string> $tags */
     public function transient(string $id, mixed $definition = null, array $tags = []): self
     {
-        $this->definitions()->bind(
-            $id,
-            $definition ?? $id,
-            LifetimeEnum::Transient,
-            $tags,
-        );
+        $this->definitions()->bind($id, $definition ?? $id, LifetimeEnum::Transient, $tags);
 
         return $this;
     }
@@ -823,14 +459,6 @@ final class Container implements ContainerInterface, ArrayAccess
         return $this;
     }
 
-    /**
-     * Remove the container instance from the registry.
-     *
-     * This method removes the container instance from the internal registry
-     * and makes it eligible for garbage collection. This is useful if you
-     * want to ensure that the container instance is no longer referenced
-     * after it has been used.
-     */
     public function unset(): void
     {
         if ((self::$instances[$this->instanceAlias] ?? null) === $this) {
@@ -838,43 +466,31 @@ final class Container implements ContainerInterface, ArrayAccess
         }
     }
 
-    /**
-     * @throws ContainerException
-     */
     public function useCompiled(string $path): self
     {
         $compiled = new CompiledResolverGenerator()->load($this, $path);
         $this->repository->setCompiledResolver($compiled['resolver'], $compiled['ids']);
+        $this->activateCompiledResolver();
 
         return $this;
     }
 
-    /**
-     * Load an artifact validated during immutable deployment preparation.
-     *
-     * @param string $path Application-owned compiled artifact path.
-     * @param string $fingerprint Fingerprint published in the same deployment manifest.
-     * @throws ContainerException
-     */
     public function usePrevalidated(string $path, string $fingerprint): self
     {
         $compiled = new CompiledResolverGenerator()->loadPrevalidated($path, $fingerprint);
         $this->repository->setCompiledResolver($compiled['resolver'], $compiled['ids']);
+        $this->activateCompiledResolver();
 
         return $this;
     }
 
-    /**
-     * @return array<int, string>
-     * @throws ContainerException
-     */
+    /** @return array<int, string> */
     public function validate(bool $strict = false, bool $resolveFactories = false): array
     {
         $issues = $this->validateDefinitionTargets();
         if ($resolveFactories) {
             $issues = array_merge($issues, $this->validateResolvableDefinitions());
         }
-
         if ($strict && $issues !== []) {
             throw new ContainerException("Container validation failed:\n- " . implode("\n- ", $issues));
         }
@@ -882,9 +498,6 @@ final class Container implements ContainerInterface, ArrayAccess
         return $issues;
     }
 
-    /**
-     * @throws ContainerException
-     */
     public function value(string $id, mixed $value): self
     {
         $this->definitions()->bind($id, $value, LifetimeEnum::Singleton);
@@ -897,23 +510,7 @@ final class Container implements ContainerInterface, ArrayAccess
         return new ContextualBindingBuilder($this, $consumer);
     }
 
-    /**
-     * Execute a callback inside a named scope and always leave it afterward.
-     *
-     * This method provides a convenient way to execute operations within a specific
-     * scope while ensuring the scope is properly cleaned up afterward, even if
-     * an exception occurs during callback execution.
-     *
-     * The callback receives the container instance as its first argument,
-     * allowing it to perform scoped operations.
-     *
-     * @param string $scope The name of the scope to enter for the callback execution.
-     * @param callable $callback The callback to execute within the scope.
-     * @param array<string, mixed> $instances Ready instances exposed only inside this scope.
-     * @return mixed The return value of the callback.
-     * @throws ContainerException If the scope cannot be managed properly.
-     * @throws Throwable Any exception thrown by the callback will be rethrown after scope cleanup.
-     */
+    /** @param array<string, mixed> $instances */
     public function withinScope(string $scope, callable $callback, array $instances = []): mixed
     {
         $this->enterScope($scope, $instances);
@@ -925,14 +522,35 @@ final class Container implements ContainerInterface, ArrayAccess
         }
     }
 
-    /**
-     * @param array<array-key, mixed> $spec
-     * @return array{kind:'method',class:string,method:string}
-     */
+    private function activateCompiledResolver(): void
+    {
+        // Generic mode deliberately opts out of injection semantics. In injected
+        // mode, activating an artifact must replace an already-materialized
+        // InjectedCall as well as an untouched resolver factory.
+        if ($this->resolverClass !== GenericCall::class) {
+            $this->resolver = new CompiledCall($this->repository);
+        }
+    }
+
+    /** @return Closure(): CompiledCall|InjectedCall|GenericCall */
+    private function resolverFactory(): Closure
+    {
+        return function (): CompiledCall|InjectedCall|GenericCall {
+            if ($this->resolverClass === GenericCall::class) {
+                return new GenericCall($this->repository);
+            }
+            if ($this->repository->hasCompiledResolvers()) {
+                return new CompiledCall($this->repository);
+            }
+
+            return new InjectedCall($this->repository);
+        };
+    }
+
+    /** @param array<array-key, mixed> $spec @return array{kind:'method',class:string,method:string} */
     private function parseArrayMethodCallable(array $spec): array
     {
         [$class, $method] = array_values($spec);
-
         if (!is_string($class) || !is_string($method)) {
             throw new ContainerException(
                 'Invalid callable array. Expected [class, method] with non-empty strings.',
@@ -944,49 +562,28 @@ final class Container implements ContainerInterface, ArrayAccess
 
     /**
      * @param string|array<array-key, mixed>|Closure|callable $spec
-     * @return array{kind:'closure',closure:callable}
-     *                                                |array{kind:'class',class:string}
-     *                                                |array{kind:'method',class:string,method:string}
-     *                                                |array{kind:'function',function:string}
-     * @throws ContainerException
+     * @return array{kind:'closure',closure:callable}|array{kind:'class',class:string}|array{kind:'method',class:string,method:string}|array{kind:'function',function:string}
      */
     private function parseCallableDescriptor(string|array|Closure|callable $spec): array
     {
         return match (true) {
-            $spec instanceof Closure
-            => ['kind' => 'closure', 'closure' => $spec],
-
+            $spec instanceof Closure => ['kind' => 'closure', 'closure' => $spec],
             is_array($spec) && count($spec) === 2 && is_string($spec[0]) && is_string($spec[1])
-            => $this->parseArrayMethodCallable($spec),
-
+                => $this->parseArrayMethodCallable($spec),
             is_string($spec) => match (true) {
-                str_contains($spec, '@')
-                => $this->parseClassMethodString($spec, '@'),
-
-                str_contains($spec, '::')
-                => $this->parseClassMethodString($spec, '::'),
-
-                class_exists($spec)
-                => ['kind' => 'class', 'class' => $spec],
-
-                function_exists($spec)
-                => ['kind' => 'function', 'function' => $spec],
-
-                default
-                => throw new ContainerException(
+                str_contains($spec, '@') => $this->parseClassMethodString($spec, '@'),
+                str_contains($spec, '::') => $this->parseClassMethodString($spec, '::'),
+                class_exists($spec) => ['kind' => 'class', 'class' => $spec],
+                function_exists($spec) => ['kind' => 'function', 'function' => $spec],
+                default => throw new ContainerException(
                     sprintf(
                         "Unknown callable string '%s'. Expected 'class@method', 'class::method', class, or function.",
                         $spec,
                     ),
                 ),
             },
-
-            // objects with __invoke, static callables, etc.
-            is_callable($spec)
-            => ['kind' => 'closure', 'closure' => $spec],
-
-            default
-            => throw new ContainerException(
+            is_callable($spec) => ['kind' => 'closure', 'closure' => $spec],
+            default => throw new ContainerException(
                 sprintf(
                     "Unknown callable spec for '%s'. Expected closure/callable, 'class@method', 'class::method', [class,method], class, or function.",
                     gettype($spec),
@@ -995,9 +592,7 @@ final class Container implements ContainerInterface, ArrayAccess
         };
     }
 
-    /**
-     * @return array{kind:'method',class:string,method:string}
-     */
+    /** @return array{kind:'method',class:string,method:string} */
     private function parseClassMethodParts(
         string $class,
         string $method,
@@ -1006,14 +601,12 @@ final class Container implements ContainerInterface, ArrayAccess
     ): array {
         $class = trim($class);
         $method = trim($method);
-
         if ($class === '' || $method === '') {
             if ($separator === null) {
                 throw new ContainerException(
                     'Invalid callable array. Expected [class, method] with non-empty strings.',
                 );
             }
-
             throw new ContainerException(
                 sprintf(
                     'Invalid callable string "%s". Expected non-empty class and method around "%s".',
@@ -1022,47 +615,30 @@ final class Container implements ContainerInterface, ArrayAccess
                 ),
             );
         }
-
         if (!class_exists($class)) {
-            if ($separator === null) {
-                throw new ContainerException(
-                    sprintf('Invalid callable array. Class "%s" does not exist.', $class),
-                );
-            }
-
             throw new ContainerException(
-                sprintf('Invalid callable string "%s". Class "%s" does not exist.', $spec, $class),
+                $separator === null
+                    ? sprintf('Invalid callable array. Class "%s" does not exist.', $class)
+                    : sprintf('Invalid callable string "%s". Class "%s" does not exist.', $spec, $class),
             );
         }
-
         if (!method_exists($class, $method)) {
-            if ($separator === null) {
-                throw new ContainerException(
-                    sprintf('Invalid callable array. Method "%s::%s" does not exist.', $class, $method),
-                );
-            }
-
             throw new ContainerException(
-                sprintf(
-                    'Invalid callable string "%s". Method "%s::%s" does not exist.',
-                    $spec,
-                    $class,
-                    $method,
-                ),
+                $separator === null
+                    ? sprintf('Invalid callable array. Method "%s::%s" does not exist.', $class, $method)
+                    : sprintf(
+                        'Invalid callable string "%s". Method "%s::%s" does not exist.',
+                        $spec,
+                        $class,
+                        $method,
+                    ),
             );
         }
 
-        return [
-            'kind' => 'method',
-            'class' => $class,
-            'method' => $method,
-        ];
+        return ['kind' => 'method', 'class' => $class, 'method' => $method];
     }
 
-    /**
-     * @param non-empty-string $separator
-     * @return array{kind:'method',class:string,method:string}
-     */
+    /** @return array{kind:'method',class:string,method:string} */
     private function parseClassMethodString(string $spec, string $separator): array
     {
         [$class, $method] = explode($separator, $spec, 2);
@@ -1078,14 +654,12 @@ final class Container implements ContainerInterface, ArrayAccess
     {
         $resolver = $this->getCurrentResolver();
         if ($desc['kind'] === 'method') {
-            $resolved = $resolver->classSettler(
+            return $resolver->classSettler(
                 $desc['class'],
-                (string) $desc['method'],
+                $desc['method'],
                 true,
                 methodParameters: $parameters,
-            );
-
-            return $resolved->returned;
+            )->returned;
         }
 
         return $resolver->classSettler(
@@ -1114,9 +688,7 @@ final class Container implements ContainerInterface, ArrayAccess
         return $this->getCurrentResolver()->closureSettler($callback, $parameters);
     }
 
-    /**
-     * @return array<int, string>
-     */
+    /** @return array<int, string> */
     private function validateDefinitionTargets(): array
     {
         $issues = [];
@@ -1126,7 +698,6 @@ final class Container implements ContainerInterface, ArrayAccess
 
                 continue;
             }
-
             if (is_string($definition)
                 && !class_exists($definition)
                 && !function_exists($definition)
@@ -1134,8 +705,11 @@ final class Container implements ContainerInterface, ArrayAccess
             ) {
                 $issues[] = "Definition '{$id}' points to unknown string target '{$definition}'.";
             }
-
-            if (is_array($definition) && isset($definition[0]) && is_string($definition[0]) && !class_exists($definition[0])) {
+            if (is_array($definition)
+                && isset($definition[0])
+                && is_string($definition[0])
+                && !class_exists($definition[0])
+            ) {
                 $issues[] = "Definition '{$id}' references missing class '{$definition[0]}'.";
             }
         }
@@ -1143,9 +717,7 @@ final class Container implements ContainerInterface, ArrayAccess
         return $issues;
     }
 
-    /**
-     * @return array<int, string>
-     */
+    /** @return array<int, string> */
     private function validateResolvableDefinitions(): array
     {
         $issues = [];
