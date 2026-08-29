@@ -46,7 +46,6 @@ final readonly class InjectedCall
             $this->repository,
             $this->parameterResolver,
             $propertyResolver,
-            $this->definitionResolver,
         );
 
         $this->definitionResolver->setResolverInstance($this->classResolver, $this->parameterResolver);
