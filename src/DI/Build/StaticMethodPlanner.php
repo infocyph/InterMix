@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Build;
 
+use Infocyph\InterMix\DI\Attribute\Inject;
+use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionMethod;
+use ReflectionParameter;
 
 /**
  * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
@@ -78,13 +81,25 @@ final class StaticMethodPlanner
         if (!$graph->methodAttributesEnabled()) {
             return false;
         }
-        if ($method->getAttributes() !== []) {
+        if ($method->getAttributes(Inject::class) !== []) {
             return true;
         }
 
         return array_any(
             $method->getParameters(),
-            static fn(\ReflectionParameter $parameter): bool => $parameter->getAttributes() !== [],
+            fn(ReflectionParameter $parameter): bool => $this->hasDynamicParameterAttribute($graph, $parameter),
+        );
+    }
+
+    private function hasDynamicParameterAttribute(DefinitionGraph $graph, ReflectionParameter $parameter): bool
+    {
+        if ($parameter->getAttributes(Inject::class) !== []) {
+            return true;
+        }
+
+        return array_any(
+            $parameter->getAttributes(),
+            static fn(ReflectionAttribute $attribute): bool => $graph->hasAttributeType($attribute->getName()),
         );
     }
 
