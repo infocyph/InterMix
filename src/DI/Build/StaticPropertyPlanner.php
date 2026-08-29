@@ -11,7 +11,7 @@ use ReflectionProperty;
 
 /**
  * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
- * @phpstan-type PropertyPlan array{declaring: class-string, property: string, static: bool, argument: ServiceArgument|null, runtime?: 'attribute'|'assign'}
+ * @phpstan-type PropertyPlan array{declaring: class-string, property: string, static: bool, argument: ServiceArgument|null, runtime?: 'attribute'|'assign'|'registered'}
  * @internal
  */
 final class StaticPropertyPlanner
@@ -69,6 +69,15 @@ final class StaticPropertyPlanner
         $dependencies[] = $argument['id'];
     }
 
+    private function hasRuntimeAttribute(DefinitionGraph $graph, ReflectionProperty $property): bool
+    {
+        return array_any(
+            $property->getAttributes(),
+            static fn($attribute): bool => $attribute->getName() !== Inject::class
+                && $graph->hasAttributeType($attribute->getName()),
+        );
+    }
+
     /** @return array{kind: 'service', id: string}|string|null */
     private function injectArgument(DefinitionGraph $graph, ReflectionProperty $property): array|string|null
     {
@@ -92,15 +101,6 @@ final class StaticPropertyPlanner
         }
 
         return $this->serviceArgument($graph, $target);
-    }
-
-    private function hasRuntimeAttribute(DefinitionGraph $graph, ReflectionProperty $property): bool
-    {
-        return array_any(
-            $property->getAttributes(),
-            static fn($attribute): bool => $attribute->getName() !== Inject::class
-                && $graph->hasAttributeType($attribute->getName()),
-        );
     }
 
     private function isExportable(mixed $value): bool
@@ -141,7 +141,7 @@ final class StaticPropertyPlanner
         $name = $property->getName();
         if (array_key_exists($name, $registered)) {
             if (!$this->isExportable($registered[$name])) {
-                return "property '{$property->getDeclaringClass()->getName()}::\${$name}' has a non-exportable registered value";
+                return $this->runtimePropertyPlan($property, 'registered');
             }
 
             return [
@@ -157,11 +157,10 @@ final class StaticPropertyPlanner
             return null;
         }
 
-        $inject = $property->getAttributes(Inject::class)[0] ?? null;
-        if ($inject !== null) {
+        if ($property->getAttributes(Inject::class) !== []) {
             $argument = $this->injectArgument($graph, $property);
             if (is_string($argument) || !$property->isPublic() || $property->isReadOnly()) {
-                return $this->runtimeAttributePlan($property);
+                return $this->runtimePropertyPlan($property, 'attribute');
             }
             if ($argument === null) {
                 return null;
@@ -176,7 +175,7 @@ final class StaticPropertyPlanner
         }
 
         return $this->hasRuntimeAttribute($graph, $property)
-            ? $this->runtimeAttributePlan($property)
+            ? $this->runtimePropertyPlan($property, 'attribute')
             : null;
     }
 
@@ -199,14 +198,14 @@ final class StaticPropertyPlanner
     }
 
     /** @return PropertyPlan */
-    private function runtimeAttributePlan(ReflectionProperty $property): array
+    private function runtimePropertyPlan(ReflectionProperty $property, string $runtime): array
     {
         return [
             'declaring' => $property->getDeclaringClass()->getName(),
             'property' => $property->getName(),
             'static' => $property->isStatic(),
             'argument' => null,
-            'runtime' => 'attribute',
+            'runtime' => $runtime,
         ];
     }
 
