@@ -37,7 +37,7 @@ final class StaticRuntimePlanner
         $plans = [];
         $skipped = [];
         $definitions = $graph->definitions();
-        $aliasCycles = $this->detectAliasCycles($graph, $definitions);
+        $aliasCycles = $this->detectAliasCycles($definitions);
         ksort($definitions, SORT_STRING);
 
         foreach ($definitions as $id => $definition) {
@@ -100,7 +100,7 @@ final class StaticRuntimePlanner
      * @param array<string, mixed> $definitions
      * @return array<string, true>
      */
-    private function detectAliasCycles(DefinitionGraph $graph, array $definitions): array
+    private function detectAliasCycles(array $definitions): array
     {
         $cyclic = [];
         foreach ($definitions as $id => $definition) {
@@ -111,7 +111,11 @@ final class StaticRuntimePlanner
             $path = [];
             $positions = [];
             $current = $id;
-            while (($definitions[$current] ?? null) instanceof AliasDefinition) {
+            while (true) {
+                $alias = $definitions[$current] ?? null;
+                if (!$alias instanceof AliasDefinition) {
+                    break;
+                }
                 if (isset($positions[$current])) {
                     foreach (array_slice($path, $positions[$current]) as $cycleId) {
                         $cyclic[$cycleId] = true;
@@ -121,7 +125,6 @@ final class StaticRuntimePlanner
 
                 $positions[$current] = count($path);
                 $path[] = $current;
-                $alias = $definitions[$current];
                 $current = $alias->target;
             }
         }
@@ -239,12 +242,14 @@ final class StaticRuntimePlanner
     {
         $target = $definition->target;
         $definitions = $graph->definitions();
+        $alias = $definitions[$target] ?? null;
 
-        while (($definitions[$target] ?? null) instanceof AliasDefinition) {
+        while ($alias instanceof AliasDefinition) {
             if ($graph->definitionMetaFor($target)['lifetime'] !== LifetimeEnum::Transient) {
                 break;
             }
-            $target = $definitions[$target]->target;
+            $target = $alias->target;
+            $alias = $definitions[$target] ?? null;
         }
 
         return [
