@@ -12,7 +12,7 @@ use ReflectionParameter;
 
 /**
  * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
- * @phpstan-type MethodPlan array{method: string, arguments: list<ServiceArgument>, dependencies: list<string>}
+ * @phpstan-type MethodPlan array{method: string, arguments: list<ServiceArgument>, dependencies: list<string>, runtime?: bool}
  * @internal
  */
 final class StaticMethodPlanner
@@ -76,7 +76,7 @@ final class StaticMethodPlanner
         ];
     }
 
-    private function hasDynamicParameterAttribute(DefinitionGraph $graph, ReflectionParameter $parameter): bool
+    private function hasRuntimeParameterAttribute(DefinitionGraph $graph, ReflectionParameter $parameter): bool
     {
         return array_any(
             $parameter->getAttributes(),
@@ -87,30 +87,28 @@ final class StaticMethodPlanner
 
     /**
      * @param array<int|string, mixed> $supplied
-     * @return MethodPlan|string
+     * @return MethodPlan
      */
-    private function planMethod(DefinitionGraph $graph, ReflectionMethod $method, array $supplied): array|string
+    private function planMethod(DefinitionGraph $graph, ReflectionMethod $method, array $supplied): array
     {
-        $className = $method->getDeclaringClass()->getName();
-        $methodName = $method->getName();
         if (!$method->isPublic() || $method->isStatic()) {
-            return "method '{$className}::{$methodName}()' requires reflection-based invocation";
+            return $this->runtimePlan($method);
         }
 
         if ($graph->methodAttributesEnabled()
             && array_any(
                 $method->getParameters(),
-                fn(ReflectionParameter $parameter): bool => $this->hasDynamicParameterAttribute($graph, $parameter),
+                fn(ReflectionParameter $parameter): bool => $this->hasRuntimeParameterAttribute($graph, $parameter),
             )
         ) {
-            return "method '{$className}::{$methodName}()' has runtime attributes";
+            return $this->runtimePlan($method);
         }
 
         $attributeArguments = [];
         if ($graph->methodAttributesEnabled()) {
             $attributeArguments = new StaticInjectPlanner()->methodArguments($graph, $method);
             if (is_string($attributeArguments)) {
-                return $attributeArguments;
+                return $this->runtimePlan($method);
             }
         }
 
@@ -120,15 +118,15 @@ final class StaticMethodPlanner
             $method,
             $supplied,
             'method',
-            false,
+            true,
             $attributeArguments,
         );
         if (is_string($parameters)) {
-            return $parameters;
+            return $this->runtimePlan($method);
         }
 
         return [
-            'method' => $methodName,
+            'method' => $method->getName(),
             'arguments' => $parameters['arguments'],
             'dependencies' => $parameters['dependencies'],
         ];
@@ -144,6 +142,17 @@ final class StaticMethodPlanner
         $parameters = $resource['params'] ?? [];
 
         return is_array($parameters) ? $parameters : [];
+    }
+
+    /** @return MethodPlan */
+    private function runtimePlan(ReflectionMethod $method): array
+    {
+        return [
+            'method' => $method->getName(),
+            'arguments' => [],
+            'dependencies' => [],
+            'runtime' => true,
+        ];
     }
 
     /** @param ReflectionClass<object> $class */
