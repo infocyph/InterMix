@@ -10,6 +10,9 @@ final class ScopeState
     /** @var array<int, mixed> */
     public array $resolved = [];
 
+    /** @var array<int, mixed> */
+    public array $returned = [];
+
     /**
      * @param array<int, mixed> $seeds
      * @param array<string, mixed> $rawSeeds
