@@ -245,7 +245,10 @@ class DefinitionManager implements ArrayAccess
         }
     }
 
-    /** @param list<string> $keys @return array<string, CacheItemInterface>|null */
+    /**
+     * @param list<string> $keys
+     * @return array<string, CacheItemInterface>|null
+     */
     private function warmupItems(CacheItemPoolInterface $cache, array $keys): ?array
     {
         try {
