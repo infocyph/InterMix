@@ -211,6 +211,12 @@ abstract class ProductionContainer implements ContainerInterface
             }
         }
         if (is_array($spec) && !is_string($spec[0])) {
+            if (!is_callable($spec)) {
+                throw new ContainerException(
+                    "Unknown callable spec for 'array'. Expected closure/callable, 'class@method', 'class::method', [class,method], class, or function.",
+                );
+            }
+
             return $this->dynamic()->resolveNow(Closure::fromCallable($spec), $parameters);
         }
 
