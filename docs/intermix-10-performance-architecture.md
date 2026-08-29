@@ -36,48 +36,49 @@ Legend:
 
 ### InterMix 10 architecture implementation order
 
-- [-] 1. Freeze InterMix 9 semantic behavior with regression tests. Existing regression coverage is strong, but full dev/prod/deoptimized parity coverage is still pending.
+- [-] 1. Freeze InterMix 9 semantic behavior with regression tests. Existing regression coverage is strong and new compiled/dynamic-island parity coverage exists, but the complete parity matrix is still pending.
 - [x] 2. Treat `perf/di-hot-path` as the optimized dynamic baseline.
 - [x] 3. Introduce an internal normalized definition graph (`DefinitionGraph`).
-- [ ] 4. Introduce `ContainerBuilder`.
-- [ ] 5. Move mutation/configuration ownership into the builder.
-- [ ] 6. Build an explicit `DevelopmentContainer` boundary on the normalized graph; the optimized `Container` currently remains the development engine.
-- [-] 7. Confirm the full current test suite against development mode. Current `Container` tests are green, but a distinct development boundary does not yet exist.
-- [-] 8. Introduce compiler IR/plans only where required. `StaticRuntimeGenerator` has a minimal constructor/lifetime plan, not the complete production IR.
-- [ ] 9. Add production environment folding.
+- [x] 4. Introduce `ContainerBuilder` with explicit development, compile and production-loading paths.
+- [-] 5. Move mutation/configuration ownership into the builder. The builder is now the intended configuration facade, but it still delegates mutable storage to the optimized development `Container`/Repository.
+- [-] 6. Build an explicit `DevelopmentContainer` boundary on the normalized graph. `ContainerBuilder::development()` provides an explicit development boundary, but it currently returns the optimized `Container` rather than a distinct `DevelopmentContainer` implementation.
+- [x] 7. Confirm the current semantic test suite against development mode. Pest passes in the current PHPForge QA matrix; the dedicated DevelopmentContainer class decision remains tracked separately in item 6.
+- [-] 8. Introduce compiler IR/plans only where required. Static parameter, feature, runtime planning and rendering are separated, but the production IR does not yet represent every InterMix feature.
+- [x] 9. Add production environment folding for deterministic environment bindings.
 - [ ] 10. Add alias flattening and build-time alias-cycle handling in the static production compiler.
-- [-] 11. Add constructor/parameter planning. Simple named class dependencies/defaults/null are supported; attributes, union/intersection/DNF and other strategies remain dynamic/skipped.
-- [-] 12. Add lifetime planning. Singleton/transient are generated; compiled scoped lifetime is still pending.
-- [ ] 13. Add contextual-binding planning to generated recipes.
-- [ ] 14. Add attribute/property/method planning to generated recipes.
+- [-] 11. Add constructor/parameter planning. Named class dependencies, deterministic contextual/environment targets, defaults and null are supported; attribute parameters, union/intersection/DNF and other dynamic strategies remain fallback/skipped.
+- [x] 12. Add lifetime planning and specialized generated runtime handling for singleton, transient and scoped services, including scope state/seeds.
+- [x] 13. Add contextual-binding planning for deterministic service/class bindings; dynamic contextual bindings are explicitly kept in fallback islands.
+- [-] 14. Add attribute/property/method planning to generated recipes. Static feature classification is now precise and only affected services are routed dynamic, but direct generated property/method/attribute recipes remain pending.
 - [x] 15. Add static dependency-cycle validation for the current static candidate.
 - [x] 16. Generate service slots/per-service methods with direct internal dependency calls for supported static graphs.
-- [-] 17. Implement a minimal production runtime boundary. A tiny generated PSR-11 anonymous runtime exists, but no explicit `ProductionContainer` loader/fallback boundary exists yet.
-- [-] 18. Implement singleton/scoped runtime state. Generated singleton state exists; compiled scope state/seeds/nesting remain pending.
+- [x] 17. Implement an explicit minimal `ProductionContainer` with generated runtime loading and lazy dynamic fallback.
+- [x] 18. Implement generated singleton/scoped runtime state with nested scope state and slot-based seeds.
 - [x] 19. Implement direct compiled internal dependency calls for supported static graphs; internal edges do not recurse through public string `get()`.
-- [ ] 20. Compile tags and lifecycle/scope-leave hooks.
-- [ ] 21. Implement compiled `call()` / `make()` / invocation paths.
-- [ ] 22. Implement arbitrary dynamic invocation fallback without deoptimizing known compiled services.
-- [ ] 23. Implement runtime Closure/dynamic-definition islands and `DirectFactory` integration in the production runtime.
+- [-] 20. Compile tags and lifecycle/scope-leave hooks. Tag indexes are compiled; resolving/resolved-hook services are explicitly isolated to the dynamic runtime by `ContainerBuilder`, while direct compiled hooks and scope-leave hook plans remain pending.
+- [-] 21. Implement compiled `call()` / `make()` / invocation paths. `call()` now has a direct path for compiled definition IDs; compiled `make()`, `resolveNow()` and `getReturn()` specialization remain pending.
+- [x] 22. Implement arbitrary dynamic invocation/service fallback without deoptimizing known compiled services; parity tests confirm compiled singleton identity remains authoritative across the fallback boundary.
+- [x] 23. Implement runtime Closure/dynamic-definition islands and `DirectFactory` integration in the production runtime. Dynamic fallback bridges route compiled IDs back to `ProductionContainer`, preserving singleton/scoped identity across compiled↔dynamic edges.
 - [ ] 24. Implement production deoptimization for true configuration mutation while preserving singleton/scope identity.
-- [ ] 25. Separate diagnostic/compiler metadata from the hot runtime artifact.
-- [-] 26. Move artifact validation fully to build/deployment. Atomic generation/loading exists; complete ABI/manifest/prevalidated production loading separation remains pending.
+- [x] 25. Separate diagnostic/compiler metadata from the hot runtime artifact using a metadata sidecar containing ABI/hash/environment/compiled/skipped information.
+- [-] 26. Move artifact validation fully to build/deployment. Runtime generation is atomic and ABI/SHA-256 manifest validation is implemented, but a separate prevalidated deployment load path that avoids normal bootstrap hashing remains pending.
 - [ ] 27. Add safe constant folding/transient inlining only after parity and measurements prove it safe/useful.
 - [-] 28. Benchmark alternative generated representations. Dynamic/static/native comparison exists, but the representation matrix is not complete.
-- [ ] 29. Remove obsolete Repository/manager/resolver machinery from the production runtime once the production boundary is complete.
-- [ ] 30. Run the full development/compiled/deoptimized semantic parity matrix.
-- [-] 31. Run the PHPBench matrix. Benchmarks exist; native PHPForge `ic:bench:quick` must pass without any project-level `ic:*` override.
+- [-] 29. Remove obsolete Repository/manager/resolver machinery from the production runtime. The normal compiled path no longer constructs those objects; the lazy dynamic compatibility island intentionally still uses the optimized development engine.
+- [-] 30. Run the full development/compiled/deoptimized semantic parity matrix. Current tests cover lifetimes/scopes/seeds, tags, environment/context folding, dynamic factories/closures, property-attribute fallback, lifecycle-hook islands, arbitrary class fallback, compiled calls and cross-island identity; the complete feature matrix remains pending.
+- [-] 31. Run the PHPBench matrix. Benchmarks exist; native PHPForge benchmark execution is currently skipped and must be enabled without adding a project-level `ic:*` override.
 - [ ] 32. Run external Webrick benchmark after the InterMix standalone gates are green.
 - [ ] 33. Finalize the InterMix 10 public migration API only after the runtime architecture and downstream validation are complete.
 
 ### Current release gates
 
-- [x] Existing Pest/PHPCS/PHPProbe/Deptrac/Pint/Rector quality gates pass on the reviewed branch revisions.
-- [-] PHPStan: two exact annotation findings were identified by a temporary diagnostic workflow and patched; normal workflow must confirm green.
-- [ ] Psalm/security analysis must be green on the final head.
-- [ ] Native PHPForge `ic:bench:quick` must be green on PHP 8.4 and 8.5.
+- [x] Pest, PHPCS, PHPProbe, Deptrac and Composer Normalize pass on the current implementation batch.
+- [-] Pint/Rector are the only current QA normalization failures and are intentionally left for the maintainer's formatting/refactor pass.
+- [x] PHPStan and Psalm analysis jobs pass on PHP 8.4 and PHP 8.5 on the current implementation batch.
+- [ ] Native PHPForge benchmark execution must run and pass on PHP 8.4 and 8.5; it is currently skipped by the reusable workflow because no benchmark input is selected.
 - [x] Project `composer.json` does not override PHPForge `ic:*` commands.
-- [ ] Remove the temporary PHPStan diagnostic workflow after the normal workflow confirms the fix.
+- [x] Temporary PHPStan diagnostic workflow was removed after normal PHPForge analysis confirmed green.
+- [ ] Final Security & Standards workflow must complete after Pint/Rector normalization and benchmark wiring.
 - [ ] Final diff review: no accidental public contract loss, no benchmark-only production code, and no temporary CI/debug artifacts.
 
 ## 1. Objective
