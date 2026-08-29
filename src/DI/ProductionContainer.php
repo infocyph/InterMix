@@ -24,9 +24,6 @@ abstract class ProductionContainer implements ContainerInterface
 
     abstract protected function slotFor(string $id): ?int;
 
-    /** @return array<int, string> */
-    abstract protected function taggedIds(string $tag): array;
-
     /** @internal */
     public final function attachFallback(Container $fallback): void
     {
@@ -155,6 +152,14 @@ abstract class ProductionContainer implements ContainerInterface
     protected final function fallbackHas(string $id): bool
     {
         return $this->dynamic()->has($id);
+    }
+
+    /** @return array<int, string> */
+    protected function taggedIds(string $tag): array
+    {
+        return match ($tag) {
+            default => [],
+        };
     }
 
     private function dynamic(): Container
