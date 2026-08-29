@@ -31,60 +31,25 @@ class DefinitionResolver
     /** @var (Closure(): array{ClassResolver, ParameterResolver})|null */
     private ?Closure $resolverFactory = null;
 
-    /**
-     * Constructs a DefinitionResolver instance.
-     *
-     * @param Repository $repository The Repository providing definitions, classes, functions, and parameters.
-     */
-    public function __construct(
-        protected readonly Repository $repository,
-    ) {}
+    public function __construct(protected readonly Repository $repository) {}
 
-    /**
-     * Resolve a definition by its name.
-     *
-     * First, check if the definition has already been resolved and stored in the
-     * repository. If so, return the stored result.
-     * If not, call the "getFromCacheOrResolve" method to resolve the definition.
-     * If the definition is still being resolved (circular dependency), throw an
-     * exception.
-     *
-     * @param string $name The name of the definition to resolve.
-     * @return mixed The resolved value of the definition.
-     * @throws ContainerException|InvalidArgumentException|ReflectionException
-     */
+    /** @throws ContainerException|InvalidArgumentException|ReflectionException */
     public function resolve(string $name): mixed
     {
         return $this->resolveTracked($name, false);
     }
 
-    /** Resolve a warmup miss without repeating the external cache lookup. */
     public function resolveForDefinitionCacheWarmup(string $name): mixed
     {
         return $this->resolveTracked($name, true);
     }
 
-    /**
-     * Defer creation of the reflection-backed resolver graph until a dynamic
-     * definition requires it.
-     *
-     * @param Closure $resolverFactory Lazy reflection-resolver factory.
-     */
+    /** @param Closure(): array{ClassResolver, ParameterResolver} $resolverFactory */
     public function setResolverFactory(Closure $resolverFactory): void
     {
         $this->resolverFactory = $resolverFactory;
     }
 
-    /**
-     * Sets the ClassResolver and ParameterResolver instances on this object.
-     *
-     * These resolvers are used by the resolve() method to resolve definitions
-     * that are class names or functions, and to resolve function parameters that
-     * are not provided by the user.
-     *
-     * @param ClassResolver $classResolver The ClassResolver instance.
-     * @param ParameterResolver $parameterResolver The ParameterResolver instance.
-     */
     public function setResolverInstance(
         ClassResolver $classResolver,
         ParameterResolver $parameterResolver,
@@ -93,93 +58,38 @@ class DefinitionResolver
         $this->parameterResolver = $parameterResolver;
     }
 
-    /**
-     * Resolves a definition by its ID and returns the resolved value.
-     *
-     * This method resolves a definition by its ID. If the definition is a closure,
-     * it is called with resolved arguments. If the definition is an array where the
-     * first element is a class name, it is resolved as an array definition. If the
-     * definition is a string class name, it is resolved as a class. Otherwise, the
-     * definition is returned as is.
-     *
-     * @param string $name The name of the definition to resolve.
-     * @return mixed The resolved value of the definition.
-     * @throws ContainerException
-     * @throws ReflectionException|InvalidArgumentException
-     */
+    /** @throws ContainerException|ReflectionException|InvalidArgumentException */
     protected function resolveDefinition(string $name): mixed
     {
         $definition = $this->repository->getFunctionDefinition($name);
-        switch (true) {
-            case $definition instanceof DirectFactory:
-                return $definition->resolve();
 
-            case $definition instanceof Closure:
-                [, $parameterResolver] = $this->resolvers();
-
-                // reflect closure
-                $reflectionFn = ReflectionResource::getFunctionReflection($definition);
-                $args = $parameterResolver->resolve($reflectionFn, [], 'constructor');
-
-                return $definition(...$args);
-
-            case $definition instanceof FactoryDefinition:
-                return $definition->resolve($this->repository->container());
-
-            case is_array($definition) && isset($definition[0]) && is_string($definition[0]) && class_exists($definition[0]):
-                if ($this->repository->isTracingEnabled()) {
-                    $this->repository->tracer()->recordDependency($name, $definition[0], 'definition-class');
-                }
-
-                return $this->resolveArrayDefinition(array_values($definition));
-
-            case is_string($definition) && class_exists($definition):
-                [$classResolver] = $this->resolvers();
-
-                if ($this->repository->isTracingEnabled()) {
-                    $this->repository->tracer()->recordDependency($name, $definition, 'definition-class');
-                }
-                $refClass = ReflectionResource::getClassReflection($definition);
-                $res = $classResolver->resolve($refClass, make: true);
-
-                return $res->instance;
-
-            default:
-                return $definition;
-        }
+        return match (true) {
+            $definition instanceof DirectFactory => $definition->resolve(),
+            $definition instanceof Closure => $this->resolveClosure($definition),
+            $definition instanceof FactoryDefinition => $definition->resolve($this->repository->container()),
+            is_array($definition)
+                && isset($definition[0])
+                && is_string($definition[0])
+                && class_exists($definition[0]) => $this->resolveArrayDefinitionTracked($name, $definition),
+            is_string($definition) && class_exists($definition) => $this->resolveClassDefinition($name, $definition),
+            default => $definition,
+        };
     }
 
     /**
-     * Tries to get a definition from the cache, otherwise resolves it using the
-     * `resolveDefinition` method and caches the result.
-     *
-     * @param string $name The name of the definition to resolve.
-     * @return mixed The resolved value of the definition.
-     * @throws ContainerException
-     * @throws InvalidArgumentException
-     * @throws ReflectionException
+     * Runtime lifetime ownership lives in InvocationManager::get(). This layer
+     * only decides whether a safe singleton value may use the optional external
+     * definition cache; it no longer maintains a second in-process singleton map.
      */
     private function getFromCacheOrResolve(string $name, bool $skipExternalCache = false): mixed
     {
-        $lifetime = $this->repository->getDefinitionLifetime($name);
-        $environment = $this->repository->getEnvironment() ?? 'default';
-        $resolvedKey = $name . '@env:' . $environment;
-
-        // transient / scoped → never cache at this layer
-        if ($lifetime !== LifetimeEnum::Singleton) {
+        if ($this->repository->getDefinitionLifetime($name) !== LifetimeEnum::Singleton
+            || $skipExternalCache
+        ) {
             return $this->resolveDefinition($name);
         }
 
-        if ($this->repository->hasResolvedDefinition($resolvedKey)) {
-            return $this->repository->getResolvedDefinitionEntry($resolvedKey);
-        }
-
-        $value = $skipExternalCache
-            ? $this->resolveDefinition($name)
-            : $this->resolveSingletonDefinition($name);
-        $this->repository->setResolvedDefinition($resolvedKey, $value);
-
-        return $value;
+        return $this->resolveSingletonDefinition($name);
     }
 
     private function ignoreDefinitionCacheFailure(Throwable $failure): void
@@ -215,23 +125,10 @@ class DefinitionResolver
         return [$item, $hit, $value];
     }
 
-    /**
-     * Resolves an array definition and returns the resolved value.
-     *
-     * This method accepts an array where the first element is a class name
-     * and the second element is a method name or a boolean. It uses the
-     * ClassResolver to resolve the class and either returns the result of
-     * the method call if the second element is provided, or the resolved
-     * instance if not.
-     *
-     * @param array<int, mixed> $definition An array containing a class name and optionally a method name.
-     * @return mixed The resolved value or instance.
-     * @throws ContainerException|ReflectionException
-     */
+    /** @param array<int, mixed> $definition */
     private function resolveArrayDefinition(array $definition): mixed
     {
         [$classResolver] = $this->resolvers();
-
         $class = $definition[0] ?? null;
         if (!is_string($class)) {
             return $definition;
@@ -247,26 +144,19 @@ class DefinitionResolver
         return $method !== null ? $resolved->returned : $resolved->instance;
     }
 
-    /**
-     * @return array{ClassResolver, ParameterResolver}
-     */
+    /** @return array{ClassResolver, ParameterResolver} */
     private function resolvers(): array
     {
         $classResolver = $this->classResolver;
         $parameterResolver = $this->parameterResolver;
-        if (!$classResolver instanceof ClassResolver
-            || !$parameterResolver instanceof ParameterResolver
-        ) {
+        if (!$classResolver instanceof ClassResolver || !$parameterResolver instanceof ParameterResolver) {
             $factory = $this->resolverFactory
                 ?? throw new ContainerException('Reflection resolver factory is unavailable.');
             [$classResolver, $parameterResolver] = $factory();
             $this->setResolverInstance($classResolver, $parameterResolver);
         }
 
-        return [
-            $classResolver,
-            $parameterResolver,
-        ];
+        return [$classResolver, $parameterResolver];
     }
 
     private function resolveSingletonDefinition(string $name): mixed
@@ -277,7 +167,6 @@ class DefinitionResolver
         }
 
         $cacheKey = $this->repository->makeDefinitionCacheKey($name);
-
         try {
             [$item, $hit, $cachedValue] = $this->readCachedDefinition($definitionCache, $cacheKey);
             if ($hit) {
@@ -303,17 +192,17 @@ class DefinitionResolver
             throw new ContainerException("Circular dependency for definition '$name'.");
         }
 
-        $parent = end($this->definitionStack);
-        if (is_string($parent) && $parent !== $name && $this->repository->isTracingEnabled()) {
-            $this->repository->tracer()->recordDependency($parent, $name, 'definition');
-        }
-
-        $this->entriesResolving[$name] = true;
-        $this->definitionStack[] = $name;
-        if ($this->repository->isTracingEnabled()) {
+        $tracing = $this->repository->isTracingEnabled();
+        if ($tracing) {
+            $parent = end($this->definitionStack);
+            if (is_string($parent) && $parent !== $name) {
+                $this->repository->tracer()->recordDependency($parent, $name, 'definition');
+            }
+            $this->definitionStack[] = $name;
             $this->repository->tracer()->push("def:$name");
         }
 
+        $this->entriesResolving[$name] = true;
         try {
             $resolved = $this->getFromCacheOrResolve($name, $skipExternalCache);
             $this->repository->markResolved($name);
@@ -321,7 +210,40 @@ class DefinitionResolver
             return $resolved;
         } finally {
             unset($this->entriesResolving[$name]);
-            array_pop($this->definitionStack);
+            if ($tracing) {
+                array_pop($this->definitionStack);
+            }
         }
+    }
+
+    private function resolveClosure(Closure $definition): mixed
+    {
+        [, $parameterResolver] = $this->resolvers();
+        $reflectionFn = ReflectionResource::getFunctionReflection($definition);
+
+        return $definition(...$parameterResolver->resolve($reflectionFn, [], 'constructor'));
+    }
+
+    /** @param array<int|string, mixed> $definition */
+    private function resolveArrayDefinitionTracked(string $name, array $definition): mixed
+    {
+        if ($this->repository->isTracingEnabled()) {
+            $this->repository->tracer()->recordDependency($name, (string) $definition[0], 'definition-class');
+        }
+
+        return $this->resolveArrayDefinition(array_values($definition));
+    }
+
+    private function resolveClassDefinition(string $name, string $definition): mixed
+    {
+        [$classResolver] = $this->resolvers();
+        if ($this->repository->isTracingEnabled()) {
+            $this->repository->tracer()->recordDependency($name, $definition, 'definition-class');
+        }
+
+        return $classResolver->resolve(
+            ReflectionResource::getClassReflection($definition),
+            make: true,
+        )->instance;
     }
 }
