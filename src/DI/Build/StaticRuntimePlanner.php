@@ -12,12 +12,12 @@ use ReflectionClass;
 
 /**
  * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
- * @phpstan-type PropertyPlan array{declaring: class-string, property: string, static: bool, argument: ServiceArgument}
- * @phpstan-type MethodPlan array{method: string, arguments: list<ServiceArgument>, dependencies: list<string>}
+ * @phpstan-type PropertyPlan array{declaring: class-string<object>, property: string, static: bool, argument: ServiceArgument|null, runtime?: 'attribute'|'assign'|'registered'}
+ * @phpstan-type MethodPlan array{method: string, arguments: list<ServiceArgument>, dependencies: list<string>, runtime?: bool}
  * @phpstan-type AliasPlan array{kind: 'alias', target: string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
- * @phpstan-type ClassPlan array{kind: 'class', class: class-string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, postMethod: MethodPlan|null, dependencies: list<string>}
- * @phpstan-type FactoryPlan array{kind: 'factory', class: class-string, method: string|null, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
- * @phpstan-type InvocationPlan array{kind: 'invocation', class: class-string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, invocation: MethodPlan, dependencies: list<string>}
+ * @phpstan-type ClassPlan array{kind: 'class', class: class-string<object>, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, postMethod: MethodPlan|null, dependencies: list<string>}
+ * @phpstan-type FactoryPlan array{kind: 'factory', class: class-string<object>, method: string|null, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
+ * @phpstan-type InvocationPlan array{kind: 'invocation', class: class-string<object>, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, invocation: MethodPlan, dependencies: list<string>}
  * @phpstan-type ValuePlan array{kind: 'value', code: string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
  * @phpstan-type ServicePlan AliasPlan|ClassPlan|FactoryPlan|InvocationPlan|ValuePlan
  * @internal
@@ -90,14 +90,7 @@ final class StaticRuntimePlanner
             return $constructor;
         }
         $property = new StaticPropertyPlanner()->plan($graph, $class);
-        if (is_string($property)) {
-            return $property;
-        }
         $postMethod = new StaticMethodPlanner()->plan($graph, $class);
-        if (is_string($postMethod)) {
-            return $postMethod;
-        }
-
         $methodDependencies = is_array($postMethod) ? $postMethod['dependencies'] : [];
 
         return [
@@ -332,7 +325,7 @@ final class StaticRuntimePlanner
     private function planDefinition(DefinitionGraph $graph, string $id, mixed $definition): array|string
     {
         if ($graph->requiresDynamicService($id)) {
-            return 'service has lifecycle hooks and requires the dynamic runtime';
+            return 'service requires the dynamic runtime';
         }
 
         if ($definition instanceof AliasDefinition) {

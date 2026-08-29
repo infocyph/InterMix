@@ -11,16 +11,16 @@ use ReflectionProperty;
 
 /**
  * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
- * @phpstan-type PropertyPlan array{declaring: class-string, property: string, static: bool, argument: ServiceArgument|null, runtime?: 'attribute'|'assign'|'registered'}
+ * @phpstan-type PropertyPlan array{declaring: class-string<object>, property: string, static: bool, argument: ServiceArgument|null, runtime?: 'attribute'|'assign'|'registered'}
  * @internal
  */
 final class StaticPropertyPlanner
 {
     /**
      * @param ReflectionClass<object> $class
-     * @return array{properties: list<PropertyPlan>, dependencies: list<string>}|string
+     * @return array{properties: list<PropertyPlan>, dependencies: list<string>}
      */
-    public function plan(DefinitionGraph $graph, ReflectionClass $class): array|string
+    public function plan(DefinitionGraph $graph, ReflectionClass $class): array
     {
         $properties = [];
         $dependencies = [];
@@ -35,9 +35,6 @@ final class StaticPropertyPlanner
                 }
 
                 $plan = $this->propertyPlan($graph, $property, $registered);
-                if (is_string($plan)) {
-                    return $plan;
-                }
                 if ($plan === null) {
                     continue;
                 }
@@ -131,13 +128,13 @@ final class StaticPropertyPlanner
 
     /**
      * @param array<string, mixed> $registered
-     * @return PropertyPlan|string|null
+     * @return PropertyPlan|null
      */
     private function propertyPlan(
         DefinitionGraph $graph,
         ReflectionProperty $property,
         array $registered,
-    ): array|string|null {
+    ): ?array {
         $name = $property->getName();
         if (array_key_exists($name, $registered)) {
             if (!$this->isExportable($registered[$name])) {
@@ -197,7 +194,10 @@ final class StaticPropertyPlanner
         return $properties;
     }
 
-    /** @return PropertyPlan */
+    /**
+     * @param 'attribute'|'registered' $runtime
+     * @return PropertyPlan
+     */
     private function runtimePropertyPlan(ReflectionProperty $property, string $runtime): array
     {
         return [

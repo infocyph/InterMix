@@ -137,7 +137,6 @@ abstract class ProductionContainer implements ContainerInterface
 
             return;
         }
-
         foreach ($this->taggedIds($tag) as $id) {
             yield $id => fn() => $this->get($id);
         }
@@ -263,6 +262,7 @@ abstract class ProductionContainer implements ContainerInterface
         $this->runtimeIslandResolver()->applyAttributedProperty($instance, $declaringClass, $propertyName);
     }
 
+    /** @param class-string $declaringClass */
     final protected function assignCompiledRuntimeProperty(
         object $instance,
         string $declaringClass,
