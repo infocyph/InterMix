@@ -63,6 +63,27 @@ final class StaticFreshInvocationRenderer
     }
 
     /**
+     * @param array<string, ServicePlan> $plans
+     * @return array<string, FreshInvocationPlan>
+     */
+    private function recipes(array $plans): array
+    {
+        $recipes = [];
+        foreach ($plans as $plan) {
+            $recipe = $this->toRecipe($plan);
+            if ($recipe === null) {
+                continue;
+            }
+
+            $key = $recipe['class'] . "\0" . $recipe['invocation']['method'];
+            $recipes[$key] ??= $recipe;
+        }
+        ksort($recipes, SORT_STRING);
+
+        return $recipes;
+    }
+
+    /**
      * @param array<string, array<string, int>> $grouped
      */
     private function renderDispatch(array $grouped): string
@@ -121,27 +142,6 @@ final class StaticFreshInvocationRenderer
         $source .= "\n        return true;\n";
 
         return $source . "    }\n\n";
-    }
-
-    /**
-     * @param array<string, ServicePlan> $plans
-     * @return array<string, FreshInvocationPlan>
-     */
-    private function recipes(array $plans): array
-    {
-        $recipes = [];
-        foreach ($plans as $plan) {
-            $recipe = $this->toRecipe($plan);
-            if ($recipe === null) {
-                continue;
-            }
-
-            $key = $recipe['class'] . "\0" . $recipe['invocation']['method'];
-            $recipes[$key] ??= $recipe;
-        }
-        ksort($recipes, SORT_STRING);
-
-        return $recipes;
     }
 
     /**
