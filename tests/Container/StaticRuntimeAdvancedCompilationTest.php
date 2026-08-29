@@ -119,7 +119,7 @@ it('compiles deterministic property Inject attributes', function () {
     }
 });
 
-it('keeps constructor parameter attributes on the current dynamic semantics', function () {
+it('compiles constructor parameter attributes with the current development semantics', function () {
     $builder = ContainerBuilder::create(uniqid('advanced_constructor_attr_'));
     $builder->singleton(AdvancedCompiledDependency::class)
         ->singleton('advanced.dep', AdvancedCompiledDependency::class)
@@ -133,8 +133,7 @@ it('keeps constructor parameter attributes on the current dynamic semantics', fu
         $typed = $runtime->get(AdvancedCompiledDependency::class);
         $explicit = $runtime->get('advanced.dep');
 
-        expect($report['compiled'])->not->toContain(AdvancedConstructorAttribute::class)
-            ->and($report['skipped'][AdvancedConstructorAttribute::class])->toContain('has attributes')
+        expect($report['compiled'])->toContain(AdvancedConstructorAttribute::class)
             ->and($constructor->dependency)->toBe($typed)
             ->and($constructor->dependency)->not->toBe($explicit);
     } finally {
@@ -183,22 +182,23 @@ it('compiles declarative constructor and static factories with service reference
     }
 });
 
-it('keeps reflection-only property writes in the dynamic island', function () {
+it('keeps reflection-only property writes as targeted compiled property islands', function () {
     $builder = ContainerBuilder::create(uniqid('advanced_protected_'));
     $builder->singleton(AdvancedProtectedProperty::class);
     $builder->registration()->registerProperty(
         AdvancedProtectedProperty::class,
-        ['name' => 'dynamic'],
+        ['name' => 'compiled-reflection'],
     );
 
     $path = advancedCompilationArtifactPath();
     try {
         $report = $builder->compile($path);
+        $source = file_get_contents($path);
         $runtime = $builder->production($path);
 
-        expect($report['compiled'])->not->toContain(AdvancedProtectedProperty::class)
-            ->and($report['skipped'][AdvancedProtectedProperty::class])->toContain('reflection-based injection')
-            ->and($runtime->get(AdvancedProtectedProperty::class)->name())->toBe('dynamic');
+        expect($report['compiled'])->toContain(AdvancedProtectedProperty::class)
+            ->and($source)->toContain('assignCompiledRuntimeProperty')
+            ->and($runtime->get(AdvancedProtectedProperty::class)->name())->toBe('compiled-reflection');
     } finally {
         removeAdvancedCompilationArtifact($path);
     }
