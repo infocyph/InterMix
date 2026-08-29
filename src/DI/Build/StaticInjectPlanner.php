@@ -79,7 +79,8 @@ final class StaticInjectPlanner
             return null;
         }
 
-        return $this->serviceTargetPlan($graph, $target, $parameter->getName());
+        return $this->serviceTargetPlan($graph, $target, $parameter->getName())
+            ?? "parameter '{$parameter->getName()}' has an unresolved #[Inject] target '{$target}'";
     }
 
     /** @return ServiceArgument|string */
@@ -93,11 +94,8 @@ final class StaticInjectPlanner
             return ['kind' => 'value', 'code' => var_export($value, true)];
         }
 
-        if ($graph->hasDefinition($value) || class_exists($value) || interface_exists($value)) {
-            $service = $this->serviceTargetPlan($graph, $value, $parameter);
-            if ($service !== null) {
-                return $service;
-            }
+        if ($graph->hasDefinition($value)) {
+            return ['kind' => 'service', 'id' => $value];
         }
         if (function_exists($value)) {
             return "method parameter '{$parameter}' injects a runtime function";
@@ -125,7 +123,7 @@ final class StaticInjectPlanner
             return ['kind' => 'service', 'id' => $target];
         }
         if (function_exists($target)) {
-            return "method parameter '{$parameter}' injects a runtime function";
+            return "parameter '{$parameter}' injects a runtime function";
         }
         if (!class_exists($target) && !interface_exists($target)) {
             return null;
@@ -133,7 +131,7 @@ final class StaticInjectPlanner
 
         $concrete = $graph->environmentConcrete($target) ?? $target;
         if (!class_exists($concrete)) {
-            return "method parameter '{$parameter}' injects an unresolved interface '$target'";
+            return "parameter '{$parameter}' injects an unresolved interface '{$target}'";
         }
 
         return ['kind' => 'service', 'id' => $concrete];
