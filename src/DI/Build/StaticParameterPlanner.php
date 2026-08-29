@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Build;
 
+use Infocyph\InterMix\DI\Attribute\Inject;
 use ReflectionClass;
 use ReflectionIntersectionType;
 use ReflectionNamedType;
@@ -36,16 +37,53 @@ final class StaticParameterPlanner
                 return $argument;
             }
             if ($argument['kind'] === 'service') {
-                if (isset($seenDependencies[$argument['id']])) {
-                    return "constructor dependency '{$argument['id']}' occurs more than once";
+                if (!isset($seenDependencies[$argument['id']])) {
+                    $seenDependencies[$argument['id']] = true;
+                    $dependencies[] = $argument['id'];
                 }
-                $seenDependencies[$argument['id']] = true;
-                $dependencies[] = $argument['id'];
             }
             $arguments[] = $argument;
         }
 
         return ['arguments' => $arguments, 'dependencies' => $dependencies];
+    }
+
+    /**
+     * @param ReflectionClass<object> $class
+     * @return ServiceArgument|string|null
+     */
+    private function attributeParameterPlan(
+        DefinitionGraph $graph,
+        ReflectionClass $class,
+        ReflectionParameter $parameter,
+    ): array|string|null {
+        $attributes = $parameter->getAttributes();
+        if ($attributes === []) {
+            return null;
+        }
+
+        foreach ($attributes as $attribute) {
+            $type = $attribute->getName();
+            if ($type !== Inject::class && $graph->hasAttributeType($type)) {
+                return "constructor parameter '{$parameter->getName()}' has a custom runtime attribute";
+            }
+        }
+
+        $inject = $parameter->getAttributes(Inject::class)[0] ?? null;
+        if ($inject === null || $inject->getArguments() === []) {
+            if ($inject !== null && $graph->hasAttributeType(Inject::class)) {
+                return "constructor parameter '{$parameter->getName()}' uses a custom Inject resolver";
+            }
+
+            return null;
+        }
+
+        $target = $inject->newInstance()->getParameterData('type');
+        if (!is_string($target) || $target === '' || function_exists($target)) {
+            return "constructor parameter '{$parameter->getName()}' has a dynamic #[Inject] target";
+        }
+
+        return $this->serviceTargetPlan($graph, $class->getName(), $target);
     }
 
     private function isExportable(mixed $value): bool
@@ -87,8 +125,10 @@ final class StaticParameterPlanner
         if ($parameter->isVariadic()) {
             return "constructor parameter '{$parameter->getName()}' is variadic";
         }
-        if ($parameter->getAttributes() !== []) {
-            return "constructor parameter '{$parameter->getName()}' has attributes";
+
+        $attribute = $this->attributeParameterPlan($graph, $class, $parameter);
+        if (is_array($attribute) || is_string($attribute)) {
+            return $attribute;
         }
 
         $type = $parameter->getType();
@@ -106,6 +146,30 @@ final class StaticParameterPlanner
         }
 
         return "constructor parameter '{$parameter->getName()}' cannot be represented statically";
+    }
+
+    /** @return array{kind: 'service', id: string}|string */
+    private function serviceTargetPlan(
+        DefinitionGraph $graph,
+        string $consumer,
+        string $target,
+    ): array|string {
+        if ($graph->hasDefinition($target)) {
+            return ['kind' => 'service', 'id' => $target];
+        }
+        if ($graph->hasContextualBinding($consumer, $target)) {
+            return $this->typedServicePlan($graph, $consumer, $target);
+        }
+
+        $environment = $graph->environmentConcrete($target);
+        if ($environment !== null) {
+            return ['kind' => 'service', 'id' => $environment];
+        }
+        if (class_exists($target)) {
+            return ['kind' => 'service', 'id' => $target];
+        }
+
+        return "constructor dependency '$target' is not statically resolvable";
     }
 
     /**
@@ -136,10 +200,7 @@ final class StaticParameterPlanner
         string $dependency,
     ): array|string {
         if (!$graph->hasContextualBinding($consumer, $dependency)) {
-            return [
-                'kind' => 'service',
-                'id' => $graph->environmentConcrete($dependency) ?? $dependency,
-            ];
+            return $this->serviceTargetPlan($graph, $consumer, $dependency);
         }
 
         $binding = $graph->contextualBinding($consumer, $dependency);
