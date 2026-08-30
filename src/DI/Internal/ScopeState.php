@@ -7,13 +7,13 @@ namespace Infocyph\InterMix\DI\Internal;
 /** @internal */
 final class ScopeState
 {
+    public readonly bool $hasSeeds;
+
     /** @var array<int, mixed> */
     public array $resolved = [];
 
     /** @var array<int, mixed> */
     public array $returned = [];
-
-    public readonly bool $hasSeeds;
 
     /**
      * @param array<int, mixed> $seeds
