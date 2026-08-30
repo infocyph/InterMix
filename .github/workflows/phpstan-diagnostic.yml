@@ -1,0 +1,26 @@
+name: "PHPStan Diagnostic"
+
+on:
+  push:
+    branches: [ "perf/recover-sequential-scope" ]
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.5"
+          tools: composer:v2
+          extensions: apcu, mbstring
+          coverage: none
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Print PHPStan result
+        shell: bash
+        run: |
+          set +e
+          vendor/bin/phpstan analyse --configuration=phpstan.neon --memory-limit=1G --no-progress --error-format=json > phpstan-results.json
+          status=$?
+          cat phpstan-results.json
+          exit "$status"
