@@ -18,7 +18,7 @@ Safety invariant: if static equivalence is provable, generate the faster path; o
 - [x] Add direct static-method compilation coverage (`d593e00`).
 - [x] Preserve statically-known `#[Inject]` service arguments for private/readonly properties (`c5ae56d`).
 - [x] Add private/readonly property injection fast-path coverage (`27df470`).
-- [x] Fix the only initial CI failure: Pint property ordering (`eb799402`).
+- [x] Fix initial Pint property ordering (`eb799402`).
 - [x] Add backward-compatible generated tag/runtime-parameter hooks and reuse cached reflection metadata (`97fd611`).
 - [x] Retain compiled method parameter names for safe runtime overrides (`e5978fd`).
 - [x] Generate supplied-parameter fresh invocation for non-variadic statically planned methods (`773aa41`).
@@ -33,10 +33,20 @@ Safety invariant: if static equivalence is provable, generate the faster path; o
 - [x] Keep ordinary dynamic resolution on the existing non-context path until a concurrent scope is active (`a27233b`).
 - [x] Add production request-path benchmark coverage for scoped graphs, seeds, method/controller invocation, direct/lazy tags, runtime islands, Fiber contexts, and native controls (`ab93836`).
 - [x] Complete production benchmark coverage with artifact/prevalidated loads, direct static methods, private `#[Inject]`, hybrid fallback, and sequential scope enter/resolve/leave controls (`89e5b37`).
+- [x] Reduce `ProductionContainer` analyzer complexity by moving only cold fallback/spec handling into internal helpers (`cca0220`, `30c98d6`, `d7478b6`).
+- [x] Restore non-public post-construction methods to the existing runtime-island path after parity testing exposed the regression (`5b8e5f2`).
+- [x] Fix validation-only formatting findings in runtime requirements and benchmark ordering (`b70079c`, `f16f169`).
+- [x] Restore the repository's native PHPForge workflow with no project-side benchmark command override or debug job (`c174f44`).
+- [x] Validate PHP 8.4 prefer-lowest and prefer-stable QA successfully.
+- [x] Validate PHP 8.5 prefer-lowest and prefer-stable QA successfully.
+- [x] Validate PHPStan/Psalm analysis successfully on PHP 8.4 and PHP 8.5.
+- [x] Validate production `--no-dev` clean install and platform requirements successfully.
+- [x] Confirm dynamic and compiled same-name scope/seed isolation across interleaved Fibers in the full QA matrix.
+- [x] Keep benchmark execution/discovery owned by PHPForge; no benchmark script or CI override is added to InterMix.
+- [x] Confirm the branch is based directly on current `main` with no divergence (`behind_by=0`).
 
-## Pending validation
-- [ ] Run/inspect the complete PHP 8.4/8.5 QA and analysis matrix.
-- [ ] Run/inspect the production benchmark suite and normalized controls.
-- [ ] Patch only failures/regressions identified by the validation pass.
-- [ ] Remove temporary validation/debug workflow additions.
-- [ ] Remove this branch-only checklist and mark PR ready only when all items pass.
+## Final cleanup
+- [x] All planned implementation work is complete.
+- [x] All repository QA/analyzer/install gates are green on the final implementation head.
+- [x] No public-facing API or intended behavior change is introduced; non-provable cases retain the existing dynamic/runtime-island path.
+- [ ] Delete this temporary checklist and finish PR #131 metadata.
