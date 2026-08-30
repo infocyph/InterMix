@@ -9,6 +9,7 @@ use Infocyph\InterMix\DI\Internal\RuntimeIslandResolver;
 use Infocyph\InterMix\DI\Internal\ScopeState;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
+use Infocyph\InterMix\Internal\ReflectionResource;
 use Psr\Container\ContainerInterface;
 use Throwable;
 
@@ -118,9 +119,12 @@ abstract class ProductionContainer implements ContainerInterface
             return $this->dynamic()->findByTag($tag);
         }
 
-        $matches = [];
-        foreach ($this->taggedIds($tag) as $id) {
-            $matches[$id] = $this->get($id);
+        $matches = $this->compiledTagged($tag);
+        if ($matches === null) {
+            $matches = [];
+            foreach ($this->taggedIds($tag) as $id) {
+                $matches[$id] = $this->get($id);
+            }
         }
 
         if ($this->fallback instanceof Container) {
@@ -140,15 +144,22 @@ abstract class ProductionContainer implements ContainerInterface
 
             return;
         }
-        foreach ($this->taggedIds($tag) as $id) {
-            yield $id => fn() => $this->get($id);
+
+        $compiledIds = $this->taggedIds($tag);
+        $compiled = $this->compiledTaggedLazy($tag);
+        if ($compiled === null) {
+            foreach ($compiledIds as $id) {
+                yield $id => fn() => $this->get($id);
+            }
+        } else {
+            yield from $compiled;
         }
 
         if (!$this->fallback instanceof Container) {
             return;
         }
 
-        $compiled = array_fill_keys($this->taggedIds($tag), true);
+        $compiled = array_fill_keys($compiledIds, true);
         foreach ($this->fallback->findByTagLazy($tag) as $id => $resolver) {
             if (!isset($compiled[$id])) {
                 yield $id => $resolver;
@@ -220,9 +231,25 @@ abstract class ProductionContainer implements ContainerInterface
             return $this;
         }
 
-        if (!$this->deoptimized && $parameters === []) {
+        if (!$this->deoptimized) {
             $result = null;
-            if ($this->resolveFreshCompiledSpec($spec, $result)) {
+            if ($parameters === [] && $this->resolveFreshCompiledSpec($spec, $result)) {
+                return $result;
+            }
+            if ($parameters !== []
+                && is_array($spec)
+                && count($spec) === 2
+                && array_is_list($spec)
+                && isset($spec[0], $spec[1])
+                && is_string($spec[0])
+                && is_string($spec[1])
+                && $this->freshCompiledInvocationWithParameters(
+                    $spec[0],
+                    $spec[1],
+                    $parameters,
+                    $result,
+                )
+            ) {
                 return $result;
             }
         }
@@ -275,7 +302,7 @@ abstract class ProductionContainer implements ContainerInterface
         string $propertyName,
         mixed $value,
     ): void {
-        $property = new \ReflectionProperty($declaringClass, $propertyName);
+        $property = ReflectionResource::getClassReflection($declaringClass)->getProperty($propertyName);
         $property->setValue($property->isStatic() ? null : $instance, $value);
     }
 
@@ -294,6 +321,18 @@ abstract class ProductionContainer implements ContainerInterface
     protected function compiledSingletonValues(): array
     {
         return [];
+    }
+
+    /** @return array<string, mixed>|null */
+    protected function compiledTagged(string $tag): ?array
+    {
+        return null;
+    }
+
+    /** @return iterable<string, callable(): mixed>|null */
+    protected function compiledTaggedLazy(string $tag): ?iterable
+    {
+        return null;
     }
 
     final protected function dispatchCompiledResolvedHooks(string $id, mixed $value): void
@@ -323,6 +362,16 @@ abstract class ProductionContainer implements ContainerInterface
 
     protected function freshCompiledInvocation(string $class, string $method, mixed &$result): bool
     {
+        return false;
+    }
+
+    /** @param array<int|string, mixed> $parameters */
+    protected function freshCompiledInvocationWithParameters(
+        string $class,
+        string $method,
+        array $parameters,
+        mixed &$result,
+    ): bool {
         return false;
     }
 
