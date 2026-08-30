@@ -18,11 +18,11 @@ final class ConcurrentRepository extends Repository
     /** @var array<string, ExecutionScopeState> */
     private array $executionScopes = [];
 
-    /** @var array<string, array<int, callable(string, \Infocyph\InterMix\DI\Container): void>> */
-    private array $scopeLeaveHooks = [];
-
     /** @var array<string, array<string, mixed>> */
     private array $resolvedScoped = [];
+
+    /** @var array<string, array<int, callable(string, \Infocyph\InterMix\DI\Container): void>> */
+    private array $scopeLeaveHooks = [];
 
     /** @var array<string, array<string, mixed>> */
     private array $scopeSeeds = [];
