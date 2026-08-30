@@ -15,21 +15,7 @@ jobs:
       php_extensions: "apcu"
       integration_services: '[]'
       service_topologies: '{}'
-      benchmark_composer_script: "ic:bench:quick"
     permissions:
       security-events: write
       actions: read
       contents: read
-
-  phpstan-debug:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v7
-      - uses: shivammathur/setup-php@v2
-        with:
-          php-version: "8.5"
-          extensions: apcu, mbstring
-          coverage: none
-          tools: composer:v2
-      - run: composer install --no-interaction --prefer-dist --no-progress
-      - run: php vendor/bin/phpstan analyse --configuration=vendor/infocyph/phpforge/resources/phpstan.neon.dist --memory-limit=1G --no-progress --error-format=table
