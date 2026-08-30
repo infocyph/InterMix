@@ -18,14 +18,18 @@ Safety invariant: if static equivalence is provable, generate the faster path; o
 - [x] Add direct static-method compilation coverage (`d593e00`).
 - [x] Preserve statically-known `#[Inject]` service arguments for private/readonly properties (`c5ae56d`).
 - [x] Add private/readonly property injection fast-path coverage (`27df470`).
+- [x] Fix the only initial CI failure: Pint property ordering (`eb799402`).
+- [x] Add backward-compatible generated tag/runtime-parameter hooks and reuse cached reflection metadata (`97fd611`).
+- [x] Retain compiled method parameter names for safe runtime overrides (`e5978fd`).
+- [x] Generate supplied-parameter fresh invocation for non-variadic statically planned methods (`773aa41`).
+- [x] Add named/positional runtime-parameter parity and variadic fallback coverage (`5612ebc`).
+- [x] Generate direct eager/lazy compiled tag dispatch with deoptimization checks (`6fac721`).
+- [x] Add eager/lazy tag dispatch parity and identity coverage (`c35d582`).
 
 ## In progress
-- [ ] Generate direct compiled tag resolution while preserving fallback merge/lazy semantics.
+- [ ] Isolate mutable scope state per execution context for coroutine/Fiber safety without a Swoole dependency.
 
 ## Pending
-- [ ] Compile `resolveNow()` / fresh method invocation with supplied runtime parameters only when binding semantics are provably equivalent.
-- [ ] Cache immutable runtime-island reflection metadata without caching request-specific values.
-- [ ] Isolate mutable scope state per execution context for coroutine/Fiber safety without a Swoole dependency.
 - [ ] Add interleaving concurrency regression coverage for dynamic and generated containers.
 - [ ] Expand production request-path benchmarks for scoped, invocation, tag, runtime-island, and context-isolation paths.
 - [ ] Run/inspect full CI and benchmark results; fix regressions.
