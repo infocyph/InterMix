@@ -65,6 +65,10 @@ it('specializes scoped identity and scope seeds in production', function () {
 
     try {
         $builder->compile($path);
+        $source = file_get_contents($path);
+        expect($source)->toBeString()
+            ->toContain('$this->scope->hasSeeds && array_key_exists(');
+
         $runtime = $builder->production($path);
         $root = $runtime->get('leaf');
 
