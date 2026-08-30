@@ -12,6 +12,8 @@ final class ExecutionContext
 {
     private static ?Closure $coroutineIdResolver = null;
 
+    private static ?string $coroutinePrefix = null;
+
     private static bool $coroutineResolverInitialized = false;
 
     public static function id(): ?string
@@ -26,20 +28,24 @@ final class ExecutionContext
         }
 
         $getCid = self::$coroutineIdResolver;
-        if (!$getCid instanceof Closure) {
+        $prefix = self::$coroutinePrefix;
+        if (!$getCid instanceof Closure || $prefix === null) {
             return null;
         }
 
         $id = $getCid();
 
-        return is_int($id) && $id >= 0 ? 'coroutine:' . $id : null;
+        return is_int($id) && $id >= 0 ? $prefix . $id : null;
     }
 
     private static function initializeCoroutineResolver(): void
     {
         self::$coroutineResolverInitialized = true;
 
-        foreach (['Swoole' . '\\Coroutine', 'OpenSwoole' . '\\Coroutine'] as $class) {
+        foreach ([
+            ['Swoole' . '\\Coroutine', 'swoole:'],
+            ['OpenSwoole' . '\\Coroutine', 'openswoole:'],
+        ] as [$class, $prefix]) {
             if (!class_exists($class, false)) {
                 continue;
             }
@@ -50,6 +56,7 @@ final class ExecutionContext
             }
 
             self::$coroutineIdResolver = Closure::fromCallable($getCid);
+            self::$coroutinePrefix = $prefix;
 
             return;
         }
