@@ -13,13 +13,16 @@ Safety invariant: if static equivalence is provable, generate the faster path; o
 - [x] Add generated-artifact parity coverage for the seed fast path (`018e4aa`).
 - [x] Use `hasSeeds` in compiled invocation seed guards (`0d0d29b`).
 - [x] Use `hasSeeds` in lifecycle-hook seed guards (`0a666eb`).
+- [x] Statically plan public static methods (`5668162`).
+- [x] Render public static methods as direct `Class::method(...)` calls (`50e13c6`).
+- [x] Add direct static-method compilation coverage (`d593e00`).
+- [x] Preserve statically-known `#[Inject]` service arguments for private/readonly properties (`c5ae56d`).
+- [x] Add private/readonly property injection fast-path coverage (`27df470`).
 
 ## In progress
-- [ ] Compile public static methods directly when their arguments are statically representable.
+- [ ] Generate direct compiled tag resolution while preserving fallback merge/lazy semantics.
 
 ## Pending
-- [ ] Preserve compile-known `#[Inject]` values for non-public properties through the existing assignment path.
-- [ ] Generate direct compiled tag resolution while preserving fallback merge/lazy semantics.
 - [ ] Compile `resolveNow()` / fresh method invocation with supplied runtime parameters only when binding semantics are provably equivalent.
 - [ ] Cache immutable runtime-island reflection metadata without caching request-specific values.
 - [ ] Isolate mutable scope state per execution context for coroutine/Fiber safety without a Swoole dependency.
