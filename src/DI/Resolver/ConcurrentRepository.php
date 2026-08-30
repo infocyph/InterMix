@@ -13,18 +13,37 @@ final class ConcurrentRepository extends Repository
 {
     private bool $contextScopesActive = false;
 
-    /** @var array<string, array<int, callable(string, \Infocyph\InterMix\DI\Container): void>> */
-    private array $executionScopeLeaveHooks = [];
+    private string $currentScope = 'root';
 
     /** @var array<string, ExecutionScopeState> */
     private array $executionScopes = [];
+
+    /** @var array<string, array<int, callable(string, \Infocyph\InterMix\DI\Container): void>> */
+    private array $scopeLeaveHooks = [];
+
+    /** @var array<string, array<string, mixed>> */
+    private array $resolvedScoped = [];
+
+    /** @var array<string, array<string, mixed>> */
+    private array $scopeSeeds = [];
+
+    /** @var array<int, string> */
+    private array $scopeStack = [];
 
     /** @param array<string, mixed> $instances */
     public function enterScope(string $scope, array $instances = []): void
     {
         $context = ExecutionContext::id();
         if ($context === null) {
-            parent::enterScope($scope, $instances);
+            if ($scope === $this->currentScope || in_array($scope, $this->scopeStack, true)) {
+                throw new ContainerException("Scope \"{$scope}\" is already active.");
+            }
+
+            $this->scopeStack[] = $this->currentScope;
+            $this->currentScope = $scope;
+            if ($instances !== []) {
+                $this->scopeSeeds[$scope] = $instances;
+            }
 
             return;
         }
@@ -46,12 +65,34 @@ final class ConcurrentRepository extends Repository
     public function findScopeSeed(string $id, mixed &$value): bool
     {
         if (!$this->contextScopesActive) {
-            return parent::findScopeSeed($id, $value);
+            if ($this->scopeSeeds === []) {
+                return false;
+            }
+
+            $seeds = $this->scopeSeeds[$this->currentScope] ?? null;
+            if (!is_array($seeds) || !array_key_exists($id, $seeds)) {
+                return false;
+            }
+
+            $value = $seeds[$id];
+
+            return true;
         }
 
         $context = ExecutionContext::id();
         if ($context === null) {
-            return parent::findScopeSeed($id, $value);
+            if ($this->scopeSeeds === []) {
+                return false;
+            }
+
+            $seeds = $this->scopeSeeds[$this->currentScope] ?? null;
+            if (!is_array($seeds) || !array_key_exists($id, $seeds)) {
+                return false;
+            }
+
+            $value = $seeds[$id];
+
+            return true;
         }
 
         $state = $this->executionScopes[$context] ?? null;
@@ -73,12 +114,12 @@ final class ConcurrentRepository extends Repository
     public function getResolvedScopedEntry(string $scope, string $id): mixed
     {
         if (!$this->contextScopesActive) {
-            return parent::getResolvedScopedEntry($scope, $id);
+            return $this->resolvedScoped[$scope][$id] ?? null;
         }
 
         $context = ExecutionContext::id();
         if ($context === null) {
-            return parent::getResolvedScopedEntry($scope, $id);
+            return $this->resolvedScoped[$scope][$id] ?? null;
         }
 
         $state = $this->executionScopes[$context] ?? null;
@@ -91,12 +132,12 @@ final class ConcurrentRepository extends Repository
     public function getScope(): string
     {
         if (!$this->contextScopesActive) {
-            return parent::getScope();
+            return $this->currentScope;
         }
 
         $context = ExecutionContext::id();
         if ($context === null) {
-            return parent::getScope();
+            return $this->currentScope;
         }
 
         return $this->executionScopes[$context]->currentScope ?? 'root';
@@ -106,12 +147,12 @@ final class ConcurrentRepository extends Repository
     public function hasResolvedScoped(string $scope, string $id): bool
     {
         if (!$this->contextScopesActive) {
-            return parent::hasResolvedScoped($scope, $id);
+            return array_key_exists($id, $this->resolvedScoped[$scope] ?? []);
         }
 
         $context = ExecutionContext::id();
         if ($context === null) {
-            return parent::hasResolvedScoped($scope, $id);
+            return array_key_exists($id, $this->resolvedScoped[$scope] ?? []);
         }
 
         $state = $this->executionScopes[$context] ?? null;
@@ -124,12 +165,12 @@ final class ConcurrentRepository extends Repository
     public function hasScopeSeeds(): bool
     {
         if (!$this->contextScopesActive) {
-            return parent::hasScopeSeeds();
+            return $this->scopeSeeds !== [];
         }
 
         $context = ExecutionContext::id();
         if ($context === null) {
-            return parent::hasScopeSeeds();
+            return $this->scopeSeeds !== [];
         }
 
         return ($this->executionScopes[$context]->scopeSeeds ?? []) !== [];
@@ -138,9 +179,18 @@ final class ConcurrentRepository extends Repository
     public function invalidateClass(string $class): void
     {
         parent::invalidateClass($class);
+        foreach (array_keys($this->resolvedScoped) as $scope) {
+            unset($this->resolvedScoped[$scope][$class]);
+            if ($this->resolvedScoped[$scope] === []) {
+                unset($this->resolvedScoped[$scope]);
+            }
+        }
         foreach ($this->executionScopes as $state) {
             foreach (array_keys($state->resolvedScoped) as $scope) {
                 unset($state->resolvedScoped[$scope][$class]);
+                if ($state->resolvedScoped[$scope] === []) {
+                    unset($state->resolvedScoped[$scope]);
+                }
             }
         }
     }
@@ -148,6 +198,12 @@ final class ConcurrentRepository extends Repository
     public function invalidateDefinition(string $id): void
     {
         parent::invalidateDefinition($id);
+        foreach (array_keys($this->resolvedScoped) as $scope) {
+            unset($this->resolvedScoped[$scope][$id]);
+            if ($this->resolvedScoped[$scope] === []) {
+                unset($this->resolvedScoped[$scope]);
+            }
+        }
         foreach ($this->executionScopes as $state) {
             foreach (array_keys($state->resolvedScoped) as $scope) {
                 unset($state->resolvedScoped[$scope][$id]);
@@ -161,6 +217,7 @@ final class ConcurrentRepository extends Repository
     public function invalidateResolutionConfiguration(): void
     {
         parent::invalidateResolutionConfiguration();
+        $this->resolvedScoped = [];
         foreach ($this->executionScopes as $state) {
             $state->resolvedScoped = [];
         }
@@ -169,21 +226,35 @@ final class ConcurrentRepository extends Repository
     public function leaveScope(): void
     {
         if (!$this->contextScopesActive) {
-            parent::leaveScope();
+            $scope = $this->currentScope;
+            foreach ($this->scopeLeaveHooks[$scope] ?? [] as $hook) {
+                $hook($scope, $this->container());
+            }
+
+            unset($this->resolvedScoped[$scope], $this->scopeSeeds[$scope]);
+            $previous = array_pop($this->scopeStack);
+            $this->currentScope = is_string($previous) ? $previous : 'root';
 
             return;
         }
 
         $context = ExecutionContext::id();
         if ($context === null) {
-            parent::leaveScope();
+            $scope = $this->currentScope;
+            foreach ($this->scopeLeaveHooks[$scope] ?? [] as $hook) {
+                $hook($scope, $this->container());
+            }
+
+            unset($this->resolvedScoped[$scope], $this->scopeSeeds[$scope]);
+            $previous = array_pop($this->scopeStack);
+            $this->currentScope = is_string($previous) ? $previous : 'root';
 
             return;
         }
 
         $state = $this->executionScopes[$context] ??= new ExecutionScopeState();
         $scope = $state->currentScope;
-        foreach ($this->executionScopeLeaveHooks[$scope] ?? [] as $hook) {
+        foreach ($this->scopeLeaveHooks[$scope] ?? [] as $hook) {
             $hook($scope, $this->container());
         }
 
@@ -204,20 +275,26 @@ final class ConcurrentRepository extends Repository
     public function onScopeLeave(string $scope, callable $hook): void
     {
         parent::onScopeLeave($scope, $hook);
-        $this->executionScopeLeaveHooks[$scope][] = $hook;
+        $this->scopeLeaveHooks[$scope][] = $hook;
     }
 
     public function resetScope(): void
     {
         if (!$this->contextScopesActive) {
-            parent::resetScope();
+            $this->resolvedScoped = [];
+            $this->scopeStack = [];
+            $this->scopeSeeds = [];
+            $this->currentScope = 'root';
 
             return;
         }
 
         $context = ExecutionContext::id();
         if ($context === null) {
-            parent::resetScope();
+            $this->resolvedScoped = [];
+            $this->scopeStack = [];
+            $this->scopeSeeds = [];
+            $this->currentScope = 'root';
             $this->executionScopes = [];
             $this->contextScopesActive = false;
 
@@ -235,6 +312,10 @@ final class ConcurrentRepository extends Repository
         }
 
         parent::setEnvironment($env);
+        $this->resolvedScoped = [];
+        $this->scopeStack = [];
+        $this->scopeSeeds = [];
+        $this->currentScope = 'root';
         $this->executionScopes = [];
         $this->contextScopesActive = false;
     }
@@ -242,14 +323,14 @@ final class ConcurrentRepository extends Repository
     public function setResolvedScoped(string $scope, string $id, mixed $value): void
     {
         if (!$this->contextScopesActive) {
-            parent::setResolvedScoped($scope, $id, $value);
+            $this->resolvedScoped[$scope][$id] = $value;
 
             return;
         }
 
         $context = ExecutionContext::id();
         if ($context === null) {
-            parent::setResolvedScoped($scope, $id, $value);
+            $this->resolvedScoped[$scope][$id] = $value;
 
             return;
         }
@@ -261,14 +342,14 @@ final class ConcurrentRepository extends Repository
     public function setScope(string $scope): void
     {
         if (!$this->contextScopesActive) {
-            parent::setScope($scope);
+            $this->currentScope = $scope;
 
             return;
         }
 
         $context = ExecutionContext::id();
         if ($context === null) {
-            parent::setScope($scope);
+            $this->currentScope = $scope;
 
             return;
         }
