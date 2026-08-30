@@ -32,7 +32,7 @@ final class StaticInvocationRenderer
         }
 
         $source = "    private function s{$slot}(): mixed\n    {\n";
-        $source .= $this->seedGuard($slot);
+        $source .= $this->seedGuard($slot, $plan['lifetime']);
         $source .= $this->cacheGuard($slot, $plan['lifetime']);
         if ($resolvingHook) {
             $source .= '        $this->dispatchCompiledResolvingHooks(' . var_export($id, true) . ");\n\n";
@@ -73,8 +73,8 @@ final class StaticInvocationRenderer
     private function cacheGuard(int $slot, LifetimeEnum $lifetime): string
     {
         if ($lifetime === LifetimeEnum::Scoped) {
-            return "        if (array_key_exists({$slot}, \$this->scope->resolved)) {\n"
-                . "            return \$this->scope->resolved[{$slot}];\n"
+            return "        if (array_key_exists({$slot}, \$scope->resolved)) {\n"
+                . "            return \$scope->resolved[{$slot}];\n"
                 . "        }\n\n";
         }
         if ($lifetime === LifetimeEnum::Singleton) {
@@ -89,7 +89,7 @@ final class StaticInvocationRenderer
     private function cacheResult(int $slot, LifetimeEnum $lifetime): string
     {
         if ($lifetime === LifetimeEnum::Scoped) {
-            return "\n        \$this->scope->resolved[{$slot}] = \$result;\n";
+            return "\n        \$scope->resolved[{$slot}] = \$result;\n";
         }
         if ($lifetime === LifetimeEnum::Singleton) {
             return "\n        \$this->invocationSingletons[{$slot}] = \$result;\n";
@@ -105,14 +105,14 @@ final class StaticInvocationRenderer
     private function renderPlainMethod(int $slot, array $plan, array $slots): string
     {
         $source = "    private function s{$slot}(): mixed\n    {\n";
-        $source .= $this->seedGuard($slot);
+        $source .= $this->seedGuard($slot, $plan['lifetime']);
 
         if ($plan['lifetime'] === LifetimeEnum::Scoped) {
-            $source .= "        if (array_key_exists({$slot}, \$this->scope->resolved)) {\n";
-            $source .= "            return \$this->scope->resolved[{$slot}];\n";
+            $source .= "        if (array_key_exists({$slot}, \$scope->resolved)) {\n";
+            $source .= "            return \$scope->resolved[{$slot}];\n";
             $source .= "        }\n\n";
             $source .= $this->statements($plan, $slots);
-            $source .= "\n        return \$this->scope->resolved[{$slot}] = \$result;\n";
+            $source .= "\n        return \$scope->resolved[{$slot}] = \$result;\n";
         } elseif ($plan['lifetime'] === LifetimeEnum::Singleton) {
             $source .= "        if (array_key_exists({$slot}, \$this->invocationSingletons)) {\n";
             $source .= "            return \$this->invocationSingletons[{$slot}];\n";
@@ -127,11 +127,9 @@ final class StaticInvocationRenderer
         return $source . "    }\n\n";
     }
 
-    private function seedGuard(int $slot): string
+    private function seedGuard(int $slot, LifetimeEnum $lifetime): string
     {
-        return "        if (\$this->scope->hasSeeds && array_key_exists({$slot}, \$this->scope->seeds)) {\n"
-            . "            return \$this->scope->seeds[{$slot}];\n"
-            . "        }\n\n";
+        return new StaticScopeAccessRenderer()->seedGuard($slot, $lifetime);
     }
 
     /**
