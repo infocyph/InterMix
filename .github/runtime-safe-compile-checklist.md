@@ -9,8 +9,10 @@ Safety invariant: if static equivalence is provable, generate the faster path; o
 - [x] Add internal `ScopeState::$hasSeeds` precomputation (`718aa502`).
 - [x] Add direct unit coverage for `ScopeState::$hasSeeds` (`da5de8ff`).
 - [x] Open draft PR #131 for CI/review visibility.
-- [x] Use `hasSeeds` in generated seed guards (`2bb061b`).
+- [x] Use `hasSeeds` in standard generated seed guards (`2bb061b`).
 - [x] Add generated-artifact parity coverage for the seed fast path (`018e4aa`).
+- [x] Use `hasSeeds` in compiled invocation seed guards (`0d0d29b`).
+- [x] Use `hasSeeds` in lifecycle-hook seed guards (`0a666eb`).
 
 ## In progress
 - [ ] Compile public static methods directly when their arguments are statically representable.
