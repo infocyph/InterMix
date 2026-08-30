@@ -55,6 +55,7 @@ final class ExecutionContext
                 continue;
             }
 
+            /** @var callable(): mixed $getCid */
             self::$coroutineIdResolver = Closure::fromCallable($getCid);
             self::$coroutinePrefix = $prefix;
 
