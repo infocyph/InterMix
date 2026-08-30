@@ -20,7 +20,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          vendor/bin/phpstan analyse --configuration=phpstan.neon --memory-limit=1G --no-progress --error-format=json > phpstan-results.json
+          vendor/bin/phpstan analyse --configuration=vendor/infocyph/phpforge/resources/phpstan.neon.dist --memory-limit=1G --no-progress --error-format=json > phpstan-results.json
           status=$?
           cat phpstan-results.json
           exit "$status"
