@@ -30,6 +30,19 @@ final class MethodRegisteredInvocation
     }
 }
 
+final class MethodStaticInvocation
+{
+    public static ?MethodCompiledDependency $dependency = null;
+
+    public static string $label = 'unset';
+
+    public static function boot(MethodCompiledDependency $dependency, string $label = 'default'): void
+    {
+        self::$dependency = $dependency;
+        self::$label = $label;
+    }
+}
+
 final class MethodCallOnInvocation
 {
     public const CALL_ON = 'boot';
@@ -138,6 +151,39 @@ it('compiles registered post-construction method invocation', function () {
             ->and($service->calls)->toBe(1);
     } finally {
         removeMethodCompilationArtifact($path);
+    }
+});
+
+it('compiles public static methods without a reflection island', function () {
+    MethodStaticInvocation::$dependency = null;
+    MethodStaticInvocation::$label = 'unset';
+
+    $builder = ContainerBuilder::create(uniqid('method_static_'));
+    $builder->singleton(MethodCompiledDependency::class)
+        ->singleton(MethodStaticInvocation::class);
+    $builder->registration()->registerMethod(
+        MethodStaticInvocation::class,
+        'boot',
+        ['label' => 'compiled-static'],
+    );
+
+    $path = methodCompilationArtifactPath();
+    try {
+        $report = $builder->compile($path);
+        $source = file_get_contents($path);
+        $runtime = $builder->production($path);
+        $service = $runtime->get(MethodStaticInvocation::class);
+
+        expect($report['compiled'])->toContain(MethodStaticInvocation::class)
+            ->and($source)->toBeString()
+            ->toContain('\\MethodStaticInvocation::boot(')
+            ->and($service)->toBeInstanceOf(MethodStaticInvocation::class)
+            ->and(MethodStaticInvocation::$label)->toBe('compiled-static')
+            ->and(MethodStaticInvocation::$dependency)->toBe($runtime->get(MethodCompiledDependency::class));
+    } finally {
+        removeMethodCompilationArtifact($path);
+        MethodStaticInvocation::$dependency = null;
+        MethodStaticInvocation::$label = 'unset';
     }
 });
 
