@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\Benchmarks;
 
 use Fiber;
+use Infocyph\InterMix\DI\Attribute\Inject;
+use Infocyph\InterMix\DI\Build\StaticRuntimeGenerator;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\DI\ProductionContainer;
@@ -20,6 +22,15 @@ final class ProductionRequestPathBench
     private int $sequence = 0;
 
     private mixed $sink;
+
+    #[Revs(100)]
+    public function benchArtifactLoad(): void
+    {
+        static $generator;
+        $generator ??= new StaticRuntimeGenerator();
+        [$path, , $fallback] = $this->bootFixture();
+        $this->sink = $generator->load($path, $fallback);
+    }
 
     #[Revs(500)]
     public function benchCompiledControllerInvocation(): void
@@ -41,11 +52,29 @@ final class ProductionRequestPathBench
     }
 
     #[Revs(500)]
+    public function benchCompiledPrivateInject(): void
+    {
+        static $runtime;
+        $runtime ??= $this->propertyInjectRuntime();
+        $this->sink = $runtime->get(ProductionRequestPrivateInject::class);
+    }
+
+    #[Revs(500)]
     public function benchCompiledPublicMethodPath(): void
     {
         static $runtime;
         $runtime ??= $this->methodRuntime(ProductionRequestCompiledMethod::class, 'compiled-method');
         $this->sink = $runtime->get('compiled-method');
+    }
+
+    #[Revs(500)]
+    public function benchCompiledScopeEnterResolveLeave(): void
+    {
+        static $runtime;
+        $runtime ??= $this->threeNodeRuntime(LifetimeEnum::Scoped, 'scope-cycle');
+        $runtime->enterScope('request');
+        $this->sink = $runtime->get('root');
+        $runtime->leaveScope();
     }
 
     #[Revs(1000)]
@@ -71,6 +100,26 @@ final class ProductionRequestPathBench
             )]);
         }
         $this->sink = $runtime->get('root');
+    }
+
+    #[Revs(500)]
+    public function benchCompiledStaticMethodPath(): void
+    {
+        static $runtime;
+        $runtime ??= $this->staticMethodRuntime();
+        $this->sink = $runtime->get(ProductionRequestStaticMethod::class);
+    }
+
+    #[Revs(1000)]
+    public function benchCompiledTaggedLazyPipeline(): void
+    {
+        static $runtime;
+        $runtime ??= $this->taggedRuntime();
+        $resolved = [];
+        foreach ($runtime->findByTagLazy('middleware') as $id => $resolver) {
+            $resolved[$id] = $resolver();
+        }
+        $this->sink = $resolved;
     }
 
     #[Revs(1000)]
@@ -106,6 +155,19 @@ final class ProductionRequestPathBench
             $runtime->get('root');
         }
         $this->sink = $runtime->get('root');
+    }
+
+    #[Revs(500)]
+    public function benchDynamicScopeEnterResolveLeave(): void
+    {
+        static $container;
+        if (!$container instanceof Container) {
+            $container = new Container($this->alias('dynamic-scope-cycle'));
+            $container->scoped('root', ProductionRequestRoot::class);
+        }
+        $container->enterScope('request');
+        $this->sink = $container->get('root');
+        $container->leaveScope();
     }
 
     #[Revs(500)]
@@ -147,12 +209,29 @@ final class ProductionRequestPathBench
         $this->sink = $fiber->resume();
     }
 
+    #[Revs(500)]
+    public function benchHybridFallbackGet(): void
+    {
+        static $runtime;
+        $runtime ??= $this->hybridRuntime();
+        $this->sink = $runtime->get('dynamic');
+    }
+
     #[Revs(1000)]
     public function benchNativeTransientGraph(): void
     {
         $this->sink = new ProductionRequestRoot(
             new ProductionRequestMiddle(new ProductionRequestLeaf()),
         );
+    }
+
+    #[Revs(100)]
+    public function benchPrevalidatedArtifactLoad(): void
+    {
+        static $generator;
+        $generator ??= new StaticRuntimeGenerator();
+        [$path, $sha256, $fallback] = $this->bootFixture();
+        $this->sink = $generator->loadPrevalidated($path, $sha256, $fallback);
     }
 
     #[Revs(500)]
@@ -193,6 +272,30 @@ final class ProductionRequestPathBench
         return sys_get_temp_dir() . '/intermix-production-request-' . bin2hex(random_bytes(8)) . '.php';
     }
 
+    /** @return array{string, string, Container} */
+    private function bootFixture(): array
+    {
+        static $fixture;
+        if (is_array($fixture)) {
+            return $fixture;
+        }
+
+        $builder = ContainerBuilder::create($this->alias('boot'))
+            ->singleton('root', ProductionRequestRoot::class);
+        $path = $this->artifactPath();
+        $report = $builder->compile($path);
+        $fallback = $builder->development();
+        register_shutdown_function(static function () use ($path): void {
+            foreach ([$path, $path . '.meta.json'] as $artifact) {
+                if (is_file($artifact)) {
+                    unlink($artifact);
+                }
+            }
+        });
+
+        return $fixture = [$path, $report['sha256'], $fallback];
+    }
+
     private function controllerRuntime(): ProductionContainer
     {
         $builder = ContainerBuilder::create($this->alias('controller'))
@@ -201,6 +304,15 @@ final class ProductionRequestPathBench
             ->singleton(ProductionRequestRoot::class)
             ->transient(ProductionRequestController::class);
         $builder->registration()->registerMethod(ProductionRequestController::class, 'handle');
+
+        return $this->production($builder);
+    }
+
+    private function hybridRuntime(): ProductionContainer
+    {
+        $builder = ContainerBuilder::create($this->alias('hybrid'))
+            ->singleton(ProductionRequestLeaf::class)
+            ->bind('dynamic', static fn(): ProductionRequestLeaf => new ProductionRequestLeaf());
 
         return $this->production($builder);
     }
@@ -224,6 +336,16 @@ final class ProductionRequestPathBench
         return $runtime;
     }
 
+    private function propertyInjectRuntime(): ProductionContainer
+    {
+        $builder = ContainerBuilder::create($this->alias('private-inject'));
+        $builder->options()->setOptions(propertyAttributes: true);
+        $builder->singleton(ProductionRequestLeaf::class)
+            ->transient(ProductionRequestPrivateInject::class);
+
+        return $this->production($builder);
+    }
+
     private function removeArtifact(string $path): void
     {
         foreach ([$path, $path . '.meta.json'] as $artifact) {
@@ -231,6 +353,16 @@ final class ProductionRequestPathBench
                 unlink($artifact);
             }
         }
+    }
+
+    private function staticMethodRuntime(): ProductionContainer
+    {
+        $builder = ContainerBuilder::create($this->alias('static-method'))
+            ->singleton(ProductionRequestLeaf::class)
+            ->transient(ProductionRequestStaticMethod::class);
+        $builder->registration()->registerMethod(ProductionRequestStaticMethod::class, 'boot');
+
+        return $this->production($builder);
     }
 
     private function taggedRuntime(): ProductionContainer
@@ -363,6 +495,17 @@ final readonly class ProductionRequestNode9
 
 final class ProductionRequestNode10 {}
 
+final class ProductionRequestPrivateInject
+{
+    #[Inject]
+    private ProductionRequestLeaf $leaf;
+
+    public function value(): int
+    {
+        return $this->leaf->value();
+    }
+}
+
 final readonly class ProductionRequestRoot
 {
     public function __construct(public ProductionRequestMiddle $middle) {}
@@ -382,5 +525,15 @@ final class ProductionRequestRuntimeIsland
     protected function boot(ProductionRequestLeaf $leaf): void
     {
         $this->value = $leaf->value();
+    }
+}
+
+final class ProductionRequestStaticMethod
+{
+    public static int $value = 0;
+
+    public static function boot(ProductionRequestLeaf $leaf): void
+    {
+        self::$value = $leaf->value();
     }
 }
