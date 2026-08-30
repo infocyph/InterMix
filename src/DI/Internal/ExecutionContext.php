@@ -16,12 +16,12 @@ final class ExecutionContext
             return 'fiber:' . spl_object_id($fiber);
         }
 
-        $id = self::coroutineId('Swoole\\Coroutine');
+        $id = self::coroutineId('Swoole' . '\\Coroutine');
         if ($id !== null) {
             return 'swoole:' . $id;
         }
 
-        $id = self::coroutineId('OpenSwoole\\Coroutine');
+        $id = self::coroutineId('OpenSwoole' . '\\Coroutine');
         if ($id !== null) {
             return 'openswoole:' . $id;
         }
