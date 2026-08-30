@@ -25,10 +25,10 @@ final class StaticLifecycleHookRenderer
         string $serviceStatements,
     ): string {
         $source = "    private function s{$slot}(): mixed\n    {\n";
-        $source .= $this->seedGuard($slot);
+        $source .= $this->seedGuard($slot, $lifetime);
         if ($lifetime === LifetimeEnum::Scoped) {
-            $source .= "        if (isset(\$this->scope->resolved[{$slot}])) {\n";
-            $source .= "            return \$this->scope->resolved[{$slot}];\n";
+            $source .= "        if (isset(\$scope->resolved[{$slot}])) {\n";
+            $source .= "            return \$scope->resolved[{$slot}];\n";
             $source .= "        }\n\n";
         } elseif ($lifetime === LifetimeEnum::Singleton) {
             $source .= "        if (\$this->v{$slot} !== null) {\n";
@@ -40,7 +40,7 @@ final class StaticLifecycleHookRenderer
         }
         $source .= $serviceStatements;
         if ($lifetime === LifetimeEnum::Scoped) {
-            $source .= "\n        \$this->scope->resolved[{$slot}] = \$instance;\n";
+            $source .= "\n        \$scope->resolved[{$slot}] = \$instance;\n";
         } elseif ($lifetime === LifetimeEnum::Singleton) {
             $source .= "\n        \$this->v{$slot} = \$instance;\n";
         }
@@ -60,10 +60,10 @@ final class StaticLifecycleHookRenderer
         string $singletonStore,
     ): string {
         $source = "    private function s{$slot}(): mixed\n    {\n";
-        $source .= $this->seedGuard($slot);
+        $source .= $this->seedGuard($slot, $lifetime);
         if ($lifetime === LifetimeEnum::Scoped) {
-            $source .= "        if (array_key_exists({$slot}, \$this->scope->resolved)) {\n";
-            $source .= "            return \$this->scope->resolved[{$slot}];\n";
+            $source .= "        if (array_key_exists({$slot}, \$scope->resolved)) {\n";
+            $source .= "            return \$scope->resolved[{$slot}];\n";
             $source .= "        }\n\n";
         } elseif ($lifetime === LifetimeEnum::Singleton) {
             $source .= "        if (array_key_exists({$slot}, \$this->{$singletonStore})) {\n";
@@ -75,7 +75,7 @@ final class StaticLifecycleHookRenderer
         }
         $source .= "        \$value = {$expression};\n";
         if ($lifetime === LifetimeEnum::Scoped) {
-            $source .= "        \$this->scope->resolved[{$slot}] = \$value;\n";
+            $source .= "        \$scope->resolved[{$slot}] = \$value;\n";
         } elseif ($lifetime === LifetimeEnum::Singleton) {
             $source .= "        \$this->{$singletonStore}[{$slot}] = \$value;\n";
         }
@@ -119,10 +119,8 @@ final class StaticLifecycleHookRenderer
         return '';
     }
 
-    private function seedGuard(int $slot): string
+    private function seedGuard(int $slot, LifetimeEnum $lifetime): string
     {
-        return "        if (\$this->scope->parent !== null && array_key_exists({$slot}, \$this->scope->seeds)) {\n"
-            . "            return \$this->scope->seeds[{$slot}];\n"
-            . "        }\n\n";
+        return new StaticScopeAccessRenderer()->seedGuard($slot, $lifetime);
     }
 }

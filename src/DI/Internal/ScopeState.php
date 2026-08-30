@@ -7,6 +7,8 @@ namespace Infocyph\InterMix\DI\Internal;
 /** @internal */
 final class ScopeState
 {
+    public readonly bool $hasSeeds;
+
     /** @var array<int, mixed> */
     public array $resolved = [];
 
@@ -22,7 +24,9 @@ final class ScopeState
         public readonly ?self $parent = null,
         public readonly array $seeds = [],
         public readonly array $rawSeeds = [],
-    ) {}
+    ) {
+        $this->hasSeeds = $seeds !== [];
+    }
 
     public function contains(string $name): bool
     {

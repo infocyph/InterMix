@@ -5,20 +5,28 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI;
 
 use Closure;
+use Infocyph\InterMix\DI\Internal\ExecutionContext;
+use Infocyph\InterMix\DI\Internal\ProductionFallbackState;
+use Infocyph\InterMix\DI\Internal\ProductionSpecResolver;
 use Infocyph\InterMix\DI\Internal\RuntimeIslandResolver;
 use Infocyph\InterMix\DI\Internal\ScopeState;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
+use Infocyph\InterMix\Internal\ReflectionResource;
 use Psr\Container\ContainerInterface;
-use Throwable;
 
 abstract class ProductionContainer implements ContainerInterface
 {
+    protected bool $contextScopesActive = false;
+
     protected ScopeState $scope;
 
     private bool $deoptimizationReady = false;
 
     private bool $deoptimized = false;
+
+    /** @var array<string, ScopeState> */
+    private array $executionScopes = [];
 
     private ?Container $fallback;
 
@@ -93,7 +101,11 @@ abstract class ProductionContainer implements ContainerInterface
     /** @param array<string, mixed> $instances */
     final public function enterScope(string $scope, array $instances = []): static
     {
-        if ($scope === 'root' || $this->scope->contains($scope)) {
+        $context = ExecutionContext::id();
+        $current = $context === null
+            ? $this->scope
+            : ($this->executionScopes[$context] ?? new ScopeState('root'));
+        if ($scope === 'root' || $current->contains($scope)) {
             throw new ContainerException("Scope \"{$scope}\" is already active.");
         }
 
@@ -105,7 +117,13 @@ abstract class ProductionContainer implements ContainerInterface
             }
         }
 
-        $this->scope = new ScopeState($scope, $this->scope, $seeds, $instances);
+        $next = new ScopeState($scope, $current, $seeds, $instances);
+        if ($context === null) {
+            $this->scope = $next;
+        } else {
+            $this->executionScopes[$context] = $next;
+            $this->contextScopesActive = true;
+        }
         $this->fallback?->enterScope($scope, $instances);
 
         return $this;
@@ -118,9 +136,12 @@ abstract class ProductionContainer implements ContainerInterface
             return $this->dynamic()->findByTag($tag);
         }
 
-        $matches = [];
-        foreach ($this->taggedIds($tag) as $id) {
-            $matches[$id] = $this->get($id);
+        $matches = $this->compiledTagged($tag);
+        if ($matches === null) {
+            $matches = [];
+            foreach ($this->taggedIds($tag) as $id) {
+                $matches[$id] = $this->get($id);
+            }
         }
 
         if ($this->fallback instanceof Container) {
@@ -140,15 +161,22 @@ abstract class ProductionContainer implements ContainerInterface
 
             return;
         }
-        foreach ($this->taggedIds($tag) as $id) {
-            yield $id => fn() => $this->get($id);
+
+        $compiledIds = $this->taggedIds($tag);
+        $compiled = $this->compiledTaggedLazy($tag);
+        if ($compiled === null) {
+            foreach ($compiledIds as $id) {
+                yield $id => fn() => $this->get($id);
+            }
+        } else {
+            yield from $compiled;
         }
 
         if (!$this->fallback instanceof Container) {
             return;
         }
 
-        $compiled = array_fill_keys($this->taggedIds($tag), true);
+        $compiled = array_fill_keys($compiledIds, true);
         foreach ($this->fallback->findByTagLazy($tag) as $id => $resolver) {
             if (!isset($compiled[$id])) {
                 yield $id => $resolver;
@@ -174,7 +202,11 @@ abstract class ProductionContainer implements ContainerInterface
 
     final public function leaveScope(): static
     {
-        $scope = $this->scope->name;
+        $context = ExecutionContext::id();
+        $current = $context === null
+            ? $this->scope
+            : ($this->executionScopes[$context] ?? new ScopeState('root'));
+        $scope = $current->name;
         if ($this->requiresScopeLeaveHook($scope) && !$this->fallback instanceof Container) {
             throw new ContainerException(
                 "Compiled scope '$scope' requires its runtime scope-leave hook graph.",
@@ -182,8 +214,19 @@ abstract class ProductionContainer implements ContainerInterface
         }
 
         $this->fallback?->leaveScope();
-        $parent = $this->scope->parent;
-        $this->scope = $parent ?? new ScopeState('root');
+        $parent = $current->parent;
+        if ($context === null) {
+            $this->scope = $parent ?? new ScopeState('root');
+
+            return $this;
+        }
+
+        if ($parent instanceof ScopeState && $parent->name !== 'root') {
+            $this->executionScopes[$context] = $parent;
+        } else {
+            unset($this->executionScopes[$context]);
+        }
+        $this->contextScopesActive = $this->executionScopes !== [];
 
         return $this;
     }
@@ -220,26 +263,12 @@ abstract class ProductionContainer implements ContainerInterface
             return $this;
         }
 
-        if (!$this->deoptimized && $parameters === []) {
-            $result = null;
-            if ($this->resolveFreshCompiledSpec($spec, $result)) {
-                return $result;
-            }
-        }
-        if (is_array($spec) && (count($spec) !== 2 || !array_is_list($spec))) {
-            return $this->dynamic()->resolveNow($spec, $parameters);
-        }
-        if (is_array($spec) && !is_string($spec[0])) {
-            if (!is_callable($spec)) {
-                throw new ContainerException(
-                    "Unknown callable spec for 'array'. Expected closure/callable, 'class@method', 'class::method', [class,method], class, or function.",
-                );
-            }
-
-            return $this->dynamic()->resolveNow(Closure::fromCallable($spec), $parameters);
+        $result = null;
+        if (!$this->deoptimized && $this->resolveCompiledNow($spec, $parameters, $result)) {
+            return $result;
         }
 
-        return $this->dynamic()->resolveNow($spec, $parameters);
+        return ProductionSpecResolver::resolveDynamic($this->dynamic(), $spec, $parameters);
     }
 
     /** @return iterable<string, callable(): mixed> */
@@ -275,7 +304,7 @@ abstract class ProductionContainer implements ContainerInterface
         string $propertyName,
         mixed $value,
     ): void {
-        $property = new \ReflectionProperty($declaringClass, $propertyName);
+        $property = ReflectionResource::getClassReflection($declaringClass)->getProperty($propertyName);
         $property->setValue($property->isStatic() ? null : $instance, $value);
     }
 
@@ -290,10 +319,36 @@ abstract class ProductionContainer implements ContainerInterface
         return false;
     }
 
+    final protected function compiledScope(): ScopeState
+    {
+        if (!$this->contextScopesActive) {
+            return $this->scope;
+        }
+
+        $context = ExecutionContext::id();
+        if ($context === null) {
+            return $this->scope;
+        }
+
+        return $this->executionScopes[$context] ??= new ScopeState('root');
+    }
+
     /** @return array<string, mixed> */
     protected function compiledSingletonValues(): array
     {
         return [];
+    }
+
+    /** @return array<string, mixed>|null */
+    protected function compiledTagged(string $tag): ?array
+    {
+        return null;
+    }
+
+    /** @return iterable<string, callable(): mixed>|null */
+    protected function compiledTaggedLazy(string $tag): ?iterable
+    {
+        return null;
     }
 
     final protected function dispatchCompiledResolvedHooks(string $id, mixed $value): void
@@ -323,6 +378,16 @@ abstract class ProductionContainer implements ContainerInterface
 
     protected function freshCompiledInvocation(string $class, string $method, mixed &$result): bool
     {
+        return false;
+    }
+
+    /** @param array<int|string, mixed> $parameters */
+    protected function freshCompiledInvocationWithParameters(
+        string $class,
+        string $method,
+        array $parameters,
+        mixed &$result,
+    ): bool {
         return false;
     }
 
@@ -372,21 +437,25 @@ abstract class ProductionContainer implements ContainerInterface
 
     private function captureFallbackDefinitions(Container $fallback): void
     {
-        $repository = $fallback->getRepository();
-        foreach ($this->compiledIds() as $id) {
-            if (isset($this->fallbackDefinitions[$id])) {
-                continue;
-            }
+        $this->fallbackDefinitions = ProductionFallbackState::captureDefinitions(
+            $fallback,
+            $this->compiledIds(),
+            $this->fallbackDefinitions,
+        );
+    }
 
-            $exists = $repository->hasFunctionReference($id);
-            $meta = $repository->getDefinitionMeta($id);
-            $this->fallbackDefinitions[$id] = [
-                'exists' => $exists,
-                'definition' => $exists ? $repository->getFunctionDefinition($id) : null,
-                'lifetime' => $meta['lifetime'],
-                'tags' => $meta['tags'],
-            ];
+    private function currentExecutionScope(): ScopeState
+    {
+        if (!$this->contextScopesActive) {
+            return $this->scope;
         }
+
+        $context = ExecutionContext::id();
+        if ($context === null) {
+            return $this->scope;
+        }
+
+        return $this->executionScopes[$context] ?? new ScopeState('root');
     }
 
     private function dynamic(): Container
@@ -426,6 +495,36 @@ abstract class ProductionContainer implements ContainerInterface
         }
     }
 
+    /**
+     * @param string|array<array-key, mixed>|Closure|callable $spec
+     * @param array<int|string, mixed> $parameters
+     */
+    private function resolveCompiledNow(
+        string|Closure|callable|array $spec,
+        array $parameters,
+        mixed &$result,
+    ): bool {
+        if ($parameters === []) {
+            return $this->resolveFreshCompiledSpec($spec, $result);
+        }
+        if (!is_array($spec)
+            || count($spec) !== 2
+            || !array_is_list($spec)
+            || !isset($spec[0], $spec[1])
+            || !is_string($spec[0])
+            || !is_string($spec[1])
+        ) {
+            return false;
+        }
+
+        return $this->freshCompiledInvocationWithParameters(
+            $spec[0],
+            $spec[1],
+            $parameters,
+            $result,
+        );
+    }
+
     /** @param string|array<array-key, mixed>|Closure|callable $spec */
     private function resolveFreshCompiledSpec(string|Closure|callable|array $spec, mixed &$result): bool
     {
@@ -454,31 +553,11 @@ abstract class ProductionContainer implements ContainerInterface
     /** @return array<string, true> */
     private function restoreFallbackDefinitions(Container $fallback): array
     {
-        $overridden = [];
-        $repository = $fallback->getRepository();
-        foreach ($this->fallbackDefinitions as $id => $snapshot) {
-            if (($this->fallbackBridgeDefinitions[$id] ?? null)
-                !== $repository->getFunctionDefinition($id)
-            ) {
-                $overridden[$id] = true;
-
-                continue;
-            }
-            if (!$snapshot['exists']) {
-                $fallback->unbind($id);
-
-                continue;
-            }
-
-            $fallback->bind(
-                $id,
-                $snapshot['definition'],
-                $snapshot['lifetime'],
-                $snapshot['tags'],
-            );
-        }
-
-        return $overridden;
+        return ProductionFallbackState::restoreDefinitions(
+            $fallback,
+            $this->fallbackDefinitions,
+            $this->fallbackBridgeDefinitions,
+        );
     }
 
     private function runtimeIslandResolver(): RuntimeIslandResolver
@@ -494,18 +573,7 @@ abstract class ProductionContainer implements ContainerInterface
 
     private function synchronizeFallbackScopes(Container $fallback): void
     {
-        $scopes = [];
-        for ($scope = $this->scope; $scope->parent instanceof ScopeState; $scope = $scope->parent) {
-            $scopes[] = $scope;
-        }
-
-        try {
-            foreach (array_reverse($scopes) as $scope) {
-                $fallback->enterScope($scope->name, $scope->rawSeeds);
-            }
-        } catch (Throwable $throwable) {
-            throw new ContainerException('Unable to synchronize production fallback scope state.', previous: $throwable);
-        }
+        ProductionFallbackState::synchronizeScopes($fallback, $this->currentExecutionScope());
     }
 
     /** @param array<string, true> $overridden */
@@ -515,25 +583,12 @@ abstract class ProductionContainer implements ContainerInterface
             return;
         }
 
-        $repository = $fallback->getRepository();
-        foreach ($this->compiledSingletonValues() as $id => $value) {
-            if (isset($overridden[$id])) {
-                continue;
-            }
-            $repository->setResolved($id, $value);
-            $repository->markResolved($id);
-        }
-
-        $ids = $this->compiledIds();
-        for ($scope = $this->scope; $scope instanceof ScopeState; $scope = $scope->parent) {
-            foreach ($scope->resolved as $slot => $value) {
-                $id = $ids[$slot] ?? null;
-                if (!is_string($id) || isset($overridden[$id])) {
-                    continue;
-                }
-                $repository->setResolvedScoped($scope->name, $id, $value);
-                $repository->markResolved($id);
-            }
-        }
+        ProductionFallbackState::transferCompiledState(
+            $fallback,
+            $overridden,
+            $this->compiledSingletonValues(),
+            $this->compiledIds(),
+            $this->currentExecutionScope(),
+        );
     }
 }

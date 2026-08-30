@@ -7,7 +7,7 @@ namespace Infocyph\InterMix\DI\Build;
 /**
  * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
  * @phpstan-type PropertyPlan array{declaring: class-string, property: string, static: bool, argument: ServiceArgument|null, runtime?: 'attribute'|'assign'}
- * @phpstan-type MethodPlan array{method: string, arguments: list<ServiceArgument>, dependencies: list<string>, runtime?: bool}
+ * @phpstan-type MethodPlan array{method: string, arguments: list<ServiceArgument>, dependencies: list<string>, static?: bool, runtime?: bool}
  * @internal
  */
 final class StaticRuntimeIslandRenderer
@@ -35,7 +35,11 @@ final class StaticRuntimeIslandRenderer
             $arguments[] = $this->argumentExpression($argument, $slots);
         }
 
-        return $instance . '->' . $method['method'] . '(' . implode(', ', $arguments) . ')';
+        $target = ($method['static'] ?? false)
+            ? '\\' . ltrim($class, '\\') . '::'
+            : $instance . '->';
+
+        return $target . $method['method'] . '(' . implode(', ', $arguments) . ')';
     }
 
     /**

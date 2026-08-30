@@ -14,6 +14,7 @@ use Infocyph\InterMix\DI\Managers\DefinitionManager;
 use Infocyph\InterMix\DI\Managers\InvocationManager;
 use Infocyph\InterMix\DI\Managers\OptionsManager;
 use Infocyph\InterMix\DI\Managers\RegistrationManager;
+use Infocyph\InterMix\DI\Resolver\ConcurrentRepository;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\DI\Support\CompiledResolverGenerator;
 use Infocyph\InterMix\DI\Support\ContainerProxy;
@@ -67,7 +68,7 @@ final class Container implements ContainerInterface, ArrayAccess
 
     public function __construct(private readonly string $instanceAlias = self::DEFAULT_ALIAS)
     {
-        $this->repository = new Repository($this, $this->instanceAlias);
+        $this->repository = new ConcurrentRepository($this, $this->instanceAlias);
         $this->resolver = $this->resolverFactory();
         $this->invocationManager = new InvocationManager($this->repository, $this);
     }

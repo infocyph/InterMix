@@ -156,7 +156,7 @@ final class StaticPropertyPlanner
 
         if ($property->getAttributes(Inject::class) !== []) {
             $argument = $this->injectArgument($graph, $property);
-            if (is_string($argument) || !$property->isPublic() || $property->isReadOnly()) {
+            if (is_string($argument)) {
                 return $this->runtimePropertyPlan($property);
             }
             if ($argument === null) {
@@ -168,6 +168,7 @@ final class StaticPropertyPlanner
                 'property' => $name,
                 'static' => $property->isStatic(),
                 'argument' => $argument,
+                ...(!$property->isPublic() || $property->isReadOnly() ? ['runtime' => 'assign'] : []),
             ];
         }
 

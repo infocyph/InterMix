@@ -17,12 +17,18 @@ Typical use-cases
   not across jobs.
 * **Multi-tenant apps** – tag each tenant with their customer ID.
 
-Scopes are logical container scopes for synchronous request/job execution and
-explicitly isolated container instances. InterMix does not provide automatic
-Fiber- or coroutine-local storage; concurrent contexts must use isolated
-container instances or application-managed execution-context storage.
-The generated ``ProductionContainer`` implements the same explicit scope and
-seed contract for compiled services and synchronizes dynamic fallback islands.
+Scopes are logical container scopes for request and job execution. When the
+same container is used by concurrent PHP ``Fiber`` instances, or by active
+Swoole/OpenSwoole coroutines, InterMix keeps the active scope, scope stack,
+seeds, and resolved scoped services local to the current execution context.
+The generated ``ProductionContainer`` applies the same isolation to compiled
+services and synchronizes dynamic fallback islands with that context.
+
+Execution-context detection is automatic, but scope boundaries are explicit:
+each request or job must still call ``enterScope()`` and ``leaveScope()`` (or
+use ``withinScope()``). Singleton services and container configuration remain
+shared. Do not mutate definitions, switch environments, attach fallbacks, or
+deoptimize a production container while concurrent work is in flight.
 
 API
 ---
@@ -111,6 +117,10 @@ Best practices 💡
   rebinding their definitions for every operation.
 * **Long-running workers** – always leave the job/request scope; do not retain
   scoped instances across work items.
+* **Concurrent workers** – one container may serve interleaved Fibers or active
+  Swoole/OpenSwoole coroutines when every work item owns its explicit scope.
+  Prefer ``withinScope()`` so exceptions cannot strand execution-local state.
+  Shared singleton services must themselves be safe for concurrent use.
 
 Related pages
 -------------

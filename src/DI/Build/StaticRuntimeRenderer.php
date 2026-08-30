@@ -9,7 +9,7 @@ use Infocyph\InterMix\DI\Support\LifetimeEnum;
 /**
  * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
  * @phpstan-type PropertyPlan array{declaring: class-string, property: string, static: bool, argument: ServiceArgument|null, runtime?: 'attribute'|'assign'}
- * @phpstan-type MethodPlan array{method: string, arguments: list<ServiceArgument>, dependencies: list<string>, runtime?: bool}
+ * @phpstan-type MethodPlan array{method: string, arguments: list<ServiceArgument>, dependencies: list<string>, parameterNames?: list<string>, static?: bool, runtime?: bool}
  * @phpstan-type AliasPlan array{kind: 'alias', target: string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
  * @phpstan-type ClassPlan array{kind: 'class', class: class-string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, postMethod: MethodPlan|null, dependencies: list<string>}
  * @phpstan-type FactoryPlan array{kind: 'factory', class: class-string, method: string|null, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
@@ -48,7 +48,7 @@ final class StaticRuntimeRenderer
         $source .= $this->renderFreshMethods($plans, $slots);
         $source .= new StaticFreshInvocationRenderer()->render($plans, $slots);
         $source .= $this->renderCompiledSingletonValues($graph, $plans, $slots, $lifecycleRenderer);
-        $source .= $this->renderTags($graph, $plans);
+        $source .= $this->renderTags($graph, $plans, $slots);
         $source .= $lifecycleRenderer->renderScopeLeaveHooks($graph);
         $source .= $this->renderServiceMethods(
             $graph,
@@ -160,13 +160,13 @@ final class StaticRuntimeRenderer
         }
 
         $source = "    private function s{$slot}(): mixed\n    {\n";
-        $source .= $this->renderSeedGuard($slot);
+        $source .= $this->renderSeedGuard($slot, $plan['lifetime']);
 
         if ($plan['lifetime'] === LifetimeEnum::Scoped) {
-            $source .= "        if (array_key_exists({$slot}, \$this->scope->resolved)) {\n";
-            $source .= "            return \$this->scope->resolved[{$slot}];\n";
+            $source .= "        if (array_key_exists({$slot}, \$scope->resolved)) {\n";
+            $source .= "            return \$scope->resolved[{$slot}];\n";
             $source .= "        }\n\n";
-            $source .= "        return \$this->scope->resolved[{$slot}] = {$target};\n";
+            $source .= "        return \$scope->resolved[{$slot}] = {$target};\n";
         } elseif ($plan['lifetime'] === LifetimeEnum::Singleton) {
             $source .= "        if (array_key_exists({$slot}, \$this->aliasSingletons)) {\n";
             $source .= "            return \$this->aliasSingletons[{$slot}];\n";
@@ -214,19 +214,19 @@ final class StaticRuntimeRenderer
         }
 
         $source = "    private function s{$slot}(): mixed\n    {\n";
-        $source .= $this->renderSeedGuard($slot);
+        $source .= $this->renderSeedGuard($slot, $plan['lifetime']);
         $hasSetup = $plan['properties'] !== [] || $plan['postMethod'] !== null;
         $construction = $hasSetup ? null : $this->classConstruction($plan, $slots);
 
         if ($plan['lifetime'] === LifetimeEnum::Scoped) {
-            $source .= "        if (isset(\$this->scope->resolved[{$slot}])) {\n";
-            $source .= "            return \$this->scope->resolved[{$slot}];\n";
+            $source .= "        if (isset(\$scope->resolved[{$slot}])) {\n";
+            $source .= "            return \$scope->resolved[{$slot}];\n";
             $source .= "        }\n\n";
             if ($hasSetup) {
                 $source .= $this->classServiceStatements($plan, $slots, $slot);
-                $source .= "\n        return \$this->scope->resolved[{$slot}] = \$instance;\n";
+                $source .= "\n        return \$scope->resolved[{$slot}] = \$instance;\n";
             } else {
-                $source .= "        return \$this->scope->resolved[{$slot}] = {$construction};\n";
+                $source .= "        return \$scope->resolved[{$slot}] = {$construction};\n";
             }
         } elseif ($plan['lifetime'] === LifetimeEnum::Singleton) {
             if ($hasSetup) {
@@ -369,13 +369,13 @@ final class StaticRuntimeRenderer
         }
 
         $source = "    private function s{$slot}(): mixed\n    {\n";
-        $source .= $this->renderSeedGuard($slot);
+        $source .= $this->renderSeedGuard($slot, $plan['lifetime']);
 
         if ($plan['lifetime'] === LifetimeEnum::Scoped) {
-            $source .= "        if (array_key_exists({$slot}, \$this->scope->resolved)) {\n";
-            $source .= "            return \$this->scope->resolved[{$slot}];\n";
+            $source .= "        if (array_key_exists({$slot}, \$scope->resolved)) {\n";
+            $source .= "            return \$scope->resolved[{$slot}];\n";
             $source .= "        }\n\n";
-            $source .= "        return \$this->scope->resolved[{$slot}] = {$expression};\n";
+            $source .= "        return \$scope->resolved[{$slot}] = {$expression};\n";
         } elseif ($plan['lifetime'] === LifetimeEnum::Singleton) {
             $source .= "        if (array_key_exists({$slot}, \$this->factorySingletons)) {\n";
             $source .= "            return \$this->factorySingletons[{$slot}];\n";
@@ -480,11 +480,9 @@ final class StaticRuntimeRenderer
         return $source . "        };\n    }\n\n";
     }
 
-    private function renderSeedGuard(int $slot): string
+    private function renderSeedGuard(int $slot, LifetimeEnum $lifetime): string
     {
-        return "        if (\$this->scope->parent !== null && array_key_exists({$slot}, \$this->scope->seeds)) {\n"
-            . "            return \$this->scope->seeds[{$slot}];\n"
-            . "        }\n\n";
+        return new StaticScopeAccessRenderer()->seedGuard($slot, $lifetime);
     }
 
     /**
@@ -576,8 +574,11 @@ final class StaticRuntimeRenderer
         return $source . "        };\n    }\n\n";
     }
 
-    /** @param array<string, ServicePlan> $plans */
-    private function renderTags(DefinitionGraph $graph, array $plans): string
+    /**
+     * @param array<string, ServicePlan> $plans
+     * @param array<string, int> $slots
+     */
+    private function renderTags(DefinitionGraph $graph, array $plans, array $slots): string
     {
         $tags = [];
         foreach (array_keys($plans) as $id) {
@@ -595,6 +596,34 @@ final class StaticRuntimeRenderer
             $source .= '            ' . var_export($tag, true) . ' => ' . var_export($ids, true) . ",\n";
         }
         $source .= "            default => [],\n";
+        $source .= "        };\n    }\n\n";
+
+        $source .= "    protected function compiledTagged(string \$tag): ?array\n    {\n        return match (\$tag) {\n";
+        foreach ($tags as $tag => $ids) {
+            $source .= '            ' . var_export($tag, true) . " => [\n";
+            foreach ($ids as $id) {
+                $exportedId = var_export($id, true);
+                $slot = $slots[$id];
+                $source .= "                {$exportedId} => \$this->isDeoptimized()"
+                    . " ? \$this->fallbackGet({$exportedId}) : \$this->s{$slot}(),\n";
+            }
+            $source .= "            ],\n";
+        }
+        $source .= "            default => null,\n";
+        $source .= "        };\n    }\n\n";
+
+        $source .= "    protected function compiledTaggedLazy(string \$tag): ?iterable\n    {\n        return match (\$tag) {\n";
+        foreach ($tags as $tag => $ids) {
+            $source .= '            ' . var_export($tag, true) . " => [\n";
+            foreach ($ids as $id) {
+                $exportedId = var_export($id, true);
+                $slot = $slots[$id];
+                $source .= "                {$exportedId} => fn() => \$this->isDeoptimized()"
+                    . " ? \$this->fallbackGet({$exportedId}) : \$this->s{$slot}(),\n";
+            }
+            $source .= "            ],\n";
+        }
+        $source .= "            default => null,\n";
 
         return $source . "        };\n    }\n\n";
     }
@@ -620,7 +649,7 @@ final class StaticRuntimeRenderer
 
         return "    private function s{$slot}(): mixed\n"
             . "    {\n"
-            . $this->renderSeedGuard($slot)
+            . $this->renderSeedGuard($slot, $plan['lifetime'])
             . '        return ' . $plan['code'] . ";\n"
             . "    }\n\n";
     }
