@@ -12,7 +12,7 @@ use ReflectionParameter;
 
 /**
  * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
- * @phpstan-type MethodPlan array{method: string, arguments: list<ServiceArgument>, dependencies: list<string>, runtime?: bool}
+ * @phpstan-type MethodPlan array{method: string, arguments: list<ServiceArgument>, dependencies: list<string>, static?: bool, runtime?: bool}
  * @internal
  */
 final class StaticMethodPlanner
@@ -91,7 +91,7 @@ final class StaticMethodPlanner
      */
     private function planMethod(DefinitionGraph $graph, ReflectionMethod $method, array $supplied): array
     {
-        if (!$method->isPublic() || $method->isStatic()) {
+        if (!$method->isPublic()) {
             return $this->runtimePlan($method);
         }
 
@@ -129,6 +129,7 @@ final class StaticMethodPlanner
             'method' => $method->getName(),
             'arguments' => $parameters['arguments'],
             'dependencies' => $parameters['dependencies'],
+            ...($method->isStatic() ? ['static' => true] : []),
         ];
     }
 
