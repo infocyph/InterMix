@@ -9,12 +9,13 @@ Safety invariant: if static equivalence is provable, generate the faster path; o
 - [x] Add internal `ScopeState::$hasSeeds` precomputation (`718aa502`).
 - [x] Add direct unit coverage for `ScopeState::$hasSeeds` (`da5de8ff`).
 - [x] Open draft PR #131 for CI/review visibility.
+- [x] Use `hasSeeds` in generated seed guards (`2bb061b`).
+- [x] Add generated-artifact parity coverage for the seed fast path (`018e4aa`).
 
 ## In progress
-- [ ] Use `hasSeeds` in generated seed guards and add generated-artifact parity coverage.
+- [ ] Compile public static methods directly when their arguments are statically representable.
 
 ## Pending
-- [ ] Compile public static methods directly when their arguments are statically representable.
 - [ ] Preserve compile-known `#[Inject]` values for non-public properties through the existing assignment path.
 - [ ] Generate direct compiled tag resolution while preserving fallback merge/lazy semantics.
 - [ ] Compile `resolveNow()` / fresh method invocation with supplied runtime parameters only when binding semantics are provably equivalent.
