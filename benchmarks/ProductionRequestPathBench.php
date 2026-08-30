@@ -67,16 +67,6 @@ final class ProductionRequestPathBench
         $this->sink = $runtime->get('compiled-method');
     }
 
-    #[Revs(500)]
-    public function benchCompiledScopeEnterResolveLeave(): void
-    {
-        static $runtime;
-        $runtime ??= $this->threeNodeRuntime(LifetimeEnum::Scoped, 'scope-cycle');
-        $runtime->enterScope('request');
-        $this->sink = $runtime->get('root');
-        $runtime->leaveScope();
-    }
-
     #[Revs(1000)]
     public function benchCompiledScopedGraph(): void
     {
@@ -100,6 +90,16 @@ final class ProductionRequestPathBench
             )]);
         }
         $this->sink = $runtime->get('root');
+    }
+
+    #[Revs(500)]
+    public function benchCompiledScopeEnterResolveLeave(): void
+    {
+        static $runtime;
+        $runtime ??= $this->threeNodeRuntime(LifetimeEnum::Scoped, 'scope-cycle');
+        $runtime->enterScope('request');
+        $this->sink = $runtime->get('root');
+        $runtime->leaveScope();
     }
 
     #[Revs(500)]
@@ -158,19 +158,6 @@ final class ProductionRequestPathBench
     }
 
     #[Revs(500)]
-    public function benchDynamicScopeEnterResolveLeave(): void
-    {
-        static $container;
-        if (!$container instanceof Container) {
-            $container = new Container($this->alias('dynamic-scope-cycle'));
-            $container->scoped('root', ProductionRequestRoot::class);
-        }
-        $container->enterScope('request');
-        $this->sink = $container->get('root');
-        $container->leaveScope();
-    }
-
-    #[Revs(500)]
     public function benchDynamicScopedFiber(): void
     {
         static $fiber;
@@ -189,6 +176,19 @@ final class ProductionRequestPathBench
         }
 
         $this->sink = $fiber->resume();
+    }
+
+    #[Revs(500)]
+    public function benchDynamicScopeEnterResolveLeave(): void
+    {
+        static $container;
+        if (!$container instanceof Container) {
+            $container = new Container($this->alias('dynamic-scope-cycle'));
+            $container->scoped('root', ProductionRequestRoot::class);
+        }
+        $container->enterScope('request');
+        $this->sink = $container->get('root');
+        $container->leaveScope();
     }
 
     #[Revs(500)]
