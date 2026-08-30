@@ -64,43 +64,18 @@ final class ConcurrentRepository extends Repository
     /** @internal */
     public function findScopeSeed(string $id, mixed &$value): bool
     {
-        if (!$this->contextScopesActive) {
-            if ($this->scopeSeeds === []) {
-                return false;
+        if ($this->contextScopesActive) {
+            $context = ExecutionContext::id();
+            if ($context !== null) {
+                return $this->findExecutionScopeSeed($context, $id, $value);
             }
-
-            $seeds = $this->scopeSeeds[$this->currentScope] ?? null;
-            if (!is_array($seeds) || !array_key_exists($id, $seeds)) {
-                return false;
-            }
-
-            $value = $seeds[$id];
-
-            return true;
         }
 
-        $context = ExecutionContext::id();
-        if ($context === null) {
-            if ($this->scopeSeeds === []) {
-                return false;
-            }
-
-            $seeds = $this->scopeSeeds[$this->currentScope] ?? null;
-            if (!is_array($seeds) || !array_key_exists($id, $seeds)) {
-                return false;
-            }
-
-            $value = $seeds[$id];
-
-            return true;
-        }
-
-        $state = $this->executionScopes[$context] ?? null;
-        if (!$state instanceof ExecutionScopeState || $state->scopeSeeds === []) {
+        if ($this->scopeSeeds === []) {
             return false;
         }
 
-        $seeds = $state->scopeSeeds[$state->currentScope] ?? null;
+        $seeds = $this->scopeSeeds[$this->currentScope] ?? null;
         if (!is_array($seeds) || !array_key_exists($id, $seeds)) {
             return false;
         }
@@ -356,5 +331,22 @@ final class ConcurrentRepository extends Repository
 
         $state = $this->executionScopes[$context] ??= new ExecutionScopeState();
         $state->currentScope = $scope;
+    }
+
+    private function findExecutionScopeSeed(string $context, string $id, mixed &$value): bool
+    {
+        $state = $this->executionScopes[$context] ?? null;
+        if (!$state instanceof ExecutionScopeState || $state->scopeSeeds === []) {
+            return false;
+        }
+
+        $seeds = $state->scopeSeeds[$state->currentScope] ?? null;
+        if (!is_array($seeds) || !array_key_exists($id, $seeds)) {
+            return false;
+        }
+
+        $value = $seeds[$id];
+
+        return true;
     }
 }
