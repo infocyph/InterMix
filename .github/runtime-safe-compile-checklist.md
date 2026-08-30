@@ -25,12 +25,16 @@ Safety invariant: if static equivalence is provable, generate the faster path; o
 - [x] Add named/positional runtime-parameter parity and variadic fallback coverage (`5612ebc`).
 - [x] Generate direct eager/lazy compiled tag dispatch with deoptimization checks (`6fac721`).
 - [x] Add eager/lazy tag dispatch parity and identity coverage (`c35d582`).
+- [x] Identify Fiber/Swoole/OpenSwoole execution contexts without adding a runtime dependency (`2a13832`, `00359c9`).
+- [x] Add per-context dynamic scope state and enable it in `Container` (`ca2484e`, `d49adc3`, `68b0065`).
+- [x] Isolate compiled `ProductionContainer` scope chains by execution context (`f6e0d45`).
+- [x] Centralize compile-time scope access and apply it to invocation/lifecycle/main generated service paths (`f8528ac`, `534f93c`, `0cedbec`, `84baba6`).
+- [x] Add interleaving Fiber regression coverage for dynamic and generated containers (`9e70ed9`).
+- [x] Keep ordinary dynamic resolution on the existing non-context path until a concurrent scope is active (`a27233b`).
 
 ## In progress
-- [ ] Isolate mutable scope state per execution context for coroutine/Fiber safety without a Swoole dependency.
+- [ ] Expand production request-path benchmarks for scoped, invocation, tag, runtime-island, and context-isolation paths.
 
 ## Pending
-- [ ] Add interleaving concurrency regression coverage for dynamic and generated containers.
-- [ ] Expand production request-path benchmarks for scoped, invocation, tag, runtime-island, and context-isolation paths.
 - [ ] Run/inspect full CI and benchmark results; fix regressions.
 - [ ] Remove this branch-only checklist and mark PR ready only when all items pass.
