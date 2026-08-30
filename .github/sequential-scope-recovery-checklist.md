@@ -10,10 +10,10 @@ Branch-only tracker for recovering the DI 130-era sequential/dynamic scope perfo
 
 ## Work
 - [x] Create `perf/recover-sequential-scope` from current `main`.
-- [ ] Remove sequential `parent::...` scope dispatch from `ConcurrentRepository`.
-- [ ] Preserve per-context Fiber/Swoole/OpenSwoole scope state.
-- [ ] Cache runtime coroutine capability detection without changing context IDs.
-- [ ] Add mixed sequential/concurrent scope regression coverage.
+- [x] Remove sequential `parent::...` scope dispatch from `ConcurrentRepository` (`e15fa306`).
+- [x] Preserve per-context Fiber/Swoole/OpenSwoole scope state (`e15fa306`).
+- [x] Cache runtime coroutine capability detection without changing context ID prefixes (`2b8dc01`, `0dc5535`).
+- [x] Add mixed sequential/concurrent scope and leave-hook regression coverage (`d8e2683`).
 - [ ] Run full PHPForge QA/analyzer matrix.
 - [ ] Inspect updated benchmark against DI 130 and DI 131.
 - [ ] Patch only concrete regressions found by validation.
