@@ -33,6 +33,7 @@ final class StaticRuntimeRequirements
                         $property['declaring'],
                         $property['property'],
                     );
+
                     break;
                 }
             }
