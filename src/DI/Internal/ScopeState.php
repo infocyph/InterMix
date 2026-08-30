@@ -13,6 +13,8 @@ final class ScopeState
     /** @var array<int, mixed> */
     public array $returned = [];
 
+    public readonly bool $hasSeeds;
+
     /**
      * @param array<int, mixed> $seeds
      * @param array<string, mixed> $rawSeeds
@@ -22,7 +24,9 @@ final class ScopeState
         public readonly ?self $parent = null,
         public readonly array $seeds = [],
         public readonly array $rawSeeds = [],
-    ) {}
+    ) {
+        $this->hasSeeds = $seeds !== [];
+    }
 
     public function contains(string $name): bool
     {
