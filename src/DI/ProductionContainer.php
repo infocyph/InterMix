@@ -6,13 +6,14 @@ namespace Infocyph\InterMix\DI;
 
 use Closure;
 use Infocyph\InterMix\DI\Internal\ExecutionContext;
+use Infocyph\InterMix\DI\Internal\ProductionFallbackState;
+use Infocyph\InterMix\DI\Internal\ProductionSpecResolver;
 use Infocyph\InterMix\DI\Internal\RuntimeIslandResolver;
 use Infocyph\InterMix\DI\Internal\ScopeState;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Internal\ReflectionResource;
 use Psr\Container\ContainerInterface;
-use Throwable;
 
 abstract class ProductionContainer implements ContainerInterface
 {
@@ -262,42 +263,12 @@ abstract class ProductionContainer implements ContainerInterface
             return $this;
         }
 
-        if (!$this->deoptimized) {
-            $result = null;
-            if ($parameters === [] && $this->resolveFreshCompiledSpec($spec, $result)) {
-                return $result;
-            }
-            if ($parameters !== []
-                && is_array($spec)
-                && count($spec) === 2
-                && array_is_list($spec)
-                && isset($spec[0], $spec[1])
-                && is_string($spec[0])
-                && is_string($spec[1])
-                && $this->freshCompiledInvocationWithParameters(
-                    $spec[0],
-                    $spec[1],
-                    $parameters,
-                    $result,
-                )
-            ) {
-                return $result;
-            }
-        }
-        if (is_array($spec) && (count($spec) !== 2 || !array_is_list($spec))) {
-            return $this->dynamic()->resolveNow($spec, $parameters);
-        }
-        if (is_array($spec) && !is_string($spec[0])) {
-            if (!is_callable($spec)) {
-                throw new ContainerException(
-                    "Unknown callable spec for 'array'. Expected closure/callable, 'class@method', 'class::method', [class,method], class, or function.",
-                );
-            }
-
-            return $this->dynamic()->resolveNow(Closure::fromCallable($spec), $parameters);
+        $result = null;
+        if (!$this->deoptimized && $this->resolveCompiledNow($spec, $parameters, $result)) {
+            return $result;
         }
 
-        return $this->dynamic()->resolveNow($spec, $parameters);
+        return ProductionSpecResolver::resolveDynamic($this->dynamic(), $spec, $parameters);
     }
 
     /** @return iterable<string, callable(): mixed> */
@@ -466,21 +437,11 @@ abstract class ProductionContainer implements ContainerInterface
 
     private function captureFallbackDefinitions(Container $fallback): void
     {
-        $repository = $fallback->getRepository();
-        foreach ($this->compiledIds() as $id) {
-            if (isset($this->fallbackDefinitions[$id])) {
-                continue;
-            }
-
-            $exists = $repository->hasFunctionReference($id);
-            $meta = $repository->getDefinitionMeta($id);
-            $this->fallbackDefinitions[$id] = [
-                'exists' => $exists,
-                'definition' => $exists ? $repository->getFunctionDefinition($id) : null,
-                'lifetime' => $meta['lifetime'],
-                'tags' => $meta['tags'],
-            ];
-        }
+        $this->fallbackDefinitions = ProductionFallbackState::captureDefinitions(
+            $fallback,
+            $this->compiledIds(),
+            $this->fallbackDefinitions,
+        );
     }
 
     private function currentExecutionScope(): ScopeState
@@ -534,6 +495,36 @@ abstract class ProductionContainer implements ContainerInterface
         }
     }
 
+    /**
+     * @param string|array<array-key, mixed>|Closure|callable $spec
+     * @param array<int|string, mixed> $parameters
+     */
+    private function resolveCompiledNow(
+        string|Closure|callable|array $spec,
+        array $parameters,
+        mixed &$result,
+    ): bool {
+        if ($parameters === []) {
+            return $this->resolveFreshCompiledSpec($spec, $result);
+        }
+        if (!is_array($spec)
+            || count($spec) !== 2
+            || !array_is_list($spec)
+            || !isset($spec[0], $spec[1])
+            || !is_string($spec[0])
+            || !is_string($spec[1])
+        ) {
+            return false;
+        }
+
+        return $this->freshCompiledInvocationWithParameters(
+            $spec[0],
+            $spec[1],
+            $parameters,
+            $result,
+        );
+    }
+
     /** @param string|array<array-key, mixed>|Closure|callable $spec */
     private function resolveFreshCompiledSpec(string|Closure|callable|array $spec, mixed &$result): bool
     {
@@ -562,31 +553,11 @@ abstract class ProductionContainer implements ContainerInterface
     /** @return array<string, true> */
     private function restoreFallbackDefinitions(Container $fallback): array
     {
-        $overridden = [];
-        $repository = $fallback->getRepository();
-        foreach ($this->fallbackDefinitions as $id => $snapshot) {
-            if (($this->fallbackBridgeDefinitions[$id] ?? null)
-                !== $repository->getFunctionDefinition($id)
-            ) {
-                $overridden[$id] = true;
-
-                continue;
-            }
-            if (!$snapshot['exists']) {
-                $fallback->unbind($id);
-
-                continue;
-            }
-
-            $fallback->bind(
-                $id,
-                $snapshot['definition'],
-                $snapshot['lifetime'],
-                $snapshot['tags'],
-            );
-        }
-
-        return $overridden;
+        return ProductionFallbackState::restoreDefinitions(
+            $fallback,
+            $this->fallbackDefinitions,
+            $this->fallbackBridgeDefinitions,
+        );
     }
 
     private function runtimeIslandResolver(): RuntimeIslandResolver
@@ -602,18 +573,7 @@ abstract class ProductionContainer implements ContainerInterface
 
     private function synchronizeFallbackScopes(Container $fallback): void
     {
-        $scopes = [];
-        for ($scope = $this->currentExecutionScope(); $scope->parent instanceof ScopeState; $scope = $scope->parent) {
-            $scopes[] = $scope;
-        }
-
-        try {
-            foreach (array_reverse($scopes) as $scope) {
-                $fallback->enterScope($scope->name, $scope->rawSeeds);
-            }
-        } catch (Throwable $throwable) {
-            throw new ContainerException('Unable to synchronize production fallback scope state.', previous: $throwable);
-        }
+        ProductionFallbackState::synchronizeScopes($fallback, $this->currentExecutionScope());
     }
 
     /** @param array<string, true> $overridden */
@@ -623,25 +583,12 @@ abstract class ProductionContainer implements ContainerInterface
             return;
         }
 
-        $repository = $fallback->getRepository();
-        foreach ($this->compiledSingletonValues() as $id => $value) {
-            if (isset($overridden[$id])) {
-                continue;
-            }
-            $repository->setResolved($id, $value);
-            $repository->markResolved($id);
-        }
-
-        $ids = $this->compiledIds();
-        for ($scope = $this->currentExecutionScope(); $scope instanceof ScopeState; $scope = $scope->parent) {
-            foreach ($scope->resolved as $slot => $value) {
-                $id = $ids[$slot] ?? null;
-                if (!is_string($id) || isset($overridden[$id])) {
-                    continue;
-                }
-                $repository->setResolvedScoped($scope->name, $id, $value);
-                $repository->markResolved($id);
-            }
-        }
+        ProductionFallbackState::transferCompiledState(
+            $fallback,
+            $overridden,
+            $this->compiledSingletonValues(),
+            $this->compiledIds(),
+            $this->currentExecutionScope(),
+        );
     }
 }
