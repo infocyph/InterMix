@@ -108,7 +108,7 @@ it('keeps dynamic definitions and arbitrary classes as cold fallback islands', f
     }
 });
 
-it('compiles tag indexes for known production services', function () {
+it('compiles direct eager and lazy tag dispatch for known production services', function () {
     $builder = ContainerBuilder::create(uniqid('production_tags_'))
         ->singleton('first', ProductionRuntimeLeaf::class, ['worker'])
         ->transient('second', ProductionRuntimeLeaf::class, ['worker']);
@@ -117,9 +117,20 @@ it('compiles tag indexes for known production services', function () {
 
     try {
         $builder->compile($path);
+        $source = file_get_contents($path);
         $runtime = $builder->production($path);
+        $eager = $runtime->findByTag('worker');
+        $lazy = iterator_to_array($runtime->findByTagLazy('worker'));
 
-        expect(array_keys($runtime->findByTag('worker')))->toBe(['first', 'second']);
+        expect($source)->toBeString()
+            ->toContain('protected function compiledTagged(string $tag): ?array')
+            ->toContain('protected function compiledTaggedLazy(string $tag): ?iterable')
+            ->and(array_keys($eager))->toBe(['first', 'second'])
+            ->and(array_keys($lazy))->toBe(['first', 'second'])
+            ->and($lazy['first']())->toBe($eager['first'])
+            ->and($lazy['second']())->toBeInstanceOf(ProductionRuntimeLeaf::class)
+            ->and($runtime->findByTag('missing'))->toBe([])
+            ->and(iterator_to_array($runtime->findByTagLazy('missing')))->toBe([]);
     } finally {
         removeProductionRuntimeArtifact($path);
     }
