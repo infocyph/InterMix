@@ -31,10 +31,12 @@ Safety invariant: if static equivalence is provable, generate the faster path; o
 - [x] Centralize compile-time scope access and apply it to invocation/lifecycle/main generated service paths (`f8528ac`, `534f93c`, `0cedbec`, `84baba6`).
 - [x] Add interleaving Fiber regression coverage for dynamic and generated containers (`9e70ed9`).
 - [x] Keep ordinary dynamic resolution on the existing non-context path until a concurrent scope is active (`a27233b`).
+- [x] Add production request-path benchmark coverage for scoped graphs, seeds, method/controller invocation, direct/lazy tags, runtime islands, Fiber contexts, and native controls (`ab93836`).
+- [x] Complete production benchmark coverage with artifact/prevalidated loads, direct static methods, private `#[Inject]`, hybrid fallback, and sequential scope enter/resolve/leave controls (`89e5b37`).
 
-## In progress
-- [ ] Expand production request-path benchmarks for scoped, invocation, tag, runtime-island, and context-isolation paths.
-
-## Pending
-- [ ] Run/inspect full CI and benchmark results; fix regressions.
+## Pending validation
+- [ ] Run/inspect the complete PHP 8.4/8.5 QA and analysis matrix.
+- [ ] Run/inspect the production benchmark suite and normalized controls.
+- [ ] Patch only failures/regressions identified by the validation pass.
+- [ ] Remove temporary validation/debug workflow additions.
 - [ ] Remove this branch-only checklist and mark PR ready only when all items pass.
