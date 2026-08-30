@@ -30,6 +30,24 @@ final class MethodRegisteredInvocation
     }
 }
 
+final class MethodRuntimeParameterInvocation
+{
+    /** @return array{MethodCompiledDependency, string} */
+    public function run(MethodCompiledDependency $dependency, string $label = 'default'): array
+    {
+        return [$dependency, $label];
+    }
+}
+
+final class MethodVariadicInvocation
+{
+    /** @return list<string> */
+    public function run(string ...$labels): array
+    {
+        return $labels;
+    }
+}
+
 final class MethodStaticInvocation
 {
     public static ?MethodCompiledDependency $dependency = null;
@@ -184,6 +202,71 @@ it('compiles public static methods without a reflection island', function () {
         removeMethodCompilationArtifact($path);
         MethodStaticInvocation::$dependency = null;
         MethodStaticInvocation::$label = 'unset';
+    }
+});
+
+it('compiles supplied named and positional method arguments over the static plan', function () {
+    $builder = ContainerBuilder::create(uniqid('method_runtime_parameters_'));
+    $builder->singleton(MethodCompiledDependency::class)
+        ->transient(MethodRuntimeParameterInvocation::class);
+    $builder->registration()->registerMethod(MethodRuntimeParameterInvocation::class, 'run');
+
+    $development = $builder->development();
+    $developmentNamed = $development->resolveNow(
+        [MethodRuntimeParameterInvocation::class, 'run'],
+        ['label' => 'runtime-named'],
+    );
+
+    $path = methodCompilationArtifactPath();
+    try {
+        $report = $builder->compile($path);
+        $source = file_get_contents($path);
+        $runtime = $builder->production($path);
+        $named = $runtime->resolveNow(
+            [MethodRuntimeParameterInvocation::class, 'run'],
+            ['label' => 'runtime-named'],
+        );
+        $override = new MethodCompiledDependency();
+        $positional = $runtime->resolveNow(
+            [MethodRuntimeParameterInvocation::class, 'run'],
+            [0 => $override, 1 => 'runtime-positional'],
+        );
+
+        expect($report['compiled'])->toContain(MethodRuntimeParameterInvocation::class)
+            ->and($source)->toBeString()
+            ->toContain('freshCompiledInvocationWithParameters(')
+            ->toContain("array_key_exists('label', \$parameters)")
+            ->and($developmentNamed[1])->toBe('runtime-named')
+            ->and($named[0])->toBe($runtime->get(MethodCompiledDependency::class))
+            ->and($named[1])->toBe($developmentNamed[1])
+            ->and($positional[0])->toBe($override)
+            ->and($positional[1])->toBe('runtime-positional');
+    } finally {
+        removeMethodCompilationArtifact($path);
+    }
+});
+
+it('keeps variadic runtime arguments on the existing dynamic resolver', function () {
+    $builder = ContainerBuilder::create(uniqid('method_variadic_parameters_'));
+    $builder->transient(MethodVariadicInvocation::class);
+    $builder->registration()->registerMethod(MethodVariadicInvocation::class, 'run');
+    $path = methodCompilationArtifactPath();
+
+    try {
+        $report = $builder->compile($path);
+        $source = file_get_contents($path);
+        $runtime = $builder->production($path);
+        $result = $runtime->resolveNow(
+            [MethodVariadicInvocation::class, 'run'],
+            ['first', 'second'],
+        );
+
+        expect($report['compiled'])->toContain(MethodVariadicInvocation::class)
+            ->and($source)->toBeString()
+            ->not->toContain('freshCompiledInvocationWithParameters(')
+            ->and($result)->toBe(['first', 'second']);
+    } finally {
+        removeMethodCompilationArtifact($path);
     }
 });
 
