@@ -9,10 +9,6 @@ use Fiber;
 /** @internal */
 final class ExecutionContext
 {
-    private static ?bool $openSwooleAvailable = null;
-
-    private static ?bool $swooleAvailable = null;
-
     public static function id(): ?string
     {
         $fiber = Fiber::getCurrent();
@@ -20,22 +16,32 @@ final class ExecutionContext
             return 'fiber:' . spl_object_id($fiber);
         }
 
-        self::$swooleAvailable ??= class_exists(\Swoole\Coroutine::class, false);
-        if (self::$swooleAvailable) {
-            $id = \Swoole\Coroutine::getCid();
-            if ($id >= 0) {
-                return 'swoole:' . $id;
-            }
+        $id = self::coroutineId('Swoole\\Coroutine');
+        if ($id !== null) {
+            return 'swoole:' . $id;
         }
 
-        self::$openSwooleAvailable ??= class_exists(\OpenSwoole\Coroutine::class, false);
-        if (self::$openSwooleAvailable) {
-            $id = \OpenSwoole\Coroutine::getCid();
-            if ($id >= 0) {
-                return 'openswoole:' . $id;
-            }
+        $id = self::coroutineId('OpenSwoole\\Coroutine');
+        if ($id !== null) {
+            return 'openswoole:' . $id;
         }
 
         return null;
+    }
+
+    private static function coroutineId(string $class): ?int
+    {
+        if (!class_exists($class, false)) {
+            return null;
+        }
+
+        $getCid = [$class, 'getCid'];
+        if (!is_callable($getCid)) {
+            return null;
+        }
+
+        $id = $getCid();
+
+        return is_int($id) && $id >= 0 ? $id : null;
     }
 }
