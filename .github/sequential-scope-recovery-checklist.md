@@ -14,7 +14,11 @@ Branch-only tracker for recovering the DI 130-era sequential/dynamic scope perfo
 - [x] Preserve per-context Fiber/Swoole/OpenSwoole scope state (`e15fa306`).
 - [x] Cache runtime coroutine capability detection without changing context ID prefixes (`2b8dc01`, `0dc5535`).
 - [x] Add mixed sequential/concurrent scope and leave-hook regression coverage (`d8e2683`).
-- [ ] Run full PHPForge QA/analyzer matrix.
+- [x] Split concurrent-only state into lazy `ExecutionScopeStore` while keeping sequential state direct (`f648ad8`, `c999f53`).
+- [x] Keep sequential scope leave inline while isolating concurrent leave complexity (`523dfce`).
+- [x] Patch validation findings only: Pint ordering and PHPStan's redundant coroutine callable guard (`93521aa`, `92ab29c`).
+- [x] Remove the temporary PHPStan diagnostic workflow (`9931d70`).
+- [x] Run full PHPForge QA/analyzer matrix: PHP 8.4/8.5 × stable/lowest, PHPStan, Psalm, and clean install all green on `9931d702`.
 - [ ] Inspect updated benchmark against DI 130 and DI 131.
-- [ ] Patch only concrete regressions found by validation.
+- [ ] Patch only benchmark regressions if the new comparison identifies any.
 - [ ] Remove this checklist before completion.
