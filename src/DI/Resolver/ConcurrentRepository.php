@@ -165,14 +165,7 @@ final class ConcurrentRepository extends Repository
         if ($store instanceof ExecutionScopeStore) {
             $context = ExecutionContext::id();
             if ($context !== null) {
-                $scope = $store->getScope($context);
-                foreach ($this->scopeLeaveHooks[$scope] ?? [] as $hook) {
-                    $hook($scope, $this->container());
-                }
-                $store->leaveScope($context);
-                if ($store->isEmpty()) {
-                    $this->executionScopes = null;
-                }
+                $this->leaveExecutionScope($store, $context);
 
                 return;
             }
@@ -258,5 +251,17 @@ final class ConcurrentRepository extends Repository
         }
 
         $this->currentScope = $scope;
+    }
+
+    private function leaveExecutionScope(ExecutionScopeStore $store, string $context): void
+    {
+        $scope = $store->getScope($context);
+        foreach ($this->scopeLeaveHooks[$scope] ?? [] as $hook) {
+            $hook($scope, $this->container());
+        }
+        $store->leaveScope($context);
+        if ($store->isEmpty()) {
+            $this->executionScopes = null;
+        }
     }
 }
