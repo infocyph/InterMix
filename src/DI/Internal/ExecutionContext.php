@@ -50,12 +50,8 @@ final class ExecutionContext
                 continue;
             }
 
-            $getCid = [$class, 'getCid'];
-            if (!is_callable($getCid)) {
-                continue;
-            }
-
             /** @var callable(): mixed $getCid */
+            $getCid = [$class, 'getCid'];
             self::$coroutineIdResolver = Closure::fromCallable($getCid);
             self::$coroutinePrefix = $prefix;
 
