@@ -121,7 +121,7 @@ final class StaticLifecycleHookRenderer
 
     private function seedGuard(int $slot): string
     {
-        return "        if (\$this->scope->parent !== null && array_key_exists({$slot}, \$this->scope->seeds)) {\n"
+        return "        if (\$this->scope->hasSeeds && array_key_exists({$slot}, \$this->scope->seeds)) {\n"
             . "            return \$this->scope->seeds[{$slot}];\n"
             . "        }\n\n";
     }
