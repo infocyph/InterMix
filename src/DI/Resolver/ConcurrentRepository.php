@@ -5,61 +5,65 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Resolver;
 
 use Infocyph\InterMix\DI\Internal\ExecutionContext;
-use Infocyph\InterMix\DI\Internal\ExecutionScopeState;
+use Infocyph\InterMix\DI\Internal\ExecutionScopeStore;
 use Infocyph\InterMix\Exceptions\ContainerException;
 
 /** @internal */
 final class ConcurrentRepository extends Repository
 {
-    private bool $contextScopesActive = false;
+    private string $currentScope = 'root';
+
+    private ?ExecutionScopeStore $executionScopes = null;
+
+    /** @var array<string, array<string, mixed>> */
+    private array $resolvedScoped = [];
 
     /** @var array<string, array<int, callable(string, \Infocyph\InterMix\DI\Container): void>> */
-    private array $executionScopeLeaveHooks = [];
+    private array $scopeLeaveHooks = [];
 
-    /** @var array<string, ExecutionScopeState> */
-    private array $executionScopes = [];
+    /** @var array<string, array<string, mixed>> */
+    private array $scopeSeeds = [];
+
+    /** @var array<int, string> */
+    private array $scopeStack = [];
 
     /** @param array<string, mixed> $instances */
     public function enterScope(string $scope, array $instances = []): void
     {
         $context = ExecutionContext::id();
-        if ($context === null) {
-            parent::enterScope($scope, $instances);
+        if ($context !== null) {
+            ($this->executionScopes ??= new ExecutionScopeStore())->enterScope($context, $scope, $instances);
 
             return;
         }
 
-        $state = $this->executionScopes[$context] ??= new ExecutionScopeState();
-        if ($scope === $state->currentScope || in_array($scope, $state->scopeStack, true)) {
+        if ($scope === $this->currentScope || in_array($scope, $this->scopeStack, true)) {
             throw new ContainerException("Scope \"{$scope}\" is already active.");
         }
 
-        $state->scopeStack[] = $state->currentScope;
-        $state->currentScope = $scope;
+        $this->scopeStack[] = $this->currentScope;
+        $this->currentScope = $scope;
         if ($instances !== []) {
-            $state->scopeSeeds[$scope] = $instances;
+            $this->scopeSeeds[$scope] = $instances;
         }
-        $this->contextScopesActive = true;
     }
 
     /** @internal */
     public function findScopeSeed(string $id, mixed &$value): bool
     {
-        if (!$this->contextScopesActive) {
-            return parent::findScopeSeed($id, $value);
+        $store = $this->executionScopes;
+        if ($store instanceof ExecutionScopeStore) {
+            $context = ExecutionContext::id();
+            if ($context !== null) {
+                return $store->findScopeSeed($context, $id, $value);
+            }
         }
 
-        $context = ExecutionContext::id();
-        if ($context === null) {
-            return parent::findScopeSeed($id, $value);
-        }
-
-        $state = $this->executionScopes[$context] ?? null;
-        if (!$state instanceof ExecutionScopeState || $state->scopeSeeds === []) {
+        if ($this->scopeSeeds === []) {
             return false;
         }
 
-        $seeds = $state->scopeSeeds[$state->currentScope] ?? null;
+        $seeds = $this->scopeSeeds[$this->currentScope] ?? null;
         if (!is_array($seeds) || !array_key_exists($id, $seeds)) {
             return false;
         }
@@ -72,160 +76,137 @@ final class ConcurrentRepository extends Repository
     /** @internal */
     public function getResolvedScopedEntry(string $scope, string $id): mixed
     {
-        if (!$this->contextScopesActive) {
-            return parent::getResolvedScopedEntry($scope, $id);
+        $store = $this->executionScopes;
+        if ($store instanceof ExecutionScopeStore) {
+            $context = ExecutionContext::id();
+            if ($context !== null) {
+                return $store->getResolvedScopedEntry($context, $scope, $id);
+            }
         }
 
-        $context = ExecutionContext::id();
-        if ($context === null) {
-            return parent::getResolvedScopedEntry($scope, $id);
-        }
-
-        $state = $this->executionScopes[$context] ?? null;
-
-        return $state instanceof ExecutionScopeState
-            ? ($state->resolvedScoped[$scope][$id] ?? null)
-            : null;
+        return $this->resolvedScoped[$scope][$id] ?? null;
     }
 
     public function getScope(): string
     {
-        if (!$this->contextScopesActive) {
-            return parent::getScope();
+        $store = $this->executionScopes;
+        if ($store instanceof ExecutionScopeStore) {
+            $context = ExecutionContext::id();
+            if ($context !== null) {
+                return $store->getScope($context);
+            }
         }
 
-        $context = ExecutionContext::id();
-        if ($context === null) {
-            return parent::getScope();
-        }
-
-        return $this->executionScopes[$context]->currentScope ?? 'root';
+        return $this->currentScope;
     }
 
     /** @internal */
     public function hasResolvedScoped(string $scope, string $id): bool
     {
-        if (!$this->contextScopesActive) {
-            return parent::hasResolvedScoped($scope, $id);
+        $store = $this->executionScopes;
+        if ($store instanceof ExecutionScopeStore) {
+            $context = ExecutionContext::id();
+            if ($context !== null) {
+                return $store->hasResolvedScoped($context, $scope, $id);
+            }
         }
 
-        $context = ExecutionContext::id();
-        if ($context === null) {
-            return parent::hasResolvedScoped($scope, $id);
-        }
-
-        $state = $this->executionScopes[$context] ?? null;
-
-        return $state instanceof ExecutionScopeState
-            && array_key_exists($id, $state->resolvedScoped[$scope] ?? []);
+        return array_key_exists($id, $this->resolvedScoped[$scope] ?? []);
     }
 
     /** @internal */
     public function hasScopeSeeds(): bool
     {
-        if (!$this->contextScopesActive) {
-            return parent::hasScopeSeeds();
+        $store = $this->executionScopes;
+        if ($store instanceof ExecutionScopeStore) {
+            $context = ExecutionContext::id();
+            if ($context !== null) {
+                return $store->hasScopeSeeds($context);
+            }
         }
 
-        $context = ExecutionContext::id();
-        if ($context === null) {
-            return parent::hasScopeSeeds();
-        }
-
-        return ($this->executionScopes[$context]->scopeSeeds ?? []) !== [];
+        return $this->scopeSeeds !== [];
     }
 
     public function invalidateClass(string $class): void
     {
         parent::invalidateClass($class);
-        foreach ($this->executionScopes as $state) {
-            foreach (array_keys($state->resolvedScoped) as $scope) {
-                unset($state->resolvedScoped[$scope][$class]);
+        foreach (array_keys($this->resolvedScoped) as $scope) {
+            unset($this->resolvedScoped[$scope][$class]);
+            if ($this->resolvedScoped[$scope] === []) {
+                unset($this->resolvedScoped[$scope]);
             }
         }
+        $this->executionScopes?->invalidateClass($class);
     }
 
     public function invalidateDefinition(string $id): void
     {
         parent::invalidateDefinition($id);
-        foreach ($this->executionScopes as $state) {
-            foreach (array_keys($state->resolvedScoped) as $scope) {
-                unset($state->resolvedScoped[$scope][$id]);
-                if ($state->resolvedScoped[$scope] === []) {
-                    unset($state->resolvedScoped[$scope]);
-                }
+        foreach (array_keys($this->resolvedScoped) as $scope) {
+            unset($this->resolvedScoped[$scope][$id]);
+            if ($this->resolvedScoped[$scope] === []) {
+                unset($this->resolvedScoped[$scope]);
             }
         }
+        $this->executionScopes?->invalidateDefinition($id);
     }
 
     public function invalidateResolutionConfiguration(): void
     {
         parent::invalidateResolutionConfiguration();
-        foreach ($this->executionScopes as $state) {
-            $state->resolvedScoped = [];
-        }
+        $this->resolvedScoped = [];
+        $this->executionScopes?->invalidateResolutionConfiguration();
     }
 
     public function leaveScope(): void
     {
-        if (!$this->contextScopesActive) {
-            parent::leaveScope();
+        $store = $this->executionScopes;
+        if ($store instanceof ExecutionScopeStore) {
+            $context = ExecutionContext::id();
+            if ($context !== null) {
+                $this->leaveExecutionScope($store, $context);
 
-            return;
+                return;
+            }
         }
 
-        $context = ExecutionContext::id();
-        if ($context === null) {
-            parent::leaveScope();
-
-            return;
-        }
-
-        $state = $this->executionScopes[$context] ??= new ExecutionScopeState();
-        $scope = $state->currentScope;
-        foreach ($this->executionScopeLeaveHooks[$scope] ?? [] as $hook) {
+        $scope = $this->currentScope;
+        foreach ($this->scopeLeaveHooks[$scope] ?? [] as $hook) {
             $hook($scope, $this->container());
         }
 
-        unset($state->resolvedScoped[$scope], $state->scopeSeeds[$scope]);
-        $previous = array_pop($state->scopeStack);
-        $state->currentScope = is_string($previous) ? $previous : 'root';
-
-        if ($state->currentScope === 'root'
-            && $state->scopeStack === []
-            && $state->scopeSeeds === []
-            && $state->resolvedScoped === []
-        ) {
-            unset($this->executionScopes[$context]);
-        }
-        $this->contextScopesActive = $this->executionScopes !== [];
+        unset($this->resolvedScoped[$scope], $this->scopeSeeds[$scope]);
+        $previous = array_pop($this->scopeStack);
+        $this->currentScope = is_string($previous) ? $previous : 'root';
     }
 
     public function onScopeLeave(string $scope, callable $hook): void
     {
         parent::onScopeLeave($scope, $hook);
-        $this->executionScopeLeaveHooks[$scope][] = $hook;
+        $this->scopeLeaveHooks[$scope][] = $hook;
     }
 
     public function resetScope(): void
     {
-        if (!$this->contextScopesActive) {
-            parent::resetScope();
+        $store = $this->executionScopes;
+        if ($store instanceof ExecutionScopeStore) {
+            $context = ExecutionContext::id();
+            if ($context !== null) {
+                $store->resetScope($context);
+                if ($store->isEmpty()) {
+                    $this->executionScopes = null;
+                }
 
-            return;
+                return;
+            }
         }
 
-        $context = ExecutionContext::id();
-        if ($context === null) {
-            parent::resetScope();
-            $this->executionScopes = [];
-            $this->contextScopesActive = false;
-
-            return;
-        }
-
-        unset($this->executionScopes[$context]);
-        $this->contextScopesActive = $this->executionScopes !== [];
+        $this->resolvedScoped = [];
+        $this->scopeStack = [];
+        $this->scopeSeeds = [];
+        $this->currentScope = 'root';
+        $this->executionScopes = null;
     }
 
     public function setEnvironment(string $env): void
@@ -235,45 +216,52 @@ final class ConcurrentRepository extends Repository
         }
 
         parent::setEnvironment($env);
-        $this->executionScopes = [];
-        $this->contextScopesActive = false;
+        $this->resolvedScoped = [];
+        $this->scopeStack = [];
+        $this->scopeSeeds = [];
+        $this->currentScope = 'root';
+        $this->executionScopes = null;
     }
 
     public function setResolvedScoped(string $scope, string $id, mixed $value): void
     {
-        if (!$this->contextScopesActive) {
-            parent::setResolvedScoped($scope, $id, $value);
+        $store = $this->executionScopes;
+        if ($store instanceof ExecutionScopeStore) {
+            $context = ExecutionContext::id();
+            if ($context !== null) {
+                $store->setResolvedScoped($context, $scope, $id, $value);
 
-            return;
+                return;
+            }
         }
 
-        $context = ExecutionContext::id();
-        if ($context === null) {
-            parent::setResolvedScoped($scope, $id, $value);
-
-            return;
-        }
-
-        $state = $this->executionScopes[$context] ??= new ExecutionScopeState();
-        $state->resolvedScoped[$scope][$id] = $value;
+        $this->resolvedScoped[$scope][$id] = $value;
     }
 
     public function setScope(string $scope): void
     {
-        if (!$this->contextScopesActive) {
-            parent::setScope($scope);
+        $store = $this->executionScopes;
+        if ($store instanceof ExecutionScopeStore) {
+            $context = ExecutionContext::id();
+            if ($context !== null) {
+                $store->setScope($context, $scope);
 
-            return;
+                return;
+            }
         }
 
-        $context = ExecutionContext::id();
-        if ($context === null) {
-            parent::setScope($scope);
+        $this->currentScope = $scope;
+    }
 
-            return;
+    private function leaveExecutionScope(ExecutionScopeStore $store, string $context): void
+    {
+        $scope = $store->getScope($context);
+        foreach ($this->scopeLeaveHooks[$scope] ?? [] as $hook) {
+            $hook($scope, $this->container());
         }
-
-        $state = $this->executionScopes[$context] ??= new ExecutionScopeState();
-        $state->currentScope = $scope;
+        $store->leaveScope($context);
+        if ($store->isEmpty()) {
+            $this->executionScopes = null;
+        }
     }
 }

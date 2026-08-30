@@ -104,3 +104,58 @@ it('isolates compiled scoped identity and seeds across interleaved Fibers', func
         removeExecutionContextArtifact($path);
     }
 });
+
+it('keeps sequential scope state isolated around Fiber scopes', function () {
+    $container = new Container(uniqid('context_mixed_'));
+    $container->scoped('leaf', ExecutionContextScopedLeaf::class)
+        ->scoped('seeded', ExecutionContextScopedLeaf::class);
+
+    $beforeSeed = new ExecutionContextScopedLeaf();
+    $container->enterScope('request', ['seeded' => $beforeSeed]);
+    $before = $container->get('leaf');
+    $beforeAgain = $container->get('leaf');
+    $beforeSeeded = $container->get('seeded');
+    $container->leaveScope();
+
+    $fibers = interleaveExecutionContextScopes($container);
+
+    $afterSeed = new ExecutionContextScopedLeaf();
+    $container->enterScope('request', ['seeded' => $afterSeed]);
+    $after = $container->get('leaf');
+    $afterSeeded = $container->get('seeded');
+    $container->leaveScope();
+
+    expect($before)->toBe($beforeAgain)
+        ->and($beforeSeeded)->toBe($beforeSeed)
+        ->and($afterSeeded)->toBe($afterSeed)
+        ->and($after)->not->toBe($before)
+        ->and($fibers['a'][0])->not->toBe($before)
+        ->and($fibers['b'][0])->not->toBe($before)
+        ->and($fibers['a'][0])->not->toBe($after)
+        ->and($fibers['b'][0])->not->toBe($after);
+});
+
+it('dispatches scope leave hooks for sequential and Fiber scopes', function () {
+    $container = new Container(uniqid('context_hooks_'));
+    $calls = [];
+    $container->onScopeLeave(
+        'request',
+        static function (string $scope, Container $activeContainer) use (&$calls, $container): void {
+            $calls[] = [$scope, Fiber::getCurrent() instanceof Fiber, $activeContainer === $container];
+        },
+    );
+
+    $container->enterScope('request');
+    $container->leaveScope();
+
+    $fiber = new Fiber(static function () use ($container): void {
+        $container->enterScope('request');
+        $container->leaveScope();
+    });
+    $fiber->start();
+
+    expect($calls)->toBe([
+        ['request', false, true],
+        ['request', true, true],
+    ]);
+});
