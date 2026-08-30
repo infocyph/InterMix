@@ -156,10 +156,11 @@ Persistent-worker note
 
 Reflection metadata is immutable and may be reused process-wide. Resolved
 singletons and scopes belong to a container instance. In long-running workers,
-keep request/job state in short-lived scopes and use isolated containers for
-truly concurrent execution contexts; InterMix does not provide automatic
-Fiber- or coroutine-local storage. Swoole and ReactPHP event loops are not, by
-themselves, PHP threads.
+keep request/job state in short-lived scopes. InterMix isolates scope stacks,
+seeds, and scoped resolutions for each active PHP ``Fiber`` or
+Swoole/OpenSwoole coroutine. Scope entry and exit remain application-owned, and
+singletons remain shared by the container. Plain event-loop callbacks that do
+not run in distinct Fibers or coroutines share the main execution context.
 
 Parameter resolution cache note
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

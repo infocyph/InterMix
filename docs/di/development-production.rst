@@ -81,9 +81,11 @@ registration remain available:
    $container->options()->enableDebugTracing();
    $application = $container->get(Application::class);
 
-Use a distinct container alias per isolated test or worker. For request/job
-state, use ``withinScope()`` and always leave the scope. InterMix does not add
-automatic Fiber- or coroutine-local state.
+Use a distinct container alias per isolated test or independently configured
+worker. For request/job state, use ``withinScope()`` so the scope is always
+left. A shared container isolates scoped state between active PHP ``Fiber``
+instances and Swoole/OpenSwoole coroutines; its singleton services and
+configuration are still shared.
 
 Production build step
 ---------------------
