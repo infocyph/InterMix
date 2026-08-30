@@ -11,6 +11,8 @@ use Infocyph\InterMix\Exceptions\ContainerException;
 /** @internal */
 final class ConcurrentRepository extends Repository
 {
+    private bool $contextScopesActive = false;
+
     /** @var array<string, array<int, callable(string, \Infocyph\InterMix\DI\Container): void>> */
     private array $executionScopeLeaveHooks = [];
 
@@ -37,11 +39,16 @@ final class ConcurrentRepository extends Repository
         if ($instances !== []) {
             $state->scopeSeeds[$scope] = $instances;
         }
+        $this->contextScopesActive = true;
     }
 
     /** @internal */
     public function findScopeSeed(string $id, mixed &$value): bool
     {
+        if (!$this->contextScopesActive) {
+            return parent::findScopeSeed($id, $value);
+        }
+
         $context = ExecutionContext::id();
         if ($context === null) {
             return parent::findScopeSeed($id, $value);
@@ -65,16 +72,28 @@ final class ConcurrentRepository extends Repository
     /** @internal */
     public function getResolvedScopedEntry(string $scope, string $id): mixed
     {
+        if (!$this->contextScopesActive) {
+            return parent::getResolvedScopedEntry($scope, $id);
+        }
+
         $context = ExecutionContext::id();
         if ($context === null) {
             return parent::getResolvedScopedEntry($scope, $id);
         }
 
-        return $this->executionScopes[$context]->resolvedScoped[$scope][$id] ?? null;
+        $state = $this->executionScopes[$context] ?? null;
+
+        return $state instanceof ExecutionScopeState
+            ? ($state->resolvedScoped[$scope][$id] ?? null)
+            : null;
     }
 
     public function getScope(): string
     {
+        if (!$this->contextScopesActive) {
+            return parent::getScope();
+        }
+
         $context = ExecutionContext::id();
         if ($context === null) {
             return parent::getScope();
@@ -86,17 +105,28 @@ final class ConcurrentRepository extends Repository
     /** @internal */
     public function hasResolvedScoped(string $scope, string $id): bool
     {
+        if (!$this->contextScopesActive) {
+            return parent::hasResolvedScoped($scope, $id);
+        }
+
         $context = ExecutionContext::id();
         if ($context === null) {
             return parent::hasResolvedScoped($scope, $id);
         }
 
-        return array_key_exists($id, $this->executionScopes[$context]->resolvedScoped[$scope] ?? []);
+        $state = $this->executionScopes[$context] ?? null;
+
+        return $state instanceof ExecutionScopeState
+            && array_key_exists($id, $state->resolvedScoped[$scope] ?? []);
     }
 
     /** @internal */
     public function hasScopeSeeds(): bool
     {
+        if (!$this->contextScopesActive) {
+            return parent::hasScopeSeeds();
+        }
+
         $context = ExecutionContext::id();
         if ($context === null) {
             return parent::hasScopeSeeds();
@@ -138,6 +168,12 @@ final class ConcurrentRepository extends Repository
 
     public function leaveScope(): void
     {
+        if (!$this->contextScopesActive) {
+            parent::leaveScope();
+
+            return;
+        }
+
         $context = ExecutionContext::id();
         if ($context === null) {
             parent::leaveScope();
@@ -162,6 +198,7 @@ final class ConcurrentRepository extends Repository
         ) {
             unset($this->executionScopes[$context]);
         }
+        $this->contextScopesActive = $this->executionScopes !== [];
     }
 
     public function onScopeLeave(string $scope, callable $hook): void
@@ -172,25 +209,44 @@ final class ConcurrentRepository extends Repository
 
     public function resetScope(): void
     {
+        if (!$this->contextScopesActive) {
+            parent::resetScope();
+
+            return;
+        }
+
         $context = ExecutionContext::id();
         if ($context === null) {
             parent::resetScope();
             $this->executionScopes = [];
+            $this->contextScopesActive = false;
 
             return;
         }
 
         unset($this->executionScopes[$context]);
+        $this->contextScopesActive = $this->executionScopes !== [];
     }
 
     public function setEnvironment(string $env): void
     {
+        if (parent::getEnvironment() === $env) {
+            return;
+        }
+
         parent::setEnvironment($env);
         $this->executionScopes = [];
+        $this->contextScopesActive = false;
     }
 
     public function setResolvedScoped(string $scope, string $id, mixed $value): void
     {
+        if (!$this->contextScopesActive) {
+            parent::setResolvedScoped($scope, $id, $value);
+
+            return;
+        }
+
         $context = ExecutionContext::id();
         if ($context === null) {
             parent::setResolvedScoped($scope, $id, $value);
@@ -204,6 +260,12 @@ final class ConcurrentRepository extends Repository
 
     public function setScope(string $scope): void
     {
+        if (!$this->contextScopesActive) {
+            parent::setScope($scope);
+
+            return;
+        }
+
         $context = ExecutionContext::id();
         if ($context === null) {
             parent::setScope($scope);
