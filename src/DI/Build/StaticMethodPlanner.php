@@ -12,7 +12,7 @@ use ReflectionParameter;
 
 /**
  * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
- * @phpstan-type MethodPlan array{method: string, arguments: list<ServiceArgument>, dependencies: list<string>, static?: bool, runtime?: bool}
+ * @phpstan-type MethodPlan array{method: string, arguments: list<ServiceArgument>, dependencies: list<string>, parameterNames?: list<string>, static?: bool, runtime?: bool}
  * @internal
  */
 final class StaticMethodPlanner
@@ -125,10 +125,22 @@ final class StaticMethodPlanner
             return $this->runtimePlan($method);
         }
 
+        $reflectionParameters = $method->getParameters();
+        $parameterNames = array_any(
+            $reflectionParameters,
+            static fn(ReflectionParameter $parameter): bool => $parameter->isVariadic(),
+        )
+            ? null
+            : array_map(
+                static fn(ReflectionParameter $parameter): string => $parameter->getName(),
+                $reflectionParameters,
+            );
+
         return [
             'method' => $method->getName(),
             'arguments' => $parameters['arguments'],
             'dependencies' => $parameters['dependencies'],
+            ...($parameterNames !== null ? ['parameterNames' => $parameterNames] : []),
             ...($method->isStatic() ? ['static' => true] : []),
         ];
     }
