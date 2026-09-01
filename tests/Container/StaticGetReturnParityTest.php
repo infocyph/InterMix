@@ -76,7 +76,7 @@ it('preserves registered getReturn semantics while still invoking configured met
     $path = staticGetReturnArtifactPath();
     try {
         $report = $builder->compile($path);
-        $runtime = $builder->productionPrevalidated($path, $report['sha256']);
+        $runtime = $builder->productionPrevalidated($path, $report['digest']);
         $runtime->enterScope('request');
         $productionSingleton = $runtime->getReturn('singleton');
         $productionScoped = $runtime->getReturn('scoped');

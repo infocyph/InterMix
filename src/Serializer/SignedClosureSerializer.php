@@ -13,9 +13,9 @@ use function Opis\Closure\{serialize as opis_serialize, unserialize as opis_unse
 
 final readonly class SignedClosureSerializer
 {
-    private const string HMAC_ALGORITHM = 'sha256';
+    private const string HMAC_ALGORITHM = 'sha3-256';
 
-    private const string PREFIX = 'imxcs1.';
+    private const string PREFIX = 'imxcs2.';
 
     public function __construct(
         #[\SensitiveParameter]

@@ -54,7 +54,7 @@ it('keeps compile-known private Inject dependencies out of attribute resolution 
     try {
         $report = $builder->compile($path);
         $source = file_get_contents($path);
-        $runtime = $builder->productionPrevalidated($path, $report['sha256']);
+        $runtime = $builder->productionPrevalidated($path, $report['digest']);
         $dependency = $runtime->get(StaticPrivateInjectDependency::class);
         $private = $runtime->get(StaticPrivateInjectConsumer::class);
         $readonly = $runtime->get(StaticReadonlyInjectConsumer::class);

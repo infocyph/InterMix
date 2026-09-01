@@ -38,7 +38,7 @@ it('keeps non-exportable registered property values in a targeted runtime island
     try {
         $report = $builder->compile($path);
         $source = file_get_contents($path);
-        $runtime = $builder->productionPrevalidated($path, $report['sha256']);
+        $runtime = $builder->productionPrevalidated($path, $report['digest']);
         $consumer = $runtime->get(RuntimePropertyIslandConsumer::class);
 
         expect($report['compiled'])->toContain(RuntimePropertyIslandConsumer::class)

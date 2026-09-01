@@ -34,7 +34,7 @@ final class DefinitionCacheBench
         $this->seedHit($this->cacheLayerMemory, '__definition_cache_cachelayer__');
 
         $this->apcu = extension_loaded('apcu') && apcu_enabled()
-            ? Cache::apcu('intermix.benchmark.' . substr(hash('sha256', uniqid('', true)), 0, 12))
+            ? Cache::apcu('intermix.benchmark.' . substr(hash('xxh128', uniqid('', true)), 0, 12))
             : null;
         if ($this->apcu instanceof Cache) {
             $this->seedHit($this->apcu, '__definition_cache_apcu__');

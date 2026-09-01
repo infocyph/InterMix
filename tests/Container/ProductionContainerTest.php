@@ -145,7 +145,7 @@ it('deoptimizes a prior production runtime before attaching another to the build
     try {
         $report = $builder->compile($path);
         $first = $builder->production($path);
-        $second = $builder->productionPrevalidated($path, $report['sha256']);
+        $second = $builder->productionPrevalidated($path, $report['digest']);
         $development = $builder->development();
 
         expect($first)->not->toBe($second)

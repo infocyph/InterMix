@@ -22,7 +22,7 @@ final class StaticRuntimeGenerator
      *   runtime: ProductionContainer,
      *   compiled: list<string>,
      *   skipped: array<string, string>,
-     *   sha256: string
+     *   digest: string
      * }
      */
     public function generate(
@@ -38,7 +38,7 @@ final class StaticRuntimeGenerator
         }
 
         $source = new StaticRuntimeRenderer()->render($graph, $plans, $slots);
-        $sha256 = hash('sha256', $source);
+        $digest = hash('xxh128', $source);
         AtomicFileWriter::write(
             $filePath,
             $source,
@@ -48,17 +48,17 @@ final class StaticRuntimeGenerator
         );
         $this->writeManifest(
             $filePath,
-            $sha256,
+            $digest,
             array_keys($plans),
             $planned['skipped'],
             $graph->environment(),
         );
 
         return [
-            'runtime' => $this->loadPrevalidated($filePath, $sha256, $fallback),
+            'runtime' => $this->loadPrevalidated($filePath, $digest, $fallback),
             'compiled' => array_keys($plans),
             'skipped' => $planned['skipped'],
-            'sha256' => $sha256,
+            'digest' => $digest,
         ];
     }
 
@@ -71,20 +71,20 @@ final class StaticRuntimeGenerator
     }
 
     /**
-     * Load an artifact whose SHA-256 digest was validated during deployment.
+     * Load an artifact whose xxh128 digest was validated during deployment.
      *
      * This deliberately does not hash the runtime file. The caller must source
      * the digest from trusted immutable deployment metadata.
      */
     public function loadPrevalidated(
         string $filePath,
-        string $expectedSha256,
+        string $expectedDigest,
         ?Container $fallback = null,
     ): ProductionContainer {
-        $this->assertSha256($expectedSha256);
+        $this->assertDigest($expectedDigest);
         $manifest = $this->readManifest($filePath);
         $this->assertManifestAbi($manifest);
-        if (!hash_equals($manifest['sha256'], $expectedSha256)) {
+        if (!hash_equals($manifest['digest'], $expectedDigest)) {
             throw new ContainerException(
                 'Prevalidated static runtime does not match the active deployment digest.',
             );
@@ -94,7 +94,16 @@ final class StaticRuntimeGenerator
         return $this->attachFallback($this->loadRuntime($filePath), $fallback);
     }
 
-    /** @param array{abi: int, sha256: string, environment: ?string} $manifest */
+    private function assertDigest(string $digest): void
+    {
+        if (preg_match('/^[a-f0-9]{32}$/D', $digest) !== 1) {
+            throw new ContainerException(
+                'Prevalidated static runtime digest must be a lowercase xxh128 hexadecimal value.',
+            );
+        }
+    }
+
+    /** @param array{abi: int, digest: string, environment: ?string} $manifest */
     private function assertEnvironmentMatches(array $manifest, ?Container $fallback): void
     {
         if (!$fallback instanceof Container) {
@@ -109,21 +118,12 @@ final class StaticRuntimeGenerator
         }
     }
 
-    /** @param array{abi: int, sha256: string, environment: ?string} $manifest */
+    /** @param array{abi: int, digest: string, environment: ?string} $manifest */
     private function assertManifestAbi(array $manifest): void
     {
         if ($manifest['abi'] !== self::ARTIFACT_ABI) {
             throw new ContainerException(
                 "Unsupported static runtime ABI '{$manifest['abi']}'.",
-            );
-        }
-    }
-
-    private function assertSha256(string $sha256): void
-    {
-        if (preg_match('/^[a-f0-9]{64}$/D', $sha256) !== 1) {
-            throw new ContainerException(
-                'Prevalidated static runtime digest must be a SHA-256 hexadecimal value.',
             );
         }
     }
@@ -156,7 +156,7 @@ final class StaticRuntimeGenerator
         return $filePath . self::MANIFEST_SUFFIX;
     }
 
-    /** @return array{abi: int, sha256: string, environment: ?string} */
+    /** @return array{abi: int, digest: string, environment: ?string} */
     private function readManifest(string $filePath): array
     {
         $manifestPath = $this->manifestPath($filePath);
@@ -175,10 +175,11 @@ final class StaticRuntimeGenerator
             throw new ContainerException('Static runtime manifest is invalid JSON.', previous: $exception);
         }
         if (!is_array($manifest)
-            || !isset($manifest['abi'], $manifest['sha256'])
+            || !isset($manifest['abi'], $manifest['digest'])
             || !array_key_exists('environment', $manifest)
             || !is_int($manifest['abi'])
-            || !is_string($manifest['sha256'])
+            || !is_string($manifest['digest'])
+            || preg_match('/^[a-f0-9]{32}$/D', $manifest['digest']) !== 1
             || (!is_string($manifest['environment']) && $manifest['environment'] !== null)
         ) {
             throw new ContainerException('Static runtime manifest has an invalid shape.');
@@ -186,19 +187,19 @@ final class StaticRuntimeGenerator
 
         return [
             'abi' => $manifest['abi'],
-            'sha256' => $manifest['sha256'],
+            'digest' => $manifest['digest'],
             'environment' => $manifest['environment'],
         ];
     }
 
-    /** @return array{abi: int, sha256: string, environment: ?string} */
+    /** @return array{abi: int, digest: string, environment: ?string} */
     private function validateManifest(string $filePath): array
     {
         $manifest = $this->readManifest($filePath);
         $this->assertManifestAbi($manifest);
 
-        $hash = hash_file('sha256', $filePath);
-        if (!is_string($hash) || !hash_equals($manifest['sha256'], $hash)) {
+        $hash = hash_file('xxh128', $filePath);
+        if (!is_string($hash) || !hash_equals($manifest['digest'], $hash)) {
             throw new ContainerException('Static runtime artifact hash does not match its manifest.');
         }
 
@@ -211,7 +212,7 @@ final class StaticRuntimeGenerator
      */
     private function writeManifest(
         string $filePath,
-        string $sha256,
+        string $digest,
         array $compiled,
         array $skipped,
         ?string $environment,
@@ -220,7 +221,7 @@ final class StaticRuntimeGenerator
             $manifest = json_encode(
                 [
                     'abi' => self::ARTIFACT_ABI,
-                    'sha256' => $sha256,
+                    'digest' => $digest,
                     'environment' => $environment,
                     'compiled' => $compiled,
                     'skipped' => $skipped,

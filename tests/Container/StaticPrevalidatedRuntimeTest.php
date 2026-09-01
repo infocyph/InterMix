@@ -28,9 +28,9 @@ it('loads a production runtime from the deployment digest returned by compile', 
 
     try {
         $report = $builder->compile($path);
-        $runtime = $builder->productionPrevalidated($path, $report['sha256']);
+        $runtime = $builder->productionPrevalidated($path, $report['digest']);
 
-        expect($report['sha256'])->toMatch('/^[a-f0-9]{64}$/')
+        expect($report['digest'])->toMatch('/^[a-f0-9]{32}$/')
             ->and($runtime->get('service'))->toBeInstanceOf(StaticPrevalidatedService::class)
             ->and($runtime->get('service'))->toBe($runtime->get('service'));
     } finally {
@@ -47,10 +47,10 @@ it('rejects malformed and mismatched deployment digests', function () {
         $report = $builder->compile($path);
 
         expect(fn() => $builder->productionPrevalidated($path, 'invalid'))
-            ->toThrow(ContainerException::class, 'SHA-256')
-            ->and(fn() => $builder->productionPrevalidated($path, str_repeat('0', 64)))
+            ->toThrow(ContainerException::class, 'xxh128')
+            ->and(fn() => $builder->productionPrevalidated($path, str_repeat('0', 32)))
             ->toThrow(ContainerException::class, 'deployment digest')
-            ->and($report['sha256'])->not->toBe(str_repeat('0', 64));
+            ->and($report['digest'])->not->toBe(str_repeat('0', 32));
     } finally {
         removeStaticPrevalidatedArtifact($path);
     }
@@ -68,7 +68,7 @@ it('requires recompilation after environment mutation', function () {
 
         expect(fn() => $builder->production($path))
             ->toThrow(ContainerException::class, 'recompiled')
-            ->and(fn() => $builder->productionPrevalidated($path, $report['sha256']))
+            ->and(fn() => $builder->productionPrevalidated($path, $report['digest']))
             ->toThrow(ContainerException::class, 'recompiled');
     } finally {
         removeStaticPrevalidatedArtifact($path);
@@ -89,7 +89,7 @@ it('validates the artifact environment when loading in a fresh process builder',
 
         expect(fn() => $loader->production($path))
             ->toThrow(ContainerException::class, 'environment')
-            ->and(fn() => $loader->productionPrevalidated($path, $report['sha256']))
+            ->and(fn() => $loader->productionPrevalidated($path, $report['digest']))
             ->toThrow(ContainerException::class, 'environment');
     } finally {
         removeStaticPrevalidatedArtifact($path);

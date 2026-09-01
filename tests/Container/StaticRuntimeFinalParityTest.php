@@ -52,7 +52,7 @@ it('preserves compiled call error semantics for missing methods', function () {
 
     try {
         $report = $productionBuilder->compile($path);
-        $runtime = $productionBuilder->productionPrevalidated($path, $report['sha256']);
+        $runtime = $productionBuilder->productionPrevalidated($path, $report['digest']);
 
         expect($developmentError)->toBeInstanceOf(ContainerException::class)
             ->and(fn() => $runtime->call('callable', 'missing'))->toThrow(
@@ -71,7 +71,7 @@ it('keeps arbitrary closure invocation in a narrow dynamic island with compiled 
 
     try {
         $report = $builder->compile($path);
-        $runtime = $builder->productionPrevalidated($path, $report['sha256']);
+        $runtime = $builder->productionPrevalidated($path, $report['digest']);
         $consumer = $runtime->resolveNow(
             static fn(StaticFinalParityDependency $dependency): StaticFinalParityRoot => new StaticFinalParityRoot($dependency),
         );
@@ -99,7 +99,7 @@ it('preserves callable parser errors across development and production fallback'
 
     try {
         $report = $productionBuilder->compile($path);
-        $runtime = $productionBuilder->productionPrevalidated($path, $report['sha256']);
+        $runtime = $productionBuilder->productionPrevalidated($path, $report['digest']);
 
         expect($developmentError)->toBeInstanceOf(ContainerException::class)
             ->and(fn() => $runtime->resolveNow(['StaticFinalParityMissingClass', 'run']))->toThrow(
@@ -127,7 +127,7 @@ it('preserves malformed array callable errors without production warnings', func
 
     try {
         $report = $builder->compile($path);
-        $runtime = $builder->productionPrevalidated($path, $report['sha256']);
+        $runtime = $builder->productionPrevalidated($path, $report['digest']);
 
         expect($developmentError)->toBeInstanceOf(InvalidArgumentException::class)
             ->and(fn() => $runtime->resolveNow([]))->toThrow(

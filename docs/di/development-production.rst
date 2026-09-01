@@ -111,10 +111,10 @@ Publish all of the following as one release:
 * its adjacent ``.meta.json`` manifest; and
 * application code and dependencies from the same build.
 
-The report's ``sha256`` may also be recorded in trusted immutable deployment
-metadata for prevalidated loading. A database row, cache value, environment
-variable, or file writable by the runtime worker is not automatically a trusted
-digest source.
+The report's ``digest`` is an xxh128 artifact identity and may also be recorded
+in trusted immutable deployment metadata for prevalidated loading. A database
+row, cache value, environment variable, or file writable by the runtime worker
+is not automatically a trusted digest source.
 
 Production bootstrap
 --------------------
@@ -127,7 +127,7 @@ fallback definitions, then load the artifact once during process bootstrap:
    $path = __DIR__ . '/bootstrap/cache/intermix.production.php';
    $builder = applicationContainer('prod');
 
-   // Safe default: validates ABI, manifest, environment and file SHA-256.
+   // Safe default: validates ABI, manifest, environment and file xxh128 digest.
    $container = $builder->production($path);
    $application = $container->get(Application::class);
 
@@ -136,8 +136,8 @@ avoid hashing the file in every new process:
 
 .. code-block:: php
 
-   $trustedSha256 = deploymentMetadata('intermix.sha256');
-   $container = $builder->productionPrevalidated($path, $trustedSha256);
+   $trustedDigest = deploymentMetadata('intermix.digest');
+   $container = $builder->productionPrevalidated($path, $trustedDigest);
 
 ``productionPrevalidated()`` is not a shortcut for reading the digest from the
 same mutable artifact directory. If the trust boundary is uncertain, use
@@ -187,7 +187,7 @@ callables:
    $report = $productionBuilder->compile($temporaryPath);
    $production = $productionBuilder->productionPrevalidated(
        $temporaryPath,
-       $report['sha256'],
+       $report['digest'],
    );
 
    expect($production->get(Application::class))

@@ -50,7 +50,7 @@ provide equivalent integrity protection.
    $payload = $serializer->serialize(static fn (): string => 'work');
    $closure = $serializer->unserialize($payload);
 
-Signed payloads use the ``imxcs1.`` envelope and HMAC-SHA-256. Signing keys are
+Signed payloads use the ``imxcs2.`` envelope and HMAC-SHA3-256. Signing keys are
 held by the serializer instance; InterMix has no process-global signing state.
 Unsigned serializers reject signed payloads, signed serializers reject unsigned
 payloads, and verification occurs before executable data is decoded.

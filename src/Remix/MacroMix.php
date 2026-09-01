@@ -237,7 +237,7 @@ trait MacroMix
             throw new RuntimeException('Unable to create the InterMix lock directory.');
         }
         chmod($directory, 0700);
-        $path = $directory . '/macro-' . hash('sha256', static::class) . '.lock';
+        $path = $directory . '/macro-' . hash('xxh128', static::class) . '.lock';
         $handle = fopen($path, 'c');
         if ($handle === false) {
             throw new RuntimeException('Unable to open the MacroMix mutation lock.');
