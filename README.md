@@ -154,8 +154,8 @@ $builder = ContainerBuilder::create()
 $path = __DIR__ . '/var/intermix.production.php';
 $report = $builder->compile($path);
 
-// Runtime stage. The digest comes from trusted deployment metadata.
-$container = $builder->productionPrevalidated($path, $report['sha256']);
+// Runtime stage. The xxh128 digest comes from trusted deployment metadata.
+$container = $builder->productionPrevalidated($path, $report['digest']);
 $mailer = $container->get(Mailer::class);
 ```
 
@@ -215,7 +215,8 @@ $signedClosure = $signed->unserialize($signedPayload);
 ```
 
 Ordinary PHP values use native PHP facilities. Resources remain the application's
-responsibility. Signing is instance-scoped and adds no work to normal invocation.
+responsibility. Signed Closure envelopes use HMAC-SHA3-256; signing is instance-scoped
+and adds no work to normal invocation.
 
 ## Testing
 
