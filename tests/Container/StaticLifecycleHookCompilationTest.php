@@ -46,7 +46,7 @@ it('keeps hooked singleton services compiled and dispatches hooks only on cache 
 
     try {
         $report = $builder->compile($path);
-        $runtime = $builder->productionPrevalidated($path, $report['sha256']);
+        $runtime = $builder->productionPrevalidated($path, $report['digest']);
 
         $first = $runtime->get('service');
         $second = $runtime->get('service');
@@ -72,7 +72,7 @@ it('captures hooks registered through a retained development container', functio
 
     try {
         $report = $builder->compile($path);
-        $runtime = $builder->productionPrevalidated($path, $report['sha256']);
+        $runtime = $builder->productionPrevalidated($path, $report['digest']);
 
         expect($runtime->get('service'))->toBeInstanceOf(StaticHookCompiledService::class)
             ->and($events)->toBe(['service']);
@@ -95,7 +95,7 @@ it('dispatches compiled transient value hooks for every resolution', function ()
 
     try {
         $report = $builder->compile($path);
-        $runtime = $builder->productionPrevalidated($path, $report['sha256']);
+        $runtime = $builder->productionPrevalidated($path, $report['digest']);
 
         expect($runtime->get('answer'))->toBe(42)
             ->and($runtime->get('answer'))->toBe(42)
@@ -127,7 +127,7 @@ it('preserves scoped hook and scope-leave semantics in production', function () 
 
     try {
         $report = $builder->compile($path);
-        $runtime = $builder->productionPrevalidated($path, $report['sha256']);
+        $runtime = $builder->productionPrevalidated($path, $report['digest']);
 
         $runtime->enterScope('request');
         $first = $runtime->get('service');
@@ -164,7 +164,7 @@ it('dispatches lifecycle hooks around compiled invocation results', function () 
 
     try {
         $report = $builder->compile($path);
-        $runtime = $builder->productionPrevalidated($path, $report['sha256']);
+        $runtime = $builder->productionPrevalidated($path, $report['digest']);
 
         expect($runtime->get('invocation'))->toBe('invoked')
             ->and($runtime->get('invocation'))->toBe('invoked')
@@ -184,7 +184,7 @@ it('fails closed when a hooked artifact is loaded without its runtime hook graph
 
     try {
         $report = $builder->compile($path);
-        $runtime = new StaticRuntimeGenerator()->loadPrevalidated($path, $report['sha256']);
+        $runtime = new StaticRuntimeGenerator()->loadPrevalidated($path, $report['digest']);
 
         expect(fn() => $runtime->get('service'))
             ->toThrow(ContainerException::class, 'runtime lifecycle-hook graph');
