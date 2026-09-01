@@ -71,7 +71,7 @@ it('compiles deterministic method-level Inject arguments without changing litera
 
     try {
         $report = $builder->compile($path);
-        $consumer = $builder->productionPrevalidated($path, $report['sha256'])->get('consumer');
+        $consumer = $builder->productionPrevalidated($path, $report['digest'])->get('consumer');
 
         expect($report['compiled'])->toContain('consumer', 'config.message')
             ->and($consumer)->toBeInstanceOf(StaticMethodLevelInjectConsumer::class)
@@ -91,7 +91,7 @@ it('compiles deterministic parameter-level Inject service targets', function () 
 
     try {
         $report = $builder->compile($path);
-        $consumer = $builder->productionPrevalidated($path, $report['sha256'])->get('consumer');
+        $consumer = $builder->productionPrevalidated($path, $report['digest'])->get('consumer');
 
         expect($report['compiled'])->toContain('consumer', 'config.message')
             ->and($consumer)->toBeInstanceOf(StaticParameterLevelInjectConsumer::class)
@@ -111,7 +111,7 @@ it('keeps typed method-level Inject precedence as a targeted runtime method isla
     try {
         $report = $builder->compile($path);
         $source = file_get_contents($path);
-        $consumer = $builder->productionPrevalidated($path, $report['sha256'])->get('consumer');
+        $consumer = $builder->productionPrevalidated($path, $report['digest'])->get('consumer');
 
         expect($report['compiled'])->toContain('consumer')
             ->and($source)->toContain('invokeCompiledRuntimeMethod')
