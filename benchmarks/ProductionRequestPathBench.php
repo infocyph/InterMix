@@ -230,8 +230,8 @@ final class ProductionRequestPathBench
     {
         static $generator;
         $generator ??= new StaticRuntimeGenerator();
-        [$path, $sha256, $fallback] = $this->bootFixture();
-        $this->sink = $generator->loadPrevalidated($path, $sha256, $fallback);
+        [$path, $digest, $fallback] = $this->bootFixture();
+        $this->sink = $generator->loadPrevalidated($path, $digest, $fallback);
     }
 
     #[Revs(500)]
@@ -293,7 +293,7 @@ final class ProductionRequestPathBench
             }
         });
 
-        return $fixture = [$path, $report['sha256'], $fallback];
+        return $fixture = [$path, $report['digest'], $fallback];
     }
 
     private function controllerRuntime(): ProductionContainer
