@@ -270,7 +270,7 @@ it('integrates with CacheLayer APCu when available', function () {
         test()->markTestSkipped('APCu is not enabled.');
     }
 
-    $cache = Cache::apcu('intermix.apcu.' . substr(hash('sha256', uniqid('', true)), 0, 12));
+    $cache = Cache::apcu('intermix.apcu.' . substr(hash('xxh128', uniqid('', true)), 0, 12));
     $container = cacheLayerContainer(uniqid('apcu.', true));
     $container->definitions()->enableDefinitionCache($cache);
     $container->bind('value', static fn(): int => 42);
