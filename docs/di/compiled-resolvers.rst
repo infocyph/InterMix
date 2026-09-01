@@ -42,14 +42,14 @@ the immutable release:
 
    $container = $builder->productionPrevalidated(
        $path,
-       $report['sha256'],
+       $report['digest'],
    );
 
-``production($path)`` verifies the artifact with ``hash_file()`` before loading.
-``productionPrevalidated($path, $sha256)`` is for deployment systems that already
-verified the immutable artifact and obtained its digest from trusted deployment
-metadata. It validates the manifest and expected digest without hashing the PHP
-file on every process start.
+``production($path)`` verifies the artifact with ``hash_file('xxh128', ...)``
+before loading. ``productionPrevalidated($path, $digest)`` is for deployment
+systems that already verified the immutable artifact and obtained its xxh128
+digest from trusted deployment metadata. It validates the manifest and expected
+digest without hashing the PHP file on every process start.
 
 The generated runtime specializes known service IDs, lifetimes, scopes, tags,
 deterministic injection, and known invocation paths. Closures, custom runtime
@@ -208,10 +208,11 @@ artifact for every immutable application release so source-only changes cannot
 reuse an older recipe. Treat the cache file as trusted executable build output
 and never accept its path or contents from a request.
 
-The fingerprints are compatibility coordinates, not authentication. They prove
-that the runtime configuration matches the build input; they do not make an
-untrusted PHP artifact safe to execute. Array definitions that require dynamic
-class or method construction are deliberately omitted and reported as skipped.
+The fingerprints are compatibility coordinates backed by xxh128, not
+authentication. They prove that the runtime configuration matches the build
+input; they do not make an untrusted PHP artifact safe to execute. Array
+definitions that require dynamic class or method construction are deliberately
+omitted and reported as skipped.
 
 When the artifact is loaded before the first service resolution, InterMix uses
 a compiled-first resolver that does not construct the class, parameter, or
@@ -237,7 +238,7 @@ atomic deployment manifest as the artifact, then load both values together:
        $optimizeManifest['container_fingerprint'],
    );
 
-The fingerprint is not a secret. It is an integrity coordinate tying two
+The xxh128 fingerprint is not a secret. It is an integrity coordinate tying two
 trusted deployment outputs together. Never obtain it or the artifact path from
 request input. Rebuild and republish both after definitions, environment,
 container options, PHP, InterMix, providers, or deployment configuration
