@@ -20,7 +20,7 @@ final class ContainerBuilder
 {
     private readonly Container $development;
 
-    /** @var null|array{compiled: list<string>, skipped: array<string, string>, sha256: string} */
+    /** @var null|array{compiled: list<string>, skipped: array<string, string>, digest: string} */
     private ?array $compilationReport = null;
 
     /** @var array<string, true> */
@@ -96,13 +96,13 @@ final class ContainerBuilder
         return $this;
     }
 
-    /** @return null|array{compiled: list<string>, skipped: array<string, string>, sha256: string} */
+    /** @return null|array{compiled: list<string>, skipped: array<string, string>, digest: string} */
     public function compilationReport(): ?array
     {
         return $this->compilationReport;
     }
 
-    /** @return array{compiled: list<string>, skipped: array<string, string>, sha256: string} */
+    /** @return array{compiled: list<string>, skipped: array<string, string>, digest: string} */
     public function compile(string $path): array
     {
         $this->beforeMutation();
@@ -119,7 +119,7 @@ final class ContainerBuilder
         $this->compilationReport = [
             'compiled' => $generated['compiled'],
             'skipped' => $generated['skipped'],
-            'sha256' => $generated['sha256'],
+            'digest' => $generated['digest'],
         ];
         $this->finalizedArtifactExists = true;
         $this->requiresCompilation = false;
@@ -209,7 +209,7 @@ final class ContainerBuilder
         );
     }
 
-    public function productionPrevalidated(string $path, string $sha256): ProductionContainer
+    public function productionPrevalidated(string $path, string $digest): ProductionContainer
     {
         $this->beforeProductionLoad();
 
@@ -217,7 +217,7 @@ final class ContainerBuilder
             fn(): ProductionContainer => $this->rememberProductionRuntime(
                 new StaticRuntimeGenerator()->loadPrevalidated(
                     $path,
-                    $sha256,
+                    $digest,
                     $this->development,
                 ),
             ),
