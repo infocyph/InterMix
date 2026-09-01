@@ -499,7 +499,7 @@ it('loads a deployment-prevalidated artifact and rejects a mismatched manifest f
     $rejected->bind('service', CompiledResolverDependency::class, LifetimeEnum::Transient);
 
     expect($runtime->get('service'))->toBeInstanceOf(CompiledResolverDependency::class)
-        ->and(fn() => $rejected->usePrevalidated($path, str_repeat('0', 64)))
+        ->and(fn() => $rejected->usePrevalidated($path, str_repeat('0', 32)))
         ->toThrow(ContainerException::class)
         ->and($rejected->getRepository()->getCompiledResolver('service'))->toBeNull()
         ->and(fn() => $rejected->usePrevalidated($path, 'invalid'))
@@ -508,7 +508,7 @@ it('loads a deployment-prevalidated artifact and rejects a mismatched manifest f
 
 it('rejects malformed service IDs in a prevalidated artifact', function () {
     $path = compiledResolverPath();
-    $fingerprint = str_repeat('a', 64);
+    $fingerprint = str_repeat('a', 32);
     $php = PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;
     file_put_contents($path, <<<PHP
         <?php
