@@ -164,7 +164,7 @@ it('releases the mutation lock when an operation throws', function () {
     expect(fn() => $mutate->invoke(null, static fn() => throw new RuntimeException('failed')))
         ->toThrow(RuntimeException::class, 'failed');
 
-    $path = sys_get_temp_dir() . '/intermix-locks/macro-' . hash('sha256', MacroTestClass::class) . '.lock';
+    $path = sys_get_temp_dir() . '/intermix-locks/macro-' . hash('xxh128', MacroTestClass::class) . '.lock';
     $handle = fopen($path, 'c');
     if ($handle === false) {
         throw new RuntimeException('Unable to open test lock.');
@@ -177,7 +177,7 @@ it('releases the mutation lock when an operation throws', function () {
 
 it('keeps reads and macro execution lock-free', function () {
     MacroTestClass::macro('lockFreeRead', static fn(): string => 'read');
-    $path = sys_get_temp_dir() . '/intermix-locks/macro-' . hash('sha256', MacroTestClass::class) . '.lock';
+    $path = sys_get_temp_dir() . '/intermix-locks/macro-' . hash('xxh128', MacroTestClass::class) . '.lock';
     $handle = fopen($path, 'c');
     if ($handle === false) {
         throw new RuntimeException('Unable to open test lock.');
