@@ -670,10 +670,10 @@ class Repository
     public function makeDefinitionCacheKey(string $definition): string
     {
         $this->definitionCachePrefix ??= 'imx.'
-            . substr(hash('sha256', $this->alias), 0, 16)
+            . substr(hash('xxh128', $this->alias), 0, 16)
             . '.' . substr(
                 hash(
-                    'sha256',
+                    'xxh128',
                     ($this->definitionCacheGeneration ?? 'default') . "\0" . $this->definitionCacheRevision,
                 ),
                 0,
@@ -682,7 +682,7 @@ class Repository
             . '.';
 
         return $this->definitionCachePrefix
-            . substr(hash('sha256', $definition . "\0" . ($this->environment ?? 'default')), 0, 16);
+            . substr(hash('xxh128', $definition . "\0" . ($this->environment ?? 'default')), 0, 16);
     }
 
     /** @internal */
