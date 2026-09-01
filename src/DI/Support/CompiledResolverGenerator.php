@@ -103,14 +103,14 @@ final class CompiledResolverGenerator
      * runtime, fingerprint, and callable payload before activation.
      *
      * @param string $filePath Trusted compiled artifact path.
-     * @param string $expectedFingerprint Deployment-validated SHA-256 fingerprint.
+     * @param string $expectedFingerprint Deployment-validated xxh128 fingerprint.
      * @return array{resolver: Closure(Container, string): mixed, ids: array<string, string>}
      * @throws ContainerException
      */
     public function loadPrevalidated(string $filePath, string $expectedFingerprint): array
     {
-        if (preg_match('/^[a-f0-9]{64}$/D', $expectedFingerprint) !== 1) {
-            throw new ContainerException('Prevalidated resolver fingerprint must be a SHA-256 hexadecimal digest.');
+        if (preg_match('/^[a-f0-9]{32}$/D', $expectedFingerprint) !== 1) {
+            throw new ContainerException('Prevalidated resolver fingerprint must be a lowercase xxh128 hexadecimal digest.');
         }
         if (!is_file($filePath) || !is_readable($filePath)) {
             throw new ContainerException("Compiled resolver artifact is not readable: '$filePath'.");
@@ -146,7 +146,7 @@ final class CompiledResolverGenerator
      */
     private static function stableHash(array $value): string
     {
-        return hash('sha256', serialize($value));
+        return hash('xxh128', serialize($value));
     }
 
     /**
