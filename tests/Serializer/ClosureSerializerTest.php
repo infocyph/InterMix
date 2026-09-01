@@ -30,7 +30,7 @@ it('recognizes only the unsigned InterMix envelope', function () {
     expect($payload)->toStartWith('imxc1.')
         ->and(ClosureSerializer::isEnvelope($payload))->toBeTrue()
         ->and(ClosureSerializer::isEnvelope('not-a-payload'))->toBeFalse()
-        ->and(ClosureSerializer::isEnvelope('imxcs1.signature.payload'))->toBeFalse();
+        ->and(ClosureSerializer::isEnvelope('imxcs2.signature.payload'))->toBeFalse();
 });
 
 it('rejects missing malformed and non-Closure payloads', function (string $payload) {
@@ -48,7 +48,7 @@ it('round-trips a signed Closure', function () {
     $payload = $serializer->serialize(static fn(int $value): int => $value * 2);
     $closure = $serializer->unserialize($payload);
 
-    expect($payload)->toStartWith('imxcs1.')
+    expect($payload)->toStartWith('imxcs2.')
         ->and($closure(6))->toBe(12);
 });
 
