@@ -43,7 +43,7 @@ Container Entry Points
    * - Compile construction recipes
      - ``$c->compileTo($path)`` / ``$c->useCompiled($path)`` / ``$c->compilationReport()``
    * - Finalize a v10 production runtime
-     - ``$builder->compile($path)`` / ``$builder->production($path)`` / ``$builder->productionPrevalidated($path, $sha256)``
+     - ``$builder->compile($path)`` / ``$builder->production($path)`` / ``$builder->productionPrevalidated($path, $digest)``
 
 -----------------------------
 Managers At A Glance
