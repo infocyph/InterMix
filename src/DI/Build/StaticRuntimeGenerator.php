@@ -94,6 +94,15 @@ final class StaticRuntimeGenerator
         return $this->attachFallback($this->loadRuntime($filePath), $fallback);
     }
 
+    private function assertDigest(string $digest): void
+    {
+        if (preg_match('/^[a-f0-9]{32}$/D', $digest) !== 1) {
+            throw new ContainerException(
+                'Prevalidated static runtime digest must be a lowercase xxh128 hexadecimal value.',
+            );
+        }
+    }
+
     /** @param array{abi: int, digest: string, environment: ?string} $manifest */
     private function assertEnvironmentMatches(array $manifest, ?Container $fallback): void
     {
@@ -115,15 +124,6 @@ final class StaticRuntimeGenerator
         if ($manifest['abi'] !== self::ARTIFACT_ABI) {
             throw new ContainerException(
                 "Unsupported static runtime ABI '{$manifest['abi']}'.",
-            );
-        }
-    }
-
-    private function assertDigest(string $digest): void
-    {
-        if (preg_match('/^[a-f0-9]{32}$/D', $digest) !== 1) {
-            throw new ContainerException(
-                'Prevalidated static runtime digest must be a lowercase xxh128 hexadecimal value.',
             );
         }
     }
