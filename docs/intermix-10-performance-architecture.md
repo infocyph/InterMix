@@ -58,7 +58,7 @@ This checker is authoritative for the InterMix 10 standalone implementation.
 - [x] 23. Keep Closure definitions and `DirectFactory` as explicit dynamic islands with compiled-ID bridges preserving singleton/scoped identity across compiled↔dynamic edges.
 - [x] 24. Implement explicit production deoptimization for configuration mutation with original definitions restored and compiled singleton/scoped identity transferred; repeated loads replace fallback bridges safely and post-finalization mutation through the builder, a retained manager, or the development container requires recompilation.
 - [x] 25. Separate compiler/diagnostic metadata into a sidecar; the hot artifact contains generated runtime execution code only.
-- [x] 26. Perform atomic generation and build/deployment validation with ABI/SHA-256 and compiled-environment metadata; prevalidated production loading avoids request-time `hash_file()` work.
+- [x] 26. Perform atomic generation and build/deployment validation with ABI/xxh128 digest and compiled-environment metadata; prevalidated production loading avoids request-time `hash_file()` work.
 - [x] 27. Finalize the constant-folding/transient-inlining decision: no additional speculative inlining pass is added without stable representative evidence of a sustained end-to-end win.
 - [x] 28. Benchmark generated boundary representations. The immutable ID→slot candidate showed only a noisy nominal advantage, so the simpler generated string `match` boundary is retained until stable-environment measurements justify changing it.
 - [x] 29. Keep Repository/managers/reflection resolver machinery entirely out of fully static generated artifacts; instantiate the optimized dynamic engine lazily only when a declared compatibility island is exercised.
@@ -180,7 +180,7 @@ Production loading:
 ```php
 $container = $builder->productionPrevalidated(
     '/cache/intermix.prod.php',
-    $report['sha256'],
+    $report['digest'],
 );
 ```
 
@@ -435,7 +435,7 @@ Arbitrary parameterized runtime callables preserve development error and resolut
 
 Production compilation is explicit and atomic.
 
-The compiler emits the runtime artifact plus metadata/manifest information containing ABI and digest data.
+The compiler emits the runtime artifact plus metadata/manifest information containing ABI and xxh128 digest data.
 
 Build/deployment validates:
 
@@ -454,7 +454,7 @@ Production never performs expensive compilation because an artifact is absent on
 
 ## 26. Prevalidated loading
 
-Normal verified loading can validate an artifact digest.
+Normal verified loading validates the artifact with its xxh128 digest.
 
 Deployment systems that already validated the artifact may use prevalidated loading with the expected digest, eliminating request-time `hash_file()` work.
 
@@ -472,7 +472,7 @@ The sidecar may contain:
 - environment metadata
 - compiler report
 - source/debug information
-- artifact ABI and digest
+- artifact ABI and xxh128 digest
 
 Tooling/debugging can load it on demand without burdening normal request bootstrap.
 
