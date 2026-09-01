@@ -94,7 +94,7 @@ it('does not deoptimize methods for unregistered parameter attributes', function
 
     try {
         $report = $builder->compile($path);
-        $consumer = $builder->productionPrevalidated($path, $report['sha256'])->get('consumer');
+        $consumer = $builder->productionPrevalidated($path, $report['digest'])->get('consumer');
 
         expect($report['compiled'])->toContain('consumer', StaticAttributeDependency::class)
             ->and($consumer->dependency)->toBeInstanceOf(StaticAttributeDependency::class);
@@ -116,7 +116,7 @@ it('keeps registered custom method attribute resolvers as targeted runtime islan
     try {
         $report = $builder->compile($path);
         $source = file_get_contents($path);
-        $consumer = $builder->productionPrevalidated($path, $report['sha256'])->get('consumer');
+        $consumer = $builder->productionPrevalidated($path, $report['digest'])->get('consumer');
 
         expect($report['compiled'])->toContain('consumer')
             ->and($source)->toContain('invokeCompiledRuntimeMethod')
@@ -140,7 +140,7 @@ it('preserves development semantics by ignoring method attributes on constructor
         expect($builder->development()->get('consumer')->value)->toBe('fallback');
 
         $report = $builder->compile($path);
-        $consumer = $builder->productionPrevalidated($path, $report['sha256'])->get('consumer');
+        $consumer = $builder->productionPrevalidated($path, $report['digest'])->get('consumer');
 
         expect($report['compiled'])->toContain('consumer')
             ->and($consumer->value)->toBe('fallback');
@@ -162,7 +162,7 @@ it('keeps registered custom property attribute resolvers as targeted runtime isl
     try {
         $report = $builder->compile($path);
         $source = file_get_contents($path);
-        $consumer = $builder->productionPrevalidated($path, $report['sha256'])->get('consumer');
+        $consumer = $builder->productionPrevalidated($path, $report['digest'])->get('consumer');
 
         expect($report['compiled'])->toContain('consumer')
             ->and($source)->toContain('applyCompiledRuntimePropertyAttribute')
