@@ -57,7 +57,7 @@ it('compiles zero-required-argument generic classes without autowiring machinery
 
     try {
         $report = $builder->compile($path);
-        $runtime = $builder->productionPrevalidated($path, $report['sha256']);
+        $runtime = $builder->productionPrevalidated($path, $report['digest']);
         $first = $runtime->get('empty');
         $second = $runtime->get('empty');
         $optional = $runtime->get('optional');
@@ -81,7 +81,7 @@ it('keeps registered generic constructor behavior in the dynamic island', functi
 
     try {
         $report = $builder->compile($path);
-        $runtime = $builder->productionPrevalidated($path, $report['sha256']);
+        $runtime = $builder->productionPrevalidated($path, $report['digest']);
         $configured = $runtime->get('configured');
 
         expect($report['compiled'])->not->toContain('configured')
@@ -102,7 +102,7 @@ it('keeps DI-style class recipes dynamic when injection is disabled', function (
 
     try {
         $report = $builder->compile($path);
-        $runtime = $builder->productionPrevalidated($path, $report['sha256']);
+        $runtime = $builder->productionPrevalidated($path, $report['digest']);
 
         expect($report['compiled'])->toContain('answer')
             ->and($report['compiled'])->not->toContain('consumer')
