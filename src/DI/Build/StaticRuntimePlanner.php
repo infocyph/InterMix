@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Build;
 
+use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Support\AliasDefinition;
 use Infocyph\InterMix\DI\Support\FactoryDefinition;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\Internal\ReflectionResource;
+use Psr\Container\ContainerInterface;
 use ReflectionClass;
 
 /**
@@ -409,6 +411,16 @@ final class StaticRuntimePlanner
     /** @return ValuePlan|null */
     private function valuePlan(DefinitionGraph $graph, string $id, mixed $definition): ?array
     {
+        if ($id === ContainerInterface::class && $definition instanceof Container) {
+            return [
+                'kind' => 'value',
+                'code' => '$this',
+                'lifetime' => LifetimeEnum::Singleton,
+                'arguments' => [],
+                'properties' => [],
+                'dependencies' => [],
+            ];
+        }
         if (!$this->isExportable($definition) || (is_array($definition) && $this->isCallableArrayDefinition($definition))) {
             return null;
         }
