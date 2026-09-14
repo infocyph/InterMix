@@ -13,6 +13,8 @@ use stdClass;
 /** @internal */
 final class ConcurrentRepository extends Repository
 {
+    use ConcurrentScopeConstruction;
+
     private const string ROOT_CONTEXT = "\0intermix.root";
 
     private string $currentScope = 'root';
@@ -56,21 +58,6 @@ final class ConcurrentRepository extends Repository
         if ($physicalContext === self::ROOT_CONTEXT) {
             $this->rootContextActive = true;
         }
-    }
-
-    public function beginScopedConstruction(string $scope, string $id): bool
-    {
-        if ($this->scopeContextOwner === null) {
-            return false;
-        }
-
-        $store = $this->executionScopes;
-        $context = $this->activeExecutionContext();
-        if (!$store instanceof ExecutionScopeStore || $context === null) {
-            return false;
-        }
-
-        return $store->beginScopedConstruction($context, $scope, $id);
     }
 
     public function captureScopeContext(): ScopeContext
@@ -120,15 +107,6 @@ final class ConcurrentRepository extends Repository
         }
 
         $this->detachScopeContext($scopeContext);
-    }
-
-    public function endScopedConstruction(string $scope, string $id): void
-    {
-        $store = $this->executionScopes;
-        $context = $this->activeExecutionContext();
-        if ($store instanceof ExecutionScopeStore && $context !== null) {
-            $store->endScopedConstruction($context, $scope, $id);
-        }
     }
 
     /** @param array<string, mixed> $instances */
