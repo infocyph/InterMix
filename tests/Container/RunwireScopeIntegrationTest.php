@@ -10,6 +10,9 @@ use Infocyph\Runwire\Coroutine\CoroutineRuntime;
 use Infocyph\Runwire\Coroutine\CoroutineScope;
 use Infocyph\Runwire\Coroutine\Task;
 use Infocyph\Runwire\Coroutine\TaskLocal;
+use Infocyph\Runwire\Exception\CancelledException;
+use Infocyph\Runwire\RequestDeadline;
+use Infocyph\Runwire\Runtime\Enum\CancellationReason;
 
 final class RunwireIntegrationScopedLeaf {}
 
@@ -121,4 +124,159 @@ it('keeps compiled Runwire child frames carrier-local while restoring the shared
     } finally {
         removeRunwireIntegrationArtifact($path);
     }
+});
+
+it('releases attached child scopes when Runwire fail-fast cancels a sibling', function (): void {
+    $container = new Container(uniqid('runwire_fail_fast_'));
+    $container->scoped('leaf', RunwireIntegrationScopedLeaf::class);
+    $nestedLeaves = 0;
+    $container->onScopeLeave('nested', static function () use (&$nestedLeaves): void {
+        ++$nestedLeaves;
+    });
+    $container->enterScope('request');
+    $parent = $container->get('leaf');
+    $context = $container->captureScopeContext();
+    $scopeLocal = new TaskLocal();
+    $runtime = new CoroutineRuntime();
+    $caught = null;
+
+    try {
+        $runtime->run(static function (CoroutineScope $scope) use ($container, $context, $scopeLocal): void {
+            $scope->setLocal($scopeLocal, $context);
+            $scope->spawn(static function () use ($container, $scope, $scopeLocal): void {
+                $captured = $scope->local($scopeLocal);
+                if (!$captured instanceof ScopeContext) {
+                    throw new RuntimeException('Runwire task-local scope context was not inherited.');
+                }
+
+                $container->withinScopeContext(
+                    $captured,
+                    static function (Container $active) use ($scope): void {
+                        $active->enterScope('nested');
+                        $active->get('leaf');
+                        $scope->sleep(30.0);
+                    },
+                );
+            });
+            $scope->spawn(static function () use ($scope): void {
+                $scope->yieldNow();
+                throw new RuntimeException('runwire-fail-fast');
+            });
+        });
+    } catch (RuntimeException $error) {
+        $caught = $error;
+    }
+
+    expect($caught)->toBeInstanceOf(RuntimeException::class)
+        ->and($caught?->getMessage())->toBe('runwire-fail-fast')
+        ->and($runtime->activeTaskCount())->toBe(0)
+        ->and($nestedLeaves)->toBe(1)
+        ->and($container->get('leaf'))->toBe($parent);
+
+    $container->leaveScope();
+});
+
+it('releases an attached nested scope after explicit Runwire task cancellation', function (): void {
+    $container = new Container(uniqid('runwire_explicit_cancel_'));
+    $container->scoped('leaf', RunwireIntegrationScopedLeaf::class);
+    $nestedLeaves = 0;
+    $container->onScopeLeave('nested', static function () use (&$nestedLeaves): void {
+        ++$nestedLeaves;
+    });
+    $container->enterScope('request');
+    $parent = $container->get('leaf');
+    $context = $container->captureScopeContext();
+    $scopeLocal = new TaskLocal();
+    $runtime = new CoroutineRuntime();
+
+    $reason = $runtime->run(static function (CoroutineScope $scope) use ($container, $context, $scopeLocal): CancellationReason {
+        $scope->setLocal($scopeLocal, $context);
+        $task = $scope->spawn(static function () use ($container, $scope, $scopeLocal): void {
+            $captured = $scope->local($scopeLocal);
+            if (!$captured instanceof ScopeContext) {
+                throw new RuntimeException('Runwire task-local scope context was not inherited.');
+            }
+
+            $container->withinScopeContext(
+                $captured,
+                static function (Container $active) use ($scope): void {
+                    $active->enterScope('nested');
+                    $active->get('leaf');
+                    $scope->sleep(30.0);
+                },
+            );
+        });
+        $scope->yieldNow();
+        $task->cancel();
+
+        try {
+            $task->await();
+        } catch (CancelledException $error) {
+            return $error->reason;
+        }
+
+        throw new RuntimeException('Expected the Runwire child task to be cancelled.');
+    });
+
+    expect($reason)->toBe(CancellationReason::HOST_CANCELLED)
+        ->and($runtime->activeTaskCount())->toBe(0)
+        ->and($nestedLeaves)->toBe(1)
+        ->and($container->get('leaf'))->toBe($parent);
+
+    $container->leaveScope();
+});
+
+it('releases attached scopes when a Runwire deadline expires', function (): void {
+    $container = new Container(uniqid('runwire_deadline_'));
+    $container->scoped('leaf', RunwireIntegrationScopedLeaf::class);
+    $nestedLeaves = 0;
+    $container->onScopeLeave('nested', static function () use (&$nestedLeaves): void {
+        ++$nestedLeaves;
+    });
+    $container->enterScope('request');
+    $parent = $container->get('leaf');
+    $context = $container->captureScopeContext();
+    $scopeLocal = new TaskLocal();
+    $runtime = new CoroutineRuntime();
+    $caught = null;
+
+    try {
+        $runtime->run(static function (CoroutineScope $scope) use ($container, $context, $scopeLocal): void {
+            $scope->setLocal($scopeLocal, $context);
+            $clock = hrtime(true);
+            $now = is_int($clock) ? $clock : (int) $clock;
+
+            $scope->withDeadline(
+                new RequestDeadline($now + 50_000_000),
+                static function (CoroutineScope $inner) use ($container, $scopeLocal): void {
+                    $inner->spawn(static function () use ($container, $inner, $scopeLocal): void {
+                        $captured = $inner->local($scopeLocal);
+                        if (!$captured instanceof ScopeContext) {
+                            throw new RuntimeException('Runwire task-local scope context was not inherited.');
+                        }
+
+                        $container->withinScopeContext(
+                            $captured,
+                            static function (Container $active) use ($inner): void {
+                                $active->enterScope('nested');
+                                $active->get('leaf');
+                                $inner->sleep(30.0);
+                            },
+                        );
+                    });
+                    $inner->sleep(30.0);
+                },
+            );
+        });
+    } catch (CancelledException $error) {
+        $caught = $error;
+    }
+
+    expect($caught)->toBeInstanceOf(CancelledException::class)
+        ->and($caught?->reason)->toBe(CancellationReason::DEADLINE_EXCEEDED)
+        ->and($runtime->activeTaskCount())->toBe(0)
+        ->and($nestedLeaves)->toBe(1)
+        ->and($container->get('leaf'))->toBe($parent);
+
+    $container->leaveScope();
 });
