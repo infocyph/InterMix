@@ -63,7 +63,7 @@ trait ContainerProxy
     }
 
     /**
-     * @inheritDoc
+     * ArrayAccess offsetExists implementation.
      */
     public function offsetExists(mixed $offset): bool
     {
@@ -106,6 +106,18 @@ trait ContainerProxy
     public function offsetUnset(mixed $offset): void
     {
         $this->unbind(ServiceId::from($offset));
+    }
+
+    /**
+     * Reset only the current execution carrier's DI scope state.
+     *
+     * This is safe for framework/runtime finally blocks: owned nested scopes are
+     * unwound with normal leave hooks, while an attached shared scope is merely
+     * detached after its carrier-local child frames are closed.
+     */
+    public function resetCurrentExecutionScope(): void
+    {
+        $this->scopeContextRepository()->resetCurrentExecutionScope();
     }
 
     public function withinScopeContext(ScopeContext $scopeContext, callable $callback): mixed
