@@ -11,9 +11,6 @@ final class LogicalScopeState
 
     public bool $closed = false;
 
-    /** @var array<string, mixed> */
-    public array $resolvedScoped;
-
     /**
      * @param array<string, mixed> $seeds
      * @param array<string, mixed> $resolvedScoped
@@ -22,10 +19,8 @@ final class LogicalScopeState
         public readonly string $name,
         public readonly ?self $parent = null,
         public readonly array $seeds = [],
-        array $resolvedScoped = [],
-    ) {
-        $this->resolvedScoped = $resolvedScoped;
-    }
+        public array $resolvedScoped = [],
+    ) {}
 
     public function contains(string $scope): bool
     {
