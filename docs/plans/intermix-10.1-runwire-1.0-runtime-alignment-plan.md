@@ -1029,27 +1029,29 @@ Execute in this order.
 - [x] **18. Run dynamic/compiled/deoptimized semantic parity suite.** **Completed:** one common parity scenario verifies shared parent identity/seeds, carrier-local nested identities, exception cleanup, idempotent reset and stale-context rejection across dynamic, compiled/runtime-island and explicitly deoptimized modes.
 - [x] **19. Benchmark sequential, Fiber-isolated and attached-scope paths.** **Completed:** `StructuredScopeBench` measures sequential dynamic/compiled reads, Fiber-isolated round trips, capture, attached resolved reads and attached nested-scope round trips; the benchmark guide freezes the sequential regression policy. **Validation:** PHP 8.4/8.5 benchmark jobs are green in Security & Standards #518.
 - [x] **20. Update docs and migration/release notes.** **Completed:** `docs/di/scopes.rst`, `docs/benchmark.rst`, the process-state audit and `docs/intermix-10.1-runtime-alignment.rst` document final semantics, persistent-process ownership, integration boundaries, migration guidance and performance policy. **Validation:** Security & Standards #518 and Swoole/OpenSwoole Scope Compatibility #11 are fully green at head `1d43ca0ce58369985fb48368107a81a1d889356e`.
-- [ ] **21. Perform downstream readiness review for Webrick/Foundation.** Freeze the small InterMix integration surface they should consume.
+- [x] **21. Perform downstream readiness review for Webrick/Foundation.** **Completed:** reviewed Foundation `foundation-3/close-26.6` and Webrick `webrick-5/runwire-runtime-adapter`. The frozen InterMix integration surface is `withinScope()` for ordinary boundaries plus `ScopeContext`, `captureScopeContext()`, `withinScopeContext()` and `resetCurrentExecutionScope()` for structured/persistent execution. Webrick keeps the semantic `webrick.request` boundary and does not own InterMix attachment mechanics; Foundation owns request/job/command scope composition and may transport the opaque context through Runwire task-local state. InterMix and Runwire remain mutually independent. **Validation:** centralized Security & Standards #528 and Swoole/OpenSwoole Scope Compatibility #21 are green at code head `bafe720712187fec56e56017e03c5cbb827761f5` with no root PHPProbe/PHPStan overrides and published `infocyph/runwire:^1.0` resolving normally from Composer.
 
 ---
 
 # 26. Detailed acceptance matrix
 
-| Environment / execution model | InterMix requirement | Expected behavior |
-| --- | --- | --- |
-| Plain sequential PHP | mandatory baseline | ordinary scopes, no concurrency machinery required |
-| Apache / CGI / FastCGI | mandatory baseline | request-owned process lifecycle, normal scopes |
-| PHP-FPM | mandatory baseline | request-owned lifecycle, normal scopes |
-| LiteSpeed/shared hosting | mandatory baseline | normal scopes, no PCNTL/POSIX/worker assumption |
-| PHP Fiber independent tasks | mandatory | isolated scopes by default |
-| PHP Fiber structured children | mandatory new 10.1 coverage | explicit captured-scope attachment |
-| Runwire 1.0 coroutine tasks | integration coverage | task-local propagation composed externally |
-| Runwire portable native | downstream compatibility | no InterMix PCNTL/POSIX dependency |
-| Runwire prefork | downstream compatibility | process-local container per worker + execution scopes |
-| FrankenPHP persistent worker | downstream compatibility | deterministic request scope cleanup |
-| RoadRunner persistent worker | downstream compatibility | deterministic request scope cleanup |
-| Swoole/OpenSwoole | optional integration coverage | coroutine isolation + explicit logical propagation |
-| Compiled ProductionContainer | mandatory | same semantics with generated fast path |
+Status reflects the **InterMix-side acceptance contract**. For rows labelled downstream compatibility, `[x]` means the runtime-neutral InterMix behavior is proven and imposes no incompatible host requirement; it does not claim a dedicated server-bootstrap test where the plan did not require one.
+
+| Status | Environment / execution model | InterMix requirement | Expected behavior / evidence |
+| --- | --- | --- | --- |
+| [x] | Plain sequential PHP | mandatory baseline | ordinary scopes remain the zero-concurrency baseline; no structured-runtime machinery is required |
+| [x] | Apache / CGI / FastCGI | mandatory baseline | production dependencies remain PHP + PSR contracts only; request-owned normal scopes need no worker/runtime extension |
+| [x] | PHP-FPM | mandatory baseline | request-owned lifecycle uses ordinary scopes with no persistent-worker requirement |
+| [x] | LiteSpeed/shared hosting | mandatory baseline | no PCNTL/POSIX/Runwire/Swoole requirement is introduced |
+| [x] | PHP Fiber independent tasks | mandatory | independent Fibers remain isolated by default in dynamic and compiled regression coverage |
+| [x] | PHP Fiber structured children | mandatory new 10.1 coverage | opaque `ScopeContext` capture/attach explicitly shares one logical scope while nested positions stay carrier-local |
+| [x] | Runwire 1.0 coroutine tasks | integration coverage | released `infocyph/runwire:^1.0` integration tests exercise task-local structured propagation externally |
+| [x] | Runwire portable native | downstream compatibility | InterMix has no PCNTL/POSIX production requirement and Runwire remains development/integration only |
+| [x] | Runwire prefork | downstream compatibility | InterMix scope/context state is process-local and container-owned; no cross-process scope propagation is assumed |
+| [x] | FrankenPHP persistent worker | downstream compatibility | repeated same-container request/task churn proves deterministic scope cleanup; host-specific boot composition remains downstream |
+| [x] | RoadRunner persistent worker | downstream compatibility | repeated same-container request/task churn proves deterministic scope cleanup; host-specific boot composition remains downstream |
+| [x] | Swoole/OpenSwoole | optional integration coverage | dedicated PHP 8.4/8.5 matrix proves coroutine isolation, Fiber precedence and explicit logical propagation |
+| [x] | Compiled ProductionContainer | mandatory | structured-scope parity is proven across generated production, runtime islands/fallback and deoptimized execution |
 
 ---
 
@@ -1057,61 +1059,63 @@ Execute in this order.
 
 InterMix 10.1 is ready only when all of the following are true.
 
+**Current audit: 34/38 gates complete.** Four evidence gates remain deliberately open rather than inferred: numeric memory/context-count stabilization, container-alias cardinality stability under repeated framework-style execution, and same-runner InterMix 10.0 → 10.1 performance comparisons for the ordinary sequential and isolated-Fiber paths.
+
 ## Correctness
 
-- [ ] Existing InterMix 10.0 scope behavior remains backward compatible.
-- [ ] Independent Fibers/coroutines remain isolated by default.
-- [ ] Explicit logical scope propagation works across child Fibers.
-- [ ] Parent/child/sibling scoped identity matches the documented contract.
-- [ ] Nested child scopes are carrier-local and restore correctly.
-- [ ] Scope seeds, including `null`, propagate correctly through explicit attachment.
-- [ ] Scope-leave hooks run exactly once for the owning scope.
-- [ ] Foreign/stale scope contexts are rejected.
-- [ ] Owner-close-with-live-attachments is rejected deterministically.
-- [ ] Concurrent cold scoped resolution cannot duplicate one logical scoped instance.
-- [ ] Cancellation/exception/deadline paths leave no stale scope state.
-- [ ] Sequential persistent requests/jobs receive fresh scoped state.
+- [x] Existing InterMix 10.0 scope behavior remains backward compatible.
+- [x] Independent Fibers/coroutines remain isolated by default.
+- [x] Explicit logical scope propagation works across child Fibers.
+- [x] Parent/child/sibling scoped identity matches the documented contract.
+- [x] Nested child scopes are carrier-local and restore correctly.
+- [x] Scope seeds, including `null`, propagate correctly through explicit attachment.
+- [x] Scope-leave hooks run exactly once for the owning scope.
+- [x] Foreign/stale scope contexts are rejected.
+- [x] Owner-close-with-live-attachments is rejected deterministically.
+- [x] Concurrent cold scoped resolution cannot duplicate one logical scoped instance.
+- [x] Cancellation/exception/deadline paths leave no stale scope state.
+- [x] Sequential persistent requests/jobs receive fresh scoped state.
 
 ## Runtime independence
 
-- [ ] `infocyph/runwire` is absent from production `require`.
-- [ ] No Runwire type appears in InterMix production public APIs.
-- [ ] No PCNTL/POSIX requirement is introduced.
-- [ ] Plain PHP/shared-hosting behavior remains first-class.
-- [ ] `composer install --no-dev --classmap-authoritative` works without Runwire.
+- [x] `infocyph/runwire` is absent from production `require`.
+- [x] No Runwire type appears in InterMix production public APIs.
+- [x] No PCNTL/POSIX requirement is introduced.
+- [x] Plain PHP/shared-hosting behavior remains first-class.
+- [x] `composer install --no-dev --classmap-authoritative` works without Runwire.
 
 ## Production/runtime parity
 
-- [ ] Dynamic `Container` passes all new semantics.
-- [ ] Fully compiled `ProductionContainer` passes all new semantics.
-- [ ] Runtime islands/fallback pass all new semantics.
-- [ ] Explicit deoptimization retains required identity/parity.
-- [ ] Generated artifacts do not import Runwire/framework/runtime dependencies.
+- [x] Dynamic `Container` passes all new semantics.
+- [x] Fully compiled `ProductionContainer` passes all new semantics.
+- [x] Runtime islands/fallback pass all new semantics.
+- [x] Explicit deoptimization retains required identity/parity.
+- [x] Generated artifacts do not import Runwire/framework/runtime dependencies.
 
 ## Persistent safety
 
-- [ ] No request/job objects survive in static process state.
-- [ ] static caches are bounded/weak/configuration-only/explicitly resettable.
-- [ ] repeated request/task churn stabilizes memory and context counts.
-- [ ] container alias count remains stable under normal framework usage.
-- [ ] unsafe graph mutation is rejected while active concurrent scopes exist.
+- [x] No request/job objects survive in static process state.
+- [x] static caches are bounded/weak/configuration-only/explicitly resettable.
+- [ ] repeated request/task churn stabilizes memory and context counts. **Pending evidence:** churn correctness is covered, but the suite does not yet record/compare stabilized process memory and internal carrier/logical-context counts.
+- [ ] container alias count remains stable under normal framework usage. **Pending evidence:** stable-alias ownership is documented and alias ownership semantics are tested, but repeated framework-style alias cardinality is not yet asserted directly.
+- [x] unsafe graph mutation is rejected while active concurrent scopes exist.
 
 ## Performance
 
-- [ ] ordinary sequential production request path remains within acceptable measurement noise / stated regression budget.
-- [ ] existing Fiber-isolated scope performance is not materially regressed.
-- [ ] explicit captured-scope attach/detach overhead is measured and bounded.
-- [ ] compiled generated service dispatch remains the normal production fast path.
-- [ ] no Runwire/Swoole/runtime detection is added to every ordinary `get()` call.
+- [ ] ordinary sequential production request path remains within acceptable measurement noise / stated regression budget. **Pending evidence:** benchmark jobs are green, but `docs/benchmark.rst` correctly requires a same-machine InterMix 10.0 baseline comparison before claiming the <=3% release guardrail.
+- [ ] existing Fiber-isolated scope performance is not materially regressed. **Pending evidence:** the path is benchmarked, but no same-runner 10.0 → 10.1 comparison has been recorded yet.
+- [x] explicit captured-scope attach/detach overhead is measured and bounded through `StructuredScopeBench` as a separate opt-in path.
+- [x] compiled generated service dispatch remains the normal production fast path.
+- [x] no Runwire/Swoole/runtime detection is added to every ordinary `get()` call.
 
 ## Quality/docs
 
-- [ ] PHPForge quality/static-analysis gates pass for the supported PHP matrix.
-- [ ] existing InterMix benchmarks remain green.
-- [ ] new structured-scope benchmarks are documented.
-- [ ] `docs/di/scopes.rst` reflects the final semantics.
-- [ ] persistent-process state ownership is documented.
-- [ ] downstream Foundation/Webrick integration contract is frozen and small.
+- [x] PHPForge quality/static-analysis gates pass for the supported PHP matrix. **Validation:** centralized Security & Standards #528 is green on the override-free code head.
+- [x] existing InterMix benchmarks remain green.
+- [x] new structured-scope benchmarks are documented.
+- [x] `docs/di/scopes.rst` reflects the final semantics.
+- [x] persistent-process state ownership is documented.
+- [x] downstream Foundation/Webrick integration contract is frozen and small.
 
 ---
 
