@@ -6,13 +6,7 @@ parameters:
     level: max
     paths:
         - src
-    scanFiles:
-        - tests/Fence/FenceTraitTest.php
-        - tests/Fence/LimitTest.php
-        - tests/Fence/MultiTest.php
-        - tests/Fence/SingleTest.php
-        - tests/Remix/ConditionableTappableTest.php
-        - tests/Remix/MacroMixTest.php
+        - tests/StaticAnalysis/PublicTraitConsumers.php
     cognitive_complexity:
         class: 80
         function: 12
