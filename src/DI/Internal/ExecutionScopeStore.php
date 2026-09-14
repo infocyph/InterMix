@@ -29,6 +29,15 @@ final class ExecutionScopeStore
         }
     }
 
+    public function assertMutationSafe(?string $currentContext): void
+    {
+        if ($this->hasConcurrentActivity($currentContext)) {
+            throw new ContainerException(
+                'Cannot mutate container configuration while concurrent scope execution is active.',
+            );
+        }
+    }
+
     public function attachScopeContext(string $context, ScopeContext $scopeContext, object $owner): void
     {
         $scope = $this->unwrapScopeContext($scopeContext, $owner);
