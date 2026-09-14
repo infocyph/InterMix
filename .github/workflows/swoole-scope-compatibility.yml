@@ -41,12 +41,13 @@ jobs:
           $namespace = $extension === "openswoole" ? "OpenSwoole" : "Swoole";
           $class = $namespace . "\\Coroutine";
           $run = $namespace . "\\Coroutine\\run";
+          $hasRunner = function_exists($run) || is_callable([$class, "run"]);
           if (!is_string($extension)
               || !extension_loaded($extension)
               || !class_exists($class)
               || !is_callable([$class, "create"])
               || !is_callable([$class, "sleep"])
-              || !function_exists($run)
+              || !$hasRunner
           ) {
               fwrite(STDERR, "Required Swoole/OpenSwoole coroutine API is unavailable.\n");
               exit(1);
