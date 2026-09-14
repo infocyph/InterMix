@@ -20,6 +20,8 @@ use WeakReference;
  */
 final class ExecutionContext
 {
+    private const int FIBER_TOKEN_CACHE_LIMIT = 256;
+
     private static ?Closure $coroutineContextResolver = null;
 
     private static ?Closure $coroutineIdResolver = null;
@@ -28,10 +30,15 @@ final class ExecutionContext
 
     private static bool $coroutineResolverInitialized = false;
 
+    /** @var array<int, array{0: WeakReference<Fiber>, 1: string}> */
+    private static array $fiberCarrierIds = [];
+
     private static ?string $lastObjectCarrierId = null;
 
     /** @var WeakReference<object>|null */
     private static ?WeakReference $lastObjectCarrierReference = null;
+
+    private static int $nextFiberCarrierId = 0;
 
     private static int $nextObjectCarrierId = 0;
 
@@ -42,7 +49,7 @@ final class ExecutionContext
     {
         $fiber = Fiber::getCurrent();
         if ($fiber instanceof Fiber) {
-            return self::objectCarrierId($fiber, 'fiber:');
+            return self::fiberCarrierId($fiber);
         }
 
         if (!self::$coroutineResolverInitialized) {
@@ -74,6 +81,35 @@ final class ExecutionContext
         }
 
         return $prefix . $id;
+    }
+
+    private static function fiberCarrierId(Fiber $fiber): string
+    {
+        $lastCarrier = self::$lastObjectCarrierReference?->get();
+        if ($lastCarrier === $fiber && self::$lastObjectCarrierId !== null) {
+            return self::$lastObjectCarrierId;
+        }
+
+        $objectId = spl_object_id($fiber);
+        $known = self::$fiberCarrierIds[$objectId] ?? null;
+        if ($known !== null && $known[0]->get() === $fiber) {
+            self::$lastObjectCarrierReference = $known[0];
+            self::$lastObjectCarrierId = $known[1];
+
+            return $known[1];
+        }
+
+        $token = 'fiber:' . ++self::$nextFiberCarrierId;
+        $reference = WeakReference::create($fiber);
+        self::$fiberCarrierIds[$objectId] = [$reference, $token];
+        self::$lastObjectCarrierReference = $reference;
+        self::$lastObjectCarrierId = $token;
+
+        if (count(self::$fiberCarrierIds) > self::FIBER_TOKEN_CACHE_LIMIT) {
+            self::pruneFiberCarrierIds($objectId);
+        }
+
+        return $token;
     }
 
     private static function initializeCoroutineResolver(): void
@@ -121,5 +157,14 @@ final class ExecutionContext
         self::$lastObjectCarrierId = $id;
 
         return $id;
+    }
+
+    private static function pruneFiberCarrierIds(int $activeObjectId): void
+    {
+        foreach (self::$fiberCarrierIds as $objectId => [$reference]) {
+            if ($objectId !== $activeObjectId && $reference->get() === null) {
+                unset(self::$fiberCarrierIds[$objectId]);
+            }
+        }
     }
 }
