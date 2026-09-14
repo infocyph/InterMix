@@ -1,0 +1,68 @@
+name: "Swoole/OpenSwoole Scope Compatibility"
+
+on:
+  pull_request:
+    branches: [ "main", "master", "develop", "development" ]
+  push:
+    branches: [ "main", "master" ]
+
+jobs:
+  swoole-family:
+    name: "${{ matrix.extension }} scope carriers - PHP ${{ matrix.php-version }}"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ["8.4", "8.5"]
+        extension: ["openswoole", "swoole"]
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout InterMix
+        uses: actions/checkout@v7
+
+      - name: Setup PHP and coroutine extension
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          extensions: ${{ matrix.extension }}
+          coverage: none
+          tools: composer:v2
+
+      - name: Verify coroutine API
+        shell: bash
+        env:
+          INTERMIX_SWOOLE_EXTENSION: ${{ matrix.extension }}
+        run: |
+          php --ri "$INTERMIX_SWOOLE_EXTENSION"
+          php -r '
+          $extension = getenv("INTERMIX_SWOOLE_EXTENSION");
+          $namespace = $extension === "openswoole" ? "OpenSwoole" : "Swoole";
+          $class = $namespace . "\\Coroutine";
+          $run = $namespace . "\\Coroutine\\run";
+          if (!is_string($extension)
+              || !extension_loaded($extension)
+              || !class_exists($class)
+              || !is_callable([$class, "create"])
+              || !is_callable([$class, "sleep"])
+              || !function_exists($run)
+          ) {
+              fwrite(STDERR, "Required Swoole/OpenSwoole coroutine API is unavailable.\n");
+              exit(1);
+          }
+          '
+
+      - name: Install dependencies
+        shell: bash
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Run focused carrier and scope tests
+        shell: bash
+        run: |
+          cp vendor/infocyph/phpforge/resources/pest.xml .phpforge-pest.xml
+          trap 'rm -f .phpforge-pest.xml' EXIT
+          vendor/bin/pest \
+            --configuration=.phpforge-pest.xml \
+            tests/Container/SwooleScopeCompatibilityTest.php \
+            tests/Container/StructuredScopeRuntimeTest.php
