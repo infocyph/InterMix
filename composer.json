@@ -44,12 +44,6 @@
         "infocyph/cachelayer": "Recommended PSR-6 cache implementation with memory, APCu, SQLite, Redis/Valkey, tiered and node-local adapters",
         "opis/closure": "Required only when using InterMix Closure serialization"
     },
-    "repositories": [
-        {
-            "type": "vcs",
-            "url": "https://github.com/infocyph/Runwire.git"
-        }
-    ],
     "minimum-stability": "stable",
     "prefer-stable": true,
     "autoload": {
