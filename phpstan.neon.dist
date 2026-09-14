@@ -1,0 +1,21 @@
+includes:
+    - vendor/tomasvotruba/cognitive-complexity/config/extension.neon
+
+parameters:
+    customRulesetUsed: true
+    level: max
+    paths:
+        - src
+    scanFiles:
+        - tests/Fence/FenceTraitTest.php
+        - tests/Fence/LimitTest.php
+        - tests/Fence/MultiTest.php
+        - tests/Fence/SingleTest.php
+        - tests/Remix/ConditionableTappableTest.php
+        - tests/Remix/MacroMixTest.php
+    cognitive_complexity:
+        class: 80
+        function: 12
+        dependency_tree: 120
+        dependency_tree_types: []
+    reportUnmatchedIgnoredErrors: true
