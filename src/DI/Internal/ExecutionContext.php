@@ -8,6 +8,7 @@ use Closure;
 use Fiber;
 use Throwable;
 use WeakMap;
+use WeakReference;
 
 /**
  * Detects the current physical execution carrier only.
@@ -26,6 +27,10 @@ final class ExecutionContext
     private static ?string $coroutinePrefix = null;
 
     private static bool $coroutineResolverInitialized = false;
+
+    private static ?string $lastObjectCarrierId = null;
+
+    private static ?WeakReference $lastObjectCarrierReference = null;
 
     private static int $nextObjectCarrierId = 0;
 
@@ -99,14 +104,20 @@ final class ExecutionContext
 
     private static function objectCarrierId(object $carrier, string $prefix): string
     {
-        $ids = self::$objectCarrierIds ??= new WeakMap();
-        $existing = $ids[$carrier] ?? null;
-        if (is_string($existing)) {
-            return $existing;
+        $lastCarrier = self::$lastObjectCarrierReference?->get();
+        if ($lastCarrier === $carrier && self::$lastObjectCarrierId !== null) {
+            return self::$lastObjectCarrierId;
         }
 
-        $id = $prefix . ++self::$nextObjectCarrierId;
-        $ids[$carrier] = $id;
+        $ids = self::$objectCarrierIds ??= new WeakMap();
+        $id = $ids[$carrier] ?? null;
+        if (!is_string($id)) {
+            $id = $prefix . ++self::$nextObjectCarrierId;
+            $ids[$carrier] = $id;
+        }
+
+        self::$lastObjectCarrierReference = WeakReference::create($carrier);
+        self::$lastObjectCarrierId = $id;
 
         return $id;
     }
