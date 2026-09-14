@@ -30,6 +30,7 @@ final class ExecutionContext
 
     private static ?string $lastObjectCarrierId = null;
 
+    /** @var WeakReference<object>|null */
     private static ?WeakReference $lastObjectCarrierReference = null;
 
     private static int $nextObjectCarrierId = 0;
