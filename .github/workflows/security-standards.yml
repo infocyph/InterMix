@@ -19,3 +19,67 @@ jobs:
       security-events: write
       actions: read
       contents: read
+
+  release-regression:
+    name: Release regression - PHP ${{ matrix.php-version }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ["8.4", "8.5"]
+    steps:
+      - name: Checkout InterMix 10.1 candidate
+        uses: actions/checkout@v7
+        with:
+          path: current
+
+      - name: Checkout InterMix 10.0 baseline
+        uses: actions/checkout@v7
+        with:
+          repository: infocyph/InterMix
+          ref: "10.0"
+          path: baseline
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          tools: composer:v2
+          coverage: none
+
+      - name: Install production dependencies
+        shell: bash
+        run: |
+          composer install --working-dir=baseline --no-dev --no-interaction --prefer-dist --no-progress --classmap-authoritative
+          composer install --working-dir=current --no-dev --no-interaction --prefer-dist --no-progress --classmap-authoritative
+
+      - name: Measure same-runner baseline and candidate
+        shell: bash
+        run: |
+          php current/benchmarks/ReleaseRegression.php \
+            --autoload="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" \
+            --output="$RUNNER_TEMP/intermix-10.0-${{ matrix.php-version }}.json"
+          php current/benchmarks/ReleaseRegression.php \
+            --autoload="$GITHUB_WORKSPACE/current/vendor/autoload.php" \
+            --output="$RUNNER_TEMP/intermix-10.1-${{ matrix.php-version }}.json"
+
+      - name: Enforce release regression budgets
+        shell: bash
+        run: |
+          php current/benchmarks/ReleaseRegression.php \
+            --compare-baseline="$RUNNER_TEMP/intermix-10.0-${{ matrix.php-version }}.json" \
+            --compare-current="$RUNNER_TEMP/intermix-10.1-${{ matrix.php-version }}.json" \
+            --max-sequential=3 \
+            --max-fiber=5
+
+      - name: Upload release regression evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: intermix-release-regression-php-${{ matrix.php-version }}
+          path: |
+            ${{ runner.temp }}/intermix-10.0-${{ matrix.php-version }}.json
+            ${{ runner.temp }}/intermix-10.1-${{ matrix.php-version }}.json
+          retention-days: 61
