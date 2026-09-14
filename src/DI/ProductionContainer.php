@@ -56,6 +56,7 @@ abstract class ProductionContainer implements ContainerInterface
     /** @internal */
     final public function attachFallback(Container $fallback): void
     {
+        $this->assertGraphMutationSafe();
         if ($this->fallback !== $fallback) {
             $this->fallbackDefinitions = [];
             $this->runtimeIslands = null;
@@ -97,6 +98,7 @@ abstract class ProductionContainer implements ContainerInterface
         if ($this->deoptimized) {
             return;
         }
+        $this->assertGraphMutationSafe();
         if (!$this->deoptimizationReady || !$this->fallback instanceof Container) {
             throw new ContainerException(
                 'Production deoptimization requires a configured development fallback graph.',
@@ -474,6 +476,18 @@ abstract class ProductionContainer implements ContainerInterface
         return match ($tag) {
             default => [],
         };
+    }
+
+    private function assertGraphMutationSafe(): void
+    {
+        $store = $this->productionScopes;
+        if ($store instanceof ProductionScopeStore
+            && $store->hasConcurrentActivity($store->activeContext())
+        ) {
+            throw new ContainerException(
+                'Cannot mutate production container state while concurrent scope execution is active.',
+            );
+        }
     }
 
     private function beforeScopeClose(ScopeState $scope, bool $synchronizeFallback): void
