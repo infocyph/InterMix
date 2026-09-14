@@ -60,6 +60,10 @@ final class ConcurrentRepository extends Repository
 
     public function beginScopedConstruction(string $scope, string $id): bool
     {
+        if ($this->scopeContextOwner === null) {
+            return false;
+        }
+
         $store = $this->executionScopes;
         $context = $this->activeExecutionContext();
         if (!$store instanceof ExecutionScopeStore || $context === null) {
