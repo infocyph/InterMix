@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\ContainerBuilder;
+use Infocyph\InterMix\DI\ProductionContainer;
 use Infocyph\InterMix\DI\ScopeContext;
 use Infocyph\Runwire\Coroutine\CoroutineRuntime;
 use Infocyph\Runwire\Coroutine\CoroutineScope;
+use Infocyph\Runwire\Coroutine\Task;
 use Infocyph\Runwire\Coroutine\TaskLocal;
 
 final class RunwireIntegrationScopedLeaf {}
@@ -37,8 +39,8 @@ it('shares one dynamic logical scope through Runwire task-local snapshots', func
         static function (CoroutineScope $scope) use ($container, $context, $scopeLocal): array {
             $scope->setLocal($scopeLocal, $context);
 
-            $spawn = static function () use ($container, $scope, $scopeLocal): object {
-                $task = $scope->spawn(static function () use ($container, $scope, $scopeLocal): object {
+            $spawn = static function () use ($container, $scope, $scopeLocal): Task {
+                return $scope->spawn(static function () use ($container, $scope, $scopeLocal): object {
                     $captured = $scope->local($scopeLocal);
                     if (!$captured instanceof ScopeContext) {
                         throw new RuntimeException('Runwire task-local scope context was not inherited.');
@@ -49,8 +51,6 @@ it('shares one dynamic logical scope through Runwire task-local snapshots', func
                         static fn(Container $active): object => $active->get('leaf'),
                     );
                 });
-
-                return $task;
             };
 
             $first = $spawn();
@@ -83,7 +83,7 @@ it('keeps compiled Runwire child frames carrier-local while restoring the shared
             static function (CoroutineScope $scope) use ($container, $context, $scopeLocal): array {
                 $scope->setLocal($scopeLocal, $context);
 
-                $spawn = static function () use ($container, $scope, $scopeLocal) {
+                $spawn = static function () use ($container, $scope, $scopeLocal): Task {
                     return $scope->spawn(static function () use ($container, $scope, $scopeLocal): array {
                         $captured = $scope->local($scopeLocal);
                         if (!$captured instanceof ScopeContext) {
@@ -92,7 +92,7 @@ it('keeps compiled Runwire child frames carrier-local while restoring the shared
 
                         return $container->withinScopeContext(
                             $captured,
-                            static function ($active) use ($scope): array {
+                            static function (ProductionContainer $active) use ($scope): array {
                                 $active->enterScope('nested');
                                 $nested = $active->get('leaf');
                                 $scope->yieldNow();
