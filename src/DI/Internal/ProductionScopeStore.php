@@ -19,12 +19,12 @@ final class ProductionScopeStore
 
     private const string SEQUENTIAL_CONSTRUCTION_CONTEXT = "\0intermix.production.sequential";
 
-    /** @var array<string, ProductionExecutionScopeState> */
-    private array $states = [];
+    private ?object $owner = null;
 
     private bool $rootContextActive = false;
 
-    private ?object $owner = null;
+    /** @var array<string, ProductionExecutionScopeState> */
+    private array $states = [];
 
     public function activeContext(): ?string
     {
@@ -217,6 +217,19 @@ final class ProductionScopeStore
         return $scopeContext->unwrap($this->owner());
     }
 
+    private function assertNoAttachments(ScopeState $scope): void
+    {
+        if ($scope->attachments > 0) {
+            throw new ContainerException('Cannot leave a scope while child execution carriers are still attached.');
+        }
+    }
+
+    private function close(ScopeState $scope): void
+    {
+        $scope->closed = true;
+        $scope->constructing = [];
+    }
+
     /** @param callable(ScopeState): void $beforeClose */
     private function closeContextScope(string $context, callable $beforeClose): void
     {
@@ -260,19 +273,6 @@ final class ProductionScopeStore
         $this->close($scope);
 
         return $scope->parent ?? new ScopeState('root');
-    }
-
-    private function assertNoAttachments(ScopeState $scope): void
-    {
-        if ($scope->attachments > 0) {
-            throw new ContainerException('Cannot leave a scope while child execution carriers are still attached.');
-        }
-    }
-
-    private function close(ScopeState $scope): void
-    {
-        $scope->closed = true;
-        $scope->constructing = [];
     }
 
     private function finishContext(string $context): void
