@@ -13,8 +13,6 @@ use ReflectionFunction;
 use ReflectionMethod;
 use RuntimeException;
 
-// Public trait consumers live in downstream projects and the excluded test suite.
-// @phpstan-ignore trait.unused
 trait MacroMix
 {
     /** @var array<string, bool> */
@@ -53,7 +51,7 @@ trait MacroMix
      * delegates the call to the registered macro if it exists.
      *
      * @param string $method The method name.
-     * @param array<int, mixed> $parameters Parameters to pass to the method.
+     * @param array<int, mixed> $parameters Parameters to pass to the macro.
      *
      * @return mixed The result of the macro call.
      *
