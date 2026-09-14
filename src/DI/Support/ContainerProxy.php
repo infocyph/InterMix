@@ -5,20 +5,22 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Support;
 
 use Infocyph\InterMix\DI\Internal\ServiceId;
+use Infocyph\InterMix\DI\Resolver\ConcurrentRepository;
+use Infocyph\InterMix\DI\ScopeContext;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\InvalidArgumentException;
 
 /**
- * Tiny syntactic sugar layer for the Container *itself*.
+ * Small convenience/runtime surface mixed into the Container itself.
  *
- * Gives you `$c('id')`, `$c->foo`, `$c['foo']`, and a couple of helpers
- * while staying completely optional – remove the trait and nothing breaks.
+ * Keeps syntax helpers and framework-neutral scope-context plumbing out of the
+ * main Container implementation while delegating all state ownership to the
+ * repository.
  */
 trait ContainerProxy
 {
     /**
      * Magic getter method.
-     *
      *
      * @throws InvalidArgumentException
      */
@@ -29,7 +31,6 @@ trait ContainerProxy
 
     /**
      * Allows for a quick shorthand: `$container('id')`
-     *
      *
      * @throws InvalidArgumentException
      */
@@ -49,12 +50,16 @@ trait ContainerProxy
     /**
      * Magic setter method.
      *
-     *
      * @throws ContainerException
      */
     public function __set(string $id, mixed $def): void
     {
         $this->definitions()->bind($id, $def);
+    }
+
+    public function captureScopeContext(): ScopeContext
+    {
+        return $this->scopeContextRepository()->captureScopeContext();
     }
 
     /**
@@ -68,10 +73,6 @@ trait ContainerProxy
     /**
      * Gets the value for the specified offset from the container.
      *
-     * This method allows the use of array-like syntax to retrieve a value
-     * from the container. The offset is converted to a string before
-     * retrieval.
-     *
      * @param mixed $offset The key at which to retrieve the value.
      *
      * @return mixed The value at the specified offset.
@@ -84,9 +85,6 @@ trait ContainerProxy
 
     /**
      * Sets a value in the container's definitions at the specified offset.
-     *
-     * This method allows the use of array-like syntax to bind a definition
-     * to the container. The offset is converted to a string before binding.
      *
      * @param mixed $offset The key at which to set the value.
      * @param mixed $v The value to bind to the offset.
@@ -103,7 +101,6 @@ trait ContainerProxy
      *
      * @param mixed $offset The key to unset.
      *
-     *
      * @suppress PhanUnreferencedPublicMethod
      */
     public function offsetUnset(mixed $offset): void
@@ -111,8 +108,30 @@ trait ContainerProxy
         $this->unbind(ServiceId::from($offset));
     }
 
+    public function withinScopeContext(ScopeContext $scopeContext, callable $callback): mixed
+    {
+        $repository = $this->scopeContextRepository();
+        $repository->attachScopeContext($scopeContext);
+
+        try {
+            return $callback($this);
+        } finally {
+            $repository->detachScopeContext($scopeContext);
+        }
+    }
+
     private function offsetToString(mixed $offset): string
     {
         return ServiceId::from($offset);
+    }
+
+    private function scopeContextRepository(): ConcurrentRepository
+    {
+        $repository = $this->getRepository();
+        if (!$repository instanceof ConcurrentRepository) {
+            throw new ContainerException('Scope-context propagation requires a concurrent InterMix repository.');
+        }
+
+        return $repository;
     }
 }
