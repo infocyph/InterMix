@@ -101,6 +101,79 @@ it('shares one logical scope across sibling execution carriers only when explici
     $container->leaveScope();
 });
 
+it('keeps overlapping sibling attachments on the same logical scope', function () {
+    $container = new Container(uniqid('scope_context_overlapping_siblings_'));
+    $container->scoped('leaf', stdClass::class);
+    $container->enterScope('request');
+    $parent = $container->get('leaf');
+    $context = $container->captureScopeContext();
+
+    $fiberA = new Fiber(static fn(): stdClass => $container->withinScopeContext(
+        $context,
+        static function (Container $active): stdClass {
+            $leaf = $active->get('leaf');
+            Fiber::suspend($leaf);
+
+            return $active->get('leaf');
+        },
+    ));
+    $fiberB = new Fiber(static fn(): stdClass => $container->withinScopeContext(
+        $context,
+        static function (Container $active): stdClass {
+            $leaf = $active->get('leaf');
+            Fiber::suspend($leaf);
+
+            return $active->get('leaf');
+        },
+    ));
+
+    $firstA = $fiberA->start();
+    $firstB = $fiberB->start();
+
+    expect($fiberA->isSuspended())->toBeTrue()
+        ->and($fiberB->isSuspended())->toBeTrue()
+        ->and($firstA)->toBe($parent)
+        ->and($firstB)->toBe($parent);
+
+    $fiberA->resume();
+    $fiberB->resume();
+
+    expect($fiberA->getReturn())->toBe($parent)
+        ->and($fiberB->getReturn())->toBe($parent);
+
+    $container->leaveScope();
+});
+
+it('does not fire the owning scope leave hook when children attach or detach', function () {
+    $container = new Container(uniqid('scope_context_owner_hook_'));
+    $calls = [];
+    $container->onScopeLeave(
+        'request',
+        static function (string $scope) use (&$calls): void {
+            $calls[] = $scope;
+        },
+    );
+    $container->enterScope('request');
+    $context = $container->captureScopeContext();
+
+    $fiberA = new Fiber(static fn(): null => $container->withinScopeContext(
+        $context,
+        static fn(): null => null,
+    ));
+    $fiberB = new Fiber(static fn(): null => $container->withinScopeContext(
+        $context,
+        static fn(): null => null,
+    ));
+    $fiberA->start();
+    $fiberB->start();
+
+    expect($calls)->toBe([]);
+
+    $container->leaveScope();
+
+    expect($calls)->toBe(['request']);
+});
+
 it('propagates a logical scope captured from a parent Fiber to a child Fiber', function () {
     $container = new Container(uniqid('scope_context_fiber_parent_'));
     $container->scoped('leaf', stdClass::class);
@@ -142,6 +215,18 @@ it('rejects a scope context owned by another container', function () {
         ->toThrow(ContainerException::class, 'different container');
 
     $owner->leaveScope();
+});
+
+it('rejects forged scope-context implementations', function () {
+    $container = new Container(uniqid('scope_context_forged_'));
+    $forged = new class implements ScopeContext {};
+    $fiber = new Fiber(static fn(): mixed => $container->withinScopeContext(
+        $forged,
+        static fn(Container $active): mixed => $active,
+    ));
+
+    expect(fn() => $fiber->start())
+        ->toThrow(ContainerException::class, 'different container');
 });
 
 it('rejects a captured context after its owning scope closes', function () {
