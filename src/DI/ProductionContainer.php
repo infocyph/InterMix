@@ -374,19 +374,6 @@ abstract class ProductionContainer implements ContainerInterface
         return $this->productionScopes->current($this->scope);
     }
 
-    final protected function constructCompiledScoped(
-        ScopeState $scope,
-        int $slot,
-        string $id,
-        callable $resolver,
-    ): mixed {
-        if (!$this->contextScopesActive) {
-            return $scope->resolved[$slot] = $resolver();
-        }
-
-        return $this->scopeStore()->constructScoped($scope, $slot, $id, $resolver);
-    }
-
     /** @return array<string, mixed> */
     protected function compiledSingletonValues(): array
     {
@@ -403,6 +390,19 @@ abstract class ProductionContainer implements ContainerInterface
     protected function compiledTaggedLazy(string $tag): ?iterable
     {
         return null;
+    }
+
+    final protected function constructCompiledScoped(
+        ScopeState $scope,
+        int $slot,
+        string $id,
+        callable $resolver,
+    ): mixed {
+        if (!$this->contextScopesActive) {
+            return $scope->resolved[$slot] = $resolver();
+        }
+
+        return $this->scopeStore()->constructScoped($scope, $slot, $id, $resolver);
     }
 
     final protected function dispatchCompiledResolvedHooks(string $id, mixed $value): void
