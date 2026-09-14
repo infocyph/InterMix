@@ -399,15 +399,7 @@ final class ConcurrentRepository extends Repository
     protected function checkIfLocked(): void
     {
         parent::checkIfLocked();
-
-        $store = $this->executionScopes;
-        if ($store instanceof ExecutionScopeStore
-            && $store->hasConcurrentActivity($this->activeExecutionContext())
-        ) {
-            throw new ContainerException(
-                'Cannot mutate container configuration while concurrent scope execution is active.',
-            );
-        }
+        $this->executionScopes?->assertMutationSafe($this->activeExecutionContext());
     }
 
     private function activeExecutionContext(): ?string
