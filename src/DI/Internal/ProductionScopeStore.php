@@ -168,6 +168,23 @@ final class ProductionScopeStore
         $state->current = new ScopeState($scope, $current, $seeds, $rawSeeds);
     }
 
+    public function hasConcurrentActivity(?string $currentContext): bool
+    {
+        foreach ($this->states as $context => $state) {
+            if ($context !== $currentContext || $state->attachedScope instanceof ScopeState) {
+                return true;
+            }
+
+            for ($scope = $state->current; $scope instanceof ScopeState; $scope = $scope->parent) {
+                if ($scope->attachments > 0) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     public function isEmpty(): bool
     {
         return $this->states === [];
