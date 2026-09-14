@@ -39,6 +39,7 @@ final class StructuredScopeBench
             $context,
             static function (Container $active): object {
                 $active->enterScope('nested');
+
                 try {
                     return $active->get('leaf');
                 } finally {
@@ -77,6 +78,7 @@ final class StructuredScopeBench
 
         $fiber = new Fiber(static function () use ($container): object {
             $container->enterScope('request');
+
             try {
                 return $container->get('leaf');
             } finally {
@@ -177,6 +179,4 @@ final class StructuredScopeBench
     }
 }
 
-final class StructuredScopeBenchLeaf
-{
-}
+final class StructuredScopeBenchLeaf {}
