@@ -19,55 +19,6 @@ final class StructuredScopeBench
 {
     private mixed $sink;
 
-    #[Revs(1000)]
-    public function benchSequentialDynamicResolved(): void
-    {
-        $this->sink = $this->sequentialDynamic()->get('leaf');
-    }
-
-    #[Revs(1000)]
-    public function benchSequentialCompiledResolved(): void
-    {
-        $this->sink = $this->sequentialCompiled()->get('leaf');
-    }
-
-    #[Revs(100)]
-    public function benchFiberIsolatedScopeRoundTrip(): void
-    {
-        static $container;
-        $container ??= $this->newDynamic('fiber-isolated');
-
-        $fiber = new Fiber(static function () use ($container): object {
-            $container->enterScope('request');
-            try {
-                return $container->get('leaf');
-            } finally {
-                $container->leaveScope();
-            }
-        });
-        $fiber->start();
-        $this->sink = $fiber->getReturn();
-    }
-
-    #[Revs(200)]
-    public function benchDynamicCaptureContext(): void
-    {
-        [, $context] = $this->dynamicAttachmentFixture();
-        $this->sink = $context;
-    }
-
-    #[Revs(100)]
-    public function benchDynamicAttachedResolved(): void
-    {
-        [$container, $context] = $this->dynamicAttachmentFixture();
-        $fiber = new Fiber(static fn(): object => $container->withinScopeContext(
-            $context,
-            static fn(Container $active): object => $active->get('leaf'),
-        ));
-        $fiber->start();
-        $this->sink = $fiber->getReturn();
-    }
-
     #[Revs(100)]
     public function benchCompiledAttachedResolved(): void
     {
@@ -99,18 +50,53 @@ final class StructuredScopeBench
         $this->sink = $fiber->getReturn();
     }
 
-    /** @return array{Container, ScopeContext} */
-    private function dynamicAttachmentFixture(): array
+    #[Revs(100)]
+    public function benchDynamicAttachedResolved(): void
     {
-        static $fixture;
-        if (!is_array($fixture)) {
-            $container = $this->newDynamic('attached');
-            $container->enterScope('request');
-            $container->get('leaf');
-            $fixture = [$container, $container->captureScopeContext()];
-        }
+        [$container, $context] = $this->dynamicAttachmentFixture();
+        $fiber = new Fiber(static fn(): object => $container->withinScopeContext(
+            $context,
+            static fn(Container $active): object => $active->get('leaf'),
+        ));
+        $fiber->start();
+        $this->sink = $fiber->getReturn();
+    }
 
-        return $fixture;
+    #[Revs(200)]
+    public function benchDynamicCaptureContext(): void
+    {
+        [, $context] = $this->dynamicAttachmentFixture();
+        $this->sink = $context;
+    }
+
+    #[Revs(100)]
+    public function benchFiberIsolatedScopeRoundTrip(): void
+    {
+        static $container;
+        $container ??= $this->newDynamic('fiber-isolated');
+
+        $fiber = new Fiber(static function () use ($container): object {
+            $container->enterScope('request');
+            try {
+                return $container->get('leaf');
+            } finally {
+                $container->leaveScope();
+            }
+        });
+        $fiber->start();
+        $this->sink = $fiber->getReturn();
+    }
+
+    #[Revs(1000)]
+    public function benchSequentialCompiledResolved(): void
+    {
+        $this->sink = $this->sequentialCompiled()->get('leaf');
+    }
+
+    #[Revs(1000)]
+    public function benchSequentialDynamicResolved(): void
+    {
+        $this->sink = $this->sequentialDynamic()->get('leaf');
     }
 
     /** @return array{ProductionContainer, ScopeContext} */
@@ -127,14 +113,41 @@ final class StructuredScopeBench
         return $fixture;
     }
 
-    private function sequentialDynamic(): Container
+    /** @return array{Container, ScopeContext} */
+    private function dynamicAttachmentFixture(): array
     {
-        static $container;
-        if (!$container instanceof Container) {
-            $container = $this->newDynamic('sequential');
+        static $fixture;
+        if (!is_array($fixture)) {
+            $container = $this->newDynamic('attached');
             $container->enterScope('request');
             $container->get('leaf');
+            $fixture = [$container, $container->captureScopeContext()];
         }
+
+        return $fixture;
+    }
+
+    private function newCompiled(string $purpose): ProductionContainer
+    {
+        $builder = ContainerBuilder::create('__structured_scope_bench_compiled_' . $purpose . '_' . bin2hex(random_bytes(4)));
+        $builder->scoped('leaf', StructuredScopeBenchLeaf::class);
+        $path = sys_get_temp_dir() . '/intermix-structured-scope-bench-' . bin2hex(random_bytes(8)) . '.php';
+        $builder->compile($path);
+        register_shutdown_function(static function () use ($path): void {
+            foreach ([$path, $path . '.meta.json'] as $artifact) {
+                if (is_file($artifact)) {
+                    unlink($artifact);
+                }
+            }
+        });
+
+        return $builder->production($path);
+    }
+
+    private function newDynamic(string $purpose): Container
+    {
+        $container = new Container('__structured_scope_bench_' . $purpose . '_' . bin2hex(random_bytes(4)));
+        $container->scoped('leaf', StructuredScopeBenchLeaf::class);
 
         return $container;
     }
@@ -151,27 +164,19 @@ final class StructuredScopeBench
         return $container;
     }
 
-    private function newDynamic(string $purpose): Container
+    private function sequentialDynamic(): Container
     {
-        $container = new Container('__structured_scope_bench_' . $purpose . '_' . bin2hex(random_bytes(4)));
-        $container->scoped('leaf', StructuredScopeBenchLeaf::class);
+        static $container;
+        if (!$container instanceof Container) {
+            $container = $this->newDynamic('sequential');
+            $container->enterScope('request');
+            $container->get('leaf');
+        }
 
         return $container;
     }
-
-    private function newCompiled(string $purpose): ProductionContainer
-    {
-        $builder = ContainerBuilder::create('__structured_scope_bench_compiled_' . $purpose . '_' . bin2hex(random_bytes(4)));
-        $builder->scoped('leaf', StructuredScopeBenchLeaf::class);
-        $path = sys_get_temp_dir() . '/intermix-structured-scope-bench-' . bin2hex(random_bytes(8)) . '.php';
-        $builder->compile($path);
-        register_shutdown_function(static function () use ($path): void {
-            @unlink($path);
-            @unlink($path . '.meta.json');
-        });
-
-        return $builder->production($path);
-    }
 }
 
-final class StructuredScopeBenchLeaf {}
+final class StructuredScopeBenchLeaf
+{
+}
