@@ -11,32 +11,47 @@ use Infocyph\InterMix\Fence\Single;
 use Infocyph\InterMix\Remix\ConditionableTappable;
 use Infocyph\InterMix\Remix\MacroMix;
 
-final class FenceConsumer
+final class PublicTraitConsumers
 {
-    use Fence;
-}
+    public static function fence(): object
+    {
+        return new class {
+            use Fence;
+        };
+    }
 
-final class LimitConsumer
-{
-    use Limit;
-}
+    public static function limit(): object
+    {
+        return new class {
+            use Limit;
+        };
+    }
 
-final class MultiConsumer
-{
-    use Multi;
-}
+    public static function multi(): object
+    {
+        return new class {
+            use Multi;
+        };
+    }
 
-final class SingleConsumer
-{
-    use Single;
-}
+    public static function single(): object
+    {
+        return new class {
+            use Single;
+        };
+    }
 
-final class ConditionableTappableConsumer
-{
-    use ConditionableTappable;
-}
+    public static function conditionableTappable(): object
+    {
+        return new class {
+            use ConditionableTappable;
+        };
+    }
 
-final class MacroMixConsumer
-{
-    use MacroMix;
+    public static function macroMix(): object
+    {
+        return new class {
+            use MacroMix;
+        };
+    }
 }
