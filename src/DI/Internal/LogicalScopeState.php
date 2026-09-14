@@ -11,6 +11,9 @@ final class LogicalScopeState
 
     public bool $closed = false;
 
+    /** @var array<string, string> service id => constructing carrier */
+    public array $constructing = [];
+
     /**
      * @param array<string, mixed> $seeds
      * @param array<string, mixed> $resolvedScoped
