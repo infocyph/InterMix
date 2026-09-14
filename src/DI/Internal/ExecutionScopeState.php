@@ -9,16 +9,16 @@ final class ExecutionScopeState
 {
     public ?LogicalScopeState $attachedScope = null;
 
-    public ?LogicalScopeState $current = null;
+    public string $currentScope = 'root';
 
-    public string $fastCurrentScope = 'root';
-
-    /** @var array<string, array<string, mixed>> */
-    public array $fastResolvedScoped = [];
+    public ?LogicalScopeState $logicalCurrent = null;
 
     /** @var array<string, array<string, mixed>> */
-    public array $fastScopeSeeds = [];
+    public array $resolvedScoped = [];
+
+    /** @var array<string, array<string, mixed>> */
+    public array $scopeSeeds = [];
 
     /** @var array<int, string> */
-    public array $fastScopeStack = [];
+    public array $scopeStack = [];
 }
