@@ -83,7 +83,6 @@ final class ContainerBuilder
         return $this;
     }
 
-    /** @param array<int, string> $tags */
     public function bindFactory(
         string $id,
         Closure $factory,
@@ -300,12 +299,12 @@ final class ContainerBuilder
 
     private function beforeMutation(): void
     {
+        $this->deoptimizeProductionRuntimes();
+
         if ($this->finalizedArtifactExists) {
             $this->compilationReport = null;
             $this->requiresCompilation = true;
         }
-
-        $this->deoptimizeProductionRuntimes();
     }
 
     private function beforeProductionLoad(): void
@@ -346,12 +345,12 @@ final class ContainerBuilder
         if ($this->suppressMutationListener) {
             return;
         }
+
+        $this->deoptimizeProductionRuntimes();
         if ($this->finalizedArtifactExists) {
             $this->compilationReport = null;
             $this->requiresCompilation = true;
         }
-
-        $this->deoptimizeProductionRuntimes();
     }
 
     /**
