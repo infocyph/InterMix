@@ -107,6 +107,17 @@ final class ConcurrentRepository extends Repository
         $this->finishExecutionContext($store, $physicalContext);
     }
 
+    public function detachScopeContextIfAttached(ScopeContext $scopeContext): void
+    {
+        $physicalContext = ExecutionContext::id() ?? self::ROOT_CONTEXT;
+        $store = $this->executionScopes;
+        if (!$store instanceof ExecutionScopeStore || !$store->isAttached($physicalContext)) {
+            return;
+        }
+
+        $this->detachScopeContext($scopeContext);
+    }
+
     public function endScopedConstruction(string $scope, string $id): void
     {
         $store = $this->executionScopes;
