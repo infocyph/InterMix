@@ -106,6 +106,20 @@ final class ExecutionScopeStore
         return $current instanceof LogicalScopeState ? $current->name : 'root';
     }
 
+    public function hasNestedScopeOnAttachment(string $context, ScopeContext $scopeContext, object $owner): bool
+    {
+        if (!$scopeContext instanceof CapturedScopeContext || !$scopeContext->belongsTo($owner)) {
+            throw new ContainerException('Scope context belongs to a different container.');
+        }
+
+        $state = $this->states[$context] ?? null;
+        if (!$state instanceof ExecutionScopeState || $state->attachedScope !== $scopeContext->scope()) {
+            throw new ContainerException('Scope context is not attached to the current execution carrier.');
+        }
+
+        return $state->current !== $state->attachedScope;
+    }
+
     public function hasResolvedScoped(string $context, string $scope, string $id): bool
     {
         $frame = $this->scopeForName($context, $scope);
@@ -215,6 +229,13 @@ final class ExecutionScopeStore
         $this->states[$context] = $state;
     }
 
+    public function resetAll(): void
+    {
+        foreach (array_keys($this->states) as $context) {
+            $this->resetScope($context);
+        }
+    }
+
     public function resetScope(string $context): void
     {
         $state = $this->states[$context] ?? null;
@@ -244,13 +265,6 @@ final class ExecutionScopeStore
         }
 
         unset($this->states[$context]);
-    }
-
-    public function resetAll(): void
-    {
-        foreach (array_keys($this->states) as $context) {
-            $this->resetScope($context);
-        }
     }
 
     public function setResolvedScoped(string $context, string $scope, string $id, mixed $value): void
