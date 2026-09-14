@@ -8,22 +8,14 @@ use Infocyph\InterMix\DI\ScopeContext;
 use Infocyph\InterMix\Exceptions\ContainerException;
 
 /** @internal */
-final class CapturedScopeContext implements ScopeContext
+final readonly class CapturedScopeContext implements ScopeContext
 {
     public function __construct(
-        private readonly object $owner,
-        private readonly LogicalScopeState $scope,
+        private object $owner,
+        private LogicalScopeState $scope,
     ) {}
 
-    public function belongsTo(object $owner): bool
-    {
-        return $this->owner === $owner;
-    }
-
-    public function scope(): LogicalScopeState
-    {
-        return $this->scope;
-    }
+    private function __clone(): void {}
 
     public function __serialize(): array
     {
@@ -36,5 +28,13 @@ final class CapturedScopeContext implements ScopeContext
         throw new ContainerException('Scope contexts are process-local and cannot be unserialized.');
     }
 
-    private function __clone(): void {}
+    public function belongsTo(object $owner): bool
+    {
+        return $this->owner === $owner;
+    }
+
+    public function scope(): LogicalScopeState
+    {
+        return $this->scope;
+    }
 }
