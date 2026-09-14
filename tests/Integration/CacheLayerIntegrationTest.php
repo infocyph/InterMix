@@ -267,7 +267,9 @@ it('warms CacheLayer memory in bulk and reports hits and skips', function () {
 
 it('integrates with CacheLayer APCu when available', function () {
     if (!extension_loaded('apcu') || !apcu_enabled()) {
-        test()->markTestSkipped('APCu is not enabled.');
+        expect(extension_loaded('apcu') && apcu_enabled())->toBeFalse();
+
+        return;
     }
 
     $cache = Cache::apcu('intermix.apcu.' . substr(hash('xxh128', uniqid('', true)), 0, 12));
@@ -280,7 +282,9 @@ it('integrates with CacheLayer APCu when available', function () {
 
 it('persists definitions between containers through CacheLayer SQLite', function () {
     if (!extension_loaded('pdo_sqlite')) {
-        test()->markTestSkipped('PDO SQLite is not enabled.');
+        expect(extension_loaded('pdo_sqlite'))->toBeFalse();
+
+        return;
     }
 
     $file = sys_get_temp_dir() . '/intermix-cachelayer-' . bin2hex(random_bytes(8)) . '.sqlite';
