@@ -352,6 +352,7 @@ final class ConcurrentRepository extends Repository
             return;
         }
 
+        $this->checkIfLocked();
         $this->executionScopes?->resetAll();
         parent::setEnvironment($env);
         $this->resolvedScoped = [];
@@ -393,6 +394,20 @@ final class ConcurrentRepository extends Repository
         }
 
         $this->currentScope = $scope;
+    }
+
+    protected function checkIfLocked(): void
+    {
+        parent::checkIfLocked();
+
+        $store = $this->executionScopes;
+        if ($store instanceof ExecutionScopeStore
+            && $store->hasConcurrentActivity($this->activeExecutionContext())
+        ) {
+            throw new ContainerException(
+                'Cannot mutate container configuration while concurrent scope execution is active.',
+            );
+        }
     }
 
     private function activeExecutionContext(): ?string
