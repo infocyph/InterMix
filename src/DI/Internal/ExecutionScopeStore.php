@@ -13,6 +13,22 @@ final class ExecutionScopeStore
     /** @var array<string, ExecutionScopeState> */
     private array $states = [];
 
+    public function assertCanLeaveScope(string $context): void
+    {
+        $state = $this->states[$context] ?? null;
+        if (!$state instanceof ExecutionScopeState || !$state->current instanceof LogicalScopeState) {
+            return;
+        }
+
+        $scope = $state->current;
+        if ($state->attachedScope === $scope) {
+            throw new ContainerException('Cannot leave an attached scope context; detach it instead.');
+        }
+        if ($scope->attachments > 0) {
+            throw new ContainerException('Cannot leave a scope while child execution carriers are still attached.');
+        }
+    }
+
     public function attachScopeContext(string $context, ScopeContext $scopeContext, object $owner): void
     {
         $scope = $this->unwrapScopeContext($scopeContext, $owner);
@@ -30,6 +46,29 @@ final class ExecutionScopeStore
         $state->attachedScope = $scope;
     }
 
+    public function beginScopedConstruction(string $context, string $scope, string $id): bool
+    {
+        $frame = $this->scopeForName($context, $scope);
+        if (!$frame instanceof LogicalScopeState) {
+            return false;
+        }
+
+        $constructingCarrier = $frame->constructing[$id] ?? null;
+        if ($constructingCarrier !== null) {
+            if ($constructingCarrier === $context) {
+                return false;
+            }
+
+            throw new ContainerException(
+                "Scoped service '{$id}' is already being constructed by another execution carrier in scope '{$scope}'.",
+            );
+        }
+
+        $frame->constructing[$id] = $context;
+
+        return true;
+    }
+
     public function captureScopeContext(string $context, object $owner): ScopeContext
     {
         $scope = $this->states[$context]->current ?? null;
@@ -38,6 +77,20 @@ final class ExecutionScopeStore
         }
 
         return new CapturedScopeContext($owner, $scope);
+    }
+
+    public function detachCurrentScopeContext(string $context): void
+    {
+        $state = $this->states[$context] ?? null;
+        if (!$state instanceof ExecutionScopeState || !$state->attachedScope instanceof LogicalScopeState) {
+            return;
+        }
+        if ($state->current !== $state->attachedScope) {
+            throw new ContainerException('Cannot detach a scope context while a nested scope is still active.');
+        }
+
+        $state->attachedScope->attachments = max(0, $state->attachedScope->attachments - 1);
+        unset($this->states[$context]);
     }
 
     public function detachScopeContext(string $context, ScopeContext $scopeContext, object $owner): void
@@ -55,6 +108,14 @@ final class ExecutionScopeStore
         $state->attachedScope = null;
         $scope->attachments = max(0, $scope->attachments - 1);
         unset($this->states[$context]);
+    }
+
+    public function endScopedConstruction(string $context, string $scope, string $id): void
+    {
+        $frame = $this->scopeForName($context, $scope);
+        if ($frame instanceof LogicalScopeState && ($frame->constructing[$id] ?? null) === $context) {
+            unset($frame->constructing[$id]);
+        }
     }
 
     /** @param array<string, mixed> $instances */
@@ -98,6 +159,16 @@ final class ExecutionScopeStore
         return $current instanceof LogicalScopeState ? $current->name : 'root';
     }
 
+    public function hasNestedScope(string $context): bool
+    {
+        $state = $this->states[$context] ?? null;
+
+        return $state instanceof ExecutionScopeState
+            && $state->attachedScope instanceof LogicalScopeState
+            && $state->current instanceof LogicalScopeState
+            && $state->current !== $state->attachedScope;
+    }
+
     public function hasNestedScopeOnAttachment(string $context, ScopeContext $scopeContext, object $owner): bool
     {
         $scope = $this->unwrapScopeContext($scopeContext, $owner);
@@ -131,14 +202,14 @@ final class ExecutionScopeStore
     public function invalidateClass(string $class): void
     {
         $this->walkUniqueFrames(static function (LogicalScopeState $scope) use ($class): void {
-            unset($scope->resolvedScoped[$class]);
+            unset($scope->resolvedScoped[$class], $scope->constructing[$class]);
         });
     }
 
     public function invalidateDefinition(string $id): void
     {
         $this->walkUniqueFrames(static function (LogicalScopeState $scope) use ($id): void {
-            unset($scope->resolvedScoped[$id]);
+            unset($scope->resolvedScoped[$id], $scope->constructing[$id]);
         });
     }
 
@@ -146,7 +217,13 @@ final class ExecutionScopeStore
     {
         $this->walkUniqueFrames(static function (LogicalScopeState $scope): void {
             $scope->resolvedScoped = [];
+            $scope->constructing = [];
         });
+    }
+
+    public function isAttached(string $context): bool
+    {
+        return ($this->states[$context]->attachedScope ?? null) instanceof LogicalScopeState;
     }
 
     public function isEmpty(): bool
@@ -161,15 +238,10 @@ final class ExecutionScopeStore
             return;
         }
 
+        $this->assertCanLeaveScope($context);
         $scope = $state->current;
-        if ($state->attachedScope === $scope) {
-            throw new ContainerException('Cannot leave an attached scope context; detach it instead.');
-        }
-        if ($scope->attachments > 0) {
-            throw new ContainerException('Cannot leave a scope while child execution carriers are still attached.');
-        }
-
         $scope->closed = true;
+        $scope->constructing = [];
         $state->current = $scope->parent;
         if (!$state->current instanceof LogicalScopeState) {
             unset($this->states[$context]);
@@ -238,6 +310,7 @@ final class ExecutionScopeStore
                     throw new ContainerException('Cannot reset a scope while child execution carriers are still attached.');
                 }
                 $scope->closed = true;
+                $scope->constructing = [];
             }
 
             $state->attachedScope->attachments = max(0, $state->attachedScope->attachments - 1);
@@ -251,6 +324,7 @@ final class ExecutionScopeStore
                 throw new ContainerException('Cannot reset a scope while child execution carriers are still attached.');
             }
             $scope->closed = true;
+            $scope->constructing = [];
         }
 
         unset($this->states[$context]);
