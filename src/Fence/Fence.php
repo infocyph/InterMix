@@ -144,8 +144,10 @@ trait Fence
     /**
      * Verifies that the class instance can be created given the requirements.
      *
-     * @param array{extensions?: array<int, string>, classes?: array<int, string>}|null $c
-     *                                                                                     The values are arrays of names of extensions and classes that must be present.
+     * Runtime validation intentionally accepts a broad shape here because callers
+     * may bypass PHPDoc and provide malformed requirement arrays.
+     *
+     * @param array{extensions?: mixed, classes?: mixed}|null $c
      */
     private static function checkRequirements(?array $c): void
     {
@@ -266,12 +268,15 @@ trait Fence
             return PHP_INT_MAX;
         }
 
-        $limit = (int) constant("$className::FENCE_LIMIT");
-        if ($limit < 1) {
+        $declaredLimit = constant("$className::FENCE_LIMIT");
+        if (!is_int($declaredLimit)) {
+            throw new InvalidArgumentException('Declared FENCE_LIMIT must be an integer.');
+        }
+        if ($declaredLimit < 1) {
             throw new InvalidArgumentException('Declared FENCE_LIMIT must be at least 1.');
         }
 
-        return $limit;
+        return $declaredLimit;
     }
 
     private static function isKeyed(): bool
