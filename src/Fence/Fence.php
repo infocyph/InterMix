@@ -151,21 +151,18 @@ trait Fence
      */
     private static function checkRequirements(?array $c): void
     {
-        foreach (['extensions', 'classes'] as $key) {
-            $requirements = $c[$key] ?? [];
-            if (!is_array($requirements)
-                || array_any($requirements, static fn(mixed $value): bool => !is_string($value))
-            ) {
-                throw new InvalidArgumentException("Fence requirement '{$key}' must be an array of strings.");
-            }
-        }
-
-        if ($c === null || (($c['extensions'] ?? []) === [] && ($c['classes'] ?? []) === [])) {
+        if ($c === null) {
             return;
         }
 
-        $missingE = self::findMissingExtensions((array) ($c['extensions'] ?? []));
-        $missingC = self::findMissingClasses((array) ($c['classes'] ?? []));
+        $extensions = self::normalizeRequirements($c['extensions'] ?? [], 'extensions');
+        $classes = self::normalizeRequirements($c['classes'] ?? [], 'classes');
+        if ($extensions === [] && $classes === []) {
+            return;
+        }
+
+        $missingE = self::findMissingExtensions($extensions);
+        $missingC = self::findMissingClasses($classes);
 
         if ($missingE === [] && $missingC === []) {
             return;
@@ -287,6 +284,26 @@ trait Fence
         }
 
         return true;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private static function normalizeRequirements(mixed $requirements, string $key): array
+    {
+        if (!is_array($requirements)) {
+            throw new InvalidArgumentException("Fence requirement '{$key}' must be an array of strings.");
+        }
+
+        $normalized = [];
+        foreach ($requirements as $value) {
+            if (!is_string($value)) {
+                throw new InvalidArgumentException("Fence requirement '{$key}' must be an array of strings.");
+            }
+            $normalized[] = $value;
+        }
+
+        return $normalized;
     }
 
     private static function slotFor(?string $key): string
