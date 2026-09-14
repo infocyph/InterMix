@@ -118,9 +118,11 @@ final class ConcurrentRepository extends Repository
     public function findScopeSeed(string $id, mixed &$value): bool
     {
         $store = $this->executionScopes;
-        $context = $this->activeExecutionContext();
-        if ($store instanceof ExecutionScopeStore && $context !== null) {
-            return $store->findScopeSeed($context, $id, $value);
+        if ($store instanceof ExecutionScopeStore) {
+            $context = $this->activeExecutionContext();
+            if ($context !== null) {
+                return $store->findScopeSeed($context, $id, $value);
+            }
         }
 
         if ($this->scopeSeeds === []) {
@@ -141,9 +143,11 @@ final class ConcurrentRepository extends Repository
     public function getResolvedScopedEntry(string $scope, string $id): mixed
     {
         $store = $this->executionScopes;
-        $context = $this->activeExecutionContext();
-        if ($store instanceof ExecutionScopeStore && $context !== null) {
-            return $store->getResolvedScopedEntry($context, $scope, $id);
+        if ($store instanceof ExecutionScopeStore) {
+            $context = $this->activeExecutionContext();
+            if ($context !== null) {
+                return $store->getResolvedScopedEntry($context, $scope, $id);
+            }
         }
 
         return $this->resolvedScoped[$scope][$id] ?? null;
@@ -152,9 +156,11 @@ final class ConcurrentRepository extends Repository
     public function getScope(): string
     {
         $store = $this->executionScopes;
-        $context = $this->activeExecutionContext();
-        if ($store instanceof ExecutionScopeStore && $context !== null) {
-            return $store->getScope($context);
+        if ($store instanceof ExecutionScopeStore) {
+            $context = $this->activeExecutionContext();
+            if ($context !== null) {
+                return $store->getScope($context);
+            }
         }
 
         return $this->currentScope;
@@ -164,9 +170,11 @@ final class ConcurrentRepository extends Repository
     public function hasResolvedScoped(string $scope, string $id): bool
     {
         $store = $this->executionScopes;
-        $context = $this->activeExecutionContext();
-        if ($store instanceof ExecutionScopeStore && $context !== null) {
-            return $store->hasResolvedScoped($context, $scope, $id);
+        if ($store instanceof ExecutionScopeStore) {
+            $context = $this->activeExecutionContext();
+            if ($context !== null) {
+                return $store->hasResolvedScoped($context, $scope, $id);
+            }
         }
 
         return array_key_exists($id, $this->resolvedScoped[$scope] ?? []);
@@ -176,9 +184,11 @@ final class ConcurrentRepository extends Repository
     public function hasScopeSeeds(): bool
     {
         $store = $this->executionScopes;
-        $context = $this->activeExecutionContext();
-        if ($store instanceof ExecutionScopeStore && $context !== null) {
-            return $store->hasScopeSeeds($context);
+        if ($store instanceof ExecutionScopeStore) {
+            $context = $this->activeExecutionContext();
+            if ($context !== null) {
+                return $store->hasScopeSeeds($context);
+            }
         }
 
         return $this->scopeSeeds !== [];
@@ -218,11 +228,13 @@ final class ConcurrentRepository extends Repository
     public function leaveScope(): void
     {
         $store = $this->executionScopes;
-        $context = $this->activeExecutionContext();
-        if ($store instanceof ExecutionScopeStore && $context !== null) {
-            $this->leaveExecutionScope($store, $context);
+        if ($store instanceof ExecutionScopeStore) {
+            $context = $this->activeExecutionContext();
+            if ($context !== null) {
+                $this->leaveExecutionScope($store, $context);
 
-            return;
+                return;
+            }
         }
 
         $scope = $this->currentScope;
@@ -244,17 +256,19 @@ final class ConcurrentRepository extends Repository
     public function resetScope(): void
     {
         $store = $this->executionScopes;
-        $context = $this->activeExecutionContext();
-        if ($store instanceof ExecutionScopeStore && $context !== null) {
-            $store->resetScope($context);
-            if ($context === self::ROOT_CONTEXT) {
-                $this->rootContextActive = false;
-            }
-            if ($store->isEmpty()) {
-                $this->executionScopes = null;
-            }
+        if ($store instanceof ExecutionScopeStore) {
+            $context = $this->activeExecutionContext();
+            if ($context !== null) {
+                $store->resetScope($context);
+                if ($context === self::ROOT_CONTEXT) {
+                    $this->rootContextActive = false;
+                }
+                if ($store->isEmpty()) {
+                    $this->executionScopes = null;
+                }
 
-            return;
+                return;
+            }
         }
 
         $this->resolvedScoped = [];
@@ -282,11 +296,13 @@ final class ConcurrentRepository extends Repository
     public function setResolvedScoped(string $scope, string $id, mixed $value): void
     {
         $store = $this->executionScopes;
-        $context = $this->activeExecutionContext();
-        if ($store instanceof ExecutionScopeStore && $context !== null) {
-            $store->setResolvedScoped($context, $scope, $id, $value);
+        if ($store instanceof ExecutionScopeStore) {
+            $context = $this->activeExecutionContext();
+            if ($context !== null) {
+                $store->setResolvedScoped($context, $scope, $id, $value);
 
-            return;
+                return;
+            }
         }
 
         $this->resolvedScoped[$scope][$id] = $value;
@@ -295,14 +311,16 @@ final class ConcurrentRepository extends Repository
     public function setScope(string $scope): void
     {
         $store = $this->executionScopes;
-        $context = $this->activeExecutionContext();
-        if ($store instanceof ExecutionScopeStore && $context !== null) {
-            $store->setScope($context, $scope);
-            if ($context === self::ROOT_CONTEXT && $scope === 'root') {
-                $this->rootContextActive = false;
-            }
+        if ($store instanceof ExecutionScopeStore) {
+            $context = $this->activeExecutionContext();
+            if ($context !== null) {
+                $store->setScope($context, $scope);
+                if ($context === self::ROOT_CONTEXT && $scope === 'root') {
+                    $this->rootContextActive = false;
+                }
 
-            return;
+                return;
+            }
         }
 
         $this->currentScope = $scope;
