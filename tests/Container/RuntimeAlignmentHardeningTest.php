@@ -78,7 +78,7 @@ it('preserves compiled and fallback scoped identity across capture and safe deop
 
 it('rejects dynamic configuration mutation from a foreign carrier while its scope is active', function () {
     $container = new Container(uniqid('runtime_alignment_dynamic_mutation_'));
-    $container->value('stable', 'stable');
+    $container->value('stable', 'baseline');
 
     $fiber = new Fiber(static function () use ($container): void {
         $container->enterScope('request');
