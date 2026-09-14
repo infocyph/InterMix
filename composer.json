@@ -53,11 +53,8 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "Infocyph\\InterMix\\Tests\\": "tests/"
-        },
-        "exclude-from-classmap": [
-            "/tests/**/*Test.php"
-        ]
+            "Infocyph\\InterMix\\Tests\\Fixture\\": "tests/Fixture/"
+        }
     },
     "config": {
         "allow-plugins": {
