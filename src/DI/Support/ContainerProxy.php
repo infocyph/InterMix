@@ -128,7 +128,7 @@ trait ContainerProxy
         try {
             return $callback($this);
         } finally {
-            $repository->detachScopeContext($scopeContext);
+            $repository->detachScopeContextIfAttached($scopeContext);
         }
     }
 
