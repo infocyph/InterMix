@@ -15,11 +15,7 @@ final class ExecutionScopeStore
 
     public function attachScopeContext(string $context, ScopeContext $scopeContext, object $owner): void
     {
-        if (!$scopeContext instanceof CapturedScopeContext || !$scopeContext->belongsTo($owner)) {
-            throw new ContainerException('Scope context belongs to a different container.');
-        }
-
-        $scope = $scopeContext->scope();
+        $scope = $this->unwrapScopeContext($scopeContext, $owner);
         if ($scope->closed) {
             throw new ContainerException('Scope context is no longer active.');
         }
@@ -46,12 +42,8 @@ final class ExecutionScopeStore
 
     public function detachScopeContext(string $context, ScopeContext $scopeContext, object $owner): void
     {
-        if (!$scopeContext instanceof CapturedScopeContext || !$scopeContext->belongsTo($owner)) {
-            throw new ContainerException('Scope context belongs to a different container.');
-        }
-
+        $scope = $this->unwrapScopeContext($scopeContext, $owner);
         $state = $this->states[$context] ?? null;
-        $scope = $scopeContext->scope();
         if (!$state instanceof ExecutionScopeState || $state->attachedScope !== $scope) {
             throw new ContainerException('Scope context is not attached to the current execution carrier.');
         }
@@ -108,12 +100,9 @@ final class ExecutionScopeStore
 
     public function hasNestedScopeOnAttachment(string $context, ScopeContext $scopeContext, object $owner): bool
     {
-        if (!$scopeContext instanceof CapturedScopeContext || !$scopeContext->belongsTo($owner)) {
-            throw new ContainerException('Scope context belongs to a different container.');
-        }
-
+        $scope = $this->unwrapScopeContext($scopeContext, $owner);
         $state = $this->states[$context] ?? null;
-        if (!$state instanceof ExecutionScopeState || $state->attachedScope !== $scopeContext->scope()) {
+        if (!$state instanceof ExecutionScopeState || $state->attachedScope !== $scope) {
             throw new ContainerException('Scope context is not attached to the current execution carrier.');
         }
 
@@ -298,6 +287,15 @@ final class ExecutionScopeStore
         }
 
         return null;
+    }
+
+    private function unwrapScopeContext(ScopeContext $scopeContext, object $owner): LogicalScopeState
+    {
+        if (!$scopeContext instanceof CapturedScopeContext) {
+            throw new ContainerException('Scope context belongs to a different container.');
+        }
+
+        return $scopeContext->unwrap($owner);
     }
 
     /** @param callable(LogicalScopeState): void $callback */
