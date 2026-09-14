@@ -20,6 +20,26 @@ function swooleCompatibilityRuntime(): ?array
     return null;
 }
 
+/** @param class-string $coroutineClass */
+function runSwooleCompatibilityCoroutine(string $coroutineClass, string $namespace, callable $callback): void
+{
+    $runFunction = $namespace . '\\Coroutine\\run';
+    if (function_exists($runFunction)) {
+        $runFunction($callback);
+
+        return;
+    }
+
+    $runMethod = [$coroutineClass, 'run'];
+    if (is_callable($runMethod)) {
+        $runMethod($callback);
+
+        return;
+    }
+
+    throw new RuntimeException('Loaded Swoole/OpenSwoole runtime does not expose a coroutine runner.');
+}
+
 it('keeps Swoole family carriers stable and distinct when the optional extension is loaded', function (): void {
     $runtime = swooleCompatibilityRuntime();
     if ($runtime === null) {
@@ -29,29 +49,30 @@ it('keeps Swoole family carriers stable and distinct when the optional extension
     }
 
     [$coroutineClass, $namespace] = $runtime;
-    $run = $namespace . '\\Coroutine\\run';
-    expect(function_exists($run))->toBeTrue();
-
     $pairs = [];
     $fiberIds = [];
 
-    $run(static function () use ($coroutineClass, &$fiberIds, &$pairs): void {
-        /** @var callable(callable(): void): int|false $create */
-        $create = [$coroutineClass, 'create'];
+    runSwooleCompatibilityCoroutine(
+        $coroutineClass,
+        $namespace,
+        static function () use ($coroutineClass, &$fiberIds, &$pairs): void {
+            /** @var callable(callable(): void): int|false $create */
+            $create = [$coroutineClass, 'create'];
 
-        for ($iteration = 0; $iteration < 32; ++$iteration) {
-            $created = $create(static function () use (&$fiberIds, &$pairs): void {
-                $first = ExecutionContext::id();
-                $second = ExecutionContext::id();
-                $pairs[] = [$first, $second];
+            for ($iteration = 0; $iteration < 32; ++$iteration) {
+                $created = $create(static function () use (&$fiberIds, &$pairs): void {
+                    $first = ExecutionContext::id();
+                    $second = ExecutionContext::id();
+                    $pairs[] = [$first, $second];
 
-                $fiber = new Fiber(static fn(): ?string => ExecutionContext::id());
-                $fiber->start();
-                $fiberIds[] = $fiber->getReturn();
-            });
-            expect($created)->not->toBeFalse();
-        }
-    });
+                    $fiber = new Fiber(static fn(): ?string => ExecutionContext::id());
+                    $fiber->start();
+                    $fiberIds[] = $fiber->getReturn();
+                });
+                expect($created)->not->toBeFalse();
+            }
+        },
+    );
 
     $coroutineIds = [];
     foreach ($pairs as [$first, $second]) {
@@ -80,56 +101,59 @@ it('shares a logical scope explicitly across a Swoole family child without chang
     }
 
     [$coroutineClass, $namespace] = $runtime;
-    $run = $namespace . '\\Coroutine\\run';
     $container = new Container(uniqid('swoole_scope_'));
     $container->scoped('leaf', SwooleCompatibilityScopedLeaf::class);
     $shared = null;
     $isolated = null;
 
-    $run(static function () use ($container, $coroutineClass, &$isolated, &$shared): void {
-        /** @var callable(callable(): void): int|false $create */
-        $create = [$coroutineClass, 'create'];
-        /** @var callable(float): mixed $sleep */
-        $sleep = [$coroutineClass, 'sleep'];
+    runSwooleCompatibilityCoroutine(
+        $coroutineClass,
+        $namespace,
+        static function () use ($container, $coroutineClass, &$isolated, &$shared): void {
+            /** @var callable(callable(): void): int|false $create */
+            $create = [$coroutineClass, 'create'];
+            /** @var callable(float): mixed $sleep */
+            $sleep = [$coroutineClass, 'sleep'];
 
-        $container->enterScope('request');
-        $parent = $container->get('leaf');
-        $context = $container->captureScopeContext();
-        $remaining = 2;
+            $container->enterScope('request');
+            $parent = $container->get('leaf');
+            $context = $container->captureScopeContext();
+            $remaining = 2;
 
-        $created = $create(static function () use ($container, $context, &$remaining, &$shared): void {
-            try {
-                $shared = $container->withinScopeContext(
-                    $context,
-                    static fn(Container $active): object => $active->get('leaf'),
-                );
-            } finally {
-                --$remaining;
-            }
-        });
-        expect($created)->not->toBeFalse();
-
-        $created = $create(static function () use ($container, &$isolated, &$remaining): void {
-            try {
-                $container->enterScope('independent');
+            $created = $create(static function () use ($container, $context, &$remaining, &$shared): void {
                 try {
-                    $isolated = $container->get('leaf');
+                    $shared = $container->withinScopeContext(
+                        $context,
+                        static fn(Container $active): object => $active->get('leaf'),
+                    );
                 } finally {
-                    $container->leaveScope();
+                    --$remaining;
                 }
-            } finally {
-                --$remaining;
+            });
+            expect($created)->not->toBeFalse();
+
+            $created = $create(static function () use ($container, &$isolated, &$remaining): void {
+                try {
+                    $container->enterScope('independent');
+                    try {
+                        $isolated = $container->get('leaf');
+                    } finally {
+                        $container->leaveScope();
+                    }
+                } finally {
+                    --$remaining;
+                }
+            });
+            expect($created)->not->toBeFalse();
+
+            while ($remaining > 0) {
+                $sleep(0.001);
             }
-        });
-        expect($created)->not->toBeFalse();
 
-        while ($remaining > 0) {
-            $sleep(0.001);
-        }
+            expect($shared)->toBe($parent)
+                ->and($isolated)->not->toBe($parent);
 
-        expect($shared)->toBe($parent)
-            ->and($isolated)->not->toBe($parent);
-
-        $container->leaveScope();
-    });
+            $container->leaveScope();
+        },
+    );
 });
