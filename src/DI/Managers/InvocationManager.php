@@ -8,6 +8,7 @@ use ArrayAccess;
 use Closure;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Internal\ClassResolution;
+use Infocyph\InterMix\DI\Resolver\ConcurrentRepository;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\DI\Support\TraceLevelEnum;
@@ -150,7 +151,7 @@ class InvocationManager implements ArrayAccess
         return $this->container->registration();
     }
 
-    /** @throws ContainerException|InvalidArgumentException|ReflectionException */
+    /** @throws ContainerException|ReflectionException */
     protected function resolveDefinition(string $id): mixed
     {
         return $this->repository->fetchInstanceOrValue(
@@ -238,27 +239,38 @@ class InvocationManager implements ArrayAccess
 
     private function resolveAndCache(string $id, bool $cacheable, ?string $scope): mixed
     {
-        $this->repository->dispatchResolvingHooks($id);
+        $constructionOwner = false;
+        if ($scope !== null && $this->repository instanceof ConcurrentRepository) {
+            $constructionOwner = $this->repository->beginScopedConstruction($scope, $id);
+        }
 
-        if ($this->repository->hasFunctionReference($id)) {
-            $resolved = $this->resolveDefinition($id);
-        } else {
-            $resolution = $this->container->getCurrentResolver()->classSettler($id);
-            $resolved = $this->repository->fetchInstanceOrValue($resolution);
+        try {
+            $this->repository->dispatchResolvingHooks($id);
+
+            if ($this->repository->hasFunctionReference($id)) {
+                $resolved = $this->resolveDefinition($id);
+            } else {
+                $resolution = $this->container->getCurrentResolver()->classSettler($id);
+                $resolved = $this->repository->fetchInstanceOrValue($resolution);
+                if ($cacheable) {
+                    $this->storeResolvedByLifetime($id, $resolution, $scope);
+                }
+                $this->repository->dispatchResolvedHooks($id, $resolved);
+
+                return $resolved;
+            }
+
             if ($cacheable) {
-                $this->storeResolvedByLifetime($id, $resolution, $scope);
+                $this->storeResolvedByLifetime($id, $resolved, $scope);
             }
             $this->repository->dispatchResolvedHooks($id, $resolved);
 
             return $resolved;
+        } finally {
+            if ($constructionOwner && $scope !== null && $this->repository instanceof ConcurrentRepository) {
+                $this->repository->endScopedConstruction($scope, $id);
+            }
         }
-
-        if ($cacheable) {
-            $this->storeResolvedByLifetime($id, $resolved, $scope);
-        }
-        $this->repository->dispatchResolvedHooks($id, $resolved);
-
-        return $resolved;
     }
 
     private function storeResolvedByLifetime(string $id, mixed $resolved, ?string $scope): void
