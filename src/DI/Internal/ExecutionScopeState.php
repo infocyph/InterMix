@@ -7,14 +7,7 @@ namespace Infocyph\InterMix\DI\Internal;
 /** @internal */
 final class ExecutionScopeState
 {
-    public string $currentScope = 'root';
+    public ?LogicalScopeState $attachedScope = null;
 
-    /** @var array<string, array<string, mixed>> */
-    public array $resolvedScoped = [];
-
-    /** @var array<string, array<string, mixed>> */
-    public array $scopeSeeds = [];
-
-    /** @var array<int, string> */
-    public array $scopeStack = [];
+    public ?LogicalScopeState $current = null;
 }
