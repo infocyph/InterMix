@@ -1010,7 +1010,7 @@ One request executes sequentially, Foundation/Webrick uses ordinary `withinScope
 
 Execute in this order.
 
-- [ ] **1. Freeze InterMix 10.0 behavior.** Keep all current scope/Fiber/compiled parity tests green and add regression fixtures for current defaults before refactoring internals.
+- [ ] **1. Freeze InterMix 10.0 behavior.** Keep all current scope/Fiber/compiled parity tests green and add regression fixtures for current defaults before refactoring internals. **Batch status:** regression fixtures added in `tests/Container/ExecutionContextScopeIsolationTest.php` for nested independent Fiber stacks, `null` seed isolation, throwable cleanup, repeated same-name roots, and compiled leave-hook parity; PHP 8.4 syntax validation passed. Full Pest/PHPForge suite execution remains pending before this item is checked complete.
 - [ ] **2. Add explicit terminology/tests for carrier identity vs logical scope identity.** No behavior change yet.
 - [ ] **3. Design the opaque scope-context/handle contract.** Keep names minimal; prove foreign/stale/non-serializable ownership rules.
 - [ ] **4. Refactor dynamic scope internals.** Separate carrier-local active frame from logical scope storage while preserving the sequential fast path.
