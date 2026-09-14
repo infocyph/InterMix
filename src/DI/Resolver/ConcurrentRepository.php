@@ -24,10 +24,10 @@ final class ConcurrentRepository extends Repository
 
     private bool $rootContextActive = false;
 
+    private ?object $scopeContextOwner = null;
+
     /** @var array<string, array<int, callable(string, \Infocyph\InterMix\DI\Container): void>> */
     private array $scopeLeaveHooks = [];
-
-    private ?object $scopeContextOwner = null;
 
     /** @var array<string, array<string, mixed>> */
     private array $scopeSeeds = [];
@@ -82,6 +82,14 @@ final class ConcurrentRepository extends Repository
         $store = $this->executionScopes;
         if (!$store instanceof ExecutionScopeStore) {
             throw new ContainerException('Scope context is not attached to the current execution carrier.');
+        }
+
+        while ($store->hasNestedScopeOnAttachment(
+            $physicalContext,
+            $scopeContext,
+            $this->scopeContextOwner(),
+        )) {
+            $this->leaveExecutionScope($store, $physicalContext);
         }
 
         $store->detachScopeContext($physicalContext, $scopeContext, $this->scopeContextOwner());
