@@ -21,7 +21,7 @@ final class ReleaseRegression
     private const int SEQUENTIAL_ITERATIONS = 250000;
 
     /** @param array<int, string> $arguments */
-    public static function main(array $arguments): int
+    public static function main(array $arguments): void
     {
         $baseline = self::option($arguments, 'compare-baseline');
         $current = self::option($arguments, 'compare-current');
@@ -30,12 +30,14 @@ final class ReleaseRegression
                 throw new RuntimeException('Both --compare-baseline and --compare-current are required.');
             }
 
-            return self::compare(
+            self::compare(
                 $baseline,
                 $current,
                 self::floatOption($arguments, 'max-sequential', 3.0),
                 self::floatOption($arguments, 'max-fiber', 5.0),
             );
+
+            return;
         }
 
         $autoload = self::option($arguments, 'autoload');
@@ -55,9 +57,57 @@ final class ReleaseRegression
             throw new RuntimeException("Unable to write benchmark output: {$output}");
         }
 
-        echo $encoded;
+        fwrite(STDOUT, $encoded);
+    }
 
-        return 0;
+    private static function compare(
+        string $baselinePath,
+        string $currentPath,
+        float $maxSequential,
+        float $maxFiber,
+    ): void {
+        $baseline = self::readResult($baselinePath);
+        $current = self::readResult($currentPath);
+        if ($baseline['php'] !== $current['php']) {
+            throw new RuntimeException('Baseline and current results must use the same PHP version.');
+        }
+
+        $sequential = self::regression(
+            $baseline['sequential_production_ns'],
+            $current['sequential_production_ns'],
+        );
+        $fiber = self::regression($baseline['fiber_isolated_ns'], $current['fiber_isolated_ns']);
+
+        printf(
+            "PHP %s release regression comparison\nsequential production: %.3f ns -> %.3f ns (%+.2f%%, limit %.2f%%)\nisolated Fiber: %.3f ns -> %.3f ns (%+.2f%%, limit %.2f%%)\n",
+            $current['php'],
+            $baseline['sequential_production_ns'],
+            $current['sequential_production_ns'],
+            $sequential,
+            $maxSequential,
+            $baseline['fiber_isolated_ns'],
+            $current['fiber_isolated_ns'],
+            $fiber,
+            $maxFiber,
+        );
+
+        if ($sequential > $maxSequential || $fiber > $maxFiber) {
+            throw new RuntimeException('Release performance regression budget exceeded.');
+        }
+    }
+
+    /** @param array<int, string> $arguments */
+    private static function floatOption(array $arguments, string $name, float $default): float
+    {
+        $value = self::option($arguments, $name);
+        if ($value === null) {
+            return $default;
+        }
+        if (!is_numeric($value)) {
+            throw new RuntimeException("Option --{$name} must be numeric.");
+        }
+
+        return (float) $value;
     }
 
     /** @return array{php: string, sequential_production_ns: float, fiber_isolated_ns: float} */
@@ -93,24 +143,6 @@ final class ReleaseRegression
         }
     }
 
-    private static function measureSequential(ProductionContainer $container): float
-    {
-        $samples = [];
-        $sink = null;
-        for ($sample = 0; $sample < self::SAMPLES; ++$sample) {
-            $started = hrtime(true);
-            for ($iteration = 0; $iteration < self::SEQUENTIAL_ITERATIONS; ++$iteration) {
-                $sink = $container->get('leaf');
-            }
-            $samples[] = (hrtime(true) - $started) / self::SEQUENTIAL_ITERATIONS;
-        }
-        if (!$sink instanceof ReleaseRegressionLeaf) {
-            throw new RuntimeException('Sequential benchmark did not resolve the expected scoped service.');
-        }
-
-        return self::median($samples);
-    }
-
     private static function measureFiber(Container $container): float
     {
         $samples = [];
@@ -139,27 +171,22 @@ final class ReleaseRegression
         return self::median($samples);
     }
 
-    private static function warmSequential(ProductionContainer $container): void
+    private static function measureSequential(ProductionContainer $container): float
     {
-        for ($iteration = 0; $iteration < 50000; ++$iteration) {
-            $container->get('leaf');
+        $samples = [];
+        $sink = null;
+        for ($sample = 0; $sample < self::SAMPLES; ++$sample) {
+            $started = hrtime(true);
+            for ($iteration = 0; $iteration < self::SEQUENTIAL_ITERATIONS; ++$iteration) {
+                $sink = $container->get('leaf');
+            }
+            $samples[] = (hrtime(true) - $started) / self::SEQUENTIAL_ITERATIONS;
         }
-    }
-
-    private static function warmFiber(Container $container): void
-    {
-        for ($iteration = 0; $iteration < 250; ++$iteration) {
-            $fiber = new Fiber(static function () use ($container): void {
-                $container->enterScope('request');
-
-                try {
-                    $container->get('leaf');
-                } finally {
-                    $container->leaveScope();
-                }
-            });
-            $fiber->start();
+        if (!$sink instanceof ReleaseRegressionLeaf) {
+            throw new RuntimeException('Sequential benchmark did not resolve the expected scoped service.');
         }
+
+        return self::median($samples);
     }
 
     /** @param list<float> $values */
@@ -170,44 +197,17 @@ final class ReleaseRegression
         return $values[intdiv(count($values), 2)];
     }
 
-    private static function compare(
-        string $baselinePath,
-        string $currentPath,
-        float $maxSequential,
-        float $maxFiber,
-    ): int {
-        $baseline = self::readResult($baselinePath);
-        $current = self::readResult($currentPath);
-        if ($baseline['php'] !== $current['php']) {
-            throw new RuntimeException('Baseline and current results must use the same PHP version.');
+    /** @param array<int, string> $arguments */
+    private static function option(array $arguments, string $name): ?string
+    {
+        $prefix = '--' . $name . '=';
+        foreach ($arguments as $argument) {
+            if (str_starts_with($argument, $prefix)) {
+                return substr($argument, strlen($prefix));
+            }
         }
 
-        $sequential = self::regression(
-            $baseline['sequential_production_ns'],
-            $current['sequential_production_ns'],
-        );
-        $fiber = self::regression($baseline['fiber_isolated_ns'], $current['fiber_isolated_ns']);
-
-        printf(
-            "PHP %s release regression comparison\nsequential production: %.3f ns -> %.3f ns (%+.2f%%, limit %.2f%%)\nisolated Fiber: %.3f ns -> %.3f ns (%+.2f%%, limit %.2f%%)\n",
-            $current['php'],
-            $baseline['sequential_production_ns'],
-            $current['sequential_production_ns'],
-            $sequential,
-            $maxSequential,
-            $baseline['fiber_isolated_ns'],
-            $current['fiber_isolated_ns'],
-            $fiber,
-            $maxFiber,
-        );
-
-        if ($sequential > $maxSequential || $fiber > $maxFiber) {
-            fwrite(STDERR, "Release performance regression budget exceeded.\n");
-
-            return 1;
-        }
-
-        return 0;
+        return null;
     }
 
     /** @return array{php: string, sequential_production_ns: float, fiber_isolated_ns: float} */
@@ -243,34 +243,30 @@ final class ReleaseRegression
         return (($current / $baseline) - 1.0) * 100.0;
     }
 
-    /** @param array<int, string> $arguments */
-    private static function option(array $arguments, string $name): ?string
+    private static function warmFiber(Container $container): void
     {
-        $prefix = '--' . $name . '=';
-        foreach ($arguments as $argument) {
-            if (str_starts_with($argument, $prefix)) {
-                return substr($argument, strlen($prefix));
-            }
-        }
+        for ($iteration = 0; $iteration < 250; ++$iteration) {
+            $fiber = new Fiber(static function () use ($container): void {
+                $container->enterScope('request');
 
-        return null;
+                try {
+                    $container->get('leaf');
+                } finally {
+                    $container->leaveScope();
+                }
+            });
+            $fiber->start();
+        }
     }
 
-    /** @param array<int, string> $arguments */
-    private static function floatOption(array $arguments, string $name, float $default): float
+    private static function warmSequential(ProductionContainer $container): void
     {
-        $value = self::option($arguments, $name);
-        if ($value === null) {
-            return $default;
+        for ($iteration = 0; $iteration < 50000; ++$iteration) {
+            $container->get('leaf');
         }
-        if (!is_numeric($value)) {
-            throw new RuntimeException("Option --{$name} must be numeric.");
-        }
-
-        return (float) $value;
     }
 }
 
 if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
-    exit(ReleaseRegression::main($argv));
+    ReleaseRegression::main($argv);
 }
