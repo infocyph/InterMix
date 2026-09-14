@@ -65,9 +65,7 @@ final class ProductionScopeStore
         return $context;
     }
 
-    /**
-     * @return array{ProductionCapturedScopeContext, ScopeState}
-     */
+    /** @return array{ProductionCapturedScopeContext, ScopeState} */
     public function capture(ScopeState $sequentialScope, ?ScopeContext $fallbackContext): array
     {
         $context = ExecutionContext::id();
@@ -116,7 +114,7 @@ final class ProductionScopeStore
         try {
             return $scope->resolved[$slot] = $resolver();
         } finally {
-            if (($scope->constructing[$slot] ?? null) === $carrier) {
+            if ($scope->constructing[$slot] === $carrier) {
                 unset($scope->constructing[$slot]);
             }
         }
@@ -190,11 +188,7 @@ final class ProductionScopeStore
     {
         $context = $this->activeContext();
         if ($context === null) {
-            while ($sequentialScope->name !== 'root') {
-                $sequentialScope = $this->closeSequentialScope($sequentialScope, $beforeClose);
-            }
-
-            return $sequentialScope;
+            return $this->resetSequential($sequentialScope, $beforeClose);
         }
 
         $state = $this->states[$context] ?? null;
@@ -203,28 +197,12 @@ final class ProductionScopeStore
         }
 
         if ($state->attachedScope instanceof ScopeState) {
-            while ($state->current !== $state->attachedScope) {
-                $this->closeContextScope($context, $beforeClose);
-                $state = $this->states[$context];
-            }
-
-            $state->attachedScope->attachments = max(0, $state->attachedScope->attachments - 1);
-            unset($this->states[$context]);
-            $this->finishContext($context);
+            $this->resetAttached($context, $state, $beforeClose);
 
             return $sequentialScope;
         }
 
-        while (($this->states[$context]->current ?? null) instanceof ScopeState
-            && $this->states[$context]->current->name !== 'root'
-        ) {
-            $this->closeContextScope($context, $beforeClose);
-        }
-
-        if (($this->states[$context]->current ?? null)?->name === 'root') {
-            unset($this->states[$context]);
-            $this->finishContext($context);
-        }
+        $this->resetOwnedContext($context, $beforeClose);
 
         return $sequentialScope;
     }
@@ -243,8 +221,12 @@ final class ProductionScopeStore
     private function closeContextScope(string $context, callable $beforeClose): void
     {
         $state = $this->states[$context] ?? null;
-        $current = $state?->current;
-        if (!$state instanceof ProductionExecutionScopeState || !$current instanceof ScopeState || $current->name === 'root') {
+        if (!$state instanceof ProductionExecutionScopeState) {
+            return;
+        }
+
+        $current = $state->current;
+        if (!$current instanceof ScopeState || $current->name === 'root') {
             return;
         }
         if ($state->attachedScope === $current) {
@@ -303,5 +285,52 @@ final class ProductionScopeStore
     private function owner(): object
     {
         return $this->owner ??= new stdClass();
+    }
+
+    /** @param callable(ScopeState): void $beforeClose */
+    private function resetAttached(
+        string $context,
+        ProductionExecutionScopeState $state,
+        callable $beforeClose,
+    ): void {
+        while ($state->current !== $state->attachedScope) {
+            $this->closeContextScope($context, $beforeClose);
+            $state = $this->states[$context];
+        }
+
+        $attached = $state->attachedScope;
+        if ($attached instanceof ScopeState) {
+            $attached->attachments = max(0, $attached->attachments - 1);
+        }
+        unset($this->states[$context]);
+        $this->finishContext($context);
+    }
+
+    /** @param callable(ScopeState): void $beforeClose */
+    private function resetOwnedContext(string $context, callable $beforeClose): void
+    {
+        while (true) {
+            $current = $this->states[$context]->current ?? null;
+            if (!$current instanceof ScopeState || $current->name === 'root') {
+                break;
+            }
+            $this->closeContextScope($context, $beforeClose);
+            if (!isset($this->states[$context])) {
+                return;
+            }
+        }
+
+        unset($this->states[$context]);
+        $this->finishContext($context);
+    }
+
+    /** @param callable(ScopeState): void $beforeClose */
+    private function resetSequential(ScopeState $scope, callable $beforeClose): ScopeState
+    {
+        while ($scope->name !== 'root') {
+            $scope = $this->closeSequentialScope($scope, $beforeClose);
+        }
+
+        return $scope;
     }
 }
