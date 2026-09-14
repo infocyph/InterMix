@@ -46,6 +46,12 @@
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/infocyph/Runwire.git"
+        }
+    ],
     "autoload": {
         "psr-4": {
             "Infocyph\\InterMix\\": "src/"
