@@ -10,6 +10,8 @@ use Infocyph\InterMix\Exceptions\ContainerException;
 /** @internal */
 final class ExecutionScopeStore
 {
+    use ExecutionScopeMaintenance;
+
     /** @var array<string, ExecutionScopeState> */
     private array $states = [];
 
@@ -209,23 +211,6 @@ final class ExecutionScopeStore
             : $state->currentScope;
     }
 
-    public function hasConcurrentActivity(?string $currentContext): bool
-    {
-        foreach ($this->states as $context => $state) {
-            if ($context !== $currentContext || $state->attachedScope instanceof LogicalScopeState) {
-                return true;
-            }
-
-            for ($scope = $state->logicalCurrent; $scope instanceof LogicalScopeState; $scope = $scope->parent) {
-                if ($scope->attachments > 0) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
     public function hasNestedScope(string $context): bool
     {
         $state = $this->states[$context] ?? null;
@@ -277,47 +262,6 @@ final class ExecutionScopeStore
     public function hasState(string $context): bool
     {
         return isset($this->states[$context]);
-    }
-
-    public function invalidateClass(string $class): void
-    {
-        foreach ($this->states as $state) {
-            foreach (array_keys($state->resolvedScoped) as $scope) {
-                unset($state->resolvedScoped[$scope][$class]);
-                if ($state->resolvedScoped[$scope] === []) {
-                    unset($state->resolvedScoped[$scope]);
-                }
-            }
-        }
-        $this->walkUniqueFrames(static function (LogicalScopeState $scope) use ($class): void {
-            unset($scope->resolvedScoped[$class], $scope->constructing[$class]);
-        });
-    }
-
-    public function invalidateDefinition(string $id): void
-    {
-        foreach ($this->states as $state) {
-            foreach (array_keys($state->resolvedScoped) as $scope) {
-                unset($state->resolvedScoped[$scope][$id]);
-                if ($state->resolvedScoped[$scope] === []) {
-                    unset($state->resolvedScoped[$scope]);
-                }
-            }
-        }
-        $this->walkUniqueFrames(static function (LogicalScopeState $scope) use ($id): void {
-            unset($scope->resolvedScoped[$id], $scope->constructing[$id]);
-        });
-    }
-
-    public function invalidateResolutionConfiguration(): void
-    {
-        foreach ($this->states as $state) {
-            $state->resolvedScoped = [];
-        }
-        $this->walkUniqueFrames(static function (LogicalScopeState $scope): void {
-            $scope->resolvedScoped = [];
-            $scope->constructing = [];
-        });
     }
 
     public function isAttached(string $context): bool
@@ -469,70 +413,6 @@ final class ExecutionScopeStore
         }
     }
 
-    private function logicalScopeForName(string $context, string $scope): ?LogicalScopeState
-    {
-        for ($current = $this->states[$context]->logicalCurrent ?? null; $current instanceof LogicalScopeState; $current = $current->parent) {
-            if ($current->name === $scope) {
-                return $current;
-            }
-        }
-
-        return null;
-    }
-
-    private function promoteFastState(ExecutionScopeState $state): void
-    {
-        if ($state->currentScope === 'root') {
-            throw new ContainerException('Cannot capture a scope context without an active scope.');
-        }
-
-        $parent = null;
-        foreach ([...$state->scopeStack, $state->currentScope] as $scope) {
-            if ($scope === 'root') {
-                continue;
-            }
-            $parent = new LogicalScopeState(
-                $scope,
-                $parent,
-                $state->scopeSeeds[$scope] ?? [],
-                $state->resolvedScoped[$scope] ?? [],
-            );
-        }
-
-        $state->logicalCurrent = $parent;
-        $state->currentScope = 'root';
-        $state->scopeStack = [];
-        $state->scopeSeeds = [];
-        $state->resolvedScoped = [];
-    }
-
-    private function resetLogicalState(string $context, ExecutionScopeState $state): void
-    {
-        if ($state->attachedScope instanceof LogicalScopeState) {
-            for ($scope = $state->logicalCurrent; $scope instanceof LogicalScopeState && $scope !== $state->attachedScope; $scope = $scope->parent) {
-                if ($scope->attachments > 0) {
-                    throw new ContainerException('Cannot reset a scope while child execution carriers are still attached.');
-                }
-                $scope->closed = true;
-                $scope->constructing = [];
-            }
-
-            $state->attachedScope->attachments = max(0, $state->attachedScope->attachments - 1);
-            unset($this->states[$context]);
-
-            return;
-        }
-
-        for ($scope = $state->logicalCurrent; $scope instanceof LogicalScopeState; $scope = $scope->parent) {
-            if ($scope->attachments > 0) {
-                throw new ContainerException('Cannot reset a scope while child execution carriers are still attached.');
-            }
-            $scope->closed = true;
-            $scope->constructing = [];
-        }
-        unset($this->states[$context]);
-    }
-
     private function stateHasActiveScope(ExecutionScopeState $state): bool
     {
         return $state->logicalCurrent instanceof LogicalScopeState
@@ -547,21 +427,5 @@ final class ExecutionScopeStore
         }
 
         return $scopeContext->unwrap($owner);
-    }
-
-    /** @param callable(LogicalScopeState): void $callback */
-    private function walkUniqueFrames(callable $callback): void
-    {
-        $seen = [];
-        foreach ($this->states as $state) {
-            for ($scope = $state->logicalCurrent; $scope instanceof LogicalScopeState; $scope = $scope->parent) {
-                $id = spl_object_id($scope);
-                if (isset($seen[$id])) {
-                    continue;
-                }
-                $seen[$id] = true;
-                $callback($scope);
-            }
-        }
     }
 }
