@@ -91,12 +91,19 @@ final class ExecutionScopeStore
 
     public function getResolvedScopedEntry(string $context, string $scope, string $id): mixed
     {
-        return $this->scopeForName($context, $scope)?->resolvedScoped[$id] ?? null;
+        $frame = $this->scopeForName($context, $scope);
+        if (!$frame instanceof LogicalScopeState) {
+            return null;
+        }
+
+        return $frame->resolvedScoped[$id] ?? null;
     }
 
     public function getScope(string $context): string
     {
-        return $this->states[$context]->current?->name ?? 'root';
+        $current = $this->states[$context]->current ?? null;
+
+        return $current instanceof LogicalScopeState ? $current->name : 'root';
     }
 
     public function hasResolvedScoped(string $context, string $scope, string $id): bool
@@ -108,7 +115,9 @@ final class ExecutionScopeStore
 
     public function hasScopeSeeds(string $context): bool
     {
-        return ($this->states[$context]->current?->seeds ?? []) !== [];
+        $current = $this->states[$context]->current ?? null;
+
+        return $current instanceof LogicalScopeState && $current->seeds !== [];
     }
 
     public function hasState(string $context): bool
