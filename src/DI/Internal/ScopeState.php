@@ -7,14 +7,14 @@ namespace Infocyph\InterMix\DI\Internal;
 /** @internal */
 final class ScopeState
 {
+    public readonly bool $hasSeeds;
+
     public int $attachments = 0;
 
     public bool $closed = false;
 
     /** @var array<int, string> service slot => constructing carrier */
     public array $constructing = [];
-
-    public readonly bool $hasSeeds;
 
     /** @var array<int, mixed> */
     public array $resolved = [];
