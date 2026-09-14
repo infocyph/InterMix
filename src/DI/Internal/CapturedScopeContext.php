@@ -25,7 +25,6 @@ final class CapturedScopeContext implements ScopeContext
         return $this->scope;
     }
 
-    /** @return never */
     public function __serialize(): array
     {
         throw new ContainerException('Scope contexts are process-local and cannot be serialized.');
