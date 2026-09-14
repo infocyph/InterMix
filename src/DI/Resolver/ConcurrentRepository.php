@@ -58,6 +58,17 @@ final class ConcurrentRepository extends Repository
         }
     }
 
+    public function beginScopedConstruction(string $scope, string $id): bool
+    {
+        $store = $this->executionScopes;
+        $context = $this->activeExecutionContext();
+        if (!$store instanceof ExecutionScopeStore || $context === null) {
+            return false;
+        }
+
+        return $store->beginScopedConstruction($context, $scope, $id);
+    }
+
     public function captureScopeContext(): ScopeContext
     {
         $physicalContext = ExecutionContext::id();
@@ -93,11 +104,15 @@ final class ConcurrentRepository extends Repository
         }
 
         $store->detachScopeContext($physicalContext, $scopeContext, $this->scopeContextOwner());
-        if ($physicalContext === self::ROOT_CONTEXT && !$store->hasState(self::ROOT_CONTEXT)) {
-            $this->rootContextActive = false;
-        }
-        if ($store->isEmpty()) {
-            $this->executionScopes = null;
+        $this->finishExecutionContext($store, $physicalContext);
+    }
+
+    public function endScopedConstruction(string $scope, string $id): void
+    {
+        $store = $this->executionScopes;
+        $context = $this->activeExecutionContext();
+        if ($store instanceof ExecutionScopeStore && $context !== null) {
+            $store->endScopedConstruction($context, $scope, $id);
         }
     }
 
@@ -261,6 +276,41 @@ final class ConcurrentRepository extends Repository
         $this->scopeLeaveHooks[$scope][] = $hook;
     }
 
+    /**
+     * Framework-safe cleanup for only the currently executing carrier.
+     *
+     * Owned scopes are closed in LIFO order with normal leave hooks. An attached
+     * carrier closes only its nested child frames and then releases its lease;
+     * it never closes the shared owning scope.
+     */
+    public function resetCurrentExecutionScope(): void
+    {
+        $store = $this->executionScopes;
+        $context = $this->activeExecutionContext();
+        if ($store instanceof ExecutionScopeStore && $context !== null && $store->hasState($context)) {
+            if ($store->isAttached($context)) {
+                while ($store->hasNestedScope($context)) {
+                    $this->leaveExecutionScope($store, $context);
+                }
+                $store->detachCurrentScopeContext($context);
+                $this->finishExecutionContext($store, $context);
+
+                return;
+            }
+
+            while ($store->hasState($context)) {
+                $this->leaveExecutionScope($store, $context);
+            }
+            $this->finishExecutionContext($store, $context);
+
+            return;
+        }
+
+        while ($this->currentScope !== 'root') {
+            $this->leaveScope();
+        }
+    }
+
     public function resetScope(): void
     {
         $store = $this->executionScopes;
@@ -344,19 +394,25 @@ final class ConcurrentRepository extends Repository
         return $this->rootContextActive ? self::ROOT_CONTEXT : null;
     }
 
-    private function leaveExecutionScope(ExecutionScopeStore $store, string $context): void
+    private function finishExecutionContext(ExecutionScopeStore $store, string $context): void
     {
-        $scope = $store->getScope($context);
-        foreach ($this->scopeLeaveHooks[$scope] ?? [] as $hook) {
-            $hook($scope, $this->container());
-        }
-        $store->leaveScope($context);
         if ($context === self::ROOT_CONTEXT && !$store->hasState(self::ROOT_CONTEXT)) {
             $this->rootContextActive = false;
         }
         if ($store->isEmpty()) {
             $this->executionScopes = null;
         }
+    }
+
+    private function leaveExecutionScope(ExecutionScopeStore $store, string $context): void
+    {
+        $store->assertCanLeaveScope($context);
+        $scope = $store->getScope($context);
+        foreach ($this->scopeLeaveHooks[$scope] ?? [] as $hook) {
+            $hook($scope, $this->container());
+        }
+        $store->leaveScope($context);
+        $this->finishExecutionContext($store, $context);
     }
 
     private function promoteSequentialScope(): void
