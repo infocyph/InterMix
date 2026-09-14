@@ -12,6 +12,7 @@ InterMix ships with PhpBench suites at:
 - ``benchmarks/CompiledRuntimeBench.php``
 - ``benchmarks/DefinitionCacheBench.php``
 - ``benchmarks/RequestPathBench.php``
+- ``benchmarks/StructuredScopeBench.php``
 - ``benchmarks/FenceBench.php``
 
 Run every suite with PHPForge's quick benchmark profile:
@@ -51,6 +52,11 @@ The suite covers DI paths end-to-end:
 - Property wiring via ``registerProperty()`` + ``make()``
 - Immediate resolution via ``resolveNow()`` (class and method paths)
 - Scoped lifetime behavior with ``enterScope()`` / ``leaveScope()``
+- Structured-scope sequential resolved reads in dynamic and generated runtimes
+- Fiber-isolated scope enter/resolve/leave round trips
+- Logical ``ScopeContext`` capture
+- Explicit attached-child resolve/detach round trips
+- Attached child nested-scope enter/resolve/leave round trips
 - Tagged service lookup via ``findByTag()``
 - Lazy tagged iteration via ``tagged()``
 - ``Invoker`` wrapper method invocation path
@@ -71,6 +77,29 @@ The suite covers DI paths end-to-end:
 - Service-provider registration path
 - Environment-conditional interface binding path
 - Manual object graph baseline (non-container)
+
+Structured-scope regression policy
+----------------------------------
+
+InterMix 10.1 keeps the ordinary sequential production path as the primary
+performance gate. The structured-concurrency machinery is intentionally lazy:
+plain request/job execution should not pay attachment or runtime-detection work
+on every ``get()`` call.
+
+For release review:
+
+* compare the existing sequential production/request benchmarks with the 10.0
+  baseline on the same PHP build and machine;
+* treat a sustained sequential production regression above roughly **3%** as a
+  release blocker unless the change is explicitly justified;
+* inspect ``StructuredScopeBench`` separately for capture, attached-child and
+  nested-frame costs—these are opt-in structured paths, not the baseline;
+* confirm Fiber-isolated scope cost does not materially regress; and
+* run both PHP 8.4 and 8.5 benchmark jobs used by the repository workflow.
+
+The benchmark CI job is a signal, not a substitute for comparing stored
+baseline output on a stable runner. A noisy one-off difference should be
+repeated before changing runtime architecture.
 
 Interpretation
 --------------
