@@ -6,6 +6,8 @@ namespace Infocyph\InterMix\DI;
 
 use Closure;
 use Infocyph\InterMix\DI\Internal\ExecutionContext;
+use Infocyph\InterMix\DI\Internal\ProductionCapturedScopeContext;
+use Infocyph\InterMix\DI\Internal\ProductionExecutionScopeState;
 use Infocyph\InterMix\DI\Internal\ProductionFallbackState;
 use Infocyph\InterMix\DI\Internal\ProductionSpecResolver;
 use Infocyph\InterMix\DI\Internal\RuntimeIslandResolver;
@@ -14,9 +16,14 @@ use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Internal\ReflectionResource;
 use Psr\Container\ContainerInterface;
+use stdClass;
 
 abstract class ProductionContainer implements ContainerInterface
 {
+    private const string ROOT_CONTEXT = "\0intermix.production.root";
+
+    private const string SEQUENTIAL_CONSTRUCTION_CONTEXT = "\0intermix.production.sequential";
+
     protected bool $contextScopesActive = false;
 
     protected ScopeState $scope;
@@ -25,7 +32,7 @@ abstract class ProductionContainer implements ContainerInterface
 
     private bool $deoptimized = false;
 
-    /** @var array<string, ScopeState> */
+    /** @var array<string, ProductionExecutionScopeState> */
     private array $executionScopes = [];
 
     private ?Container $fallback;
@@ -38,7 +45,11 @@ abstract class ProductionContainer implements ContainerInterface
      */
     private array $fallbackDefinitions = [];
 
+    private bool $rootContextActive = false;
+
     private ?RuntimeIslandResolver $runtimeIslands = null;
+
+    private ?object $scopeContextOwner = null;
 
     public function __construct(?Container $fallback = null)
     {
@@ -78,6 +89,40 @@ abstract class ProductionContainer implements ContainerInterface
         return $this->dynamic()->call($classOrClosure, $method);
     }
 
+    final public function captureScopeContext(): ScopeContext
+    {
+        $context = ExecutionContext::id();
+        if ($context === null) {
+            if (!$this->rootContextActive) {
+                if ($this->scope->name === 'root') {
+                    throw new ContainerException('Cannot capture a scope context without an active scope.');
+                }
+
+                $state = new ProductionExecutionScopeState();
+                $state->current = $this->scope;
+                $this->executionScopes[self::ROOT_CONTEXT] = $state;
+                $this->scope = new ScopeState('root');
+                $this->rootContextActive = true;
+                $this->contextScopesActive = true;
+            }
+            $context = self::ROOT_CONTEXT;
+        }
+
+        $state = $this->executionScopes[$context] ?? null;
+        $scope = $state?->current;
+        if (!$scope instanceof ScopeState || $scope->name === 'root' || $scope->closed) {
+            throw new ContainerException('Cannot capture a scope context without an active scope.');
+        }
+
+        $fallbackContext = $this->fallback?->captureScopeContext();
+
+        return new ProductionCapturedScopeContext(
+            $this->scopeContextOwner(),
+            $scope,
+            $fallbackContext,
+        );
+    }
+
     /**
      * Switch all production resolution to the original dynamic graph while
      * preserving compiled singleton/scoped identities already materialized.
@@ -101,10 +146,10 @@ abstract class ProductionContainer implements ContainerInterface
     /** @param array<string, mixed> $instances */
     final public function enterScope(string $scope, array $instances = []): static
     {
-        $context = ExecutionContext::id();
+        $context = $this->activeExecutionContext();
         $current = $context === null
             ? $this->scope
-            : ($this->executionScopes[$context] ?? new ScopeState('root'));
+            : (($this->executionScopes[$context] ?? null)?->current ?? new ScopeState('root'));
         if ($scope === 'root' || $current->contains($scope)) {
             throw new ContainerException("Scope \"{$scope}\" is already active.");
         }
@@ -121,7 +166,8 @@ abstract class ProductionContainer implements ContainerInterface
         if ($context === null) {
             $this->scope = $next;
         } else {
-            $this->executionScopes[$context] = $next;
+            $state = $this->executionScopes[$context] ??= new ProductionExecutionScopeState();
+            $state->current = $next;
             $this->contextScopesActive = true;
         }
         $this->fallback?->enterScope($scope, $instances);
@@ -202,31 +248,7 @@ abstract class ProductionContainer implements ContainerInterface
 
     final public function leaveScope(): static
     {
-        $context = ExecutionContext::id();
-        $current = $context === null
-            ? $this->scope
-            : ($this->executionScopes[$context] ?? new ScopeState('root'));
-        $scope = $current->name;
-        if ($this->requiresScopeLeaveHook($scope) && !$this->fallback instanceof Container) {
-            throw new ContainerException(
-                "Compiled scope '$scope' requires its runtime scope-leave hook graph.",
-            );
-        }
-
-        $this->fallback?->leaveScope();
-        $parent = $current->parent;
-        if ($context === null) {
-            $this->scope = $parent ?? new ScopeState('root');
-
-            return $this;
-        }
-
-        if ($parent instanceof ScopeState && $parent->name !== 'root') {
-            $this->executionScopes[$context] = $parent;
-        } else {
-            unset($this->executionScopes[$context]);
-        }
-        $this->contextScopesActive = $this->executionScopes !== [];
+        $this->leaveProductionScope($this->activeExecutionContext(), true);
 
         return $this;
     }
@@ -249,6 +271,55 @@ abstract class ProductionContainer implements ContainerInterface
         }
 
         return $this->dynamic()->make($class, $method);
+    }
+
+    /**
+     * Reset only the current execution carrier's DI scope state.
+     *
+     * Attached carriers close only their nested frames and release the attachment;
+     * owning carriers close their own frames in deterministic LIFO order.
+     */
+    final public function resetCurrentExecutionScope(): void
+    {
+        $context = $this->activeExecutionContext();
+        if ($context === null) {
+            while ($this->scope->name !== 'root') {
+                $this->leaveProductionScope(null, true);
+            }
+
+            return;
+        }
+
+        $state = $this->executionScopes[$context] ?? null;
+        if (!$state instanceof ProductionExecutionScopeState || !$state->current instanceof ScopeState) {
+            return;
+        }
+
+        if ($state->attachedScope instanceof ScopeState) {
+            while ($state->current instanceof ScopeState && $state->current !== $state->attachedScope) {
+                $this->leaveProductionScope($context, true);
+            }
+
+            if (($this->executionScopes[$context] ?? null)?->attachedScope instanceof ScopeState) {
+                $attached = $this->executionScopes[$context]->attachedScope;
+                $attached->attachments = max(0, $attached->attachments - 1);
+                unset($this->executionScopes[$context]);
+                $this->finishProductionExecutionContext($context);
+            }
+            $this->fallback?->resetCurrentExecutionScope();
+
+            return;
+        }
+
+        while (($this->executionScopes[$context] ?? null)?->current instanceof ScopeState) {
+            $current = $this->executionScopes[$context]->current;
+            if ($current->name === 'root') {
+                unset($this->executionScopes[$context]);
+                $this->finishProductionExecutionContext($context);
+                break;
+            }
+            $this->leaveProductionScope($context, true);
+        }
     }
 
     /**
@@ -289,6 +360,35 @@ abstract class ProductionContainer implements ContainerInterface
         }
     }
 
+    final public function withinScopeContext(ScopeContext $scopeContext, callable $callback): mixed
+    {
+        [$scope, $fallbackContext] = $this->unwrapScopeContext($scopeContext);
+        $context = $this->attachProductionScopeContext($scope);
+
+        if ($this->fallback instanceof Container && $fallbackContext instanceof ScopeContext) {
+            try {
+                return $this->fallback->withinScopeContext(
+                    $fallbackContext,
+                    function () use ($callback, $context, $scope): mixed {
+                        try {
+                            return $callback($this);
+                        } finally {
+                            $this->detachProductionScopeContext($context, $scope, true);
+                        }
+                    },
+                );
+            } finally {
+                $this->detachProductionScopeContext($context, $scope, false);
+            }
+        }
+
+        try {
+            return $callback($this);
+        } finally {
+            $this->detachProductionScopeContext($context, $scope, false);
+        }
+    }
+
     final protected function applyCompiledRuntimePropertyAttribute(
         object $instance,
         string $declaringClass,
@@ -325,12 +425,43 @@ abstract class ProductionContainer implements ContainerInterface
             return $this->scope;
         }
 
-        $context = ExecutionContext::id();
+        $context = $this->activeExecutionContext();
         if ($context === null) {
             return $this->scope;
         }
 
-        return $this->executionScopes[$context] ??= new ScopeState('root');
+        $state = $this->executionScopes[$context] ??= new ProductionExecutionScopeState();
+
+        return $state->current ??= new ScopeState('root');
+    }
+
+    final protected function constructCompiledScoped(
+        ScopeState $scope,
+        int $slot,
+        string $id,
+        callable $resolver,
+    ): mixed {
+        $carrier = $this->activeExecutionContext() ?? self::SEQUENTIAL_CONSTRUCTION_CONTEXT;
+        $constructingCarrier = $scope->constructing[$slot] ?? null;
+        if ($constructingCarrier !== null) {
+            if ($constructingCarrier === $carrier) {
+                return $resolver();
+            }
+
+            throw new ContainerException(
+                "Scoped service '{$id}' is already being constructed by another execution carrier in scope '{$scope->name}'.",
+            );
+        }
+
+        $scope->constructing[$slot] = $carrier;
+
+        try {
+            return $scope->resolved[$slot] = $resolver();
+        } finally {
+            if (($scope->constructing[$slot] ?? null) === $carrier) {
+                unset($scope->constructing[$slot]);
+            }
+        }
     }
 
     /** @return array<string, mixed> */
@@ -422,6 +553,46 @@ abstract class ProductionContainer implements ContainerInterface
         };
     }
 
+    private function activeExecutionContext(): ?string
+    {
+        $context = ExecutionContext::id();
+        if ($context !== null) {
+            return $context;
+        }
+
+        return $this->rootContextActive ? self::ROOT_CONTEXT : null;
+    }
+
+    private function attachProductionScopeContext(ScopeState $scope): string
+    {
+        if ($scope->closed) {
+            throw new ContainerException('Scope context is no longer active.');
+        }
+
+        $context = ExecutionContext::id();
+        if ($context === null) {
+            if ($this->rootContextActive || $this->scope->name !== 'root') {
+                throw new ContainerException(
+                    'Cannot attach a scope context while this execution carrier already has an active scope.',
+                );
+            }
+            $context = self::ROOT_CONTEXT;
+            $this->rootContextActive = true;
+        }
+
+        $state = $this->executionScopes[$context] ??= new ProductionExecutionScopeState();
+        if ($state->current instanceof ScopeState || $state->attachedScope instanceof ScopeState) {
+            throw new ContainerException('Cannot attach a scope context while this execution carrier already has an active scope.');
+        }
+
+        ++$scope->attachments;
+        $state->current = $scope;
+        $state->attachedScope = $scope;
+        $this->contextScopesActive = true;
+
+        return $context;
+    }
+
     private function callCompiledDefinition(string $id, string|bool|null $method): mixed
     {
         $service = $this->get($id);
@@ -450,12 +621,32 @@ abstract class ProductionContainer implements ContainerInterface
             return $this->scope;
         }
 
-        $context = ExecutionContext::id();
+        $context = $this->activeExecutionContext();
         if ($context === null) {
             return $this->scope;
         }
 
-        return $this->executionScopes[$context] ?? new ScopeState('root');
+        return ($this->executionScopes[$context] ?? null)?->current ?? new ScopeState('root');
+    }
+
+    private function detachProductionScopeContext(string $context, ScopeState $scope, bool $synchronizeFallback): void
+    {
+        $state = $this->executionScopes[$context] ?? null;
+        if (!$state instanceof ProductionExecutionScopeState || $state->attachedScope !== $scope) {
+            return;
+        }
+
+        while ($state->current instanceof ScopeState && $state->current !== $scope) {
+            $this->leaveProductionScope($context, $synchronizeFallback);
+            $state = $this->executionScopes[$context] ?? null;
+            if (!$state instanceof ProductionExecutionScopeState) {
+                return;
+            }
+        }
+
+        $scope->attachments = max(0, $scope->attachments - 1);
+        unset($this->executionScopes[$context]);
+        $this->finishProductionExecutionContext($context);
     }
 
     private function dynamic(): Container
@@ -470,6 +661,14 @@ abstract class ProductionContainer implements ContainerInterface
         $this->fallback = $fallback;
 
         return $fallback;
+    }
+
+    private function finishProductionExecutionContext(string $context): void
+    {
+        if ($context === self::ROOT_CONTEXT && !isset($this->executionScopes[self::ROOT_CONTEXT])) {
+            $this->rootContextActive = false;
+        }
+        $this->contextScopesActive = $this->executionScopes !== [];
     }
 
     private function hookRuntime(string $id): Container
@@ -493,6 +692,53 @@ abstract class ProductionContainer implements ContainerInterface
             );
             $this->fallbackBridgeDefinitions[$id] = $fallback->getRepository()->getFunctionDefinition($id);
         }
+    }
+
+    private function leaveProductionScope(?string $context, bool $synchronizeFallback): void
+    {
+        $state = $context === null ? null : ($this->executionScopes[$context] ?? null);
+        $current = $context === null
+            ? $this->scope
+            : ($state?->current ?? new ScopeState('root'));
+        if ($current->name === 'root') {
+            return;
+        }
+        if ($state?->attachedScope === $current) {
+            throw new ContainerException('Cannot leave an attached scope context; detach it instead.');
+        }
+        if ($current->attachments > 0) {
+            throw new ContainerException('Cannot leave a scope while child execution carriers are still attached.');
+        }
+
+        $scope = $current->name;
+        if ($this->requiresScopeLeaveHook($scope) && !$this->fallback instanceof Container) {
+            throw new ContainerException(
+                "Compiled scope '$scope' requires its runtime scope-leave hook graph.",
+            );
+        }
+
+        if ($synchronizeFallback) {
+            $this->fallback?->leaveScope();
+        }
+
+        $current->closed = true;
+        $current->constructing = [];
+        $parent = $current->parent;
+        if ($context === null) {
+            $this->scope = $parent ?? new ScopeState('root');
+
+            return;
+        }
+
+        if ($state instanceof ProductionExecutionScopeState
+            && $parent instanceof ScopeState
+            && $parent->name !== 'root'
+        ) {
+            $state->current = $parent;
+        } else {
+            unset($this->executionScopes[$context]);
+        }
+        $this->finishProductionExecutionContext($context);
     }
 
     /**
@@ -571,6 +817,11 @@ abstract class ProductionContainer implements ContainerInterface
         return $this->runtimeIslands ??= new RuntimeIslandResolver($this->fallback->getRepository());
     }
 
+    private function scopeContextOwner(): object
+    {
+        return $this->scopeContextOwner ??= new stdClass();
+    }
+
     private function synchronizeFallbackScopes(Container $fallback): void
     {
         ProductionFallbackState::synchronizeScopes($fallback, $this->currentExecutionScope());
@@ -590,5 +841,15 @@ abstract class ProductionContainer implements ContainerInterface
             $this->compiledIds(),
             $this->currentExecutionScope(),
         );
+    }
+
+    /** @return array{ScopeState, ScopeContext|null} */
+    private function unwrapScopeContext(ScopeContext $scopeContext): array
+    {
+        if (!$scopeContext instanceof ProductionCapturedScopeContext) {
+            throw new ContainerException('Scope context belongs to a different container.');
+        }
+
+        return $scopeContext->unwrap($this->scopeContextOwner());
     }
 }
