@@ -159,6 +159,23 @@ final class ExecutionScopeStore
         return $current instanceof LogicalScopeState ? $current->name : 'root';
     }
 
+    public function hasConcurrentActivity(?string $currentContext): bool
+    {
+        foreach ($this->states as $context => $state) {
+            if ($context !== $currentContext || $state->attachedScope instanceof LogicalScopeState) {
+                return true;
+            }
+
+            for ($scope = $state->current; $scope instanceof LogicalScopeState; $scope = $scope->parent) {
+                if ($scope->attachments > 0) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     public function hasNestedScope(string $context): bool
     {
         $state = $this->states[$context] ?? null;
