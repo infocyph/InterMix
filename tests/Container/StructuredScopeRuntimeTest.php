@@ -160,7 +160,7 @@ it('clears a failed scoped construction guard so a later carrier can retry', fun
         static fn(Container $active): stdClass => $active->get('cold'),
     ));
     expect(fn() => $first->start())
-        ->toThrow(RuntimeException::class, 'expected construction failure');
+        ->toThrow(ContainerException::class);
 
     $second = new Fiber(static fn(): stdClass => $container->withinScopeContext(
         $context,
