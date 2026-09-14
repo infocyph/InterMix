@@ -35,11 +35,11 @@ jobs:
         with:
           path: current
 
-      - name: Checkout InterMix 10.0 baseline
+      - name: Checkout InterMix 10.0.4 baseline
         uses: actions/checkout@v7
         with:
           repository: infocyph/InterMix
-          ref: "10.0"
+          ref: "10.0.4"
           path: baseline
 
       - name: Setup PHP
@@ -60,7 +60,7 @@ jobs:
         run: |
           php current/benchmarks/ReleaseRegression.php \
             --autoload="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" \
-            --output="$RUNNER_TEMP/intermix-10.0-${{ matrix.php-version }}.json"
+            --output="$RUNNER_TEMP/intermix-10.0.4-${{ matrix.php-version }}.json"
           php current/benchmarks/ReleaseRegression.php \
             --autoload="$GITHUB_WORKSPACE/current/vendor/autoload.php" \
             --output="$RUNNER_TEMP/intermix-10.1-${{ matrix.php-version }}.json"
@@ -69,7 +69,7 @@ jobs:
         shell: bash
         run: |
           php current/benchmarks/ReleaseRegression.php \
-            --compare-baseline="$RUNNER_TEMP/intermix-10.0-${{ matrix.php-version }}.json" \
+            --compare-baseline="$RUNNER_TEMP/intermix-10.0.4-${{ matrix.php-version }}.json" \
             --compare-current="$RUNNER_TEMP/intermix-10.1-${{ matrix.php-version }}.json" \
             --max-sequential=3 \
             --max-fiber=5
@@ -80,6 +80,6 @@ jobs:
         with:
           name: intermix-release-regression-php-${{ matrix.php-version }}
           path: |
-            ${{ runner.temp }}/intermix-10.0-${{ matrix.php-version }}.json
+            ${{ runner.temp }}/intermix-10.0.4-${{ matrix.php-version }}.json
             ${{ runner.temp }}/intermix-10.1-${{ matrix.php-version }}.json
           retention-days: 61
