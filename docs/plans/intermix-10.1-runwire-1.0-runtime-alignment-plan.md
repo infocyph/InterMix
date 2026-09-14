@@ -297,7 +297,6 @@ A captured scope context:
 ## 8.2 Process-local only
 
 Scope-context propagation is in-process execution plumbing.
-
 Cross-process propagation belongs to explicit DTO/message/correlation metadata, never to InterMix container scope handles.
 
 ## 8.3 Explicit attachment
@@ -1015,21 +1014,21 @@ Execute in this order.
 - [x] **3. Design the opaque scope-context/handle contract.** Keep names minimal; prove foreign/stale/non-serializable ownership rules. **Completed:** public `ScopeContext` is opaque and process-local; internal captured handles require the repository's private owner capability to unwrap and forged, foreign, stale and serialized contexts are rejected.
 - [x] **4. Refactor dynamic scope internals.** Separate carrier-local active frame from logical scope storage while preserving the sequential fast path. **Completed:** `ExecutionScopeState` owns carrier-local position, `LogicalScopeState` owns logical seeds/resolved entries, and sequential state is promoted lazily only when explicit cross-carrier capture is requested.
 - [x] **5. Implement capture + attach/detach callback/lease semantics in dynamic `Container`.** Default independent Fiber behavior remains unchanged. **Completed:** `captureScopeContext()` + `withinScopeContext()` provide finally-safe explicit propagation; overlapping sibling attachments share identity, child attach/detach does not fire the owner leave hook, and default independent Fibers remain isolated.
-- [ ] **6. Implement nested child-frame semantics.** Sibling nested scopes must not mutate each other's active position.
-- [ ] **7. Add attachment ownership/liveness enforcement.** Owner cannot silently close while child attachments remain.
-- [ ] **8. Add concurrent scoped-construction guard.** Never duplicate one logical scoped instance when construction suspends/interleaves.
-- [ ] **9. Add framework-safe current-execution cleanup/reset primitive.** Idempotent, carrier-local and hook-correct.
-- [ ] **10. Port the same semantics to generated `ProductionContainer`.** Preserve InterMix 10 compiled hot paths.
-- [ ] **11. Validate dynamic fallback/runtime-island synchronization.** Captured scopes and deoptimization retain identity/parity.
-- [ ] **12. Harden execution carrier detection.** Review Fiber object-ID reuse, Swoole/OpenSwoole lifecycle and mixed carrier behavior.
-- [ ] **13. Guard unsafe global mutation during active concurrent scopes.** Especially deoptimization, environment/fallback/definition state.
-- [ ] **14. Audit all static/process-wide InterMix state.** Bound, classify, document or fix each mutable cache/registry.
-- [ ] **15. Add released Runwire 1.0 integration tests.** Use coroutine/task-local/cancellation only; no PCNTL/POSIX requirement.
-- [ ] **16. Add persistent worker/cancellation/exception stress coverage.** Prove no scope/attachment leakage.
-- [ ] **17. Add optional Swoole/OpenSwoole compatibility evidence.** No production extension requirement.
-- [ ] **18. Run dynamic/compiled/deoptimized semantic parity suite.** No feature may work only in development mode.
-- [ ] **19. Benchmark sequential, Fiber-isolated and attached-scope paths.** Reject unnecessary hot-path regressions.
-- [ ] **20. Update docs and migration/release notes.** Explicit structured-concurrency guidance and persistent-process state classification.
+- [x] **6. Implement nested child-frame semantics.** **Completed:** attached children receive carrier-local nested frames over the shared logical parent; sibling active positions and nested scoped identities remain independent and each carrier restores the parent exactly on leave.
+- [x] **7. Add attachment ownership/liveness enforcement.** **Completed:** logical scopes track live attachment leases, owner close/reset rejects while children remain attached, child detach is finally-safe, and owner scope-leave hooks are not fired by attach/detach.
+- [x] **8. Add concurrent scoped-construction guard.** **Completed:** one logical scope tracks in-flight scoped construction per service; competing carriers fail deterministically instead of duplicate-creating, while failure cleanup clears the guard for retry.
+- [x] **9. Add framework-safe current-execution cleanup/reset primitive.** **Completed:** `resetCurrentExecutionScope()` is idempotent, carrier-local and hook-correct; it closes owned nested frames in LIFO order and attached carriers release only their own frames/lease.
+- [x] **10. Port the same semantics to generated `ProductionContainer`.** **Completed:** generated production scope storage mirrors dynamic capture/attach, nested frames, attachment liveness, construction guards and current-carrier reset without importing development Repository/reflection machinery into the compiled fast path. **Validation:** Security & Standards #485 is green on PHP 8.4/8.5.
+- [x] **11. Validate dynamic fallback/runtime-island synchronization.** **Completed:** captured scopes remain synchronized across compiled services and dynamic fallback/runtime islands, and explicit deoptimization preserves active scoped/singleton identity where required.
+- [x] **12. Harden execution carrier detection.** **Completed:** Fiber and object-backed coroutine carriers use weakly keyed process-local tokens rather than reusable `spl_object_id()` ownership; numeric CID remains a fallback, and mixed Fiber-over-coroutine precedence is verified.
+- [x] **13. Guard unsafe global mutation during active concurrent scopes.** **Completed:** concurrent/shared scope activity blocks unsafe definition/environment/fallback/deoptimization transitions while preserving InterMix 10's supported single-carrier deoptimization path.
+- [x] **14. Audit all static/process-wide InterMix state.** **Completed:** mutable process state is classified in `docs/plans/intermix-10.1-process-state-audit.md`; request-derived state is kept out of static registries and existing caches are bounded, weak, configuration-only or explicitly resettable.
+- [x] **15. Add released Runwire 1.0 integration tests.** **Completed:** dev-only released Runwire 1.0 coverage proves task-local explicit scope propagation and compiled child-frame behavior without adding Runwire, PCNTL or POSIX to production requirements. **Validation:** Security & Standards #504 is fully green on PHP 8.4/8.5.
+- [x] **16. Add persistent worker/cancellation/exception stress coverage.** **Completed:** repeated same-container request churn covers dynamic, compiled and deoptimized runtimes; repeated exceptional child cleanup plus Runwire fail-fast, explicit cancellation and deadline expiry leave no stale attachment/nested scope state.
+- [x] **17. Add optional Swoole/OpenSwoole compatibility evidence.** **Completed:** an optional matrix runs Swoole and OpenSwoole on PHP 8.4/8.5 and verifies coroutine carrier stability/uniqueness, Fiber precedence, default isolation and explicit logical-scope sharing without adding extension requirements.
+- [x] **18. Run dynamic/compiled/deoptimized semantic parity suite.** **Completed:** one common parity scenario verifies shared parent identity/seeds, carrier-local nested identities, exception cleanup, idempotent reset and stale-context rejection across dynamic, compiled/runtime-island and explicitly deoptimized modes.
+- [x] **19. Benchmark sequential, Fiber-isolated and attached-scope paths.** **Completed:** `StructuredScopeBench` measures sequential dynamic/compiled reads, Fiber-isolated round trips, capture, attached resolved reads and attached nested-scope round trips; the benchmark guide freezes the sequential regression policy. **Validation:** PHP 8.4/8.5 benchmark jobs are green in Security & Standards #518.
+- [x] **20. Update docs and migration/release notes.** **Completed:** `docs/di/scopes.rst`, `docs/benchmark.rst`, the process-state audit and `docs/intermix-10.1-runtime-alignment.rst` document final semantics, persistent-process ownership, integration boundaries, migration guidance and performance policy. **Validation:** Security & Standards #518 and Swoole/OpenSwoole Scope Compatibility #11 are fully green at head `1d43ca0ce58369985fb48368107a81a1d889356e`.
 - [ ] **21. Perform downstream readiness review for Webrick/Foundation.** Freeze the small InterMix integration surface they should consume.
 
 ---
