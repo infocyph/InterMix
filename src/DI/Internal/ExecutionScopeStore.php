@@ -46,7 +46,7 @@ final class ExecutionScopeStore
         }
 
         $state = $this->states[$context] ??= new ExecutionScopeState();
-        if ($state->current instanceof LogicalScopeState || $state->attachedScope instanceof LogicalScopeState) {
+        if ($this->stateHasActiveScope($state)) {
             throw new ContainerException('Cannot attach a scope context while this execution carrier already has an active scope.');
         }
 
@@ -57,7 +57,7 @@ final class ExecutionScopeStore
 
     public function beginScopedConstruction(string $context, string $scope, string $id): bool
     {
-        $frame = $this->scopeForName($context, $scope);
+        $frame = $this->logicalScopeForName($context, $scope);
         if (!$frame instanceof LogicalScopeState) {
             return false;
         }
@@ -80,7 +80,15 @@ final class ExecutionScopeStore
 
     public function captureScopeContext(string $context, object $owner): ScopeContext
     {
-        $scope = $this->states[$context]->current ?? null;
+        $state = $this->states[$context] ?? null;
+        if (!$state instanceof ExecutionScopeState) {
+            throw new ContainerException('Cannot capture a scope context without an active scope.');
+        }
+        if (!$state->current instanceof LogicalScopeState) {
+            $this->promoteFastState($state);
+        }
+
+        $scope = $state->current;
         if (!$scope instanceof LogicalScopeState || $scope->closed) {
             throw new ContainerException('Cannot capture a scope context without an active scope.');
         }
@@ -121,7 +129,7 @@ final class ExecutionScopeStore
 
     public function endScopedConstruction(string $context, string $scope, string $id): void
     {
-        $frame = $this->scopeForName($context, $scope);
+        $frame = $this->logicalScopeForName($context, $scope);
         if ($frame instanceof LogicalScopeState && ($frame->constructing[$id] ?? null) === $context) {
             unset($frame->constructing[$id]);
         }
@@ -131,41 +139,70 @@ final class ExecutionScopeStore
     public function enterScope(string $context, string $scope, array $instances = []): void
     {
         $state = $this->states[$context] ??= new ExecutionScopeState();
-        $current = $state->current;
-        if ($scope === 'root' || ($current instanceof LogicalScopeState && $current->contains($scope))) {
+        if ($state->current instanceof LogicalScopeState || $state->attachedScope instanceof LogicalScopeState) {
+            $this->enterLogicalScope($state, $scope, $instances);
+
+            return;
+        }
+
+        if ($scope === $state->fastCurrentScope || in_array($scope, $state->fastScopeStack, true)) {
             throw new ContainerException("Scope \"{$scope}\" is already active.");
         }
 
-        $state->current = new LogicalScopeState($scope, $current, $instances);
+        $state->fastScopeStack[] = $state->fastCurrentScope;
+        $state->fastCurrentScope = $scope;
+        if ($instances !== []) {
+            $state->fastScopeSeeds[$scope] = $instances;
+        }
     }
 
     public function findScopeSeed(string $context, string $id, mixed &$value): bool
     {
-        $scope = $this->states[$context]->current ?? null;
-        if (!$scope instanceof LogicalScopeState || !array_key_exists($id, $scope->seeds)) {
+        $state = $this->states[$context] ?? null;
+        if (!$state instanceof ExecutionScopeState) {
             return false;
         }
+        if ($state->current instanceof LogicalScopeState) {
+            if (!array_key_exists($id, $state->current->seeds)) {
+                return false;
+            }
+            $value = $state->current->seeds[$id];
 
-        $value = $scope->seeds[$id];
+            return true;
+        }
+
+        $seeds = $state->fastScopeSeeds[$state->fastCurrentScope] ?? null;
+        if (!is_array($seeds) || !array_key_exists($id, $seeds)) {
+            return false;
+        }
+        $value = $seeds[$id];
 
         return true;
     }
 
     public function getResolvedScopedEntry(string $context, string $scope, string $id): mixed
     {
-        $frame = $this->scopeForName($context, $scope);
-        if (!$frame instanceof LogicalScopeState) {
+        $state = $this->states[$context] ?? null;
+        if (!$state instanceof ExecutionScopeState) {
             return null;
         }
+        if (!$state->current instanceof LogicalScopeState) {
+            return $state->fastResolvedScoped[$scope][$id] ?? null;
+        }
 
-        return $frame->resolvedScoped[$id] ?? null;
+        return $this->logicalScopeForName($context, $scope)?->resolvedScoped[$id] ?? null;
     }
 
     public function getScope(string $context): string
     {
-        $current = $this->states[$context]->current ?? null;
+        $state = $this->states[$context] ?? null;
+        if (!$state instanceof ExecutionScopeState) {
+            return 'root';
+        }
 
-        return $current instanceof LogicalScopeState ? $current->name : 'root';
+        return $state->current instanceof LogicalScopeState
+            ? $state->current->name
+            : $state->fastCurrentScope;
     }
 
     public function hasConcurrentActivity(?string $currentContext): bool
@@ -208,16 +245,29 @@ final class ExecutionScopeStore
 
     public function hasResolvedScoped(string $context, string $scope, string $id): bool
     {
-        $frame = $this->scopeForName($context, $scope);
+        $state = $this->states[$context] ?? null;
+        if (!$state instanceof ExecutionScopeState) {
+            return false;
+        }
+        if (!$state->current instanceof LogicalScopeState) {
+            return array_key_exists($id, $state->fastResolvedScoped[$scope] ?? []);
+        }
+
+        $frame = $this->logicalScopeForName($context, $scope);
 
         return $frame instanceof LogicalScopeState && array_key_exists($id, $frame->resolvedScoped);
     }
 
     public function hasScopeSeeds(string $context): bool
     {
-        $current = $this->states[$context]->current ?? null;
+        $state = $this->states[$context] ?? null;
+        if (!$state instanceof ExecutionScopeState) {
+            return false;
+        }
 
-        return $current instanceof LogicalScopeState && $current->seeds !== [];
+        return $state->current instanceof LogicalScopeState
+            ? $state->current->seeds !== []
+            : $state->fastScopeSeeds !== [];
     }
 
     public function hasState(string $context): bool
@@ -227,6 +277,14 @@ final class ExecutionScopeStore
 
     public function invalidateClass(string $class): void
     {
+        foreach ($this->states as $state) {
+            foreach (array_keys($state->fastResolvedScoped) as $scope) {
+                unset($state->fastResolvedScoped[$scope][$class]);
+                if ($state->fastResolvedScoped[$scope] === []) {
+                    unset($state->fastResolvedScoped[$scope]);
+                }
+            }
+        }
         $this->walkUniqueFrames(static function (LogicalScopeState $scope) use ($class): void {
             unset($scope->resolvedScoped[$class], $scope->constructing[$class]);
         });
@@ -234,6 +292,14 @@ final class ExecutionScopeStore
 
     public function invalidateDefinition(string $id): void
     {
+        foreach ($this->states as $state) {
+            foreach (array_keys($state->fastResolvedScoped) as $scope) {
+                unset($state->fastResolvedScoped[$scope][$id]);
+                if ($state->fastResolvedScoped[$scope] === []) {
+                    unset($state->fastResolvedScoped[$scope]);
+                }
+            }
+        }
         $this->walkUniqueFrames(static function (LogicalScopeState $scope) use ($id): void {
             unset($scope->resolvedScoped[$id], $scope->constructing[$id]);
         });
@@ -241,6 +307,9 @@ final class ExecutionScopeStore
 
     public function invalidateResolutionConfiguration(): void
     {
+        foreach ($this->states as $state) {
+            $state->fastResolvedScoped = [];
+        }
         $this->walkUniqueFrames(static function (LogicalScopeState $scope): void {
             $scope->resolvedScoped = [];
             $scope->constructing = [];
@@ -260,7 +329,12 @@ final class ExecutionScopeStore
     public function leaveScope(string $context): void
     {
         $state = $this->states[$context] ?? null;
-        if (!$state instanceof ExecutionScopeState || !$state->current instanceof LogicalScopeState) {
+        if (!$state instanceof ExecutionScopeState) {
+            return;
+        }
+        if (!$state->current instanceof LogicalScopeState) {
+            $this->leaveFastScope($context, $state);
+
             return;
         }
 
@@ -293,26 +367,12 @@ final class ExecutionScopeStore
             throw new ContainerException('Execution carrier scope state is already active.');
         }
 
-        $parent = null;
-        foreach ([...$scopeStack, $currentScope] as $scope) {
-            if ($scope === 'root') {
-                continue;
-            }
-
-            $parent = new LogicalScopeState(
-                $scope,
-                $parent,
-                $scopeSeeds[$scope] ?? [],
-                $resolvedScoped[$scope] ?? [],
-            );
-        }
-
-        if (!$parent instanceof LogicalScopeState) {
-            throw new ContainerException('Cannot capture a scope context without an active scope.');
-        }
-
         $state = new ExecutionScopeState();
-        $state->current = $parent;
+        $state->fastCurrentScope = $currentScope;
+        $state->fastScopeStack = $scopeStack;
+        $state->fastScopeSeeds = $scopeSeeds;
+        $state->fastResolvedScoped = $resolvedScoped;
+        $this->promoteFastState($state);
         $this->states[$context] = $state;
     }
 
@@ -329,7 +389,121 @@ final class ExecutionScopeStore
         if (!$state instanceof ExecutionScopeState) {
             return;
         }
+        if (!$state->current instanceof LogicalScopeState) {
+            unset($this->states[$context]);
 
+            return;
+        }
+
+        $this->resetLogicalState($context, $state);
+    }
+
+    public function setResolvedScoped(string $context, string $scope, string $id, mixed $value): void
+    {
+        $state = $this->states[$context] ??= new ExecutionScopeState();
+        if (!$state->current instanceof LogicalScopeState) {
+            $state->fastResolvedScoped[$scope][$id] = $value;
+
+            return;
+        }
+
+        $frame = $this->logicalScopeForName($context, $scope);
+        if (!$frame instanceof LogicalScopeState) {
+            $frame = new LogicalScopeState($scope, $state->current);
+            $state->current = $frame;
+        }
+        $frame->resolvedScoped[$id] = $value;
+    }
+
+    public function setScope(string $context, string $scope): void
+    {
+        $state = $this->states[$context] ??= new ExecutionScopeState();
+        if (!$state->current instanceof LogicalScopeState && !$state->attachedScope instanceof LogicalScopeState) {
+            $state->fastCurrentScope = $scope;
+            if ($scope === 'root'
+                && $state->fastScopeStack === []
+                && $state->fastScopeSeeds === []
+                && $state->fastResolvedScoped === []
+            ) {
+                unset($this->states[$context]);
+            }
+
+            return;
+        }
+
+        $state->current = $scope === 'root' ? null : new LogicalScopeState($scope);
+        $state->attachedScope = null;
+        if ($scope === 'root') {
+            unset($this->states[$context]);
+        }
+    }
+
+    /** @param array<string, mixed> $instances */
+    private function enterLogicalScope(ExecutionScopeState $state, string $scope, array $instances): void
+    {
+        $current = $state->current;
+        if ($scope === 'root' || ($current instanceof LogicalScopeState && $current->contains($scope))) {
+            throw new ContainerException("Scope \"{$scope}\" is already active.");
+        }
+
+        $state->current = new LogicalScopeState($scope, $current, $instances);
+    }
+
+    private function leaveFastScope(string $context, ExecutionScopeState $state): void
+    {
+        $scope = $state->fastCurrentScope;
+        unset($state->fastResolvedScoped[$scope], $state->fastScopeSeeds[$scope]);
+        $previous = array_pop($state->fastScopeStack);
+        $state->fastCurrentScope = is_string($previous) ? $previous : 'root';
+
+        if ($state->fastCurrentScope === 'root'
+            && $state->fastScopeStack === []
+            && $state->fastScopeSeeds === []
+            && $state->fastResolvedScoped === []
+        ) {
+            unset($this->states[$context]);
+        }
+    }
+
+    private function logicalScopeForName(string $context, string $scope): ?LogicalScopeState
+    {
+        for ($current = $this->states[$context]->current ?? null; $current instanceof LogicalScopeState; $current = $current->parent) {
+            if ($current->name === $scope) {
+                return $current;
+            }
+        }
+
+        return null;
+    }
+
+    private function promoteFastState(ExecutionScopeState $state): void
+    {
+        if ($state->fastCurrentScope === 'root') {
+            throw new ContainerException('Cannot capture a scope context without an active scope.');
+        }
+
+        $parent = null;
+        foreach ([...$state->fastScopeStack, $state->fastCurrentScope] as $scope) {
+            if ($scope === 'root') {
+                continue;
+            }
+            $parent = new LogicalScopeState(
+                $scope,
+                $parent,
+                $state->fastScopeSeeds[$scope] ?? [],
+                $state->fastResolvedScoped[$scope] ?? [],
+            );
+        }
+
+        $state->current = $parent;
+        $state->fastCurrentScope = 'root';
+        $state->fastScopeStack = [];
+        $state->fastScopeSeeds = [];
+        $state->fastResolvedScoped = [];
+    }
+
+    private function resetLogicalState(string $context, ExecutionScopeState $state): void
+    {
         if ($state->attachedScope instanceof LogicalScopeState) {
             for ($scope = $state->current; $scope instanceof LogicalScopeState && $scope !== $state->attachedScope; $scope = $scope->parent) {
                 if ($scope->attachments > 0) {
@@ -352,41 +526,14 @@ final class ExecutionScopeStore
             $scope->closed = true;
             $scope->constructing = [];
         }
-
         unset($this->states[$context]);
     }
 
-    public function setResolvedScoped(string $context, string $scope, string $id, mixed $value): void
+    private function stateHasActiveScope(ExecutionScopeState $state): bool
     {
-        $frame = $this->scopeForName($context, $scope);
-        if (!$frame instanceof LogicalScopeState) {
-            $state = $this->states[$context] ??= new ExecutionScopeState();
-            $frame = new LogicalScopeState($scope, $state->current);
-            $state->current = $frame;
-        }
-
-        $frame->resolvedScoped[$id] = $value;
-    }
-
-    public function setScope(string $context, string $scope): void
-    {
-        $state = $this->states[$context] ??= new ExecutionScopeState();
-        $state->current = $scope === 'root' ? null : new LogicalScopeState($scope);
-        $state->attachedScope = null;
-        if ($scope === 'root') {
-            unset($this->states[$context]);
-        }
-    }
-
-    private function scopeForName(string $context, string $scope): ?LogicalScopeState
-    {
-        for ($current = $this->states[$context]->current ?? null; $current instanceof LogicalScopeState; $current = $current->parent) {
-            if ($current->name === $scope) {
-                return $current;
-            }
-        }
-
-        return null;
+        return $state->current instanceof LogicalScopeState
+            || $state->attachedScope instanceof LogicalScopeState
+            || $state->fastCurrentScope !== 'root';
     }
 
     private function unwrapScopeContext(ScopeContext $scopeContext, object $owner): LogicalScopeState
