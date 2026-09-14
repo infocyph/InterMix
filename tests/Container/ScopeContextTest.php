@@ -7,17 +7,15 @@ use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\ScopeContext;
 use Infocyph\InterMix\Exceptions\ContainerException;
 
-final class ScopeContextTestLeaf {}
-
 it('distinguishes physical carrier isolation from explicit logical scope sharing', function () {
     $container = new Container(uniqid('scope_context_identity_'));
-    $container->scoped('leaf', ScopeContextTestLeaf::class);
+    $container->scoped('leaf', stdClass::class);
     $container->enterScope('request');
 
     $parent = $container->get('leaf');
     $context = $container->captureScopeContext();
 
-    $isolated = new Fiber(static function () use ($container): ScopeContextTestLeaf {
+    $isolated = new Fiber(static function () use ($container): stdClass {
         $container->enterScope('request');
         $leaf = $container->get('leaf');
         $container->leaveScope();
@@ -26,9 +24,9 @@ it('distinguishes physical carrier isolation from explicit logical scope sharing
     });
     $isolated->start();
 
-    $attached = new Fiber(static fn(): ScopeContextTestLeaf => $container->withinScopeContext(
+    $attached = new Fiber(static fn(): stdClass => $container->withinScopeContext(
         $context,
-        static fn(Container $active): ScopeContextTestLeaf => $active->get('leaf'),
+        static fn(Container $active): stdClass => $active->get('leaf'),
     ));
     $attached->start();
 
@@ -54,8 +52,8 @@ it('captures an opaque scope context only from an active logical scope', functio
 
 it('preserves materialized scoped identity and seeds when sequential state is promoted', function () {
     $container = new Container(uniqid('scope_context_promotion_'));
-    $container->scoped('leaf', ScopeContextTestLeaf::class)
-        ->scoped('nullable', ScopeContextTestLeaf::class);
+    $container->scoped('leaf', stdClass::class)
+        ->scoped('nullable', stdClass::class);
     $container->enterScope('request', ['nullable' => null]);
 
     $beforeCapture = $container->get('leaf');
@@ -81,17 +79,17 @@ it('preserves materialized scoped identity and seeds when sequential state is pr
 
 it('shares one logical scope across sibling execution carriers only when explicitly attached', function () {
     $container = new Container(uniqid('scope_context_siblings_'));
-    $container->scoped('leaf', ScopeContextTestLeaf::class);
+    $container->scoped('leaf', stdClass::class);
     $container->enterScope('request');
     $context = $container->captureScopeContext();
 
-    $fiberA = new Fiber(static fn(): ScopeContextTestLeaf => $container->withinScopeContext(
+    $fiberA = new Fiber(static fn(): stdClass => $container->withinScopeContext(
         $context,
-        static fn(Container $active): ScopeContextTestLeaf => $active->get('leaf'),
+        static fn(Container $active): stdClass => $active->get('leaf'),
     ));
-    $fiberB = new Fiber(static fn(): ScopeContextTestLeaf => $container->withinScopeContext(
+    $fiberB = new Fiber(static fn(): stdClass => $container->withinScopeContext(
         $context,
-        static fn(Container $active): ScopeContextTestLeaf => $active->get('leaf'),
+        static fn(Container $active): stdClass => $active->get('leaf'),
     ));
 
     $fiberA->start();
@@ -105,16 +103,16 @@ it('shares one logical scope across sibling execution carriers only when explici
 
 it('propagates a logical scope captured from a parent Fiber to a child Fiber', function () {
     $container = new Container(uniqid('scope_context_fiber_parent_'));
-    $container->scoped('leaf', ScopeContextTestLeaf::class);
+    $container->scoped('leaf', stdClass::class);
 
     $parentFiber = new Fiber(static function () use ($container): array {
         $container->enterScope('request');
         $parent = $container->get('leaf');
         $context = $container->captureScopeContext();
 
-        $childFiber = new Fiber(static fn(): ScopeContextTestLeaf => $container->withinScopeContext(
+        $childFiber = new Fiber(static fn(): stdClass => $container->withinScopeContext(
             $context,
-            static fn(Container $active): ScopeContextTestLeaf => $active->get('leaf'),
+            static fn(Container $active): stdClass => $active->get('leaf'),
         ));
         $childFiber->start();
         $child = $childFiber->getReturn();
@@ -174,12 +172,12 @@ it('does not allow scope contexts to be serialized', function () {
 
 it('detaches an attached scope context when the child callback throws', function () {
     $container = new Container(uniqid('scope_context_throw_'));
-    $container->scoped('leaf', ScopeContextTestLeaf::class);
+    $container->scoped('leaf', stdClass::class);
     $container->enterScope('request');
     $parent = $container->get('leaf');
     $context = $container->captureScopeContext();
 
-    $fiber = new Fiber(static function () use ($container, $context): ScopeContextTestLeaf {
+    $fiber = new Fiber(static function () use ($container, $context): stdClass {
         try {
             $container->withinScopeContext(
                 $context,
@@ -204,6 +202,51 @@ it('detaches an attached scope context when the child callback throws', function
     $fiber->start();
 
     expect($fiber->getReturn())->not->toBe($parent);
+
+    $container->leaveScope();
+});
+
+it('unwinds nested child scopes before detaching an attached context after failure', function () {
+    $container = new Container(uniqid('scope_context_nested_throw_'));
+    $container->scoped('leaf', stdClass::class);
+    $nestedLeaves = [];
+    $container->onScopeLeave(
+        'nested',
+        static function (string $scope) use (&$nestedLeaves): void {
+            $nestedLeaves[] = $scope;
+        },
+    );
+    $container->enterScope('request');
+    $parent = $container->get('leaf');
+    $context = $container->captureScopeContext();
+
+    $fiber = new Fiber(static function () use ($container, $context): stdClass {
+        try {
+            $container->withinScopeContext(
+                $context,
+                static function (Container $active): never {
+                    $active->enterScope('nested');
+                    $active->get('leaf');
+
+                    throw new RuntimeException('expected nested failure');
+                },
+            );
+        } catch (RuntimeException $exception) {
+            if ($exception->getMessage() !== 'expected nested failure') {
+                throw $exception;
+            }
+        }
+
+        $container->enterScope('independent');
+        $fresh = $container->get('leaf');
+        $container->leaveScope();
+
+        return $fresh;
+    });
+    $fiber->start();
+
+    expect($nestedLeaves)->toBe(['nested'])
+        ->and($fiber->getReturn())->not->toBe($parent);
 
     $container->leaveScope();
 });
