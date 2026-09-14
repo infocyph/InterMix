@@ -153,7 +153,10 @@ final class ProductionScopeStore
         $this->finishContext($context);
     }
 
-    /** @param array<int, mixed> $seeds @param array<string, mixed> $rawSeeds */
+    /**
+     * @param array<int, mixed> $seeds
+     * @param array<string, mixed> $rawSeeds
+     */
     public function enter(string $context, string $scope, array $seeds, array $rawSeeds): void
     {
         $state = $this->states[$context] ??= new ProductionExecutionScopeState();
