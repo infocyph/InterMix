@@ -83,6 +83,7 @@ final class ContainerBuilder
         return $this;
     }
 
+    /** @param array<int, string> $tags */
     public function bindFactory(
         string $id,
         Closure $factory,
