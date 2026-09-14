@@ -28,13 +28,12 @@ final readonly class CapturedScopeContext implements ScopeContext
         throw new ContainerException('Scope contexts are process-local and cannot be unserialized.');
     }
 
-    public function belongsTo(object $owner): bool
+    public function unwrap(object $owner): LogicalScopeState
     {
-        return $this->owner === $owner;
-    }
+        if ($this->owner !== $owner) {
+            throw new ContainerException('Scope context belongs to a different container.');
+        }
 
-    public function scope(): LogicalScopeState
-    {
         return $this->scope;
     }
 }
