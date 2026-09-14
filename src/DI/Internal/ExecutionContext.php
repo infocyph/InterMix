@@ -87,9 +87,9 @@ final class ExecutionContext
             self::$coroutineIdResolver = Closure::fromCallable($getCid);
             self::$coroutinePrefix = $prefix;
 
-            if (method_exists($class, 'getContext')) {
-                /** @var callable(int): mixed $getContext */
-                $getContext = [$class, 'getContext'];
+            /** @var array{class-string, string} $getContext */
+            $getContext = [$class, 'getContext'];
+            if (is_callable($getContext)) {
                 self::$coroutineContextResolver = Closure::fromCallable($getContext);
             }
 
