@@ -311,12 +311,6 @@ trait MacroMix
             return $result ?? $bind ?? static::class;
         }
 
-        if (!is_callable($macro)) {
-            throw new BadMethodCallException(
-                sprintf('Method %s::%s is not callable.', static::class, $method),
-            );
-        }
-
         $result = $macro(...$parameters);
 
         return $result ?? $bind ?? static::class;
