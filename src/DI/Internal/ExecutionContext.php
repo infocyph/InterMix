@@ -7,7 +7,14 @@ namespace Infocyph\InterMix\DI\Internal;
 use Closure;
 use Fiber;
 
-/** @internal */
+/**
+ * Detects the current physical execution carrier only.
+ *
+ * Carrier identity isolates independent Fibers/coroutines; it is deliberately
+ * separate from the logical DI scope identity represented by ScopeContext.
+ *
+ * @internal
+ */
 final class ExecutionContext
 {
     private static ?Closure $coroutineIdResolver = null;
