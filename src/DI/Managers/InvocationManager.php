@@ -77,6 +77,7 @@ class InvocationManager implements ArrayAccess
         $scope = null;
         if ($lifetime === LifetimeEnum::Scoped) {
             if ($this->repository instanceof ConcurrentRepository) {
+                $scope = 'root';
                 $resolved = null;
                 if ($this->repository->findCurrentResolvedScoped($id, $scope, $resolved)) {
                     return $this->repository->fetchInstanceOrValue($resolved);
