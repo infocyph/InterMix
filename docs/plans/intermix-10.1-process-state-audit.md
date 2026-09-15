@@ -24,6 +24,18 @@ This audit supports the InterMix 10.1 structured-runtime hardening work. The rul
 5. Numeric coroutine IDs remain a compatibility fallback only when a loaded Swoole/OpenSwoole runtime does not expose an object context. Scope state still has deterministic leave/reset/detach cleanup, and extension-specific lifecycle coverage remains part of the optional carrier matrix.
 6. Dynamic and compiled scope stores are container-owned and therefore isolated from unrelated container instances; they are the only place where logical scoped service identity is retained across carriers.
 
+## Release evidence
+
+`tests/Container/StructuredScopeStressTest.php` provides direct persistent-process evidence rather than relying only on functional request-churn success:
+
+- after a warmup phase, four repeated structured-scope churn windows must keep both process-memory growth and sample spread within 1 MiB;
+- the dynamic execution-scope store must return to `null` after every measured window;
+- captured `ScopeContext` and logical scope state are verified collectible through `WeakReference` after owner close and GC;
+- one stable application container alias is reused for 256 framework-style request scopes without increasing registry cardinality; and
+- after `Container::unset()`, the alias registry must return to its exact pre-test count with the test alias absent.
+
+These checks complement the dynamic/compiled/deoptimized churn, failure, cancellation and deadline suites. Together they establish that request/task-local DI state is released while application-lifetime registries remain stable when used according to the documented ownership rules.
+
 ## Release rule
 
 Any future process-wide mutable state must be classified in this audit (or its successor) as one of: bounded cache, weak cache, explicit configuration registry, or resettable runtime metadata. Request/job/session values must remain container/task-local and must not be added to process-global registries.
