@@ -33,6 +33,25 @@ trait ConcurrentScopeConstruction
         }
     }
 
+    public function findCurrentResolvedScoped(string $id, string &$scope, mixed &$value): bool
+    {
+        $store = $this->executionScopes;
+        if ($store instanceof ExecutionScopeStore) {
+            $context = $this->activeExecutionContext();
+            if ($context !== null) {
+                return $store->findCurrentResolvedScoped($context, $id, $scope, $value);
+            }
+        }
+
+        $scope = $this->currentScope;
+        if (!array_key_exists($id, $this->resolvedScoped[$scope] ?? [])) {
+            return false;
+        }
+        $value = $this->resolvedScoped[$scope][$id];
+
+        return true;
+    }
+
     public function requiresScopedConstructionGuard(): bool
     {
         return $this->scopeContextOwner !== null;
