@@ -32,4 +32,9 @@ trait ConcurrentScopeConstruction
             $store->endScopedConstruction($context, $scope, $id);
         }
     }
+
+    public function requiresScopedConstructionGuard(): bool
+    {
+        return $this->scopeContextOwner !== null;
+    }
 }
