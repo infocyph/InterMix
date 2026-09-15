@@ -55,22 +55,50 @@ jobs:
           composer install --working-dir=baseline --no-dev --no-interaction --prefer-dist --no-progress --classmap-authoritative
           composer install --working-dir=current --no-dev --no-interaction --prefer-dist --no-progress --classmap-authoritative
 
-      - name: Measure same-runner baseline and candidate
+      - name: Measure alternating same-runner pairs
         shell: bash
         run: |
-          php current/benchmarks/ReleaseRegression.php \
-            --autoload="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" \
-            --output="$RUNNER_TEMP/intermix-10.0.4-${{ matrix.php-version }}.json"
-          php current/benchmarks/ReleaseRegression.php \
-            --autoload="$GITHUB_WORKSPACE/current/vendor/autoload.php" \
-            --output="$RUNNER_TEMP/intermix-10.1-${{ matrix.php-version }}.json"
+          baseline_files=()
+          current_files=()
+
+          measure_baseline() {
+            local output="$1"
+            php current/benchmarks/ReleaseRegression.php \
+              --autoload="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" \
+              --output="$output"
+          }
+
+          measure_current() {
+            local output="$1"
+            php current/benchmarks/ReleaseRegression.php \
+              --autoload="$GITHUB_WORKSPACE/current/vendor/autoload.php" \
+              --output="$output"
+          }
+
+          for iteration in 1 2 3 4 5; do
+            baseline_file="$RUNNER_TEMP/intermix-10.0.4-${{ matrix.php-version }}-$iteration.json"
+            current_file="$RUNNER_TEMP/intermix-10.1-${{ matrix.php-version }}-$iteration.json"
+            baseline_files+=("$baseline_file")
+            current_files+=("$current_file")
+
+            if (( iteration % 2 == 1 )); then
+              measure_baseline "$baseline_file"
+              measure_current "$current_file"
+            else
+              measure_current "$current_file"
+              measure_baseline "$baseline_file"
+            fi
+          done
+
+          (IFS=,; echo "INTERMIX_BASELINE_FILES=${baseline_files[*]}" >> "$GITHUB_ENV")
+          (IFS=,; echo "INTERMIX_CURRENT_FILES=${current_files[*]}" >> "$GITHUB_ENV")
 
       - name: Enforce release regression budgets
         shell: bash
         run: |
           php current/benchmarks/ReleaseRegression.php \
-            --compare-baseline="$RUNNER_TEMP/intermix-10.0.4-${{ matrix.php-version }}.json" \
-            --compare-current="$RUNNER_TEMP/intermix-10.1-${{ matrix.php-version }}.json" \
+            --compare-baseline="$INTERMIX_BASELINE_FILES" \
+            --compare-current="$INTERMIX_CURRENT_FILES" \
             --max-sequential=3 \
             --max-fiber=5
 
@@ -80,6 +108,6 @@ jobs:
         with:
           name: intermix-release-regression-php-${{ matrix.php-version }}
           path: |
-            ${{ runner.temp }}/intermix-10.0.4-${{ matrix.php-version }}.json
-            ${{ runner.temp }}/intermix-10.1-${{ matrix.php-version }}.json
+            ${{ runner.temp }}/intermix-10.0.4-${{ matrix.php-version }}-*.json
+            ${{ runner.temp }}/intermix-10.1-${{ matrix.php-version }}-*.json
           retention-days: 61
