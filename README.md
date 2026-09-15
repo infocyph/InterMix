@@ -17,6 +17,8 @@
 - **Dependency Injection (DI)** — PSR-11 compliant container with:
   - attribute-based injection
   - scoped lifetimes
+  - explicit logical-scope propagation across structured Fibers/coroutines
+  - persistent-worker-safe carrier-local cleanup
   - lazy loading
   - environment-specific overrides
   - debug tracing & definition-cache integration via assignable PSR-6 pool
@@ -108,6 +110,44 @@ See full container guide at: [https://docs.infocyph.com/projects/intermix/di/ove
 For consuming applications, the [development and production workflow](https://docs.infocyph.com/projects/intermix/di/development-production.html)
 explains which runtime to select, when to compile, and how to deploy the
 generated artifact safely.
+
+### Structured Request/Job Scopes
+
+InterMix keeps independent Fibers/coroutines isolated by default. When structured
+child work intentionally belongs to the same request/job scope, capture the
+opaque logical scope context and attach it around the child callback:
+
+```php
+use Infocyph\InterMix\DI\Container;
+
+$container->enterScope('request', [Request::class => $request]);
+
+try {
+    $scope = $container->captureScopeContext();
+
+    $fiber = new Fiber(static fn () => $container->withinScopeContext(
+        $scope,
+        static fn (Container $active) => $active->get(RequestService::class),
+    ));
+
+    $fiber->start();
+    $result = $fiber->getReturn();
+} finally {
+    $container->leaveScope();
+    $container->resetCurrentExecutionScope();
+}
+```
+
+`ScopeContext` is container-bound, process-local and non-serializable. Attached
+children share the owning logical scope's scoped instances and seeds while
+retaining carrier-local nested scopes. `resetCurrentExecutionScope()` is an
+idempotent framework/persistent-worker cleanup primitive for the current carrier.
+These semantics are identical in dynamic and generated `ProductionContainer`
+runtimes; Runwire, Swoole/OpenSwoole, PCNTL and POSIX are not production
+requirements.
+
+See the [scope guide](https://docs.infocyph.com/projects/intermix/di/scopes.html)
+and [InterMix 10.1 runtime-alignment notes](https://docs.infocyph.com/projects/intermix/intermix-10.1-runtime-alignment.html).
 
 ### Dynamic Macros
 
