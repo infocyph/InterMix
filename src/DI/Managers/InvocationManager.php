@@ -239,36 +239,54 @@ class InvocationManager implements ArrayAccess
 
     private function resolveAndCache(string $id, bool $cacheable, ?string $scope): mixed
     {
-        $constructionOwner = false;
-        if ($scope !== null && $this->repository instanceof ConcurrentRepository) {
-            $constructionOwner = $this->repository->beginScopedConstruction($scope, $id);
+        if ($scope !== null
+            && $this->repository instanceof ConcurrentRepository
+            && $this->repository->requiresScopedConstructionGuard()
+        ) {
+            return $this->resolveAndCacheGuarded($id, $cacheable, $scope, $this->repository);
         }
 
-        try {
-            $this->repository->dispatchResolvingHooks($id);
+        return $this->resolveAndCacheDirect($id, $cacheable, $scope);
+    }
 
-            if ($this->repository->hasFunctionReference($id)) {
-                $resolved = $this->resolveDefinition($id);
-            } else {
-                $resolution = $this->container->getCurrentResolver()->classSettler($id);
-                $resolved = $this->repository->fetchInstanceOrValue($resolution);
-                if ($cacheable) {
-                    $this->storeResolvedByLifetime($id, $resolution, $scope);
-                }
-                $this->repository->dispatchResolvedHooks($id, $resolved);
+    private function resolveAndCacheDirect(string $id, bool $cacheable, ?string $scope): mixed
+    {
+        $this->repository->dispatchResolvingHooks($id);
 
-                return $resolved;
-            }
-
+        if ($this->repository->hasFunctionReference($id)) {
+            $resolved = $this->resolveDefinition($id);
+        } else {
+            $resolution = $this->container->getCurrentResolver()->classSettler($id);
+            $resolved = $this->repository->fetchInstanceOrValue($resolution);
             if ($cacheable) {
-                $this->storeResolvedByLifetime($id, $resolved, $scope);
+                $this->storeResolvedByLifetime($id, $resolution, $scope);
             }
             $this->repository->dispatchResolvedHooks($id, $resolved);
 
             return $resolved;
+        }
+
+        if ($cacheable) {
+            $this->storeResolvedByLifetime($id, $resolved, $scope);
+        }
+        $this->repository->dispatchResolvedHooks($id, $resolved);
+
+        return $resolved;
+    }
+
+    private function resolveAndCacheGuarded(
+        string $id,
+        bool $cacheable,
+        string $scope,
+        ConcurrentRepository $repository,
+    ): mixed {
+        $constructionOwner = $repository->beginScopedConstruction($scope, $id);
+
+        try {
+            return $this->resolveAndCacheDirect($id, $cacheable, $scope);
         } finally {
-            if ($constructionOwner && $scope !== null && $this->repository instanceof ConcurrentRepository) {
-                $this->repository->endScopedConstruction($scope, $id);
+            if ($constructionOwner) {
+                $repository->endScopedConstruction($scope, $id);
             }
         }
     }
