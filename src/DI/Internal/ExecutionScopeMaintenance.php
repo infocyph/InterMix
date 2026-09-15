@@ -47,6 +47,27 @@ trait ExecutionScopeMaintenance
         });
     }
 
+    public function scopeForLeave(string $context): string
+    {
+        $state = $this->states[$context] ?? null;
+        if (!$state instanceof ExecutionScopeState) {
+            return 'root';
+        }
+
+        $scope = $state->logicalCurrent;
+        if (!$scope instanceof LogicalScopeState) {
+            return $state->currentScope;
+        }
+        if ($state->attachedScope === $scope) {
+            throw new ContainerException('Cannot leave an attached scope context; detach it instead.');
+        }
+        if ($scope->attachments > 0) {
+            throw new ContainerException('Cannot leave a scope while child execution carriers are still attached.');
+        }
+
+        return $scope->name;
+    }
+
     private function closeLogicalFrames(?LogicalScopeState $scope, ?LogicalScopeState $stopBefore = null): void
     {
         for (; $scope instanceof LogicalScopeState && $scope !== $stopBefore; $scope = $scope->parent) {
