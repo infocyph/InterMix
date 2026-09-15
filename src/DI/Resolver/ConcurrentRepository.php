@@ -406,8 +406,7 @@ final class ConcurrentRepository extends Repository
 
     private function leaveExecutionScope(ExecutionScopeStore $store, string $context): void
     {
-        $store->assertCanLeaveScope($context);
-        $scope = $store->getScope($context);
+        $scope = $store->scopeForLeave($context);
         foreach ($this->scopeLeaveHooks[$scope] ?? [] as $hook) {
             $hook($scope, $this->container());
         }
