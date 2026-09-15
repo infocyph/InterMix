@@ -97,9 +97,27 @@ For release review:
 * confirm Fiber-isolated scope cost does not materially regress; and
 * run both PHP 8.4 and 8.5 benchmark jobs used by the repository workflow.
 
-The benchmark CI job is a signal, not a substitute for comparing stored
-baseline output on a stable runner. A noisy one-off difference should be
-repeated before changing runtime architecture.
+InterMix 10.1 also includes ``benchmarks/ReleaseRegression.php``. This is a
+release-gate harness rather than a PhpBench suite. The ``Security & Standards``
+workflow checks out the InterMix 10.0.4 baseline and the candidate on the same
+GitHub runner, executes five alternating baseline/candidate process pairs, and
+compares the median process result for:
+
+* generated production scoped-service reads, with a **3%** maximum regression;
+  and
+* isolated-Fiber scope round trips, with a **5%** maximum regression.
+
+The gate runs independently on PHP 8.4 and PHP 8.5 and uploads the raw JSON
+samples as workflow artifacts. For the final 10.1 alignment validation, the
+same-runner comparisons were within budget on both versions:
+
+* PHP 8.4: sequential production **-0.46%**, isolated Fiber **+3.19%**;
+* PHP 8.5: sequential production **+2.65%**, isolated Fiber **+2.13%**.
+
+The normal PHPForge benchmark jobs remain useful broad-suite signals. Their
+optional stored-baseline comparison steps may be skipped when no benchmark
+baseline/result arguments are supplied; the dedicated release-regression job is
+the authoritative 10.0.4-to-10.1 gate for the two frozen runtime paths above.
 
 Interpretation
 --------------
