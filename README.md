@@ -147,7 +147,6 @@ runtimes; Runwire, Swoole/OpenSwoole, PCNTL and POSIX are not production
 requirements.
 
 See the [scope guide](https://docs.infocyph.com/projects/intermix/di/scopes.html)
-and [InterMix 10.1 runtime-alignment notes](https://docs.infocyph.com/projects/intermix/intermix-10.1-runtime-alignment.html).
 
 ### Dynamic Macros
 
