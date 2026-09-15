@@ -126,13 +126,36 @@ The release branch exercises:
 
 * dynamic, compiled, runtime-island and deoptimized semantic parity;
 * repeated persistent request/job scope churn;
+* stabilized post-warmup process memory and complete release of dynamic
+  execution-store/carrier/logical-scope bookkeeping;
+* stable application-container alias cardinality across repeated framework-style
+  reuse;
 * Fiber failure cleanup and carrier-token reuse protection;
 * released Runwire 1.0 task-local propagation, fail-fast cancellation, explicit
   task cancellation and deadline expiry;
 * optional Swoole/OpenSwoole coroutine carrier compatibility on PHP 8.4/8.5;
-  and
 * dedicated structured-scope microbenchmarks alongside the existing sequential
-  request/production benchmarks.
+  request/production benchmarks; and
+* same-runner InterMix 10.0.4-to-10.1 regression gates on PHP 8.4/8.5 for the
+  generated sequential production path and isolated-Fiber scope path.
+
+The persistent-churn stress test warms the runtime, measures four additional
+churn windows, requires both memory growth and sample spread to stay within
+1 MiB, requires the dynamic execution scope store to return to ``null`` after
+each window, and verifies captured/logical scope objects are collectible through
+``WeakReference``. A separate framework-style test reuses one stable container
+alias for 256 request scopes and verifies the process alias registry returns to
+its exact pre-test cardinality after cleanup.
+
+The final release-regression comparison against 10.0.4 remained inside the
+frozen budgets:
+
+* PHP 8.4: sequential production -0.46%; isolated Fiber +3.19%;
+* PHP 8.5: sequential production +2.65%; isolated Fiber +2.13%.
+
+The enforced limits are 3% for the ordinary generated production path and 5%
+for isolated-Fiber scope round trips. See :doc:`benchmark` for the measurement
+method and interpretation.
 
 See :doc:`di/scopes` for the API contract and :doc:`benchmark` for the
 performance review policy.
