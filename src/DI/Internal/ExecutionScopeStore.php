@@ -395,22 +395,18 @@ final class ExecutionScopeStore
     public function setScope(string $context, string $scope): void
     {
         $state = $this->states[$context] ??= new ExecutionScopeState();
-        if (!$state->logicalCurrent instanceof LogicalScopeState && !$state->attachedScope instanceof LogicalScopeState) {
-            $state->currentScope = $scope;
-            if ($scope === 'root'
-                && $state->scopeStack === []
-                && $state->scopeSeeds === []
-                && $state->resolvedScoped === []
-            ) {
-                unset($this->states[$context]);
-            }
-
-            return;
+        if ($state->logicalCurrent instanceof LogicalScopeState || $state->attachedScope instanceof LogicalScopeState) {
+            throw new ContainerException(
+                'Cannot replace a propagated logical scope; leave or reset the scope instead.',
+            );
         }
 
-        $state->logicalCurrent = $scope === 'root' ? null : new LogicalScopeState($scope);
-        $state->attachedScope = null;
-        if ($scope === 'root') {
+        $state->currentScope = $scope;
+        if ($scope === 'root'
+            && $state->scopeStack === []
+            && $state->scopeSeeds === []
+            && $state->resolvedScoped === []
+        ) {
             unset($this->states[$context]);
         }
     }
