@@ -9,8 +9,6 @@ use Infocyph\InterMix\Exceptions\LimitExceededException;
 use Infocyph\InterMix\Exceptions\RequirementException;
 use InvalidArgumentException;
 
-// Public trait consumers live in downstream projects and the excluded test suite.
-// @phpstan-ignore trait.unused
 trait Fence
 {
     private const int REQUIREMENT_CACHE_LIMIT = 256;
@@ -146,26 +144,25 @@ trait Fence
     /**
      * Verifies that the class instance can be created given the requirements.
      *
-     * @param array{extensions?: array<int, string>, classes?: array<int, string>}|null $c
-     *                                                                                     The values are arrays of names of extensions and classes that must be present.
+     * Runtime validation intentionally accepts a broad shape here because callers
+     * may bypass PHPDoc and provide malformed requirement arrays.
+     *
+     * @param array{extensions?: mixed, classes?: mixed}|null $c
      */
     private static function checkRequirements(?array $c): void
     {
-        foreach (['extensions', 'classes'] as $key) {
-            $requirements = $c[$key] ?? [];
-            if (!is_array($requirements)
-                || array_any($requirements, static fn(mixed $value): bool => !is_string($value))
-            ) {
-                throw new InvalidArgumentException("Fence requirement '{$key}' must be an array of strings.");
-            }
-        }
-
-        if ($c === null || (($c['extensions'] ?? []) === [] && ($c['classes'] ?? []) === [])) {
+        if ($c === null) {
             return;
         }
 
-        $missingE = self::findMissingExtensions((array) ($c['extensions'] ?? []));
-        $missingC = self::findMissingClasses((array) ($c['classes'] ?? []));
+        $extensions = self::normalizeRequirements($c['extensions'] ?? [], 'extensions');
+        $classes = self::normalizeRequirements($c['classes'] ?? [], 'classes');
+        if ($extensions === [] && $classes === []) {
+            return;
+        }
+
+        $missingE = self::findMissingExtensions($extensions);
+        $missingC = self::findMissingClasses($classes);
 
         if ($missingE === [] && $missingC === []) {
             return;
@@ -268,12 +265,15 @@ trait Fence
             return PHP_INT_MAX;
         }
 
-        $limit = (int) constant("$className::FENCE_LIMIT");
-        if ($limit < 1) {
+        $declaredLimit = constant("$className::FENCE_LIMIT");
+        if (!is_int($declaredLimit)) {
+            throw new InvalidArgumentException('Declared FENCE_LIMIT must be an integer.');
+        }
+        if ($declaredLimit < 1) {
             throw new InvalidArgumentException('Declared FENCE_LIMIT must be at least 1.');
         }
 
-        return $limit;
+        return $declaredLimit;
     }
 
     private static function isKeyed(): bool
@@ -284,6 +284,26 @@ trait Fence
         }
 
         return true;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private static function normalizeRequirements(mixed $requirements, string $key): array
+    {
+        if (!is_array($requirements)) {
+            throw new InvalidArgumentException("Fence requirement '{$key}' must be an array of strings.");
+        }
+
+        $normalized = [];
+        foreach ($requirements as $value) {
+            if (!is_string($value)) {
+                throw new InvalidArgumentException("Fence requirement '{$key}' must be an array of strings.");
+            }
+            $normalized[] = $value;
+        }
+
+        return $normalized;
     }
 
     private static function slotFor(?string $key): string

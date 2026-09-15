@@ -300,12 +300,12 @@ final class ContainerBuilder
 
     private function beforeMutation(): void
     {
+        $this->deoptimizeProductionRuntimes();
+
         if ($this->finalizedArtifactExists) {
             $this->compilationReport = null;
             $this->requiresCompilation = true;
         }
-
-        $this->deoptimizeProductionRuntimes();
     }
 
     private function beforeProductionLoad(): void
@@ -346,12 +346,12 @@ final class ContainerBuilder
         if ($this->suppressMutationListener) {
             return;
         }
+
+        $this->deoptimizeProductionRuntimes();
         if ($this->finalizedArtifactExists) {
             $this->compilationReport = null;
             $this->requiresCompilation = true;
         }
-
-        $this->deoptimizeProductionRuntimes();
     }
 
     /**

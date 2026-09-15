@@ -6,8 +6,6 @@ namespace Infocyph\InterMix\Remix;
 
 use Closure;
 
-// Public trait consumers live in downstream projects and the excluded test suite.
-// @phpstan-ignore trait.unused
 trait ConditionableTappable
 {
     /**

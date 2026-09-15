@@ -1010,7 +1010,7 @@ class Repository
         unset($this->resolvedResource[$className]);
     }
 
-    private function checkIfLocked(): void
+    protected function checkIfLocked(): void
     {
         if ($this->isLocked) {
             throw new ContainerException('Container is locked! Unable to set/modify any value.');

@@ -12,6 +12,7 @@ InterMix ships with PhpBench suites at:
 - ``benchmarks/CompiledRuntimeBench.php``
 - ``benchmarks/DefinitionCacheBench.php``
 - ``benchmarks/RequestPathBench.php``
+- ``benchmarks/StructuredScopeBench.php``
 - ``benchmarks/FenceBench.php``
 
 Run every suite with PHPForge's quick benchmark profile:
@@ -51,6 +52,11 @@ The suite covers DI paths end-to-end:
 - Property wiring via ``registerProperty()`` + ``make()``
 - Immediate resolution via ``resolveNow()`` (class and method paths)
 - Scoped lifetime behavior with ``enterScope()`` / ``leaveScope()``
+- Structured-scope sequential resolved reads in dynamic and generated runtimes
+- Fiber-isolated scope enter/resolve/leave round trips
+- Logical ``ScopeContext`` capture
+- Explicit attached-child resolve/detach round trips
+- Attached child nested-scope enter/resolve/leave round trips
 - Tagged service lookup via ``findByTag()``
 - Lazy tagged iteration via ``tagged()``
 - ``Invoker`` wrapper method invocation path
@@ -71,6 +77,47 @@ The suite covers DI paths end-to-end:
 - Service-provider registration path
 - Environment-conditional interface binding path
 - Manual object graph baseline (non-container)
+
+Structured-scope regression policy
+----------------------------------
+
+InterMix 10.1 keeps the ordinary sequential production path as the primary
+performance gate. The structured-concurrency machinery is intentionally lazy:
+plain request/job execution should not pay attachment or runtime-detection work
+on every ``get()`` call.
+
+For release review:
+
+* compare the existing sequential production/request benchmarks with the 10.0
+  baseline on the same PHP build and machine;
+* treat a sustained sequential production regression above roughly **3%** as a
+  release blocker unless the change is explicitly justified;
+* inspect ``StructuredScopeBench`` separately for capture, attached-child and
+  nested-frame costs—these are opt-in structured paths, not the baseline;
+* confirm Fiber-isolated scope cost does not materially regress; and
+* run both PHP 8.4 and 8.5 benchmark jobs used by the repository workflow.
+
+InterMix 10.1 also includes ``benchmarks/ReleaseRegression.php``. This is a
+release-gate harness rather than a PhpBench suite. The ``Security & Standards``
+workflow checks out the InterMix 10.0.4 baseline and the candidate on the same
+GitHub runner, executes five alternating baseline/candidate process pairs, and
+compares the median process result for:
+
+* generated production scoped-service reads, with a **3%** maximum regression;
+  and
+* isolated-Fiber scope round trips, with a **5%** maximum regression.
+
+The gate runs independently on PHP 8.4 and PHP 8.5 and uploads the raw JSON
+samples as workflow artifacts. For the final 10.1 alignment validation, the
+same-runner comparisons were within budget on both versions:
+
+* PHP 8.4: sequential production **-0.46%**, isolated Fiber **+3.19%**;
+* PHP 8.5: sequential production **+2.65%**, isolated Fiber **+2.13%**.
+
+The normal PHPForge benchmark jobs remain useful broad-suite signals. Their
+optional stored-baseline comparison steps may be skipped when no benchmark
+baseline/result arguments are supplied; the dedicated release-regression job is
+the authoritative 10.0.4-to-10.1 gate for the two frozen runtime paths above.
 
 Interpretation
 --------------

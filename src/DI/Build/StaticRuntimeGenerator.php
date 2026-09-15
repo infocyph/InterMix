@@ -38,6 +38,7 @@ final class StaticRuntimeGenerator
         }
 
         $source = new StaticRuntimeRenderer()->render($graph, $plans, $slots);
+        $source = new StaticScopedConstructionGuard()->apply($source, $plans, $slots);
         $digest = hash('xxh128', $source);
         AtomicFileWriter::write(
             $filePath,

@@ -19,3 +19,95 @@ jobs:
       security-events: write
       actions: read
       contents: read
+
+  release-regression:
+    name: Release regression - PHP ${{ matrix.php-version }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ["8.4", "8.5"]
+    steps:
+      - name: Checkout InterMix 10.1 candidate
+        uses: actions/checkout@v7
+        with:
+          path: current
+
+      - name: Checkout InterMix 10.0.4 baseline
+        uses: actions/checkout@v7
+        with:
+          repository: infocyph/InterMix
+          ref: "10.0.4"
+          path: baseline
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          tools: composer:v2
+          coverage: none
+
+      - name: Install production dependencies
+        shell: bash
+        run: |
+          composer install --working-dir=baseline --no-dev --no-interaction --prefer-dist --no-progress --classmap-authoritative
+          composer install --working-dir=current --no-dev --no-interaction --prefer-dist --no-progress --classmap-authoritative
+
+      - name: Measure alternating same-runner pairs
+        shell: bash
+        run: |
+          baseline_files=()
+          current_files=()
+
+          measure_baseline() {
+            local output="$1"
+            php current/benchmarks/ReleaseRegression.php \
+              --autoload="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" \
+              --output="$output"
+          }
+
+          measure_current() {
+            local output="$1"
+            php current/benchmarks/ReleaseRegression.php \
+              --autoload="$GITHUB_WORKSPACE/current/vendor/autoload.php" \
+              --output="$output"
+          }
+
+          for iteration in 1 2 3 4 5; do
+            baseline_file="$RUNNER_TEMP/intermix-10.0.4-${{ matrix.php-version }}-$iteration.json"
+            current_file="$RUNNER_TEMP/intermix-10.1-${{ matrix.php-version }}-$iteration.json"
+            baseline_files+=("$baseline_file")
+            current_files+=("$current_file")
+
+            if (( iteration % 2 == 1 )); then
+              measure_baseline "$baseline_file"
+              measure_current "$current_file"
+            else
+              measure_current "$current_file"
+              measure_baseline "$baseline_file"
+            fi
+          done
+
+          (IFS=,; echo "INTERMIX_BASELINE_FILES=${baseline_files[*]}" >> "$GITHUB_ENV")
+          (IFS=,; echo "INTERMIX_CURRENT_FILES=${current_files[*]}" >> "$GITHUB_ENV")
+
+      - name: Enforce release regression budgets
+        shell: bash
+        run: |
+          php current/benchmarks/ReleaseRegression.php \
+            --compare-baseline="$INTERMIX_BASELINE_FILES" \
+            --compare-current="$INTERMIX_CURRENT_FILES" \
+            --max-sequential=3 \
+            --max-fiber=5
+
+      - name: Upload release regression evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: intermix-release-regression-php-${{ matrix.php-version }}
+          path: |
+            ${{ runner.temp }}/intermix-10.0.4-${{ matrix.php-version }}-*.json
+            ${{ runner.temp }}/intermix-10.1-${{ matrix.php-version }}-*.json
+          retention-days: 61

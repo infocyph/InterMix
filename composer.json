@@ -36,6 +36,7 @@
     "require-dev": {
         "infocyph/cachelayer": "^3.2.0",
         "infocyph/phpforge": "dev-main@dev",
+        "infocyph/runwire": "^1.0",
         "opis/closure": "^4.5"
     },
     "suggest": {
@@ -52,11 +53,8 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "Infocyph\\InterMix\\Tests\\": "tests/"
-        },
-        "exclude-from-classmap": [
-            "/tests/**/*Test.php"
-        ]
+            "Infocyph\\InterMix\\Tests\\Fixture\\": "tests/Fixture/"
+        }
     },
     "config": {
         "allow-plugins": {

@@ -2,6 +2,7 @@
 benchmarks export-ignore
 docs export-ignore
 examples export-ignore
+static-analysis export-ignore
 tests export-ignore
 
 .editorconfig export-ignore
@@ -12,7 +13,6 @@ captainhook.json export-ignore
 pest.xml export-ignore
 phpbench.json export-ignore
 phpcs.xml.dist export-ignore
-phpstan.neon.dist export-ignore
 phpunit.xml export-ignore
 pint.json export-ignore
 psalm.xml export-ignore

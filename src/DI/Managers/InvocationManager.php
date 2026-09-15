@@ -8,6 +8,7 @@ use ArrayAccess;
 use Closure;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Internal\ClassResolution;
+use Infocyph\InterMix\DI\Resolver\ConcurrentRepository;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\DI\Support\TraceLevelEnum;
@@ -75,9 +76,12 @@ class InvocationManager implements ArrayAccess
         $lifetime = $this->repository->getDefinitionLifetime($id);
         $scope = null;
         if ($lifetime === LifetimeEnum::Scoped) {
-            $scope = $this->repository->getScope();
-            $resolved = $this->repository->getResolvedScopedEntry($scope, $id);
-            if ($resolved !== null || $this->repository->hasResolvedScoped($scope, $id)) {
+            $scope = 'root';
+            $resolved = null;
+            $found = $this->repository instanceof ConcurrentRepository
+                ? $this->repository->findCurrentResolvedScoped($id, $scope, $resolved)
+                : $this->findResolvedScoped($id, $scope, $resolved);
+            if ($found) {
                 return $this->repository->fetchInstanceOrValue($resolved);
             }
         }
@@ -150,7 +154,7 @@ class InvocationManager implements ArrayAccess
         return $this->container->registration();
     }
 
-    /** @throws ContainerException|InvalidArgumentException|ReflectionException */
+    /** @throws ContainerException|ReflectionException */
     protected function resolveDefinition(string $id): mixed
     {
         return $this->repository->fetchInstanceOrValue(
@@ -236,7 +240,27 @@ class InvocationManager implements ArrayAccess
         return $service->{$method}();
     }
 
+    private function findResolvedScoped(string $id, string &$scope, mixed &$resolved): bool
+    {
+        $scope = $this->repository->getScope();
+        $resolved = $this->repository->getResolvedScopedEntry($scope, $id);
+
+        return $resolved !== null || $this->repository->hasResolvedScoped($scope, $id);
+    }
+
     private function resolveAndCache(string $id, bool $cacheable, ?string $scope): mixed
+    {
+        if ($scope !== null
+            && $this->repository instanceof ConcurrentRepository
+            && $this->repository->requiresScopedConstructionGuard()
+        ) {
+            return $this->resolveAndCacheGuarded($id, $cacheable, $scope, $this->repository);
+        }
+
+        return $this->resolveAndCacheDirect($id, $cacheable, $scope);
+    }
+
+    private function resolveAndCacheDirect(string $id, bool $cacheable, ?string $scope): mixed
     {
         $this->repository->dispatchResolvingHooks($id);
 
@@ -259,6 +283,23 @@ class InvocationManager implements ArrayAccess
         $this->repository->dispatchResolvedHooks($id, $resolved);
 
         return $resolved;
+    }
+
+    private function resolveAndCacheGuarded(
+        string $id,
+        bool $cacheable,
+        string $scope,
+        ConcurrentRepository $repository,
+    ): mixed {
+        $constructionOwner = $repository->beginScopedConstruction($scope, $id);
+
+        try {
+            return $this->resolveAndCacheDirect($id, $cacheable, $scope);
+        } finally {
+            if ($constructionOwner) {
+                $repository->endScopedConstruction($scope, $id);
+            }
+        }
     }
 
     private function storeResolvedByLifetime(string $id, mixed $resolved, ?string $scope): void

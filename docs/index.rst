@@ -16,6 +16,7 @@ Contents
     :includehidden:
 
     start
+    intermix-10.1-runtime-alignment
     backstory
     container
     fence
