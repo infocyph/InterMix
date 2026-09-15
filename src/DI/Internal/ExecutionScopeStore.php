@@ -158,6 +158,35 @@ final class ExecutionScopeStore
         }
     }
 
+    public function findCurrentResolvedScoped(string $context, string $id, string &$scope, mixed &$value): bool
+    {
+        $state = $this->states[$context] ?? null;
+        if (!$state instanceof ExecutionScopeState) {
+            $scope = 'root';
+
+            return false;
+        }
+
+        $logical = $state->logicalCurrent;
+        if (!$logical instanceof LogicalScopeState) {
+            $scope = $state->currentScope;
+            if (!array_key_exists($id, $state->resolvedScoped[$scope] ?? [])) {
+                return false;
+            }
+            $value = $state->resolvedScoped[$scope][$id];
+
+            return true;
+        }
+
+        $scope = $logical->name;
+        if (!array_key_exists($id, $logical->resolvedScoped)) {
+            return false;
+        }
+        $value = $logical->resolvedScoped[$id];
+
+        return true;
+    }
+
     public function findScopeSeed(string $context, string $id, mixed &$value): bool
     {
         $state = $this->states[$context] ?? null;
