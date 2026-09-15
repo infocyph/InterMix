@@ -76,18 +76,13 @@ class InvocationManager implements ArrayAccess
         $lifetime = $this->repository->getDefinitionLifetime($id);
         $scope = null;
         if ($lifetime === LifetimeEnum::Scoped) {
-            if ($this->repository instanceof ConcurrentRepository) {
-                $scope = 'root';
-                $resolved = null;
-                if ($this->repository->findCurrentResolvedScoped($id, $scope, $resolved)) {
-                    return $this->repository->fetchInstanceOrValue($resolved);
-                }
-            } else {
-                $scope = $this->repository->getScope();
-                $resolved = $this->repository->getResolvedScopedEntry($scope, $id);
-                if ($resolved !== null || $this->repository->hasResolvedScoped($scope, $id)) {
-                    return $this->repository->fetchInstanceOrValue($resolved);
-                }
+            $scope = 'root';
+            $resolved = null;
+            $found = $this->repository instanceof ConcurrentRepository
+                ? $this->repository->findCurrentResolvedScoped($id, $scope, $resolved)
+                : $this->findResolvedScoped($id, $scope, $resolved);
+            if ($found) {
+                return $this->repository->fetchInstanceOrValue($resolved);
             }
         }
 
@@ -243,6 +238,14 @@ class InvocationManager implements ArrayAccess
         }
 
         return $service->{$method}();
+    }
+
+    private function findResolvedScoped(string $id, string &$scope, mixed &$resolved): bool
+    {
+        $scope = $this->repository->getScope();
+        $resolved = $this->repository->getResolvedScopedEntry($scope, $id);
+
+        return $resolved !== null || $this->repository->hasResolvedScoped($scope, $id);
     }
 
     private function resolveAndCache(string $id, bool $cacheable, ?string $scope): mixed
