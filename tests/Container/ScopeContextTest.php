@@ -356,3 +356,27 @@ it('rejects attachment when the target carrier already owns a scope', function (
 
     $container->leaveScope();
 });
+
+it('rejects direct scope replacement after logical scope propagation starts', function () {
+    $container = new Container(uniqid('scope_context_direct_replacement_'));
+    $container->enterScope('request');
+    $context = $container->captureScopeContext();
+
+    expect(fn() => $container->getRepository()->setScope('replacement'))
+        ->toThrow(ContainerException::class, 'Cannot replace a propagated logical scope');
+
+    $fiber = new Fiber(static fn(): string => $container->withinScopeContext(
+        $context,
+        static function (Container $active): string {
+            expect(fn() => $active->getRepository()->setScope('replacement'))
+                ->toThrow(ContainerException::class, 'Cannot replace a propagated logical scope');
+
+            return $active->getRepository()->getScope();
+        },
+    ));
+    $fiber->start();
+
+    expect($fiber->getReturn())->toBe('request');
+
+    $container->leaveScope();
+});

@@ -230,9 +230,6 @@ Persistent-worker rules
 * Register macros, reflection/configuration helpers and other process-wide
   configuration during bootstrap, not per request.
 
-InterMix's process-wide state classification is recorded in
-``docs/plans/intermix-10.1-process-state-audit.md``.
-
 Related pages
 -------------
 
