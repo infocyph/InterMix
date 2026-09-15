@@ -93,13 +93,17 @@ final class ExecutionContext
             return self::$lastFiberCarrierId;
         }
 
+        $ids = self::$fiberCarrierIds;
         $previous = self::$lastFiber;
         $previousId = self::$lastFiberCarrierId;
         if ($previous instanceof Fiber && $previousId !== null && !$previous->isTerminated()) {
-            (self::$fiberCarrierIds ??= new WeakMap())[$previous] = $previousId;
+            if (!$ids instanceof WeakMap) {
+                $ids = new WeakMap();
+                self::$fiberCarrierIds = $ids;
+            }
+            $ids[$previous] = $previousId;
         }
 
-        $ids = self::$fiberCarrierIds;
         $id = $ids instanceof WeakMap ? ($ids[$fiber] ?? null) : null;
         if (is_string($id)) {
             unset($ids[$fiber]);
