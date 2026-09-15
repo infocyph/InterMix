@@ -10,9 +10,7 @@ use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\DI\ProductionContainer;
 use RuntimeException;
 
-final class ReleaseRegressionLeaf
-{
-}
+final class ReleaseRegressionLeaf {}
 
 final class ReleaseRegression
 {
