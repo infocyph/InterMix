@@ -98,7 +98,7 @@ final class ExecutionContext
         $previousId = self::$lastFiberCarrierId;
         if ($previous instanceof Fiber && $previousId !== null && !$previous->isTerminated()) {
             if (!$ids instanceof WeakMap) {
-                $ids = new WeakMap();
+                $ids = self::newFiberCarrierMap();
                 self::$fiberCarrierIds = $ids;
             }
             $ids[$previous] = $previousId;
@@ -142,6 +142,15 @@ final class ExecutionContext
 
             return;
         }
+    }
+
+    /** @return WeakMap<Fiber<mixed, mixed, mixed, mixed>, string> */
+    private static function newFiberCarrierMap(): WeakMap
+    {
+        /** @var WeakMap<Fiber<mixed, mixed, mixed, mixed>, string> $ids */
+        $ids = new WeakMap();
+
+        return $ids;
     }
 
     private static function objectCarrierId(object $carrier, string $prefix): string
