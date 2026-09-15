@@ -10,7 +10,9 @@ use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\DI\ProductionContainer;
 use RuntimeException;
 
-final class ReleaseRegressionLeaf {}
+final class ReleaseRegressionLeaf
+{
+}
 
 final class ReleaseRegression
 {
@@ -58,6 +60,35 @@ final class ReleaseRegression
         }
 
         fwrite(STDOUT, $encoded);
+    }
+
+    /** @return array{php: string, sequential_production_ns: float, fiber_isolated_ns: float, samples: int} */
+    private static function aggregateResults(string $paths): array
+    {
+        $pathList = array_values(array_filter(array_map('trim', explode(',', $paths))));
+        if ($pathList === []) {
+            throw new RuntimeException('At least one benchmark result is required.');
+        }
+
+        $php = null;
+        $sequential = [];
+        $fiber = [];
+        foreach ($pathList as $path) {
+            $result = self::readResult($path);
+            $php ??= $result['php'];
+            if ($result['php'] !== $php) {
+                throw new RuntimeException('Aggregated benchmark results must use the same PHP version.');
+            }
+            $sequential[] = $result['sequential_production_ns'];
+            $fiber[] = $result['fiber_isolated_ns'];
+        }
+
+        return [
+            'php' => $php,
+            'sequential_production_ns' => self::median($sequential),
+            'fiber_isolated_ns' => self::median($fiber),
+            'samples' => count($pathList),
+        ];
     }
 
     private static function compare(
@@ -142,35 +173,6 @@ final class ReleaseRegression
                 }
             }
         }
-    }
-
-    /** @return array{php: string, sequential_production_ns: float, fiber_isolated_ns: float, samples: int} */
-    private static function aggregateResults(string $paths): array
-    {
-        $pathList = array_values(array_filter(array_map('trim', explode(',', $paths))));
-        if ($pathList === []) {
-            throw new RuntimeException('At least one benchmark result is required.');
-        }
-
-        $php = null;
-        $sequential = [];
-        $fiber = [];
-        foreach ($pathList as $path) {
-            $result = self::readResult($path);
-            $php ??= $result['php'];
-            if ($result['php'] !== $php) {
-                throw new RuntimeException('Aggregated benchmark results must use the same PHP version.');
-            }
-            $sequential[] = $result['sequential_production_ns'];
-            $fiber[] = $result['fiber_isolated_ns'];
-        }
-
-        return [
-            'php' => $php,
-            'sequential_production_ns' => self::median($sequential),
-            'fiber_isolated_ns' => self::median($fiber),
-            'samples' => count($pathList),
-        ];
     }
 
     private static function measureFiber(Container $container): float
