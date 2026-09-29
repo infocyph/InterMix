@@ -32,7 +32,6 @@ final class StaticRuntimeRenderer
         $source = "<?php\n\ndeclare(strict_types=1);\n\n";
         $source .= "use Infocyph\\InterMix\\DI\\ProductionContainer;\n\n";
         $source .= "return new class extends ProductionContainer\n{\n";
-        $source .= $this->renderAliasSingletonProperties($plans);
         $source .= $this->renderFactorySingletonProperties($plans);
         $source .= $invocationRenderer->renderSingletonProperties($plans);
         $source .= $returnRenderer->renderProperties($plans);
@@ -166,13 +165,6 @@ final class StaticRuntimeRenderer
 
         return $source . "    }\n\n";
     }
-
-    /** @param array<string, ServicePlan> $plans */
-    private function renderAliasSingletonProperties(array $plans): string
-    {
-        return '';
-    }
-
 
     /**
      * @param ClassPlan $plan

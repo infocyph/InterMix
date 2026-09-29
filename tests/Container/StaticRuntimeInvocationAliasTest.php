@@ -7,7 +7,7 @@ use Infocyph\InterMix\DI\Build\StaticRuntimePlanner;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\DI\Invoker\CompiledCall;
-use Infocyph\InterMix\DI\Support\LifetimeEnum;
+use Infocyph\InterMix\Exceptions\ContainerException;
 
 final class InvocationAliasLeaf {}
 
@@ -35,27 +35,23 @@ function removeInvocationAliasArtifact(string $path): void
     }
 }
 
-it('preserves alias lifetime barriers while flattening transient alias links', function () {
-    $builder = ContainerBuilder::create(uniqid('alias_barrier_'));
+it('makes aliases follow target lifetime without owning a cache', function () {
+    $builder = ContainerBuilder::create(uniqid('alias_target_lifetime_'));
     $builder->transient('target', InvocationAliasLeaf::class)
-        ->alias('cached', 'target', LifetimeEnum::Singleton)
-        ->alias('root', 'cached', LifetimeEnum::Transient);
+        ->alias('middle', 'target')
+        ->alias('root', 'middle');
 
     $development = $builder->development();
-    $developmentRoot = $development->get('root');
-    expect($developmentRoot)->toBe($development->get('cached'))
-        ->and($development->get('root'))->toBe($developmentRoot);
+    expect($development->get('root'))->not->toBe($development->get('root'));
 
     $path = invocationAliasArtifactPath();
     try {
         $report = $builder->compile($path);
         $runtime = $builder->production($path);
-        $root = $runtime->get('root');
 
-        expect($report['compiled'])->toContain('target', 'cached', 'root')
-            ->and($root)->toBe($runtime->get('cached'))
-            ->and($runtime->get('root'))->toBe($root)
-            ->and($runtime->get('target'))->not->toBe($root);
+        expect($report['compiled'])->toContain('target', 'middle', 'root')
+            ->and($runtime->get('root'))->not->toBe($runtime->get('root'))
+            ->and($runtime->get('middle'))->not->toBe($runtime->get('target'));
     } finally {
         removeInvocationAliasArtifact($path);
     }
@@ -64,8 +60,8 @@ it('preserves alias lifetime barriers while flattening transient alias links', f
 it('flattens pure transient alias chains to their final build-time target', function () {
     $builder = ContainerBuilder::create(uniqid('alias_flatten_'));
     $builder->singleton('target', InvocationAliasLeaf::class)
-        ->alias('middle', 'target', LifetimeEnum::Transient)
-        ->alias('root', 'middle', LifetimeEnum::Transient);
+        ->alias('middle', 'target')
+        ->alias('root', 'middle');
 
     $planned = new StaticRuntimePlanner()->plan(
         DefinitionGraph::from($builder->development()->getRepository()),
@@ -76,7 +72,7 @@ it('flattens pure transient alias chains to their final build-time target', func
         ->and($planned['plans']['root']['dependencies'])->toBe(['target']);
 });
 
-it('rejects alias cycles during static planning', function () {
+it('rejects alias cycles before artifact publication', function () {
     $builder = ContainerBuilder::create(uniqid('alias_cycle_'));
     $builder->alias('a', 'b')
         ->alias('b', 'c')
@@ -84,12 +80,9 @@ it('rejects alias cycles during static planning', function () {
 
     $path = invocationAliasArtifactPath();
     try {
-        $report = $builder->compile($path);
-
-        expect($report['compiled'])->not->toContain('a', 'b', 'c')
-            ->and($report['skipped']['a'])->toBe('alias graph contains a cycle')
-            ->and($report['skipped']['b'])->toBe('alias graph contains a cycle')
-            ->and($report['skipped']['c'])->toBe('alias graph contains a cycle');
+        expect(fn() => $builder->compile($path))
+            ->toThrow(ContainerException::class, "Alias 'a' participates in a cycle.")
+            ->and(is_file($path))->toBeFalse();
     } finally {
         removeInvocationAliasArtifact($path);
     }

@@ -271,8 +271,10 @@ final class StaticRuntimePlanner
     }
 
     /** @return AliasPlan */
-    private function planAlias(DefinitionGraph $graph, string $id, AliasDefinition $definition): array
-    {
+    private function planAlias(
+        DefinitionGraph $graph,
+        AliasDefinition $definition,
+    ): array {
         $target = $definition->target;
         $definitions = $graph->definitions();
 
@@ -321,7 +323,7 @@ final class StaticRuntimePlanner
         }
 
         if ($definition instanceof AliasDefinition) {
-            return $this->planAlias($graph, $id, $definition);
+            return $this->planAlias($graph, $definition);
         }
         if ($definition instanceof FactoryDefinition) {
             return new StaticFactoryPlanner()->plan($graph, $id, $definition);

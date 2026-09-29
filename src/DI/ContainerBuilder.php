@@ -294,19 +294,29 @@ final class ContainerBuilder
     public function production(string $path): ProductionContainer
     {
         $this->finalizeGraph();
+        $fallback = $this->configuration->forkRuntime(false);
 
-        return new StaticRuntimeGenerator()->load($path, $this->configuration->forkRuntime());
+        try {
+            return new StaticRuntimeGenerator()->load($path, $fallback);
+        } finally {
+            $fallback->lock();
+        }
     }
 
     public function productionPrevalidated(string $path, string $digest): ProductionContainer
     {
         $this->finalizeGraph();
+        $fallback = $this->configuration->forkRuntime(false);
 
-        return new StaticRuntimeGenerator()->loadPrevalidated(
-            $path,
-            $digest,
-            $this->configuration->forkRuntime(),
-        );
+        try {
+            return new StaticRuntimeGenerator()->loadPrevalidated(
+                $path,
+                $digest,
+                $fallback,
+            );
+        } finally {
+            $fallback->lock();
+        }
     }
 
     /** Transitional 10.x configuration access; removed by P3. */
