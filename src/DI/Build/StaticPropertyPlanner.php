@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Build;
 
+use Infocyph\InterMix\DI\Internal\BoundedValueInspector;
+
 use Infocyph\InterMix\DI\Attribute\Inject;
 use ReflectionClass;
 use ReflectionNamedType;
@@ -102,14 +104,7 @@ final class StaticPropertyPlanner
 
     private function isExportable(mixed $value): bool
     {
-        if ($value === null || is_scalar($value)) {
-            return true;
-        }
-        if (!is_array($value)) {
-            return false;
-        }
-
-        return array_all($value, fn(mixed $item): bool => $this->isExportable($item));
+        return BoundedValueInspector::isScalarNullArray($value);
     }
 
     private function normalizeRelativeType(ReflectionProperty $property, string $type): string

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Support;
 
+use Infocyph\InterMix\DI\Internal\BoundedValueInspector;
+
 use Infocyph\InterMix\DI\Attribute\Inject;
 use Infocyph\InterMix\DI\Build\DefinitionGraph;
 use Infocyph\InterMix\Internal\ReflectionResource;
@@ -215,14 +217,7 @@ final class AutomaticClassCompiler
 
     private function isExportable(mixed $value): bool
     {
-        if ($value === null || is_scalar($value)) {
-            return true;
-        }
-        if (!is_array($value)) {
-            return false;
-        }
-
-        return array_all($value, fn($item) => $this->isExportable($item));
+        return BoundedValueInspector::isScalarNullArray($value);
     }
 
     /**

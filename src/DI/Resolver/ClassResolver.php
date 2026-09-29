@@ -7,6 +7,7 @@ namespace Infocyph\InterMix\DI\Resolver;
 use Infocyph\InterMix\DI\Attribute\AttributeResolution;
 use Infocyph\InterMix\DI\Attribute\Inject;
 use Infocyph\InterMix\DI\Internal\ClassResolution;
+use Infocyph\InterMix\DI\Internal\ExecutionContext;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Internal\ReflectionResource;
 use ReflectionClass;
@@ -14,10 +15,10 @@ use ReflectionMethod;
 
 class ClassResolver
 {
-    /** @var array<int, string> Tracing-only class ancestry. */
-    private array $classStack = [];
+    /** @var array<string, array<int, string>> Tracing-only class ancestry by carrier. */
+    private array $classStacks = [];
 
-    /** @var array<string, bool> */
+    /** @var array<string, array<string, bool>> */
     private array $entriesResolving = [];
 
     public function __construct(
@@ -64,13 +65,16 @@ class ClassResolver
 
         $class = $this->getConcreteClassForInterface($class, $supplied);
         $className = $class->getName();
+        $context = $this->resolutionContext();
         $tracing = $this->repository->isTracingEnabled();
         if ($tracing) {
-            $parent = end($this->classStack);
+            $stack = $this->classStacks[$context] ?? [];
+            $parent = end($stack);
             if (is_string($parent) && $parent !== $className) {
                 $this->repository->tracer()->recordDependency($parent, $className, 'class');
             }
-            $this->classStack[] = $className;
+            $stack[] = $className;
+            $this->classStacks[$context] = $stack;
             $this->repository->tracer()->push("class:$className");
         }
 
@@ -90,7 +94,10 @@ class ClassResolver
             return $resolved;
         } finally {
             if ($tracing) {
-                array_pop($this->classStack);
+                array_pop($this->classStacks[$context]);
+                if (($this->classStacks[$context] ?? []) === []) {
+                    unset($this->classStacks[$context]);
+                }
             }
         }
     }
@@ -233,10 +240,11 @@ class ClassResolver
         array $constructorParameters,
         array $methodParameters,
     ): ClassResolution {
-        if (isset($this->entriesResolving[$className])) {
+        $context = $this->resolutionContext();
+        if (isset($this->entriesResolving[$context][$className])) {
             throw new ContainerException("Circular dependency on {$className}");
         }
-        $this->entriesResolving[$className] = true;
+        $this->entriesResolving[$context][$className] = true;
 
         try {
             $resolved = $this->repository->getResolvedResourceFor($className);
@@ -249,8 +257,16 @@ class ClassResolver
 
             return $this->resolveMethod($class, $callMethod, $resolved, $methodParameters);
         } finally {
-            unset($this->entriesResolving[$className]);
+            unset($this->entriesResolving[$context][$className]);
+            if (($this->entriesResolving[$context] ?? []) === []) {
+                unset($this->entriesResolving[$context]);
+            }
         }
+    }
+
+    private function resolutionContext(): string
+    {
+        return ExecutionContext::id() ?? "\0intermix.root";
     }
 
     /**

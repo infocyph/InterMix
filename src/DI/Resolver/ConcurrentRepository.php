@@ -34,8 +34,38 @@ final class ConcurrentRepository extends Repository
     /** @var array<string, array<string, mixed>> */
     private array $scopeSeeds = [];
 
+    /** @var array<string, string> */
+    private array $singletonConstructing = [];
+
     /** @var array<int, string> */
     private array $scopeStack = [];
+
+    public function beginSingletonConstruction(string $id): bool
+    {
+        $context = ExecutionContext::id() ?? self::ROOT_CONTEXT;
+        $owner = $this->singletonConstructing[$id] ?? null;
+        if ($owner !== null) {
+            if ($owner === $context) {
+                return false;
+            }
+
+            throw new ContainerException(
+                "Singleton service '{$id}' is already being constructed by another execution carrier.",
+            );
+        }
+
+        $this->singletonConstructing[$id] = $context;
+
+        return true;
+    }
+
+    public function endSingletonConstruction(string $id): void
+    {
+        $context = ExecutionContext::id() ?? self::ROOT_CONTEXT;
+        if (($this->singletonConstructing[$id] ?? null) === $context) {
+            unset($this->singletonConstructing[$id]);
+        }
+    }
 
     public function attachScopeContext(ScopeContext $scopeContext): void
     {

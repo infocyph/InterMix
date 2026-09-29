@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Support;
 
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\BoundedValueInspector;
 use InvalidArgumentException;
 use ReflectionClass;
 
@@ -117,13 +118,6 @@ final readonly class FactoryDefinition
 
     private static function isExportable(mixed $value): bool
     {
-        if ($value === null || is_scalar($value)) {
-            return true;
-        }
-        if (!is_array($value)) {
-            return false;
-        }
-
-        return array_all($value, fn($item) => self::isExportable($item));
+        return BoundedValueInspector::isScalarNullArray($value);
     }
 }

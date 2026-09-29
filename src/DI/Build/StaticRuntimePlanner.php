@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Build;
 
+use Infocyph\InterMix\DI\Internal\BoundedValueInspector;
+
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Support\AliasDefinition;
 use Infocyph\InterMix\DI\Support\FactoryDefinition;
@@ -250,14 +252,7 @@ final class StaticRuntimePlanner
 
     private function isExportable(mixed $value): bool
     {
-        if ($value === null || is_scalar($value)) {
-            return true;
-        }
-        if (!is_array($value)) {
-            return false;
-        }
-
-        return array_all($value, fn(mixed $item): bool => $this->isExportable($item));
+        return BoundedValueInspector::isScalarNullArray($value);
     }
 
     /**

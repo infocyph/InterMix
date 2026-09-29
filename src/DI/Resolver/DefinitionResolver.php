@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Resolver;
 
 use Closure;
+use Infocyph\InterMix\DI\Internal\ExecutionContext;
 use Infocyph\InterMix\DI\Support\AliasDefinition;
 use Infocyph\InterMix\DI\Support\DirectFactory;
 use Infocyph\InterMix\DI\Support\FactoryDefinition;
@@ -21,10 +22,10 @@ class DefinitionResolver
 {
     private ?ClassResolver $classResolver = null;
 
-    /** @var array<int, string> */
-    private array $definitionStack = [];
+    /** @var array<string, array<int, string>> */
+    private array $definitionStacks = [];
 
-    /** @var array<string, bool> */
+    /** @var array<string, array<string, bool>> */
     private array $entriesResolving = [];
 
     private ?ParameterResolver $parameterResolver = null;
@@ -232,21 +233,24 @@ class DefinitionResolver
 
     private function resolveTracked(string $name, bool $skipExternalCache): mixed
     {
-        if (isset($this->entriesResolving[$name])) {
+        $context = $this->resolutionContext();
+        if (isset($this->entriesResolving[$context][$name])) {
             throw new ContainerException("Circular dependency for definition '$name'.");
         }
 
         $tracing = $this->repository->isTracingEnabled();
         if ($tracing) {
-            $parent = end($this->definitionStack);
+            $stack = $this->definitionStacks[$context] ?? [];
+            $parent = end($stack);
             if (is_string($parent) && $parent !== $name) {
                 $this->repository->tracer()->recordDependency($parent, $name, 'definition');
             }
-            $this->definitionStack[] = $name;
+            $stack[] = $name;
+            $this->definitionStacks[$context] = $stack;
             $this->repository->tracer()->push("def:$name");
         }
 
-        $this->entriesResolving[$name] = true;
+        $this->entriesResolving[$context][$name] = true;
 
         try {
             $resolved = $this->getFromCacheOrResolve($name, $skipExternalCache);
@@ -254,10 +258,21 @@ class DefinitionResolver
 
             return $resolved;
         } finally {
-            unset($this->entriesResolving[$name]);
+            unset($this->entriesResolving[$context][$name]);
+            if (($this->entriesResolving[$context] ?? []) === []) {
+                unset($this->entriesResolving[$context]);
+            }
             if ($tracing) {
-                array_pop($this->definitionStack);
+                array_pop($this->definitionStacks[$context]);
+                if (($this->definitionStacks[$context] ?? []) === []) {
+                    unset($this->definitionStacks[$context]);
+                }
             }
         }
+    }
+
+    private function resolutionContext(): string
+    {
+        return ExecutionContext::id() ?? "\0intermix.root";
     }
 }

@@ -250,14 +250,31 @@ class InvocationManager implements ArrayAccess
 
     private function resolveAndCache(string $id, bool $cacheable, ?string $scope): mixed
     {
-        if ($scope !== null
-            && $this->repository instanceof ConcurrentRepository
-            && $this->repository->requiresScopedConstructionGuard()
-        ) {
-            return $this->resolveAndCacheGuarded($id, $cacheable, $scope, $this->repository);
+        if ($this->repository instanceof ConcurrentRepository) {
+            if ($scope === null && $cacheable) {
+                return $this->resolveAndCacheSingletonGuarded($id, $this->repository);
+            }
+            if ($scope !== null && $this->repository->requiresScopedConstructionGuard()) {
+                return $this->resolveAndCacheGuarded($id, $cacheable, $scope, $this->repository);
+            }
         }
 
         return $this->resolveAndCacheDirect($id, $cacheable, $scope);
+    }
+
+    private function resolveAndCacheSingletonGuarded(
+        string $id,
+        ConcurrentRepository $repository,
+    ): mixed {
+        $constructionOwner = $repository->beginSingletonConstruction($id);
+
+        try {
+            return $this->resolveAndCacheDirect($id, true, null);
+        } finally {
+            if ($constructionOwner) {
+                $repository->endSingletonConstruction($id);
+            }
+        }
     }
 
     private function resolveAndCacheDirect(string $id, bool $cacheable, ?string $scope): mixed

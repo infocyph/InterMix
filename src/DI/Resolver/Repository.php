@@ -7,6 +7,7 @@ namespace Infocyph\InterMix\DI\Resolver;
 use Closure;
 use Infocyph\InterMix\DI\Attribute\AttributeRegistry;
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\BoundedValueInspector;
 use Infocyph\InterMix\DI\Internal\ClassResolution;
 use Infocyph\InterMix\DI\Resolver\Concerns\InvalidatesRepositoryState;
 use Infocyph\InterMix\DI\Resolver\Concerns\ResolvesMissingServices;
@@ -1024,14 +1025,7 @@ class Repository
 
     private function isSafeCachedDefinitionValue(mixed $value): bool
     {
-        if (is_scalar($value) || $value === null) {
-            return true;
-        }
-        if (!is_array($value)) {
-            return false;
-        }
-
-        return array_all($value, fn($item) => $this->isSafeCachedDefinitionValue($item));
+        return BoundedValueInspector::isScalarNullArray($value);
     }
 
     /**
