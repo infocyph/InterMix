@@ -7,6 +7,7 @@ namespace Infocyph\InterMix\DI\Managers;
 use ArrayAccess;
 use Closure;
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\DI\Support\ServiceProviderInterface;
 use Infocyph\InterMix\Exceptions\ContainerException;
@@ -77,7 +78,7 @@ class RegistrationManager implements ArrayAccess
             $provider = $reflection->newInstance();
         }
 
-        $provider->register($this->container);
+        $provider->register(new ContainerBuilder($this->container));
 
         return $this;
     }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Infocyph\InterMix\DI\Attribute\Inject;
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\DI\Invoker;
 use Infocyph\InterMix\DI\Invoker\GenericCall;
 use Infocyph\InterMix\DI\Support\DebugTracer;
@@ -124,7 +125,7 @@ final class ReleaseRequiredConstructorProvider implements ServiceProviderInterfa
 {
     public function __construct(string $required) {}
 
-    public function register(Container $container): void {}
+    public function register(ContainerBuilder $builder): void {}
 }
 
 final class ReleaseMacroHost

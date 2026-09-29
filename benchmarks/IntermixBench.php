@@ -6,6 +6,7 @@ namespace Infocyph\InterMix\Benchmarks;
 
 use Closure;
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\DI\Invoker;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\DI\Support\ServiceProviderInterface;
@@ -334,9 +335,9 @@ final readonly class BenchProvidedService
 
 final class BenchServiceProvider implements ServiceProviderInterface
 {
-    public function register(Container $container): void
+    public function register(ContainerBuilder $builder): void
     {
-        $container->definitions()->bind(
+        $builder->bind(
             'bench.provider.service',
             static fn(BenchService $service): BenchProvidedService => new BenchProvidedService($service),
         );

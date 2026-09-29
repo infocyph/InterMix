@@ -238,7 +238,7 @@ final class ContainerBuilder
     public function import(ServiceProviderInterface $provider): self
     {
         $this->assertMutable();
-        $provider->register($this->configuration);
+        $provider->register($this);
 
         return $this;
     }

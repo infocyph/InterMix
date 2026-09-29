@@ -7,6 +7,7 @@ use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\DI\Support\FactoryDefinition;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
+use Infocyph\InterMix\DI\Support\ServiceProviderInterface;
 use Infocyph\InterMix\Exceptions\ContainerException;
 
 final class Builder11Singleton {}
@@ -18,6 +19,16 @@ final class Builder11Configured
     public string $label = 'default';
 
     public function __construct(public int $port = 80) {}
+}
+
+final class Builder11Provider implements ServiceProviderInterface
+{
+    public function __construct(private readonly string $value) {}
+
+    public function register(ContainerBuilder $builder): void
+    {
+        $builder->value('provided', $this->value);
+    }
 }
 
 final class Builder11LiteralTarget
@@ -96,6 +107,14 @@ it('applies explicit autowire constructor and property overrides', function (): 
     expect($configured)->toBeInstanceOf(Builder11Configured::class)
         ->and($configured->port)->toBe(443)
         ->and($configured->label)->toBe('secure');
+});
+
+it('imports supplied providers through the builder contract', function (): void {
+    $runtime = ContainerBuilder::create(uniqid('builder11_provider_'))
+        ->import(new Builder11Provider('provider-value'))
+        ->build();
+
+    expect($runtime->get('provided'))->toBe('provider-value');
 });
 
 it('requires explicit scoped inputs and returns the supplied seed', function (): void {
@@ -199,14 +218,14 @@ it('uses explicit cache eligibility with an InterMix 11 namespace key', function
         ->definitionCache($cache, 'application-a', 'release-1')
         ->factory(
             'cached',
-            static function (Container $_runtime) use (&$cachedRuns): int {
+            static function () use (&$cachedRuns): int {
                 return ++$cachedRuns;
             },
         )
         ->cacheDefinition('cached')
         ->factory(
             'uncached',
-            static function (Container $_runtime) use (&$uncachedRuns): int {
+            static function () use (&$uncachedRuns): int {
                 return ++$uncachedRuns;
             },
         );
@@ -277,7 +296,7 @@ it('keeps compiled aliases cache-free for transient targets', function (): void 
 it('rejects strict compilation before publishing unsupported definitions', function (): void {
     $path = builder11ArtifactPath();
     $builder = ContainerBuilder::create(uniqid('builder11_strict_'))
-        ->factory('runtime-only', static fn(Container $_runtime): object => new stdClass());
+        ->factory('runtime-only', static fn(): object => new stdClass());
 
     try {
         expect(fn() => $builder->compile($path, true))
