@@ -142,8 +142,8 @@ it('preserves scoped hook and scope-leave semantics in production', function () 
             ->and($second)->not->toBe($first)
             ->and($resolved)->toBe(2)
             ->and($left)->toBe([
-                ['request', true],
-                ['request', true],
+                ['request', false],
+                ['request', false],
             ]);
     } finally {
         removeStaticLifecycleHookArtifact($path);

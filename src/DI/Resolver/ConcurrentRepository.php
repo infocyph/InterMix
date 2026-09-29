@@ -81,6 +81,16 @@ final class ConcurrentRepository extends Repository
         return $store->captureScopeContext($physicalContext, $this->scopeContextOwner());
     }
 
+    /** @internal */
+    public function copyConfigurationTo(Repository $target): void
+    {
+        parent::copyConfigurationTo($target);
+
+        if ($target instanceof self) {
+            $target->scopeLeaveHooks = $this->scopeLeaveHooks;
+        }
+    }
+
     public function detachScopeContext(ScopeContext $scopeContext): void
     {
         $physicalContext = ExecutionContext::id() ?? self::ROOT_CONTEXT;
