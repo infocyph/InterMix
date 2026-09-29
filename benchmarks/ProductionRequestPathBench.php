@@ -6,7 +6,6 @@ namespace Infocyph\InterMix\Benchmarks;
 
 use Fiber;
 use Infocyph\InterMix\DI\Attribute\Inject;
-use Infocyph\InterMix\DI\Build\StaticRuntimeGenerator;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\DI\ProductionContainer;
@@ -26,10 +25,8 @@ final class ProductionRequestPathBench
     #[Revs(100)]
     public function benchArtifactLoad(): void
     {
-        static $generator;
-        $generator ??= new StaticRuntimeGenerator();
-        [$path, , $fallback] = $this->bootFixture();
-        $this->sink = $generator->load($path, $fallback);
+        [$path, , $builder] = $this->bootFixture();
+        $this->sink = $builder->production($path);
     }
 
     #[Revs(500)]
@@ -228,10 +225,8 @@ final class ProductionRequestPathBench
     #[Revs(100)]
     public function benchPrevalidatedArtifactLoad(): void
     {
-        static $generator;
-        $generator ??= new StaticRuntimeGenerator();
-        [$path, $digest, $fallback] = $this->bootFixture();
-        $this->sink = $generator->loadPrevalidated($path, $digest, $fallback);
+        [$path, $digest, $builder] = $this->bootFixture();
+        $this->sink = $builder->productionPrevalidated($path, $digest);
     }
 
     #[Revs(500)]
@@ -272,7 +267,7 @@ final class ProductionRequestPathBench
         return sys_get_temp_dir() . '/intermix-production-request-' . bin2hex(random_bytes(8)) . '.php';
     }
 
-    /** @return array{string, string, Container} */
+    /** @return array{string, string, ContainerBuilder} */
     private function bootFixture(): array
     {
         static $fixture;
@@ -284,7 +279,6 @@ final class ProductionRequestPathBench
             ->singleton('root', ProductionRequestRoot::class);
         $path = $this->artifactPath();
         $report = $builder->compile($path);
-        $fallback = $builder->development();
         register_shutdown_function(static function () use ($path): void {
             foreach ([$path, $path . '.meta.json'] as $artifact) {
                 if (is_file($artifact)) {
@@ -293,7 +287,7 @@ final class ProductionRequestPathBench
             }
         });
 
-        return $fixture = [$path, $report['digest'], $fallback];
+        return $fixture = [$path, $report['digest'], $builder];
     }
 
     private function controllerRuntime(): ProductionContainer

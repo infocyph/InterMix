@@ -403,8 +403,20 @@ class Repository
 
     public function getDefinitionLifetime(string $id): LifetimeEnum
     {
-        $current = $id;
-        $seen = [];
+        $definition = $this->functionReference[$id] ?? null;
+        if (!$definition instanceof AliasDefinition) {
+            $lifetime = $this->definitionMeta[$id]['lifetime'] ?? LifetimeEnum::Singleton;
+            $env = $this->environment;
+
+            if ($env !== null && isset($this->definitionMetaByEnv[$env][$id]['lifetime'])) {
+                return $this->definitionMetaByEnv[$env][$id]['lifetime'];
+            }
+
+            return $lifetime;
+        }
+
+        $current = $definition->target;
+        $seen = [$id => true];
 
         while (($definition = $this->functionReference[$current] ?? null) instanceof AliasDefinition) {
             if (isset($seen[$current])) {
