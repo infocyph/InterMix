@@ -904,10 +904,26 @@ batch is closed.
 
 | Batch | Packages | Status | Package status / implementation evidence |
 | --- | --- | --- | --- |
-| 1 | P0 + P1 — baseline and runtime hardening | **QA in progress** | P0 **Complete** at `2d59860`. P1 implementation covers F1–F3; correctness/quality lanes are green. Final Batch 1 performance QA now uses the plan-mandated exact 10.1.1 baseline (`f687452`) rather than the historical 10.0.4 comparison. |
-| 2 | P2 + P3 — builder/definitions and runtime/scope contract | Pending | P2: B1/B2/B7. P3: B3/B4/B5. Implement P2 first inside the batch, run focused QA, then P3, then full batch QA. |
+| 1 | P0 + P1 — baseline and runtime hardening | **Complete** | Closed on `f55be8b`: P0 contract/baseline frozen; P1 F1–F3 fixed. Corrected 10.1.1 regression gate, PHPForge QA/analysis/benchmarks, clean install, and Swoole/OpenSwoole PHP 8.4/8.5 are green. |
+| 2 | P2 + P3 — builder/definitions and runtime/scope contract | **In progress — P2** | P2: B1/B2/B7 implementation starts after Batch 1 closure; run focused P2 QA before P3. P3: B3/B4/B5 follows, then full Batch 2 QA. |
 | 3 | P4 + P5 — compiled graph and provider boundaries | Pending | P4: B6 generated/fallback graph. P5: CacheLayer 4.0 / Runwire 2.1 optional provider boundaries. Run focused QA after each package, then full batch QA. |
 | 4 | P6 + P7 + P8 — migration, measured acceptance and release candidate | Pending | P6: docs/consumer migration. P7: benchmarks/soak/host acceptance. P8: exact-SHA CI, packaging and RC evidence. P8 remains the final gate inside this batch. |
+
+### Batch 1 closure evidence
+
+Batch 1 acceptance revision: `f55be8ba4b69201fa8f9bb2d34efb3e30cbc3b87`.
+
+- Release regression against exact 10.1.1 baseline `f687452` passed:
+  PHP 8.4 sequential **-1.31%**, Fiber **+3.42%**; PHP 8.5 sequential
+  **+0.17%**, Fiber **+2.24%**, within unchanged 3% / 5% budgets.
+- PHPForge QA passed on PHP 8.4/8.5 for prefer-stable and prefer-lowest.
+- PHPForge analysis and benchmark lanes passed on PHP 8.4/8.5.
+- Clean production install passed.
+- Swoole and OpenSwoole scope-carrier lanes passed on PHP 8.4/8.5.
+- The pull-request release publication job remained correctly skipped.
+
+Batch 1 is closed. Batch 2 starts with P2 only; P3 does not begin until P2
+focused QA and tracker evidence are complete.
 
 ### Batch 1 / P1 current QA state
 
