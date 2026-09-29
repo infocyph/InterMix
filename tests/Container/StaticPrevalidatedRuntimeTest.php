@@ -56,7 +56,7 @@ it('rejects malformed and mismatched deployment digests', function () {
     }
 });
 
-it('requires recompilation after environment mutation', function () {
+it('rejects environment mutation after graph finalization', function () {
     $builder = ContainerBuilder::create(uniqid('static_prevalidated_environment_'));
     $builder->setEnvironment('production')
         ->singleton('service', StaticPrevalidatedService::class);
@@ -64,12 +64,12 @@ it('requires recompilation after environment mutation', function () {
 
     try {
         $report = $builder->compile($path);
-        $builder->setEnvironment('staging');
 
-        expect(fn() => $builder->production($path))
-            ->toThrow(ContainerException::class, 'recompiled')
-            ->and(fn() => $builder->productionPrevalidated($path, $report['digest']))
-            ->toThrow(ContainerException::class, 'recompiled');
+        expect(fn() => $builder->setEnvironment('staging'))
+            ->toThrow(ContainerException::class, 'ContainerBuilder is finalized');
+
+        $runtime = $builder->productionPrevalidated($path, $report['digest']);
+        expect($runtime->get('service'))->toBeInstanceOf(StaticPrevalidatedService::class);
     } finally {
         removeStaticPrevalidatedArtifact($path);
     }

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\DI\Internal\ClassResolution;
 use Infocyph\InterMix\DI\Support\DebugTracer;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
@@ -420,11 +421,12 @@ it('isolates resolved instances per scope', function () {
     expect($a)->not->toBe($b);
 });
 
-it('imports a service provider', function () {
-    $c = Container::instance('intermix');
-    $c->registration()->import(DemoProvider::class);
+it('imports a supplied service provider through the builder', function () {
+    $runtime = ContainerBuilder::create(uniqid('provider_'))
+        ->import(new DemoProvider())
+        ->build();
 
-    expect($c->get(FooService::class))->toBeInstanceOf(FooService::class);
+    expect($runtime->get(FooService::class))->toBeInstanceOf(FooService::class);
 });
 
 it('supports property / array / callable sugar on the container', function () {

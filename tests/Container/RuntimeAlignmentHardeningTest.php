@@ -39,7 +39,7 @@ it('does not reuse collected Fiber carrier identities', function () {
         ->and(array_unique($ids))->toHaveCount(64);
 });
 
-it('preserves compiled and fallback scoped identity across capture and safe deoptimization', function () {
+it('preserves compiled and fallback scoped identity after builder finalization', function () {
     $builder = ContainerBuilder::create(uniqid('runtime_alignment_fallback_'));
     $builder->scoped('compiled', RuntimeAlignmentCompiledLeaf::class)
         ->bindFactory('dynamic', static fn(): stdClass => new stdClass(), LifetimeEnum::Scoped);
@@ -53,22 +53,21 @@ it('preserves compiled and fallback scoped identity across capture and safe deop
         $dynamic = $runtime->get('dynamic');
         $context = $runtime->captureScopeContext();
 
-        $builder->value('late.value', 'available-after-deopt');
+        expect(fn() => $builder->value('late.value', 'blocked'))
+            ->toThrow(ContainerException::class, 'ContainerBuilder is finalized');
 
         $fiber = new Fiber(static fn(): array => $runtime->withinScopeContext(
             $context,
             static fn($active): array => [
                 $active->get('compiled'),
                 $active->get('dynamic'),
-                $active->get('late.value'),
             ],
         ));
         $fiber->start();
-        [$childCompiled, $childDynamic, $late] = $fiber->getReturn();
+        [$childCompiled, $childDynamic] = $fiber->getReturn();
 
         expect($childCompiled)->toBe($compiled)
-            ->and($childDynamic)->toBe($dynamic)
-            ->and($late)->toBe('available-after-deopt');
+            ->and($childDynamic)->toBe($dynamic);
 
         $runtime->leaveScope();
     } finally {
@@ -99,7 +98,7 @@ it('rejects dynamic configuration mutation from a foreign carrier while its scop
     expect($container->get('late'))->toBe('allowed');
 });
 
-it('rejects compiled graph mutation while a propagated child carrier is attached', function () {
+it('keeps a finalized compiled graph immutable while a propagated child is attached', function () {
     $builder = ContainerBuilder::create(uniqid('runtime_alignment_compiled_mutation_'));
     $builder->scoped('compiled', RuntimeAlignmentCompiledLeaf::class);
     $development = $builder->development();
@@ -123,19 +122,17 @@ it('rejects compiled graph mutation while a propagated child carrier is attached
         ));
         $child->start();
 
-        expect(fn() => $runtime->deoptimize())
-            ->toThrow(ContainerException::class, 'concurrent scope execution is active')
-            ->and(fn() => $runtime->attachFallback(new Container(uniqid('unsafe_fallback_'))))
-            ->toThrow(ContainerException::class, 'concurrent scope execution is active')
-            ->and(fn() => $builder->value('late.value', 'blocked'))
-            ->toThrow(ContainerException::class, 'concurrent scope execution is active')
+        expect(fn() => $builder->value('late.value', 'blocked'))
+            ->toThrow(ContainerException::class, 'ContainerBuilder is finalized')
             ->and($builder->compilationReport())->toBe($report)
             ->and($development->getRepository()->hasFunctionReference('late.value'))->toBeFalse();
 
         $child->resume();
-        $builder->value('late.value', 'allowed');
 
-        expect($runtime->get('late.value'))->toBe('allowed');
+        expect(fn() => $builder->value('late.value', 'still-blocked'))
+            ->toThrow(ContainerException::class, 'ContainerBuilder is finalized')
+            ->and($runtime->get('compiled'))->toBeInstanceOf(RuntimeAlignmentCompiledLeaf::class);
+
         $runtime->leaveScope();
     } finally {
         removeRuntimeAlignmentArtifact($path);

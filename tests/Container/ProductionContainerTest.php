@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\DI\ProductionContainer;
+use Infocyph\InterMix\Exceptions\ContainerException;
 
 final class ProductionRuntimeLeaf {}
 
@@ -137,7 +138,7 @@ it('compiles direct eager and lazy tag dispatch for known production services', 
     }
 });
 
-it('deoptimizes a prior production runtime before attaching another to the builder graph', function () {
+it('loads independent production runtimes from the same frozen graph', function () {
     $builder = ContainerBuilder::create(uniqid('production_reload_'))
         ->singleton('leaf', ProductionRuntimeLeaf::class);
     $path = productionRuntimeArtifactPath();
@@ -156,7 +157,7 @@ it('deoptimizes a prior production runtime before attaching another to the build
     }
 });
 
-it('deoptimizes when a retained development manager mutates the finalized graph', function () {
+it('locks retained configuration managers after builder finalization', function () {
     $builder = ContainerBuilder::create(uniqid('production_retained_manager_'));
     $definitions = $builder->definitions();
     $definitions->bind('leaf', ProductionRuntimeLeaf::class);
@@ -166,14 +167,14 @@ it('deoptimizes when a retained development manager mutates the finalized graph'
         $builder->compile($path);
         $runtime = $builder->production($path);
         $compiled = $runtime->get('leaf');
-        $replacement = new ProductionRuntimeLeaf();
 
-        $definitions->bind('leaf', $replacement);
+        expect(fn() => $definitions->bind('leaf', new ProductionRuntimeLeaf()))
+            ->toThrow(ContainerException::class, 'Container is locked')
+            ->and($runtime->get('leaf'))->toBe($compiled);
 
-        expect($runtime->get('leaf'))->toBe($replacement)
-            ->and($runtime->get('leaf'))->not->toBe($compiled)
-            ->and(fn() => $builder->production($path))
-            ->toThrow(\Infocyph\InterMix\Exceptions\ContainerException::class, 'recompiled');
+        $second = $builder->production($path);
+        expect($second)->not->toBe($runtime)
+            ->and($second->get('leaf'))->toBeInstanceOf(ProductionRuntimeLeaf::class);
     } finally {
         removeProductionRuntimeArtifact($path);
     }
