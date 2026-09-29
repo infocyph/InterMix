@@ -405,14 +405,7 @@ class Repository
     {
         $definition = $this->functionReference[$id] ?? null;
         if (!$definition instanceof AliasDefinition) {
-            $lifetime = $this->definitionMeta[$id]['lifetime'] ?? LifetimeEnum::Singleton;
-            $env = $this->environment;
-
-            if ($env !== null && isset($this->definitionMetaByEnv[$env][$id]['lifetime'])) {
-                return $this->definitionMetaByEnv[$env][$id]['lifetime'];
-            }
-
-            return $lifetime;
+            return $this->getDirectDefinitionLifetime($id);
         }
 
         $current = $definition->target;
