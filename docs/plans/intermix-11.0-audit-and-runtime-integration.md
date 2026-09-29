@@ -891,6 +891,107 @@ Migration execution order:
 6. Run consumer fixtures and representative workloads before changing production
    traffic. Roll back by switching complete releases, not by hot-swapping graphs.
 
+## Implementation tracker
+
+Updated: 2026-09-29
+
+This tracker is the authoritative execution state for this plan. Every batch is
+implemented, QA'd, committed, and then advanced; a later batch does not begin
+until the preceding batch's required QA and plan evidence are recorded.
+
+| Batch | Package | Status | Implementation / evidence |
+| --- | --- | --- | --- |
+| 1 | P0 — contract and baseline | **In progress** | PR #138 opened; 10.1.1 baseline and public API disposition frozen below; branch starts from `f687452` and plan branch head `a3bb1e1` |
+| 2 | P1 — demonstrated defects | Pending | F1–F3 regressions and bounded fixes |
+| 3 | P2 — builder and definitions | Pending | B1/B2/B7 |
+| 4 | P3 — runtime and scope contract | Pending | B3/B4/B5 |
+| 5 | P4 — compiled graph | Pending | B6 |
+| 6 | P5 — provider boundaries | Pending | CacheLayer 4.0 / Runwire 2.1 |
+| 7 | P6 — migration and consumers | Pending | Documentation and executable consumer migrations |
+| 8 | P7 — measured acceptance | Pending | Benchmarks, host workloads, soak |
+| 9 | P8 — release candidate | Pending | Exact-SHA CI, packaging and release evidence |
+
+### Batch 1 / P0 frozen baseline
+
+P0 uses InterMix **10.1.1** commit
+`f687452b9b8d10333e7beb7d6905b479b2b8480e` as the immutable behavioral and
+performance comparison baseline. The implementation branch began P0 at
+`a3bb1e15e4c8849987d24be866575aedbf260261`; PR #138 is kept open throughout
+the staged implementation so pull-request workflows exercise each batch.
+
+Historical audit evidence remains historical: PHP 8.5.4 CLI NTS, Composer 2.10.3,
+399 tests / 2,286 assertions, 28 duplicate groups / 1,072 lines / 5.45%, 77
+Deptrac-uncovered dependencies, and the released-source CacheLayer 4.0 / Runwire
+2.1 probes recorded earlier in this plan. These results are not re-labelled as
+11.0 branch QA. Batch QA requires fresh evidence tied to the batch commit.
+
+The current dependency baseline is PHP `>=8.4`, PSR Cache `^3.0`, PSR
+Container `^2.0`; development currently targets CacheLayer `^3.2.0`, Runwire
+`^1.0`, Opis `^4.5`, and mutable PHPForge `dev-main@dev`. P5 is responsible
+for moving the optional integration targets to CacheLayer 4.0 and Runwire 2.1.
+
+### P0 public API disposition
+
+The table below freezes the required 10.1.1-to-11.0 disposition before P2 changes
+public contracts. Exact signatures and named-parameter compatibility must be
+verified against implementation as each row is migrated.
+
+| 10.1.1 surface | 11.0 disposition |
+| --- | --- |
+| `ContainerBuilder` | Retain as sole configuration owner; add frozen `build()`; remove live-runtime mutation/deoptimization model and `development()` escape hatch |
+| `Container` | Retain as dynamic runtime implementing new `RuntimeContainerInterface`; remove registration/configuration/global ownership APIs |
+| `ProductionContainer` | Retain as generated runtime implementing the same runtime contract; frozen hybrid fallback only |
+| `Container::instance()`, alias constants/registry, `unset()` | Remove |
+| DI `ArrayAccess`, magic/proxy writes and global DI lookup helpers | Remove |
+| `bind()`, `bindFactory()`, `singleton()`, `scoped()`, `transient()`, pending factory chains | Replace with explicit builder `value()`, `autowire()`, `factory()`, `alias()`, `input()` |
+| `unbind()` | Retain builder-only before freeze |
+| `definitions()`, `registration()`, `options()` public manager navigation | Internalize/remove from runtime; expose cohesive builder operations instead |
+| `ServiceProviderInterface::register(Container)` | Change to `register(ContainerBuilder)`; provider instance supplied explicitly |
+| `FactoryDefinition` / `ServiceReference` | Retain; resolve through `RuntimeContainerInterface`; bounded export validation |
+| `get()`, `has()` | Retain with strict declared-entry PSR-11 semantics |
+| `make(string, string|bool)` | Change to fresh-root `make(string, array): object` |
+| `call()`, `getReturn()`, `resolveNow()`, `parseCallable()`, public `Invoker` | Remove; replace callable execution with `invoke(callable, array)` |
+| configured/default method execution during retrieval | Remove |
+| `findByTag()`, `findByTagLazy()`, current `tagged()` resolver-closure semantics | Consolidate to lazy `tagged()` yielding ID => resolved value |
+| `TaggedPipeline` | Retain, adapted to `RuntimeContainerInterface` and new tag semantics |
+| `enterScope()` / `leaveScope()` | Remove publicly |
+| `withinScope()`, `captureScopeContext()`, scope attach/detach machinery | Consolidate into B4 `withinScope()`, `captureScopeContext()`, `withinScopeContext()`, `resetCurrentExecutionScope()` |
+| `ScopeContext` | Retain opaque process-local borrowed handle |
+| root scoped lifetime | Remove; Scoped/input resolution requires an active owned/attached frame |
+| runtime `onMissing` registration | Remove; discovery moves to bootstrap/provider registration |
+| resolving/resolved/scope-leave hooks | Retain as builder-time lifecycle configuration |
+| attributes/contextual bindings/tags/environment/constructor+property overrides | Retain with explicit builder equivalents |
+| `compileTo()`, `useCompiled()`, `usePrevalidated()` mutable runtime compilation | Remove from runtime; builder owns compile/load and frozen artifact lifecycle |
+| `compile()`, `production()`, `productionPrevalidated()` | Retain on builder with B1/B6 freeze semantics and new ABI |
+| definition cache manager mutation | Replace with explicit builder cache configuration and per-definition opt-in from B7 |
+| `attributeRegistry()`, repository/resolver mutation accessors | Internalize; expose only builder configuration / bounded runtime diagnostics |
+| `debug()`, tracing/graph diagnostics | Retain capability but separate builder graph validation/export from bounded runtime trace access |
+| Fence, Remix, closure serialization, non-DI helpers | Retain independently unless a later package records a specific incompatibility |
+
+### P0 representative consumer migrations
+
+The implementation must keep executable fixtures for these composition patterns:
+
+1. Plain PHP: builder configuration → frozen dynamic runtime → explicit
+   `withinScope()` → `get()/make()/invoke()`.
+2. Framework request/job: host-owned runtime, declared scoped inputs, captured
+   child scope handle, deterministic teardown.
+3. Generated deployment: same frozen graph → compiled artifact → production
+   runtime, with explicit hybrid fallback requirements and stale-ABI rejection.
+4. Provider extension: supplied provider instance registers into the builder;
+   factories and attributes depend on `RuntimeContainerInterface`, never mutable
+   container configuration.
+5. Cache consumer: generic PSR-6 pool, explicit namespace/generation and
+   per-definition eligibility; no CacheLayer classes required by core.
+6. Compound optional integration: host → InterMix → CacheLayer and host → sibling
+   library → CacheLayer share the host's exact Runwire runtime/request/task
+   identities while retaining one host-designated lifecycle owner.
+7. Provider-absence install: production authoritative autoload with no CacheLayer,
+   Runwire, Opis, Swoole, or framework installed still supports normal DI use.
+
+P0 does not authorize implementation of those contracts; it freezes what later
+batches must prove and prevents silent capability loss.
+
 ## Work packages, dependencies, and completion criteria
 
 All implementation work is pending. The source files named here are existing
