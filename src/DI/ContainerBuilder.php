@@ -416,24 +416,6 @@ final class ContainerBuilder
         }
     }
 
-    /** @return list<string> */
-    private function autowireIssues(string $id, AutowireDefinition $definition): array
-    {
-        if (!class_exists($definition->class)) {
-            return ["Autowire definition '{$id}' references missing class '{$definition->class}'."];
-        }
-
-        $reflection = new ReflectionClass($definition->class);
-        if (!$reflection->isInstantiable()) {
-            return ["Autowire definition '{$id}' class '{$definition->class}' is not instantiable."];
-        }
-
-        return [
-            ...$this->autowireArgumentIssues($id, $definition, $reflection),
-            ...$this->autowirePropertyIssues($id, $definition, $reflection),
-        ];
-    }
-
     /**
      * @param ReflectionClass<object> $reflection
      * @return list<string>
@@ -474,6 +456,24 @@ final class ContainerBuilder
         }
 
         return $issues;
+    }
+
+    /** @return list<string> */
+    private function autowireIssues(string $id, AutowireDefinition $definition): array
+    {
+        if (!class_exists($definition->class)) {
+            return ["Autowire definition '{$id}' references missing class '{$definition->class}'."];
+        }
+
+        $reflection = new ReflectionClass($definition->class);
+        if (!$reflection->isInstantiable()) {
+            return ["Autowire definition '{$id}' class '{$definition->class}' is not instantiable."];
+        }
+
+        return [
+            ...$this->autowireArgumentIssues($id, $definition, $reflection),
+            ...$this->autowirePropertyIssues($id, $definition, $reflection),
+        ];
     }
 
     /**
@@ -565,6 +565,7 @@ final class ContainerBuilder
             if ($definition instanceof AliasDefinition) {
                 if (!$repository->hasFunctionReference($definition->target)) {
                     $issues[] = "Alias '{$id}' targets undeclared service '{$definition->target}'.";
+
                     continue;
                 }
 
@@ -573,6 +574,7 @@ final class ContainerBuilder
                 while (($alias = $definitions[$current] ?? null) instanceof AliasDefinition) {
                     if (isset($seen[$current])) {
                         $issues[] = "Alias '{$id}' participates in a cycle.";
+
                         break;
                     }
                     $seen[$current] = true;

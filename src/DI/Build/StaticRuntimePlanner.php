@@ -274,7 +274,8 @@ final class StaticRuntimePlanner
     private function planAlias(
         DefinitionGraph $graph,
         AliasDefinition $definition,
-    ): array {
+    ): array
+    {
         $target = $definition->target;
         $definitions = $graph->definitions();
 

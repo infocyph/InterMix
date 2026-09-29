@@ -990,6 +990,11 @@ class Repository
         }
     }
 
+    private function clearScopeResolvedEntries(string $scope): void
+    {
+        unset($this->resolvedScoped[$scope]);
+    }
+
     private function getDirectDefinitionLifetime(string $id): LifetimeEnum
     {
         $lifetime = $this->definitionMeta[$id]['lifetime'] ?? LifetimeEnum::Singleton;
@@ -1000,11 +1005,6 @@ class Repository
         }
 
         return $lifetime;
-    }
-
-    private function clearScopeResolvedEntries(string $scope): void
-    {
-        unset($this->resolvedScoped[$scope]);
     }
 
     /**

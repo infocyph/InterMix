@@ -215,6 +215,21 @@ class DefinitionResolver
         return $definition(...$parameterResolver->resolve($reflectionFn, [], 'constructor'));
     }
 
+    /** @return array{ClassResolver, ParameterResolver} */
+    private function resolvers(): array
+    {
+        $classResolver = $this->classResolver;
+        $parameterResolver = $this->parameterResolver;
+        if (!$classResolver instanceof ClassResolver || !$parameterResolver instanceof ParameterResolver) {
+            $factory = $this->resolverFactory
+                ?? throw new ContainerException('Reflection resolver factory is unavailable.');
+            [$classResolver, $parameterResolver] = $factory();
+            $this->setResolverInstance($classResolver, $parameterResolver);
+        }
+
+        return [$classResolver, $parameterResolver];
+    }
+
     private function resolveSingletonDefinition(string $name): mixed
     {
         $definitionCache = $this->repository->getDefinitionCache();
@@ -276,19 +291,4 @@ class DefinitionResolver
             }
         }
     }
-    /** @return array{ClassResolver, ParameterResolver} */
-    private function resolvers(): array
-    {
-        $classResolver = $this->classResolver;
-        $parameterResolver = $this->parameterResolver;
-        if (!$classResolver instanceof ClassResolver || !$parameterResolver instanceof ParameterResolver) {
-            $factory = $this->resolverFactory
-                ?? throw new ContainerException('Reflection resolver factory is unavailable.');
-            [$classResolver, $parameterResolver] = $factory();
-            $this->setResolverInstance($classResolver, $parameterResolver);
-        }
-
-        return [$classResolver, $parameterResolver];
-    }
-
 }
