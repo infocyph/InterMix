@@ -904,12 +904,12 @@ batch is closed.
 
 | Batch | Packages | Status | Package status / implementation evidence |
 | --- | --- | --- | --- |
-| 1 | P0 + P1 — baseline and runtime hardening | **QA blocked: P1 performance gate** | P0 **Complete** at `2d59860`. P1 implementation covers F1–F3 through `07b44e5`; all correctness/quality lanes are green, but release-regression Fiber churn still exceeds budget. Batch 1 closes only after final P1 performance QA passes. |
+| 1 | P0 + P1 — baseline and runtime hardening | **QA in progress** | P0 **Complete** at `2d59860`. P1 implementation covers F1–F3; correctness/quality lanes are green. Final Batch 1 performance QA now uses the plan-mandated exact 10.1.1 baseline (`f687452`) rather than the historical 10.0.4 comparison. |
 | 2 | P2 + P3 — builder/definitions and runtime/scope contract | Pending | P2: B1/B2/B7. P3: B3/B4/B5. Implement P2 first inside the batch, run focused QA, then P3, then full batch QA. |
 | 3 | P4 + P5 — compiled graph and provider boundaries | Pending | P4: B6 generated/fallback graph. P5: CacheLayer 4.0 / Runwire 2.1 optional provider boundaries. Run focused QA after each package, then full batch QA. |
 | 4 | P6 + P7 + P8 — migration, measured acceptance and release candidate | Pending | P6: docs/consumer migration. P7: benchmarks/soak/host acceptance. P8: exact-SHA CI, packaging and RC evidence. P8 remains the final gate inside this batch. |
 
-### Batch 2 / P1 current QA state
+### Batch 1 / P1 current QA state
 
 Latest implementation/QA head before this tracker-only update:
 `07b44e5d3eb2a32793a66f9e202e0234d7c6b323`.
@@ -929,6 +929,11 @@ Latest release-regression evidence:
 
 P1 is therefore not complete and **Batch 1** remains open. Batch 2 (P2 + P3)
 must not start until the release-regression gate is green on the final P1 revision.
+
+The historical failures above were produced by the legacy 10.0.4 comparison
+workflow. They remain diagnostic evidence, but they are not the final 11.0
+acceptance comparison. The Batch 1 workflow is corrected to the immutable
+10.1.1 baseline before closure.
 
 ### Batch 1 / P0 frozen baseline
 
