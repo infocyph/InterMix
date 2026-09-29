@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Resolver;
 
 use Closure;
-use Fiber;
-use Infocyph\InterMix\DI\Internal\ExecutionContext;
 use Infocyph\InterMix\DI\Support\AliasDefinition;
 use Infocyph\InterMix\DI\Support\DirectFactory;
 use Infocyph\InterMix\DI\Support\FactoryDefinition;
@@ -21,13 +19,12 @@ use Throwable;
 
 class DefinitionResolver
 {
+    use TracksResolutionAncestry;
+
     private ?ClassResolver $classResolver = null;
 
     /** @var array<int|string, array<int, string>> */
     private array $definitionStacks = [];
-
-    /** @var array<int|string, array<string, bool>> */
-    private array $entriesResolving = [];
 
     private ?ParameterResolver $parameterResolver = null;
 
@@ -127,15 +124,6 @@ class DefinitionResolver
         $hit = $hit && $this->repository->shouldPersistDefinitionValue($value);
 
         return [$item, $hit, $value];
-    }
-
-    private function resolutionContext(): int|string
-    {
-        $fiber = Fiber::getCurrent();
-
-        return $fiber instanceof Fiber
-            ? spl_object_id($fiber)
-            : (ExecutionContext::id() ?? "\0intermix.root");
     }
 
     private function resolveAliasDefinition(string $name, AliasDefinition $definition): mixed
@@ -243,11 +231,10 @@ class DefinitionResolver
 
     private function resolveTracked(string $name, bool $skipExternalCache): mixed
     {
-        $context = $this->resolutionContext();
-        if (isset($this->entriesResolving[$context][$name])) {
-            throw new ContainerException("Circular dependency for definition '$name'.");
-        }
-
+        $context = $this->beginResolutionEntry(
+            $name,
+            "Circular dependency for definition '$name'.",
+        );
         $tracing = $this->repository->isTracingEnabled();
         if ($tracing) {
             $stack = $this->definitionStacks[$context] ?? [];
@@ -260,18 +247,13 @@ class DefinitionResolver
             $this->repository->tracer()->push("def:$name");
         }
 
-        $this->entriesResolving[$context][$name] = true;
-
         try {
             $resolved = $this->getFromCacheOrResolve($name, $skipExternalCache);
             $this->repository->markResolved($name);
 
             return $resolved;
         } finally {
-            unset($this->entriesResolving[$context][$name]);
-            if ($this->entriesResolving[$context] === []) {
-                unset($this->entriesResolving[$context]);
-            }
+            $this->endResolutionEntry($name, $context);
             if ($tracing) {
                 array_pop($this->definitionStacks[$context]);
                 if ($this->definitionStacks[$context] === []) {

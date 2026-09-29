@@ -4,11 +4,9 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Resolver;
 
-use Fiber;
 use Infocyph\InterMix\DI\Attribute\AttributeResolution;
 use Infocyph\InterMix\DI\Attribute\Inject;
 use Infocyph\InterMix\DI\Internal\ClassResolution;
-use Infocyph\InterMix\DI\Internal\ExecutionContext;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Internal\ReflectionResource;
 use ReflectionClass;
@@ -16,11 +14,10 @@ use ReflectionMethod;
 
 class ClassResolver
 {
+    use TracksResolutionAncestry;
+
     /** @var array<int|string, array<int, string>> Tracing-only class ancestry by carrier. */
     private array $classStacks = [];
-
-    /** @var array<int|string, array<string, bool>> */
-    private array $entriesResolving = [];
 
     public function __construct(
         private readonly Repository $repository,
@@ -66,8 +63,7 @@ class ClassResolver
 
         $class = $this->getConcreteClassForInterface($class, $supplied);
         $className = $class->getName();
-        $context = $this->resolutionContext();
-        $tracing = $this->beginTrace($context, $className);
+        $traceOwner = $this->beginTrace($className);
 
         try {
             $resolved = $make
@@ -75,7 +71,6 @@ class ClassResolver
                 : $this->resolveClassResources(
                     $class,
                     $className,
-                    $context,
                     $callMethod,
                     $constructorParameters,
                     $methodParameters,
@@ -85,7 +80,7 @@ class ClassResolver
 
             return $resolved;
         } finally {
-            $this->endTrace($context, $tracing);
+            $this->endTrace($traceOwner);
         }
     }
 
@@ -123,12 +118,13 @@ class ClassResolver
         return $this->resolveInjectFromClassOrInterface($type);
     }
 
-    private function beginTrace(int|string $context, string $className): bool
+    private function beginTrace(string $className): int|string|null
     {
         if (!$this->repository->isTracingEnabled()) {
-            return false;
+            return null;
         }
 
+        $context = $this->resolutionOwner();
         $stack = $this->classStacks[$context] ?? [];
         $parent = end($stack);
         if (is_string($parent) && $parent !== $className) {
@@ -138,12 +134,12 @@ class ClassResolver
         $this->classStacks[$context] = $stack;
         $this->repository->tracer()->push("class:$className");
 
-        return true;
+        return $context;
     }
 
-    private function endTrace(int|string $context, bool $tracing): void
+    private function endTrace(int|string|null $context): void
     {
-        if (!$tracing) {
+        if ($context === null) {
             return;
         }
 
@@ -245,15 +241,6 @@ class ClassResolver
         return is_array($params) ? $params : [];
     }
 
-    private function resolutionContext(): int|string
-    {
-        $fiber = Fiber::getCurrent();
-
-        return $fiber instanceof Fiber
-            ? spl_object_id($fiber)
-            : (ExecutionContext::id() ?? "\0intermix.root");
-    }
-
     /**
      * @param ReflectionClass<object> $class
      * @param array<int|string, mixed> $constructorParameters
@@ -262,15 +249,14 @@ class ClassResolver
     private function resolveClassResources(
         ReflectionClass $class,
         string $className,
-        int|string $context,
         string|bool|null $callMethod,
         array $constructorParameters,
         array $methodParameters,
     ): ClassResolution {
-        if (isset($this->entriesResolving[$context][$className])) {
-            throw new ContainerException("Circular dependency on {$className}");
-        }
-        $this->entriesResolving[$context][$className] = true;
+        $owner = $this->beginResolutionEntry(
+            $className,
+            "Circular dependency on {$className}",
+        );
 
         try {
             $resolved = $this->repository->getResolvedResourceFor($className);
@@ -283,10 +269,7 @@ class ClassResolver
 
             return $this->resolveMethod($class, $callMethod, $resolved, $methodParameters);
         } finally {
-            unset($this->entriesResolving[$context][$className]);
-            if ($this->entriesResolving[$context] === []) {
-                unset($this->entriesResolving[$context]);
-            }
+            $this->endResolutionEntry($className, $owner);
         }
     }
 
