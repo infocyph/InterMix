@@ -895,21 +895,19 @@ Migration execution order:
 
 Updated: 2026-09-29
 
-This tracker is the authoritative execution state for this plan. Every batch is
-implemented, QA'd, committed, and then advanced; a later batch does not begin
-until the preceding batch's required QA and plan evidence are recorded.
+This tracker is the authoritative execution state for this plan. A **batch is a
+coherent tranche containing multiple P-packages**, not a 1:1 alias for a package.
+Packages inside a batch still keep their own implementation and focused-QA
+evidence; the batch closes only after every contained package passes its required
+QA and the final batch-wide gate. A later batch does not begin until the preceding
+batch is closed.
 
-| Batch | Package | Status | Implementation / evidence |
+| Batch | Packages | Status | Package status / implementation evidence |
 | --- | --- | --- | --- |
-| 1 | P0 — contract and baseline | **Complete** | Frozen by `2d59860`; QA green on release regression, benchmarks, analysis, clean install, PHP 8.4/8.5 stable + prefer-lowest, and Swoole/OpenSwoole 8.4/8.5 |
-| 2 | P1 — demonstrated defects | **QA blocked: performance gate** | F1–F3 implemented through `07b44e5`; Pest/Pint/PHPCS/Rector/Deptrac/PHPStan/Psalm, clean install, PHP 8.4/8.5 stable + prefer-lowest, PHPForge benchmarks, and Swoole/OpenSwoole are green. Release-regression gate still fails on Fiber churn (8.4 +10.85%, 8.5 +12.00%; limit +5.00%); PHP 8.5 sequential sample is also +6.67% vs +3.00% limit. Batch 3 remains blocked. |
-| 3 | P2 — builder and definitions | Pending | B1/B2/B7 |
-| 4 | P3 — runtime and scope contract | Pending | B3/B4/B5 |
-| 5 | P4 — compiled graph | Pending | B6 |
-| 6 | P5 — provider boundaries | Pending | CacheLayer 4.0 / Runwire 2.1 |
-| 7 | P6 — migration and consumers | Pending | Documentation and executable consumer migrations |
-| 8 | P7 — measured acceptance | Pending | Benchmarks, host workloads, soak |
-| 9 | P8 — release candidate | Pending | Exact-SHA CI, packaging and release evidence |
+| 1 | P0 + P1 — baseline and runtime hardening | **QA blocked: P1 performance gate** | P0 **Complete** at `2d59860`. P1 implementation covers F1–F3 through `07b44e5`; all correctness/quality lanes are green, but release-regression Fiber churn still exceeds budget. Batch 1 closes only after final P1 performance QA passes. |
+| 2 | P2 + P3 — builder/definitions and runtime/scope contract | Pending | P2: B1/B2/B7. P3: B3/B4/B5. Implement P2 first inside the batch, run focused QA, then P3, then full batch QA. |
+| 3 | P4 + P5 — compiled graph and provider boundaries | Pending | P4: B6 generated/fallback graph. P5: CacheLayer 4.0 / Runwire 2.1 optional provider boundaries. Run focused QA after each package, then full batch QA. |
+| 4 | P6 + P7 + P8 — migration, measured acceptance and release candidate | Pending | P6: docs/consumer migration. P7: benchmarks/soak/host acceptance. P8: exact-SHA CI, packaging and RC evidence. P8 remains the final gate inside this batch. |
 
 ### Batch 2 / P1 current QA state
 
@@ -929,8 +927,8 @@ Latest release-regression evidence:
 - PHP 8.5: sequential production **+6.67%** (fails 3% budget), isolated Fiber
   **+12.00%** (fails 5% budget).
 
-Batch 2 is therefore not complete and Batch 3 must not start until the release
-regression gate is green on the final P1 revision.
+P1 is therefore not complete and **Batch 1** remains open. Batch 2 (P2 + P3)
+must not start until the release-regression gate is green on the final P1 revision.
 
 ### Batch 1 / P0 frozen baseline
 
@@ -1028,7 +1026,8 @@ PR workflow evidence for that commit:
 - Dedicated Swoole and OpenSwoole scope-carrier jobs passed on PHP 8.4 and 8.5.
 - The release job was correctly skipped for the pull-request event.
 
-This closes P0. Batch 2 / P1 begins only after the above exact-revision QA.
+This closes P0 inside Batch 1. P1 then proceeds as the second package in the same
+batch; Batch 1 closes only after P1 implementation and QA are complete.
 
 
 ## Work packages, dependencies, and completion criteria
