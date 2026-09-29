@@ -4,10 +4,9 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Support;
 
-use Infocyph\InterMix\DI\Internal\BoundedValueInspector;
-
 use Infocyph\InterMix\DI\Attribute\Inject;
 use Infocyph\InterMix\DI\Build\DefinitionGraph;
+use Infocyph\InterMix\DI\Internal\BoundedValueInspector;
 use Infocyph\InterMix\Internal\ReflectionResource;
 use ReflectionClass;
 use ReflectionIntersectionType;

@@ -128,6 +128,11 @@ class DefinitionResolver
         return [$item, $hit, $value];
     }
 
+    private function resolutionContext(): string
+    {
+        return ExecutionContext::id() ?? "\0intermix.root";
+    }
+
     private function resolveAliasDefinition(string $name, AliasDefinition $definition): mixed
     {
         if ($this->repository->isTracingEnabled()) {
@@ -259,20 +264,16 @@ class DefinitionResolver
             return $resolved;
         } finally {
             unset($this->entriesResolving[$context][$name]);
-            if (($this->entriesResolving[$context] ?? []) === []) {
+            if ($this->entriesResolving[$context] === []) {
                 unset($this->entriesResolving[$context]);
             }
             if ($tracing) {
                 array_pop($this->definitionStacks[$context]);
-                if (($this->definitionStacks[$context] ?? []) === []) {
+                if ($this->definitionStacks[$context] === []) {
                     unset($this->definitionStacks[$context]);
                 }
             }
         }
     }
 
-    private function resolutionContext(): string
-    {
-        return ExecutionContext::id() ?? "\0intermix.root";
-    }
 }

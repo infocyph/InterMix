@@ -66,17 +66,7 @@ class ClassResolver
         $class = $this->getConcreteClassForInterface($class, $supplied);
         $className = $class->getName();
         $context = $this->resolutionContext();
-        $tracing = $this->repository->isTracingEnabled();
-        if ($tracing) {
-            $stack = $this->classStacks[$context] ?? [];
-            $parent = end($stack);
-            if (is_string($parent) && $parent !== $className) {
-                $this->repository->tracer()->recordDependency($parent, $className, 'class');
-            }
-            $stack[] = $className;
-            $this->classStacks[$context] = $stack;
-            $this->repository->tracer()->push("class:$className");
-        }
+        $tracing = $this->beginTrace($context, $className);
 
         try {
             $resolved = $make
@@ -93,12 +83,7 @@ class ClassResolver
 
             return $resolved;
         } finally {
-            if ($tracing) {
-                array_pop($this->classStacks[$context]);
-                if (($this->classStacks[$context] ?? []) === []) {
-                    unset($this->classStacks[$context]);
-                }
-            }
+            $this->endTrace($context, $tracing);
         }
     }
 
@@ -134,6 +119,36 @@ class ClassResolver
         }
 
         return $this->resolveInjectFromClassOrInterface($type);
+    }
+
+    private function beginTrace(string $context, string $className): bool
+    {
+        if (!$this->repository->isTracingEnabled()) {
+            return false;
+        }
+
+        $stack = $this->classStacks[$context] ?? [];
+        $parent = end($stack);
+        if (is_string($parent) && $parent !== $className) {
+            $this->repository->tracer()->recordDependency($parent, $className, 'class');
+        }
+        $stack[] = $className;
+        $this->classStacks[$context] = $stack;
+        $this->repository->tracer()->push("class:$className");
+
+        return true;
+    }
+
+    private function endTrace(string $context, bool $tracing): void
+    {
+        if (!$tracing) {
+            return;
+        }
+
+        array_pop($this->classStacks[$context]);
+        if ($this->classStacks[$context] === []) {
+            unset($this->classStacks[$context]);
+        }
     }
 
     /**
@@ -228,6 +243,11 @@ class ClassResolver
         return is_array($params) ? $params : [];
     }
 
+    private function resolutionContext(): string
+    {
+        return ExecutionContext::id() ?? "\0intermix.root";
+    }
+
     /**
      * @param ReflectionClass<object> $class
      * @param array<int|string, mixed> $constructorParameters
@@ -258,15 +278,10 @@ class ClassResolver
             return $this->resolveMethod($class, $callMethod, $resolved, $methodParameters);
         } finally {
             unset($this->entriesResolving[$context][$className]);
-            if (($this->entriesResolving[$context] ?? []) === []) {
+            if ($this->entriesResolving[$context] === []) {
                 unset($this->entriesResolving[$context]);
             }
         }
-    }
-
-    private function resolutionContext(): string
-    {
-        return ExecutionContext::id() ?? "\0intermix.root";
     }
 
     /**

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Build;
 
 use Infocyph\InterMix\DI\Internal\BoundedValueInspector;
-
 use ReflectionClass;
 use ReflectionFunctionAbstract;
 use ReflectionIntersectionType;

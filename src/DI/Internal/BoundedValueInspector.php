@@ -48,34 +48,59 @@ final class BoundedValueInspector
         }
 
         foreach ($value as $key => $item) {
-            $reference = ReflectionReference::fromArrayElement($value, $key);
-            $referenceId = is_array($item) && $reference instanceof ReflectionReference
-                ? $reference->getId()
-                : null;
-            if ($referenceId !== null) {
-                if (isset($activeReferences[$referenceId])) {
-                    return false;
-                }
-                $activeReferences[$referenceId] = true;
-            }
-
-            $safe = self::inspect(
+            if (!self::inspectElement(
+                $value,
+                $key,
                 $item,
-                $depth + 1,
+                $depth,
                 $visited,
                 $activeReferences,
                 $maxDepth,
                 $maxValues,
-            );
-
-            if ($referenceId !== null) {
-                unset($activeReferences[$referenceId]);
-            }
-            if (!$safe) {
+            )) {
                 return false;
             }
         }
 
         return true;
+    }
+
+    /**
+     * @param array<array-key, mixed> $container
+     * @param array<string, true> $activeReferences
+     */
+    private static function inspectElement(
+        array $container,
+        int|string $key,
+        mixed $item,
+        int $depth,
+        int &$visited,
+        array &$activeReferences,
+        int $maxDepth,
+        int $maxValues,
+    ): bool {
+        $referenceId = self::referenceId($container, $key, $item);
+        if ($referenceId === null) {
+            return self::inspect($item, $depth + 1, $visited, $activeReferences, $maxDepth, $maxValues);
+        }
+        if (isset($activeReferences[$referenceId])) {
+            return false;
+        }
+
+        $activeReferences[$referenceId] = true;
+        $safe = self::inspect($item, $depth + 1, $visited, $activeReferences, $maxDepth, $maxValues);
+        unset($activeReferences[$referenceId]);
+
+        return $safe;
+    }
+
+    /** @param array<array-key, mixed> $container */
+    private static function referenceId(array $container, int|string $key, mixed $item): ?string
+    {
+        if (!is_array($item)) {
+            return null;
+        }
+
+        return ReflectionReference::fromArrayElement($container, $key)?->getId();
     }
 }

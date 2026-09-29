@@ -4,9 +4,8 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Build;
 
-use Infocyph\InterMix\DI\Internal\BoundedValueInspector;
-
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\BoundedValueInspector;
 use Infocyph\InterMix\DI\Support\AliasDefinition;
 use Infocyph\InterMix\DI\Support\FactoryDefinition;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;

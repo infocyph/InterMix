@@ -262,21 +262,6 @@ class InvocationManager implements ArrayAccess
         return $this->resolveAndCacheDirect($id, $cacheable, $scope);
     }
 
-    private function resolveAndCacheSingletonGuarded(
-        string $id,
-        ConcurrentRepository $repository,
-    ): mixed {
-        $constructionOwner = $repository->beginSingletonConstruction($id);
-
-        try {
-            return $this->resolveAndCacheDirect($id, true, null);
-        } finally {
-            if ($constructionOwner) {
-                $repository->endSingletonConstruction($id);
-            }
-        }
-    }
-
     private function resolveAndCacheDirect(string $id, bool $cacheable, ?string $scope): mixed
     {
         $this->repository->dispatchResolvingHooks($id);
@@ -315,6 +300,21 @@ class InvocationManager implements ArrayAccess
         } finally {
             if ($constructionOwner) {
                 $repository->endScopedConstruction($scope, $id);
+            }
+        }
+    }
+
+    private function resolveAndCacheSingletonGuarded(
+        string $id,
+        ConcurrentRepository $repository,
+    ): mixed {
+        $constructionOwner = $repository->beginSingletonConstruction($id);
+
+        try {
+            return $this->resolveAndCacheDirect($id, true, null);
+        } finally {
+            if ($constructionOwner) {
+                $repository->endSingletonConstruction($id);
             }
         }
     }
