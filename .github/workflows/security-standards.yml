@@ -5,11 +5,13 @@ on:
     - cron: "0 0 * * 0"
   push:
     branches: [ "main", "master" ]
+    tags: [ "v*", "[0-9]*" ]
   pull_request:
     branches: [ "main", "master", "develop", "development" ]
 
 jobs:
   phpforge:
+    if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
     uses: infocyph/phpforge/.github/workflows/security-standards.yml@main
     with:
       php_extensions: "apcu"
@@ -20,7 +22,16 @@ jobs:
       actions: read
       contents: read
 
+  release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    uses: infocyph/phpforge/.github/workflows/release.yml@main
+    permissions:
+      contents: write
+    secrets:
+      COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+
   release-regression:
+    if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
     name: Release regression - PHP ${{ matrix.php-version }}
     runs-on: ubuntu-latest
     permissions:
