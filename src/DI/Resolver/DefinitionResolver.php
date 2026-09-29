@@ -137,23 +137,6 @@ class DefinitionResolver
         return [$item, $hit, $value];
     }
 
-    private function resolveAutowireDefinition(
-        string $name,
-        AutowireDefinition $definition,
-    ): mixed {
-        [$classResolver] = $this->resolvers();
-        if ($this->repository->isTracingEnabled()) {
-            $this->repository->tracer()->recordDependency($name, $definition->class, 'definition-class');
-        }
-
-        return $classResolver->resolve(
-            ReflectionResource::getClassReflection($definition->class),
-            make: true,
-            constructorParameters: $definition->arguments,
-            propertyParameters: $definition->properties,
-        )->instance;
-    }
-
     private function resolveAliasDefinition(string $name, AliasDefinition $definition): mixed
     {
         if ($this->repository->isTracingEnabled()) {
@@ -193,6 +176,24 @@ class DefinitionResolver
         return $this->resolveArrayDefinition(array_values($definition));
     }
 
+    private function resolveAutowireDefinition(
+        string $name,
+        AutowireDefinition $definition,
+    ): mixed
+    {
+        [$classResolver] = $this->resolvers();
+        if ($this->repository->isTracingEnabled()) {
+            $this->repository->tracer()->recordDependency($name, $definition->class, 'definition-class');
+        }
+
+        return $classResolver->resolve(
+            ReflectionResource::getClassReflection($definition->class),
+            make: true,
+            constructorParameters: $definition->arguments,
+            propertyParameters: $definition->properties,
+        )->instance;
+    }
+
     private function resolveClassDefinition(string $name, string $definition): mixed
     {
         [$classResolver] = $this->resolvers();
@@ -212,21 +213,6 @@ class DefinitionResolver
         $reflectionFn = ReflectionResource::getFunctionReflection($definition);
 
         return $definition(...$parameterResolver->resolve($reflectionFn, [], 'constructor'));
-    }
-
-    /** @return array{ClassResolver, ParameterResolver} */
-    private function resolvers(): array
-    {
-        $classResolver = $this->classResolver;
-        $parameterResolver = $this->parameterResolver;
-        if (!$classResolver instanceof ClassResolver || !$parameterResolver instanceof ParameterResolver) {
-            $factory = $this->resolverFactory
-                ?? throw new ContainerException('Reflection resolver factory is unavailable.');
-            [$classResolver, $parameterResolver] = $factory();
-            $this->setResolverInstance($classResolver, $parameterResolver);
-        }
-
-        return [$classResolver, $parameterResolver];
     }
 
     private function resolveSingletonDefinition(string $name): mixed
@@ -290,4 +276,19 @@ class DefinitionResolver
             }
         }
     }
+    /** @return array{ClassResolver, ParameterResolver} */
+    private function resolvers(): array
+    {
+        $classResolver = $this->classResolver;
+        $parameterResolver = $this->parameterResolver;
+        if (!$classResolver instanceof ClassResolver || !$parameterResolver instanceof ParameterResolver) {
+            $factory = $this->resolverFactory
+                ?? throw new ContainerException('Reflection resolver factory is unavailable.');
+            [$classResolver, $parameterResolver] = $factory();
+            $this->setResolverInstance($classResolver, $parameterResolver);
+        }
+
+        return [$classResolver, $parameterResolver];
+    }
+
 }

@@ -416,6 +416,7 @@ final class ContainerBuilder
         }
     }
 
+    /** @return list<string> */
     private function autowireIssues(string $id, AutowireDefinition $definition): array
     {
         if (!class_exists($definition->class)) {
@@ -427,27 +428,64 @@ final class ContainerBuilder
             return ["Autowire definition '{$id}' class '{$definition->class}' is not instantiable."];
         }
 
-        $issues = [];
+        return [
+            ...$this->autowireArgumentIssues($id, $definition, $reflection),
+            ...$this->autowirePropertyIssues($id, $definition, $reflection),
+        ];
+    }
+
+    /**
+     * @param ReflectionClass<object> $reflection
+     * @return list<string>
+     */
+    private function autowireArgumentIssues(
+        string $id,
+        AutowireDefinition $definition,
+        ReflectionClass $reflection,
+    ): array {
         $keys = array_keys($definition->arguments);
         $hasIntegerKeys = array_any($keys, static fn(int|string $key): bool => is_int($key));
         $hasStringKeys = array_any($keys, static fn(int|string $key): bool => is_string($key));
+
         if ($hasIntegerKeys && $hasStringKeys) {
-            $issues[] = "Autowire definition '{$id}' mixes positional and named constructor arguments.";
-        } elseif ($hasIntegerKeys && !array_is_list($definition->arguments)) {
-            $issues[] = "Autowire definition '{$id}' positional constructor arguments must be a list.";
-        } elseif ($hasStringKeys) {
-            $constructor = $reflection->getConstructor();
-            $known = [];
-            foreach ($constructor?->getParameters() ?? [] as $parameter) {
-                $known[$parameter->getName()] = true;
-            }
-            foreach ($keys as $key) {
-                if (is_string($key) && !isset($known[$key])) {
-                    $issues[] = "Autowire definition '{$id}' has unknown constructor argument '{$key}'.";
-                }
+            return ["Autowire definition '{$id}' mixes positional and named constructor arguments."];
+        }
+
+        if ($hasIntegerKeys) {
+            return array_is_list($definition->arguments)
+                ? []
+                : ["Autowire definition '{$id}' positional constructor arguments must be a list."];
+        }
+
+        if (!$hasStringKeys) {
+            return [];
+        }
+
+        $known = [];
+        foreach ($reflection->getConstructor()?->getParameters() ?? [] as $parameter) {
+            $known[$parameter->getName()] = true;
+        }
+
+        $issues = [];
+        foreach ($keys as $key) {
+            if (is_string($key) && !isset($known[$key])) {
+                $issues[] = "Autowire definition '{$id}' has unknown constructor argument '{$key}'.";
             }
         }
 
+        return $issues;
+    }
+
+    /**
+     * @param ReflectionClass<object> $reflection
+     * @return list<string>
+     */
+    private function autowirePropertyIssues(
+        string $id,
+        AutowireDefinition $definition,
+        ReflectionClass $reflection,
+    ): array {
+        $issues = [];
         foreach ($definition->properties as $property => $_value) {
             if (!$reflection->hasProperty($property)) {
                 $issues[] = "Autowire definition '{$id}' has unknown property '{$property}'.";
@@ -457,6 +495,7 @@ final class ContainerBuilder
         return $issues;
     }
 
+    /** @return list<string> */
     private function cacheEligibilityIssues(): array
     {
         $issues = [];
@@ -477,6 +516,7 @@ final class ContainerBuilder
 
                 continue;
             }
+
             if ($repository->getDefinitionLifetime($id) !== LifetimeEnum::Singleton) {
                 $issues[] = "Definition '{$id}' must be Singleton to use external definition caching.";
             }
@@ -514,7 +554,7 @@ final class ContainerBuilder
         return $graph;
     }
 
-    /** @return array<int, string> */
+    /** @return list<string> */
     private function graphIssues(): array
     {
         $repository = $this->configuration->getRepository();
@@ -569,7 +609,7 @@ final class ContainerBuilder
         $repository->setDefinition($id, $definition, $lifetime, $tags);
     }
 
-    /** @return array<int, string> */
+    /** @return list<string> */
     private function validateBuilderState(): array
     {
         return [

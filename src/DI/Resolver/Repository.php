@@ -7,15 +7,14 @@ namespace Infocyph\InterMix\DI\Resolver;
 use Closure;
 use Infocyph\InterMix\DI\Attribute\AttributeRegistry;
 use Infocyph\InterMix\DI\Container;
-use Infocyph\InterMix\DI\Internal\BoundedValueInspector;
 use Infocyph\InterMix\DI\Internal\ClassResolution;
 use Infocyph\InterMix\DI\Resolver\Concerns\InvalidatesRepositoryState;
+use Infocyph\InterMix\DI\Resolver\Concerns\ManagesDefinitionCache;
 use Infocyph\InterMix\DI\Resolver\Concerns\ResolvesMissingServices;
 use Infocyph\InterMix\DI\Support\AliasDefinition;
 use Infocyph\InterMix\DI\Support\DebugTracer;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
-use Psr\Cache\CacheItemPoolInterface;
 use Psr\Container\ContainerInterface;
 
 /**
@@ -25,6 +24,7 @@ use Psr\Container\ContainerInterface;
 class Repository
 {
     use InvalidatesRepositoryState;
+    use ManagesDefinitionCache;
     use ResolvesMissingServices;
 
     private ?AttributeRegistry $attributeRegistry = null;
@@ -53,23 +53,6 @@ class Repository
     private string $currentScope = 'root';
 
     private ?string $defaultMethod = null;
-
-    private ?CacheItemPoolInterface $definitionCache = null;
-
-    /** @var array<string, true> */
-    private array $definitionCacheEligibleIds = [];
-
-    private bool $definitionCacheExplicitOnly = false;
-
-    private bool $definitionCacheFailOpen = true;
-
-    private ?string $definitionCacheGeneration = null;
-
-    private ?string $definitionCacheNamespace = null;
-
-    private ?string $definitionCachePrefix = null;
-
-    private int $definitionCacheRevision = 0;
 
     /** @var array<string, array{lifetime: LifetimeEnum, tags: array<int, string>}> */
     private array $definitionMeta = [];
@@ -418,11 +401,6 @@ class Repository
         return $this->defaultMethod;
     }
 
-    public function getDefinitionCache(): ?CacheItemPoolInterface
-    {
-        return $this->definitionCache;
-    }
-
     public function getDefinitionLifetime(string $id): LifetimeEnum
     {
         $current = $id;
@@ -672,16 +650,6 @@ class Repository
         return $this->scopeSeeds !== [];
     }
 
-    public function isDefinitionCacheEligible(string $id): bool
-    {
-        return isset($this->definitionCacheEligibleIds[$id]);
-    }
-
-    public function isDefinitionCacheFailOpen(): bool
-    {
-        return $this->definitionCacheFailOpen;
-    }
-
     public function isLazyLoading(): bool
     {
         return $this->lazyLoading;
@@ -726,41 +694,6 @@ class Repository
     public function lock(): void
     {
         $this->isLocked = true;
-    }
-
-    /**
-     * Create a short PSR-6-safe cache key while reusing stable prefix hashes.
-     */
-    public function makeDefinitionCacheKey(string $definition): string
-    {
-        if ($this->definitionCacheNamespace !== null) {
-            $this->definitionCachePrefix ??= 'imx11.'
-                . substr(hash('xxh128', $this->definitionCacheNamespace), 0, 16)
-                . '.' . substr(
-                    hash(
-                        'xxh128',
-                        ($this->definitionCacheGeneration ?? '') . "\0" . $this->definitionCacheRevision,
-                    ),
-                    0,
-                    16,
-                )
-                . '.';
-        } else {
-            $this->definitionCachePrefix ??= 'imx.'
-                . substr(hash('xxh128', $this->alias), 0, 16)
-                . '.' . substr(
-                    hash(
-                        'xxh128',
-                        ($this->definitionCacheGeneration ?? 'default') . "\0" . $this->definitionCacheRevision,
-                    ),
-                    0,
-                    16,
-                )
-                . '.';
-        }
-
-        return $this->definitionCachePrefix
-            . substr(hash('xxh128', $definition . "\0" . ($this->environment ?? 'default')), 0, 16);
     }
 
     /** @internal */
@@ -835,12 +768,6 @@ class Repository
         $this->currentScope = 'root';
         $this->resolvedScoped = [];
         $this->scopeSeeds = [];
-    }
-
-    public function rotateDefinitionCacheGeneration(): void
-    {
-        ++$this->definitionCacheRevision;
-        $this->definitionCachePrefix = null;
     }
 
     public function setAlias(string $alias): void
@@ -929,55 +856,6 @@ class Repository
             $this->refreshBaseTagIndex($id, $oldTags, $normalizedTags);
         }
         $this->invalidateDefinition($id);
-    }
-
-    public function setDefinitionCache(
-        CacheItemPoolInterface $cache,
-        ?string $generation = null,
-        bool $failOpen = true,
-        ?string $namespace = null,
-        bool $explicitOnly = false,
-    ): void {
-        $this->checkIfLocked();
-        if ($generation === '') {
-            throw new ContainerException('Definition cache generation cannot be empty.');
-        }
-        if ($namespace === '') {
-            throw new ContainerException('Definition cache namespace cannot be empty.');
-        }
-
-        if ($this->definitionCache === $cache
-            && ($generation === null || $generation === $this->definitionCacheGeneration)
-            && $this->definitionCacheFailOpen === $failOpen
-            && $this->definitionCacheNamespace === $namespace
-            && $this->definitionCacheExplicitOnly === $explicitOnly
-        ) {
-            return;
-        }
-
-        $this->notifyConfigurationMutation();
-
-        $this->definitionCache = $cache;
-        $this->definitionCacheExplicitOnly = $explicitOnly;
-        $this->definitionCacheFailOpen = $failOpen;
-        $this->definitionCacheNamespace = $namespace;
-        if ($generation !== null && $generation !== $this->definitionCacheGeneration) {
-            $this->definitionCacheGeneration = $generation;
-            $this->definitionCacheRevision = 0;
-        }
-        $this->definitionCachePrefix = null;
-    }
-
-    public function setDefinitionCacheEligible(string $id, bool $eligible = true): void
-    {
-        $this->checkIfLocked();
-        if ($eligible) {
-            $this->definitionCacheEligibleIds[$id] = true;
-
-            return;
-        }
-
-        unset($this->definitionCacheEligibleIds[$id]);
     }
 
     /**
@@ -1091,17 +969,6 @@ class Repository
         $this->currentScope = $scope;
     }
 
-    public function shouldPersistDefinitionValue(mixed $value): bool
-    {
-        return $this->isSafeCachedDefinitionValue($value);
-    }
-
-    public function usesDefinitionCacheFor(string $id): bool
-    {
-        return $this->definitionCache !== null
-            && (!$this->definitionCacheExplicitOnly || isset($this->definitionCacheEligibleIds[$id]));
-    }
-
     public function tracer(): DebugTracer
     {
         return $this->tracer ??= new DebugTracer(
@@ -1138,11 +1005,6 @@ class Repository
     private function clearScopeResolvedEntries(string $scope): void
     {
         unset($this->resolvedScoped[$scope]);
-    }
-
-    private function isSafeCachedDefinitionValue(mixed $value): bool
-    {
-        return BoundedValueInspector::isScalarNullArray($value);
     }
 
     /**

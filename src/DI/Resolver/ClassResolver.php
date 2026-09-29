@@ -29,6 +29,7 @@ class ClassResolver
      * @param ReflectionClass<object> $class
      * @param array<int|string, mixed> $constructorParameters
      * @param array<int|string, mixed> $methodParameters
+     * @param array<string, mixed> $propertyParameters
      */
     public function resolve(
         ReflectionClass $class,
@@ -253,6 +254,7 @@ class ClassResolver
      * @param ReflectionClass<object> $class
      * @param array<int|string, mixed> $constructorParameters
      * @param array<int|string, mixed> $methodParameters
+     * @param array<string, mixed> $propertyParameters
      */
     private function resolveClassResources(
         ReflectionClass $class,
@@ -381,6 +383,7 @@ class ClassResolver
      * @param ReflectionClass<object> $class
      * @param array<int|string, mixed> $constructorParameters
      * @param array<int|string, mixed> $methodParameters
+     * @param array<string, mixed> $propertyParameters
      */
     private function resolveMake(
         ReflectionClass $class,

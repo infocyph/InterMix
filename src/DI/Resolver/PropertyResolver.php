@@ -29,9 +29,9 @@ class PropertyResolver
 
     /**
      * @param ReflectionClass<object> $class
+     * @param array<string, mixed> $overrides
      * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
-    /** @param array<string, mixed> $overrides */
     public function resolve(ReflectionClass $class, object $instance, array $overrides = []): void
     {
         if ($overrides === [] && !$this->hasPropertyWork($class)) {
