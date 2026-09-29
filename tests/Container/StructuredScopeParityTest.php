@@ -126,17 +126,20 @@ it('keeps structured scope semantics identical across compiled runtime islands',
     }
 });
 
-it('keeps structured scope semantics identical after explicit production deoptimization', function (): void {
-    $builder = ContainerBuilder::create(uniqid('structured_parity_deoptimized_'));
+it('keeps structured scope semantics identical across independent frozen production runtimes', function (): void {
+    $builder = ContainerBuilder::create(uniqid('structured_parity_frozen_'));
     $builder->scoped('leaf', StructuredParityScopedLeaf::class)
         ->bindFactory('island', static fn(): stdClass => new stdClass(), LifetimeEnum::Scoped);
 
     $path = structuredParityArtifactPath();
     try {
         $builder->compile($path);
-        $runtime = $builder->production($path);
-        $runtime->deoptimize();
-        exerciseStructuredScopeParity($runtime);
+        $first = $builder->production($path);
+        $second = $builder->production($path);
+
+        expect($first)->not->toBe($second);
+        exerciseStructuredScopeParity($first);
+        exerciseStructuredScopeParity($second);
     } finally {
         removeStructuredParityArtifact($path);
     }

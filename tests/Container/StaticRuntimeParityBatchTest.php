@@ -111,18 +111,20 @@ it('uses the compiled service for calls to known definition ids', function () {
     }
 });
 
-it('keeps direct factories and closure definitions as isolated dynamic services', function () {
+it('keeps explicit runtime factories as isolated dynamic services', function () {
     $builder = ContainerBuilder::create(uniqid('static_batch_dynamic_defs_'));
     $builder->singleton(StaticBatchStableService::class)
-        ->bindFactory(
+        ->factory(
             'factory',
-            static fn(Container $container): object => new StaticBatchDynamicConsumer(
-                $container->get(StaticBatchStableService::class),
+            static fn(Container $runtime): object => new StaticBatchDynamicConsumer(
+                $runtime->get(StaticBatchStableService::class),
             ),
         )
-        ->bind(
+        ->factory(
             'closure',
-            static fn(StaticBatchStableService $stable): object => new StaticBatchDynamicConsumer($stable),
+            static fn(Container $runtime): object => new StaticBatchDynamicConsumer(
+                $runtime->get(StaticBatchStableService::class),
+            ),
         );
 
     $path = staticBatchArtifactPath();

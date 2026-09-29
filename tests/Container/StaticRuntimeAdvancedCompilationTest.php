@@ -7,6 +7,7 @@ use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\DI\Support\FactoryDefinition;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\DI\Support\ServiceReference;
+use Infocyph\InterMix\Exceptions\ContainerException;
 
 final class AdvancedCompiledDependency {}
 
@@ -204,8 +205,8 @@ it('keeps reflection-only property writes as targeted compiled property islands'
     }
 });
 
-it('deoptimizes before builder mutation and preserves compiled singleton and scope identity', function () {
-    $builder = ContainerBuilder::create(uniqid('advanced_deopt_'));
+it('keeps compiled singleton and scope identity after builder finalization', function () {
+    $builder = ContainerBuilder::create(uniqid('advanced_frozen_'));
     $builder->singleton(AdvancedCompiledDependency::class)
         ->singleton(AdvancedDeoptRoot::class)
         ->scoped(AdvancedDeoptScoped::class);
@@ -218,12 +219,11 @@ it('deoptimizes before builder mutation and preserves compiled singleton and sco
         $runtime->enterScope('request');
         $scoped = $runtime->get(AdvancedDeoptScoped::class);
 
-        $builder->value('late.value', 'available-after-deopt');
-
-        expect($runtime->get(AdvancedDeoptRoot::class))->toBe($root)
+        expect(fn() => $builder->value('late.value', 'blocked'))
+            ->toThrow(ContainerException::class, 'ContainerBuilder is finalized')
+            ->and($runtime->get(AdvancedDeoptRoot::class))->toBe($root)
             ->and($runtime->get(AdvancedCompiledDependency::class))->toBe($root->dependency)
-            ->and($runtime->get(AdvancedDeoptScoped::class))->toBe($scoped)
-            ->and($runtime->get('late.value'))->toBe('available-after-deopt');
+            ->and($runtime->get(AdvancedDeoptScoped::class))->toBe($scoped);
 
         $runtime->leaveScope();
     } finally {

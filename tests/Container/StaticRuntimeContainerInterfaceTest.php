@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Infocyph\InterMix\DI\ContainerBuilder;
+use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Container\ContainerInterface;
 
 final readonly class StaticRuntimeContainerInterfaceConsumer
@@ -60,19 +61,10 @@ it('compiles the intrinsic container interface as the generated production conta
     }
 });
 
-it('does not treat a user-rebound container interface as the intrinsic container', function () {
+it('rejects rebinding the intrinsic container interface', function () {
+    $builder = ContainerBuilder::create(uniqid('user_container_interface_'));
     $container = new StaticRuntimeUserContainer();
-    $builder = ContainerBuilder::create(uniqid('user_container_interface_'))
-        ->value(ContainerInterface::class, $container);
-    $path = staticRuntimeContainerInterfaceArtifactPath();
 
-    try {
-        $report = $builder->compile($path);
-        $runtime = $builder->production($path);
-
-        expect($report['skipped'])->toHaveKey(ContainerInterface::class)
-            ->and($runtime->get(ContainerInterface::class))->toBe($container);
-    } finally {
-        removeStaticRuntimeContainerInterfaceArtifact($path);
-    }
+    expect(fn() => $builder->value(ContainerInterface::class, $container))
+        ->toThrow(ContainerException::class, 'already registered');
 });

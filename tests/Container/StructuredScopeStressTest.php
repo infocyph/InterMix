@@ -120,7 +120,7 @@ it('reuses one dynamic container across persistent attached request churn withou
     $container->leaveScope();
 });
 
-it('reuses compiled and deoptimized runtimes across persistent attached request churn', function (): void {
+it('reuses one frozen production runtime across persistent attached request churn', function (): void {
     $builder = ContainerBuilder::create(uniqid('structured_stress_production_'));
     $builder->scoped('leaf', StructuredStressScopedLeaf::class);
 
@@ -129,10 +129,7 @@ it('reuses compiled and deoptimized runtimes across persistent attached request 
         $builder->compile($path);
         $runtime = $builder->production($path);
 
-        exercisePersistentAttachedScopeChurn($runtime, 32);
-
-        $runtime->deoptimize();
-        exercisePersistentAttachedScopeChurn($runtime, 32);
+        exercisePersistentAttachedScopeChurn($runtime, 64);
     } finally {
         removeStructuredStressArtifact($path);
     }
