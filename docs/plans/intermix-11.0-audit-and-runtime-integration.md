@@ -902,7 +902,7 @@ until the preceding batch's required QA and plan evidence are recorded.
 | Batch | Package | Status | Implementation / evidence |
 | --- | --- | --- | --- |
 | 1 | P0 — contract and baseline | **Complete** | Frozen by `2d59860`; QA green on release regression, benchmarks, analysis, clean install, PHP 8.4/8.5 stable + prefer-lowest, and Swoole/OpenSwoole 8.4/8.5 |
-| 2 | P1 — demonstrated defects | **In progress** | F1–F3 regressions and bounded fixes |
+| 2 | P1 — demonstrated defects | **QA blocked: performance gate** | F1–F3 implemented through `07b44e5`; Pest/Pint/PHPCS/Rector/Deptrac/PHPStan/Psalm, clean install, PHP 8.4/8.5 stable + prefer-lowest, PHPForge benchmarks, and Swoole/OpenSwoole are green. Release-regression gate still fails on Fiber churn (8.4 +10.85%, 8.5 +12.00%; limit +5.00%); PHP 8.5 sequential sample is also +6.67% vs +3.00% limit. Batch 3 remains blocked. |
 | 3 | P2 — builder and definitions | Pending | B1/B2/B7 |
 | 4 | P3 — runtime and scope contract | Pending | B3/B4/B5 |
 | 5 | P4 — compiled graph | Pending | B6 |
@@ -910,6 +910,27 @@ until the preceding batch's required QA and plan evidence are recorded.
 | 7 | P6 — migration and consumers | Pending | Documentation and executable consumer migrations |
 | 8 | P7 — measured acceptance | Pending | Benchmarks, host workloads, soak |
 | 9 | P8 — release candidate | Pending | Exact-SHA CI, packaging and release evidence |
+
+### Batch 2 / P1 current QA state
+
+Latest implementation/QA head before this tracker-only update:
+`07b44e5d3eb2a32793a66f9e202e0234d7c6b323`.
+
+P1 implementation now covers F1 carrier-local concurrent-resolution ownership,
+deterministic singleton contention, F2 weak Fiber fast-path ownership, and F3
+bounded/cycle-safe cache/export traversal. Regression tests for those defects are
+present and the latest full quality matrix is green outside the dedicated release
+performance comparison.
+
+Latest release-regression evidence:
+
+- PHP 8.4: sequential production **-0.63%** (passes 3% budget), isolated Fiber
+  **+10.85%** (fails 5% budget).
+- PHP 8.5: sequential production **+6.67%** (fails 3% budget), isolated Fiber
+  **+12.00%** (fails 5% budget).
+
+Batch 2 is therefore not complete and Batch 3 must not start until the release
+regression gate is green on the final P1 revision.
 
 ### Batch 1 / P0 frozen baseline
 
