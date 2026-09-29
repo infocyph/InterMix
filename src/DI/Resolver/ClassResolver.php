@@ -37,6 +37,7 @@ class ClassResolver
         bool $make = false,
         array $constructorParameters = [],
         array $methodParameters = [],
+        array $propertyParameters = [],
     ): ClassResolution {
         $requestedClassName = $class->getName();
         $activated = $class->isInterface()
@@ -67,13 +68,20 @@ class ClassResolver
 
         try {
             $resolved = $make
-                ? $this->resolveMake($class, $callMethod, $constructorParameters, $methodParameters)
+                ? $this->resolveMake(
+                    $class,
+                    $callMethod,
+                    $constructorParameters,
+                    $methodParameters,
+                    $propertyParameters,
+                )
                 : $this->resolveClassResources(
                     $class,
                     $className,
                     $callMethod,
                     $constructorParameters,
                     $methodParameters,
+                    $propertyParameters,
                 );
             $this->repository->markResolved($requestedClassName);
             $this->repository->markResolved($className);
@@ -252,6 +260,7 @@ class ClassResolver
         string|bool|null $callMethod,
         array $constructorParameters,
         array $methodParameters,
+        array $propertyParameters,
     ): ClassResolution {
         $owner = $this->beginResolutionEntry(
             $className,
@@ -262,7 +271,7 @@ class ClassResolver
             $resolved = $this->repository->getResolvedResourceFor($className);
             if (!$resolved instanceof ClassResolution) {
                 $instance = $this->resolveConstructor($class, $constructorParameters);
-                $this->propertyResolver->resolve($class, $instance);
+                $this->propertyResolver->resolve($class, $instance, $propertyParameters);
                 $resolved = new ClassResolution($instance);
                 $this->repository->setResolvedResource($className, $resolved);
             }
@@ -378,9 +387,10 @@ class ClassResolver
         string|bool|null $callMethod,
         array $constructorParameters,
         array $methodParameters,
+        array $propertyParameters,
     ): ClassResolution {
         $instance = $this->resolveConstructor($class, $constructorParameters);
-        $this->propertyResolver->resolve($class, $instance);
+        $this->propertyResolver->resolve($class, $instance, $propertyParameters);
 
         return $this->resolveMethod(
             $class,

@@ -277,6 +277,7 @@ class DefinitionManager implements ArrayAccess
         $keys = [];
         foreach ($definitions as $id => $definition) {
             if ($this->repository->getDefinitionLifetime($id) !== LifetimeEnum::Singleton
+                || !$this->repository->usesDefinitionCacheFor($id)
                 || !$this->canResolveToPersistableValue($definition)
             ) {
                 ++$report['skipped'];

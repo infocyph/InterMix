@@ -62,6 +62,21 @@ final class AttributeRegistry
     }
 
     /**
+     * @return array<class-string, class-string<AttributeResolverInterface>>
+     * @internal
+     */
+    public function registrations(): array
+    {
+        $registrations = [];
+        foreach ($this->map as $attribute => $resolver) {
+            $registrations[$attribute] = $resolver::class;
+        }
+        ksort($registrations, SORT_STRING);
+
+        return $registrations;
+    }
+
+    /**
      * Resolves the given attribute instance.
      *
      * Looks up the associated resolver in the map and calls its resolve method.

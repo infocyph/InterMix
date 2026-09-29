@@ -260,6 +260,22 @@ final class Container implements ContainerInterface, ArrayAccess
         return $this->repository;
     }
 
+    /**
+     * Create an isolated runtime from this container's locked configuration.
+     *
+     * @internal
+     */
+    public function forkRuntime(): self
+    {
+        $runtime = new self($this->instanceAlias);
+        $this->repository->copyConfigurationTo($runtime->repository);
+        $runtime->resolverClass = $this->resolverClass;
+        $runtime->resolver = $runtime->resolverFactory();
+        $runtime->repository->lock();
+
+        return $runtime;
+    }
+
     /** @throws ContainerException|ReflectionException|\Psr\Cache\InvalidArgumentException */
     public function getReturn(string $id): mixed
     {

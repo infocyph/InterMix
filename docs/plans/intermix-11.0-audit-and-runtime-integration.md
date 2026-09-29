@@ -925,7 +925,36 @@ Batch 1 acceptance revision: `f55be8ba4b69201fa8f9bb2d34efb3e30cbc3b87`.
 Batch 1 is closed. Batch 2 starts with P2 only; P3 does not begin until P2
 focused QA and tracker evidence are complete.
 
-### Batch 1 / P1 current QA state
+### Batch 2 / P2 implementation tracker
+
+P2 is implemented as one cohesive definition/configuration slice before focused QA:
+
+- [x] explicit definition carriers for literal values, runtime factories,
+  autowiring and required scoped inputs;
+- [x] aliases resolve through the target and do not own a second dynamic or
+  compiled singleton/scoped cache;
+- [x] autowire constructor/property overrides are explicit definition metadata;
+- [x] builder `build()` snapshots/finalizes configuration and creates isolated
+  locked runtimes with separate singleton/scope stores;
+- [x] successful finalization freezes later builder mutation; validation failure
+  remains mutable; artifact failure after finalization remains frozen;
+- [x] duplicate explicit registration requires `unbind()` before replacement;
+- [x] `compile(path, strict)` supports pre-publication strict rejection;
+- [x] external definition cache supports explicit namespace/generation and
+  per-definition eligibility with an `imx11` key discriminator;
+- [x] bounded F3 value admission remains shared by cache hits/writes and
+  exportability checks;
+- [x] P2 contract regression tests added for literal semantics, factories,
+  autowire overrides, inputs, alias lifetimes, freeze/retry behavior, cache
+  opt-in and compiled literal/alias behavior;
+- [ ] focused P2 QA on the committed slice;
+- [ ] migrate/remove the temporary 10.x builder manager/development access during
+  P3 before Batch 2 closes; retained handles are locked at P2 finalization and
+  cannot mutate finalized wiring.
+
+P3 does not start until the P2 focused QA checkbox is closed.
+
+### Batch 1 / P1 historical QA tuning evidence
 
 Latest implementation/QA head before this tracker-only update:
 `07b44e5d3eb2a32793a66f9e202e0234d7c6b323`.

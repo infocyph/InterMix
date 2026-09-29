@@ -9,6 +9,7 @@ use Infocyph\InterMix\DI\Internal\BoundedValueInspector;
 use Infocyph\InterMix\DI\Support\AliasDefinition;
 use Infocyph\InterMix\DI\Support\FactoryDefinition;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
+use Infocyph\InterMix\DI\Support\ValueDefinition;
 use Infocyph\InterMix\Internal\ReflectionResource;
 use Psr\Container\ContainerInterface;
 use ReflectionClass;
@@ -274,20 +275,15 @@ final class StaticRuntimePlanner
     {
         $target = $definition->target;
         $definitions = $graph->definitions();
-        $alias = $definitions[$target] ?? null;
 
-        while ($alias instanceof AliasDefinition) {
-            if ($graph->definitionMetaFor($target)['lifetime'] !== LifetimeEnum::Transient) {
-                break;
-            }
+        while (($alias = $definitions[$target] ?? null) instanceof AliasDefinition) {
             $target = $alias->target;
-            $alias = $definitions[$target] ?? null;
         }
 
         return [
             'kind' => 'alias',
             'target' => $target,
-            'lifetime' => $graph->definitionMetaFor($id)['lifetime'],
+            'lifetime' => $graph->definitionMetaFor($target)['lifetime'],
             'arguments' => [],
             'properties' => [],
             'dependencies' => [$target],
@@ -329,6 +325,10 @@ final class StaticRuntimePlanner
         }
         if ($definition instanceof FactoryDefinition) {
             return new StaticFactoryPlanner()->plan($graph, $id, $definition);
+        }
+        if ($definition instanceof ValueDefinition) {
+            return $this->valuePlan($graph, $id, $definition->value, true)
+                ?? 'literal value requires the frozen dynamic fallback';
         }
         if (is_array($definition) && $this->isCallableArrayDefinition($definition)) {
             return $this->planArrayDefinition($graph, $id, $definition);
@@ -403,7 +403,12 @@ final class StaticRuntimePlanner
     }
 
     /** @return ValuePlan|null */
-    private function valuePlan(DefinitionGraph $graph, string $id, mixed $definition): ?array
+    private function valuePlan(
+        DefinitionGraph $graph,
+        string $id,
+        mixed $definition,
+        bool $literal = false,
+    ): ?array
     {
         if ($id === ContainerInterface::class && $definition instanceof Container) {
             return [
@@ -415,10 +420,12 @@ final class StaticRuntimePlanner
                 'dependencies' => [],
             ];
         }
-        if (!$this->isExportable($definition) || (is_array($definition) && $this->isCallableArrayDefinition($definition))) {
+        if (!$this->isExportable($definition)
+            || (!$literal && is_array($definition) && $this->isCallableArrayDefinition($definition))
+        ) {
             return null;
         }
-        if (is_string($definition) && class_exists($definition)) {
+        if (!$literal && is_string($definition) && class_exists($definition)) {
             return null;
         }
 

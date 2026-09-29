@@ -10,6 +10,7 @@ use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Internal\ClassResolution;
 use Infocyph\InterMix\DI\Resolver\ConcurrentRepository;
 use Infocyph\InterMix\DI\Resolver\Repository;
+use Infocyph\InterMix\DI\Support\AliasDefinition;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\DI\Support\TraceLevelEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
@@ -66,6 +67,11 @@ class InvocationManager implements ArrayAccess
         $seed = null;
         if ($this->repository->findScopeSeed($id, $seed)) {
             return $seed;
+        }
+
+        $definition = $this->repository->getFunctionDefinition($id);
+        if ($definition instanceof AliasDefinition) {
+            return $this->resolveAlias($id, $definition);
         }
 
         $resolved = $this->repository->getResolvedSingletonEntry($id);
@@ -246,6 +252,31 @@ class InvocationManager implements ArrayAccess
         $resolved = $this->repository->getResolvedScopedEntry($scope, $id);
 
         return $resolved !== null || $this->repository->hasResolvedScoped($scope, $id);
+    }
+
+    private function resolveAlias(string $id, AliasDefinition $definition): mixed
+    {
+        $seen = [$id => true];
+        $target = $definition->target;
+
+        while (true) {
+            if (isset($seen[$target])) {
+                throw new ContainerException("Circular alias dependency for '{$id}'.");
+            }
+            $seen[$target] = true;
+
+            if ($this->repository->isTracingEnabled()) {
+                $this->repository->tracer()->recordDependency($id, $target, 'alias');
+            }
+
+            $next = $this->repository->getFunctionDefinition($target);
+            if (!$next instanceof AliasDefinition) {
+                return $this->container->get($target);
+            }
+
+            $id = $target;
+            $target = $next->target;
+        }
     }
 
     private function resolveAndCache(string $id, bool $cacheable, ?string $scope): mixed

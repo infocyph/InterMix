@@ -148,30 +148,18 @@ final class StaticRuntimeRenderer
         StaticLifecycleHookRenderer $lifecycleRenderer,
     ): string {
         $target = '$this->s' . $slots[$plan['target']] . '()';
-        if ($lifecycleRenderer->hasResolutionHooks($graph, $id)) {
-            return $lifecycleRenderer->renderExpressionMethod(
-                $graph,
-                $slot,
-                $id,
-                $plan['lifetime'],
-                $target,
-                'aliasSingletons',
-            );
+        $source = "    private function s{$slot}(): mixed\n    {\n";
+
+        if ($graph->hasResolvingHook($id)) {
+            $source .= '        $this->dispatchCompiledResolvingHooks(' . var_export($id, true) . ");\n\n";
         }
 
-        $source = "    private function s{$slot}(): mixed\n    {\n";
-        $source .= $this->renderSeedGuard($slot, $plan['lifetime']);
-
-        if ($plan['lifetime'] === LifetimeEnum::Scoped) {
-            $source .= "        if (array_key_exists({$slot}, \$scope->resolved)) {\n";
-            $source .= "            return \$scope->resolved[{$slot}];\n";
-            $source .= "        }\n\n";
-            $source .= "        return \$scope->resolved[{$slot}] = {$target};\n";
-        } elseif ($plan['lifetime'] === LifetimeEnum::Singleton) {
-            $source .= "        if (array_key_exists({$slot}, \$this->aliasSingletons)) {\n";
-            $source .= "            return \$this->aliasSingletons[{$slot}];\n";
-            $source .= "        }\n\n";
-            $source .= "        return \$this->aliasSingletons[{$slot}] = {$target};\n";
+        if ($lifecycleRenderer->hasResolutionHooks($graph, $id)) {
+            $source .= "        \$value = {$target};\n";
+            if ($graph->hasResolvedHook($id)) {
+                $source .= '        $this->dispatchCompiledResolvedHooks(' . var_export($id, true) . ", \$value);\n";
+            }
+            $source .= "\n        return \$value;\n";
         } else {
             $source .= "        return {$target};\n";
         }
@@ -182,14 +170,9 @@ final class StaticRuntimeRenderer
     /** @param array<string, ServicePlan> $plans */
     private function renderAliasSingletonProperties(array $plans): string
     {
-        foreach ($plans as $plan) {
-            if ($plan['kind'] === 'alias' && $plan['lifetime'] === LifetimeEnum::Singleton) {
-                return "    /** @var array<int, mixed> */\n    private array \$aliasSingletons = [];\n\n";
-            }
-        }
-
         return '';
     }
+
 
     /**
      * @param ClassPlan $plan
@@ -280,11 +263,7 @@ final class StaticRuntimeRenderer
                     'value' => "\$this->v{$slot}",
                 ];
             } elseif ($plan['kind'] === 'alias') {
-                $entries[] = [
-                    'guard' => "array_key_exists({$slot}, \$this->aliasSingletons)",
-                    'id' => $id,
-                    'value' => "\$this->aliasSingletons[{$slot}]",
-                ];
+                continue;
             } elseif ($plan['kind'] === 'factory') {
                 $entries[] = [
                     'guard' => "array_key_exists({$slot}, \$this->factorySingletons)",

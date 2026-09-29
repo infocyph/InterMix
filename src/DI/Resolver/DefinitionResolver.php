@@ -6,9 +6,13 @@ namespace Infocyph\InterMix\DI\Resolver;
 
 use Closure;
 use Infocyph\InterMix\DI\Support\AliasDefinition;
+use Infocyph\InterMix\DI\Support\AutowireDefinition;
 use Infocyph\InterMix\DI\Support\DirectFactory;
 use Infocyph\InterMix\DI\Support\FactoryDefinition;
+use Infocyph\InterMix\DI\Support\InputDefinition;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
+use Infocyph\InterMix\DI\Support\RuntimeFactoryDefinition;
+use Infocyph\InterMix\DI\Support\ValueDefinition;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Internal\ReflectionResource;
 use Psr\Cache\CacheItemInterface;
@@ -64,6 +68,12 @@ class DefinitionResolver
         $definition = $this->repository->getFunctionDefinition($name);
 
         return match (true) {
+            $definition instanceof ValueDefinition => $definition->value,
+            $definition instanceof InputDefinition => throw new ContainerException(
+                "Required scoped input '{$name}' was not supplied.",
+            ),
+            $definition instanceof AutowireDefinition => $this->resolveAutowireDefinition($name, $definition),
+            $definition instanceof RuntimeFactoryDefinition => $definition->resolve($this->repository->container()),
             $definition instanceof AliasDefinition => $this->resolveAliasDefinition($name, $definition),
             $definition instanceof DirectFactory => $definition->resolve(),
             $definition instanceof Closure => $this->resolveClosure($definition),
@@ -86,6 +96,7 @@ class DefinitionResolver
     {
         if ($this->repository->getDefinitionLifetime($name) !== LifetimeEnum::Singleton
             || $skipExternalCache
+            || !$this->repository->usesDefinitionCacheFor($name)
         ) {
             return $this->resolveDefinition($name);
         }
@@ -124,6 +135,23 @@ class DefinitionResolver
         $hit = $hit && $this->repository->shouldPersistDefinitionValue($value);
 
         return [$item, $hit, $value];
+    }
+
+    private function resolveAutowireDefinition(
+        string $name,
+        AutowireDefinition $definition,
+    ): mixed {
+        [$classResolver] = $this->resolvers();
+        if ($this->repository->isTracingEnabled()) {
+            $this->repository->tracer()->recordDependency($name, $definition->class, 'definition-class');
+        }
+
+        return $classResolver->resolve(
+            ReflectionResource::getClassReflection($definition->class),
+            make: true,
+            constructorParameters: $definition->arguments,
+            propertyParameters: $definition->properties,
+        )->instance;
     }
 
     private function resolveAliasDefinition(string $name, AliasDefinition $definition): mixed
