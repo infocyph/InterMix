@@ -34,11 +34,11 @@ final class ConcurrentRepository extends Repository
     /** @var array<string, array<string, mixed>> */
     private array $scopeSeeds = [];
 
-    /** @var array<string, string> */
-    private array $singletonConstructing = [];
-
     /** @var array<int, string> */
     private array $scopeStack = [];
+
+    /** @var array<string, string> */
+    private array $singletonConstructing = [];
 
     public function attachScopeContext(ScopeContext $scopeContext): void
     {

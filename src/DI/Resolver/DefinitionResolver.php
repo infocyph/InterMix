@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Resolver;
 
 use Closure;
+use Fiber;
 use Infocyph\InterMix\DI\Internal\ExecutionContext;
 use Infocyph\InterMix\DI\Support\AliasDefinition;
 use Infocyph\InterMix\DI\Support\DirectFactory;
@@ -22,10 +23,10 @@ class DefinitionResolver
 {
     private ?ClassResolver $classResolver = null;
 
-    /** @var array<string, array<int, string>> */
+    /** @var array<int|string, array<int, string>> */
     private array $definitionStacks = [];
 
-    /** @var array<string, array<string, bool>> */
+    /** @var array<int|string, array<string, bool>> */
     private array $entriesResolving = [];
 
     private ?ParameterResolver $parameterResolver = null;
@@ -128,9 +129,13 @@ class DefinitionResolver
         return [$item, $hit, $value];
     }
 
-    private function resolutionContext(): string
+    private function resolutionContext(): int|string
     {
-        return ExecutionContext::id() ?? "\0intermix.root";
+        $fiber = Fiber::getCurrent();
+
+        return $fiber instanceof Fiber
+            ? spl_object_id($fiber)
+            : (ExecutionContext::id() ?? "\0intermix.root");
     }
 
     private function resolveAliasDefinition(string $name, AliasDefinition $definition): mixed
@@ -275,5 +280,4 @@ class DefinitionResolver
             }
         }
     }
-
 }

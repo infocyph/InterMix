@@ -31,6 +31,11 @@ final class ExecutionContext
     /** @var WeakMap<Fiber<mixed, mixed, mixed, mixed>, string>|null */
     private static ?WeakMap $fiberCarrierIds = null;
 
+    private static ?string $lastFiberCarrierId = null;
+
+    /** @var WeakReference<Fiber<mixed, mixed, mixed, mixed>>|null */
+    private static ?WeakReference $lastFiberReference = null;
+
     private static ?string $lastObjectCarrierId = null;
 
     /** @var WeakReference<object>|null */
@@ -84,14 +89,20 @@ final class ExecutionContext
     /** @param Fiber<mixed, mixed, mixed, mixed> $fiber */
     private static function fiberCarrierId(Fiber $fiber): string
     {
-        $ids = self::$fiberCarrierIds ??= self::newFiberCarrierMap();
-        $id = $ids[$fiber] ?? null;
-        if (is_string($id)) {
-            return $id;
+        $lastFiber = self::$lastFiberReference?->get();
+        if ($lastFiber === $fiber && self::$lastFiberCarrierId !== null) {
+            return self::$lastFiberCarrierId;
         }
 
-        $id = 'fiber:' . ++self::$nextFiberCarrierId;
-        $ids[$fiber] = $id;
+        $ids = self::$fiberCarrierIds ??= self::newFiberCarrierMap();
+        $id = $ids[$fiber] ?? null;
+        if (!is_string($id)) {
+            $id = 'fiber:' . ++self::$nextFiberCarrierId;
+            $ids[$fiber] = $id;
+        }
+
+        self::$lastFiberCarrierId = $id;
+        self::$lastFiberReference = WeakReference::create($fiber);
 
         return $id;
     }
