@@ -905,7 +905,7 @@ batch is closed.
 | Batch | Packages | Status | Package status / implementation evidence |
 | --- | --- | --- | --- |
 | 1 | P0 + P1 — baseline and runtime hardening | **Complete** | Closed on `f55be8b`: P0 contract/baseline frozen; P1 F1–F3 fixed. Corrected 10.1.1 regression gate, PHPForge QA/analysis/benchmarks, clean install, and Swoole/OpenSwoole PHP 8.4/8.5 are green. |
-| 2 | P2 + P3 — builder/definitions and runtime/scope contract | **In progress — P2** | P2: B1/B2/B7 implementation starts after Batch 1 closure; run focused P2 QA before P3. P3: B3/B4/B5 follows, then full Batch 2 QA. |
+| 2 | P2 + P3 — builder/definitions and runtime/scope contract | **In progress — P2 stage 1** | P2 B1/B2/B7 audit is complete. Stage 1 is implementing builder finalization/freeze plus explicit value/autowire/factory/alias/input definition kinds; P3 remains blocked until all P2 stages and focused QA close. |
 | 3 | P4 + P5 — compiled graph and provider boundaries | Pending | P4: B6 generated/fallback graph. P5: CacheLayer 4.0 / Runwire 2.1 optional provider boundaries. Run focused QA after each package, then full batch QA. |
 | 4 | P6 + P7 + P8 — migration, measured acceptance and release candidate | Pending | P6: docs/consumer migration. P7: benchmarks/soak/host acceptance. P8: exact-SHA CI, packaging and RC evidence. P8 remains the final gate inside this batch. |
 
@@ -924,6 +924,31 @@ Batch 1 acceptance revision: `f55be8ba4b69201fa8f9bb2d34efb3e30cbc3b87`.
 
 Batch 1 is closed. Batch 2 starts with P2 only; P3 does not begin until P2
 focused QA and tracker evidence are complete.
+
+### Batch 2 / P2 mid-update
+
+Current stage: **P2 stage 1 — builder/freeze and explicit definition model**.
+
+Repository review against the P2 contract found that the current builder still owns
+a mutable development container, mutation listeners, active production-runtime
+tracking/deoptimization, public manager escape hatches, ambiguous binding helpers,
+and provider registration through the runtime container. The existing definition
+cache also still uses automatic eligibility and container-alias-derived cache keys.
+
+Stage 1 implementation scope is therefore:
+
+- make builder finalization one-way and remove live-runtime deoptimization coupling;
+- add `build()` from the finalized graph while keeping runtime instances isolated;
+- introduce explicit `value`, `autowire`, `factory`, `alias`, and `input`
+  definition kinds with duplicate rejection and builder-only `unbind`;
+- change service-provider registration to accept a supplied provider instance and
+  register against `ContainerBuilder`;
+- retain caller-owned literal object identity while snapshotting writable metadata;
+- keep P3 retrieval/scope API changes out of this stage.
+
+Stage 2 will apply B7's explicit definition-cache namespace/generation and
+per-definition opt-in rules. Focused P2 QA and tracker closure follow both stages;
+P3 does not start before that gate is green.
 
 ### Batch 2 / P2 implementation tracker
 
