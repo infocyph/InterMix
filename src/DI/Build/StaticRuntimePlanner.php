@@ -76,7 +76,8 @@ final class StaticRuntimePlanner
         DefinitionGraph $graph,
         string $id,
         ReflectionClass $class,
-    ): array|string {
+    ): array|string
+    {
         if (!$class->isInstantiable()) {
             return 'class definition is not instantiable';
         }
@@ -158,7 +159,8 @@ final class StaticRuntimePlanner
         DefinitionGraph $graph,
         array $plans,
         array &$skipped,
-    ): array {
+    ): array
+    {
         do {
             $changed = false;
             foreach ($plans as $plan) {
@@ -189,7 +191,8 @@ final class StaticRuntimePlanner
         DefinitionGraph $graph,
         string $id,
         ReflectionClass $class,
-    ): array|string {
+    ): array|string
+    {
         if ($graph->classResourcesFor($class->getName()) !== []) {
             return 'injection-off class has registered generic resources';
         }
@@ -264,7 +267,8 @@ final class StaticRuntimePlanner
         array $plans,
         array $skipped,
         string $dependency,
-    ): bool {
+    ): bool
+    {
         return isset($plans[$dependency])
             || isset($skipped[$dependency])
             || $graph->hasDefinition($dependency);

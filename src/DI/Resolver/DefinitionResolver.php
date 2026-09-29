@@ -57,7 +57,8 @@ class DefinitionResolver
     public function setResolverInstance(
         ClassResolver $classResolver,
         ParameterResolver $parameterResolver,
-    ): void {
+    ): void
+    {
         $this->classResolver = $classResolver;
         $this->parameterResolver = $parameterResolver;
     }
@@ -115,7 +116,8 @@ class DefinitionResolver
         CacheItemPoolInterface $cache,
         CacheItemInterface $item,
         mixed $value,
-    ): void {
+    ): void
+    {
         try {
             $item->set($value);
             if (!$cache->save($item)) {
