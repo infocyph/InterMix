@@ -901,8 +901,8 @@ until the preceding batch's required QA and plan evidence are recorded.
 
 | Batch | Package | Status | Implementation / evidence |
 | --- | --- | --- | --- |
-| 1 | P0 — contract and baseline | **In progress** | PR #138 opened; 10.1.1 baseline and public API disposition frozen below; branch starts from `f687452` and plan branch head `a3bb1e1` |
-| 2 | P1 — demonstrated defects | Pending | F1–F3 regressions and bounded fixes |
+| 1 | P0 — contract and baseline | **Complete** | Frozen by `2d59860`; QA green on release regression, benchmarks, analysis, clean install, PHP 8.4/8.5 stable + prefer-lowest, and Swoole/OpenSwoole 8.4/8.5 |
+| 2 | P1 — demonstrated defects | **In progress** | F1–F3 regressions and bounded fixes |
 | 3 | P2 — builder and definitions | Pending | B1/B2/B7 |
 | 4 | P3 — runtime and scope contract | Pending | B3/B4/B5 |
 | 5 | P4 — compiled graph | Pending | B6 |
@@ -991,6 +991,24 @@ The implementation must keep executable fixtures for these composition patterns:
 
 P0 does not authorize implementation of those contracts; it freezes what later
 batches must prove and prevents silent capability loss.
+
+### Batch 1 QA evidence
+
+Exact P0 tracker commit: `2d598606c0fb395006567a95dfba1cd10a4600af`.
+
+PR workflow evidence for that commit:
+
+- Release regression passed on PHP 8.4 and 8.5.
+- PHPForge benchmark jobs passed on PHP 8.4 and 8.5.
+- PHPForge analysis passed on PHP 8.4 and 8.5.
+- Clean production install passed.
+- PHPForge QA passed on PHP 8.4 and 8.5 with both prefer-stable and
+  prefer-lowest dependency resolution.
+- Dedicated Swoole and OpenSwoole scope-carrier jobs passed on PHP 8.4 and 8.5.
+- The release job was correctly skipped for the pull-request event.
+
+This closes P0. Batch 2 / P1 begins only after the above exact-revision QA.
+
 
 ## Work packages, dependencies, and completion criteria
 
