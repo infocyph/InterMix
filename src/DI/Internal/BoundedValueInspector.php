@@ -47,16 +47,28 @@ final class BoundedValueInspector
             return false;
         }
 
-        return array_all($value, fn($item, $key) => self::inspectElement(
+        return array_all(
             $value,
-            $key,
-            $item,
-            $depth,
-            $visited,
-            $activeReferences,
-            $maxDepth,
-            $maxValues,
-        ));
+            function (mixed $item, int|string $key) use (
+                $value,
+                $depth,
+                &$visited,
+                &$activeReferences,
+                $maxDepth,
+                $maxValues,
+            ): bool {
+                return self::inspectElement(
+                    $value,
+                    $key,
+                    $item,
+                    $depth,
+                    $visited,
+                    $activeReferences,
+                    $maxDepth,
+                    $maxValues,
+                );
+            },
+        );
     }
 
     /**
