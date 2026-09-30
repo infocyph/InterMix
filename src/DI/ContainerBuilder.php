@@ -617,7 +617,8 @@ final class ContainerBuilder
         $issues = [];
         $repository = $this->configuration->getRepository();
 
-        foreach (array_keys($this->cacheDefinitionIds) as $id) {
+        foreach (array_keys($this->cacheDefinitionIds) as $rawId) {
+            $id = (string) $rawId;
             if (!$repository->hasFunctionReference($id)) {
                 $issues[] = "Definition cache eligibility references unknown ID '{$id}'.";
 
@@ -677,7 +678,8 @@ final class ContainerBuilder
         $definitions = $repository->getFunctionReference();
         $issues = [];
 
-        foreach ($definitions as $id => $definition) {
+        foreach ($definitions as $rawId => $definition) {
+            $id = (string) $rawId;
             if ($definition instanceof AliasDefinition) {
                 if (!$repository->hasFunctionReference($definition->target)) {
                     $issues[] = "Alias '{$id}' targets undeclared service '{$definition->target}'.";

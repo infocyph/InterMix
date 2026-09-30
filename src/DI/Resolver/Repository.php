@@ -480,7 +480,10 @@ class Repository
         $env = $this->environment;
 
         if ($env === null) {
-            return array_keys($ids);
+            return array_map(
+            static fn(int|string $id): string => (string) $id,
+            array_keys($ids),
+        );
         }
 
         foreach ($this->tagIndexByEnv[$env][$tag] ?? [] as $id => $_) {
@@ -542,7 +545,10 @@ class Repository
      */
     public function getResolvedHookIds(): array
     {
-        return array_keys($this->onResolvedHooks);
+        return array_map(
+            static fn(int|string $id): string => (string) $id,
+            array_keys($this->onResolvedHooks),
+        );
     }
 
     /**
@@ -576,7 +582,10 @@ class Repository
      */
     public function getResolvingHookIds(): array
     {
-        return array_keys($this->onResolvingHooks);
+        return array_map(
+            static fn(int|string $id): string => (string) $id,
+            array_keys($this->onResolvingHooks),
+        );
     }
 
     public function getScope(): string
