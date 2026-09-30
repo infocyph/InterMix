@@ -54,14 +54,14 @@ final class ContainerBuilder
     /** @var array<string, true> */
     private array $scopeLeaveHookScopes = [];
 
-    public function __construct(?Container $configuration = null)
+    public function __construct(string $alias = Container::DEFAULT_ALIAS)
     {
-        $this->configuration = $configuration ?? new Container();
+        $this->configuration = new Container($alias);
     }
 
     public static function create(string $alias = Container::DEFAULT_ALIAS): self
     {
-        return new self(new Container($alias));
+        return new self($alias);
     }
 
     public function alias(string $id, string $target): self
