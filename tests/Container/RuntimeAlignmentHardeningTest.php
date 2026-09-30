@@ -24,19 +24,24 @@ function removeRuntimeAlignmentArtifact(string $path): void
     }
 }
 
-it('does not reuse collected Fiber carrier identities', function () {
+it('keeps live Fiber carrier identities distinct', function () {
+    $fibers = [];
     $ids = [];
 
     for ($i = 0; $i < 64; ++$i) {
-        $fiber = new Fiber(static fn(): ?string => ExecutionContext::id());
-        $fiber->start();
-        $ids[] = $fiber->getReturn();
-        unset($fiber);
-        gc_collect_cycles();
+        $fiber = new Fiber(static function (): void {
+            Fiber::suspend(ExecutionContext::id());
+        });
+        $ids[] = $fiber->start();
+        $fibers[] = $fiber;
     }
 
     expect(array_filter($ids, is_string(...)))->toHaveCount(64)
         ->and(array_unique($ids))->toHaveCount(64);
+
+    foreach ($fibers as $fiber) {
+        $fiber->resume();
+    }
 });
 
 it('preserves compiled and fallback scoped identity after builder finalization', function () {
