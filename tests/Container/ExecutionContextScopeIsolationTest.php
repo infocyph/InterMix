@@ -270,14 +270,16 @@ it('keeps sequential scope state isolated around Fiber scopes', function () {
 });
 
 it('dispatches scope leave hooks for sequential and Fiber scopes', function () {
-    $container = new Container(uniqid('context_hooks_'));
     $calls = [];
-    $container->onScopeLeave(
-        'request',
-        static function (string $scope, Container $activeContainer) use (&$calls, $container): void {
-            $calls[] = [$scope, Fiber::getCurrent() instanceof Fiber, $activeContainer === $container];
-        },
-    );
+    $container = null;
+    $builder = ContainerBuilder::create(uniqid('context_hooks_'))
+        ->onScopeLeave(
+            'request',
+            static function (string $scope, Container $activeContainer) use (&$calls, &$container): void {
+                $calls[] = [$scope, Fiber::getCurrent() instanceof Fiber, $activeContainer === $container];
+            },
+        );
+    $container = $builder->build();
 
     $container->enterScope('request');
     $container->leaveScope();
