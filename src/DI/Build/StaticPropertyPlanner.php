@@ -19,6 +19,7 @@ final class StaticPropertyPlanner
 {
     /**
      * @param ReflectionClass<object> $class
+     * @param array<string, mixed> $supplied
      * @return array{properties: list<PropertyPlan>, dependencies: list<string>}
      */
     public function plan(
