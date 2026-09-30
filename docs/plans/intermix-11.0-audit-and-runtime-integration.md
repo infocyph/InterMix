@@ -929,10 +929,9 @@ focused QA and tracker evidence are complete.
 
 Current stage: **P2 contract cleanup + focused QA**.
 
-Latest closed QA evidence reviewed: `c03499be734147703278e128b472aee8a02ff9d7`.
-Current P2 working head is advancing beyond that revision; tracker-only and
-migration/compiler commits after `c03499be` are not closure evidence until the
-full gate reruns.
+Latest fully inspected working revision before this tracker update: `614c5740ce4977747d773db0849bf76a2b124d30`.
+Fresh closure evidence is still pending for that revision; it is not treated as
+closed until the complete workflow matrix is green.
 P3 has **not** started. P2 closes only when the B1/B2/B7 contract, focused tests,
 PHPForge QA/analysis, release regression, clean install and runtime-extension lanes
 are all green on one exact revision.
@@ -971,8 +970,9 @@ are all green on one exact revision.
 - [x] remove builder manager/development escape hatches:
   `definitions()`, `registration()`, `options()`, `development()` — closed in
   `32d86646`;
-- [ ] migrate branch tests/fixtures that still use removed builder/runtime
-  configuration surfaces to the explicit 11.0 builder API — **in progress**;
+- [x] migrate branch tests/fixtures that use removed **builder-side** configuration
+  surfaces to the explicit 11.0 builder API; remaining runtime-side 10.x execution
+  surfaces belong to P3;
 - [x] static planning recognizes explicit `AutowireDefinition` and carries its
   constructor/property metadata into generated-runtime planning;
 - [ ] focused P2 QA green on one exact revision;
@@ -983,22 +983,21 @@ incorrect relative to the P2 completion criterion (“no manager mutation escape
 and B1/B2. Runtime-side 10.x execution APIs remain P3 work; **builder-side**
 configuration escape hatches are P2 blockers.
 
-#### Latest P2 QA evidence at `c03499be`
+#### Latest P2 QA state
 
-Green:
+Most recent completed workflow before `614c5740` showed:
 
-- release regression against exact 10.1.1 baseline on PHP 8.4 and PHP 8.5;
-- Swoole/OpenSwoole scope compatibility matrix;
-- PHPForge benchmark lanes on PHP 8.4 and PHP 8.5;
-- clean production install;
-- Pest, PHPCS, Deptrac, syntax/reference, duplicate and comment-policy checks;
-- Psalm on PHP 8.4 and PHP 8.5.
+- release regression green on PHP 8.4 and PHP 8.5;
+- PHPForge analysis green on PHP 8.4 and PHP 8.5;
+- clean production install green;
+- Swoole/OpenSwoole scope compatibility green;
+- normal QA reduced to one obsolete provider-runtime expectation;
+- PHPBench still failed because `IntermixBench::setUpContainer()` imported a
+  provider through the runtime container.
 
-At `c03499be`, Pint/Rector/PHPStan still blocked closure. Those findings were
-subsequently addressed, and the builder escape-hatch removal plus test migration
-introduced a new focused migration/compiled-planner QA cycle. The current blocker
-is therefore **fresh QA on the post-removal working head**, not the superseded
-`c03499be` diagnostics.
+Those two known blockers are fixed by `bf17b385` and `614c5740`.
+The only remaining P2 closure item is a **fresh all-green workflow on one exact
+revision**, followed by recording that revision below.
 
 No PHPForge threshold, skip policy, or benchmark budget has been weakened.
 The release-regression Fiber failure seen on earlier P2 revisions is resolved by
