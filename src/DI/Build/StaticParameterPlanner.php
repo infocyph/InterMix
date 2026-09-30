@@ -231,7 +231,7 @@ final class StaticParameterPlanner
 
     /**
      * @param ReflectionClass<object> $consumer
-     * @return array{kind: 'service', id: string}|string
+     * @return ServiceArgument|string
      */
     private function typedParameterPlan(
         DefinitionGraph $graph,
