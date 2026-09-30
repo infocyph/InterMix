@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI;
 
-use ArrayAccess;
 use Closure;
 use Infocyph\InterMix\DI\Attribute\AttributeRegistry;
 use Infocyph\InterMix\DI\Invoker\CompiledCall;
@@ -17,7 +16,7 @@ use Infocyph\InterMix\DI\Managers\RegistrationManager;
 use Infocyph\InterMix\DI\Resolver\ConcurrentRepository;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\DI\Support\CompiledResolverGenerator;
-use Infocyph\InterMix\DI\Support\ContainerProxy;
+use Infocyph\InterMix\DI\Support\RuntimeContainerProxy;
 use Infocyph\InterMix\DI\Support\ContextualBindingBuilder;
 use Infocyph\InterMix\DI\Support\DebugTracer;
 use Infocyph\InterMix\DI\Support\DirectFactory;
@@ -32,10 +31,9 @@ use Psr\Container\ContainerInterface;
 use ReflectionException;
 use Throwable;
 
-/** @implements ArrayAccess<string, mixed> */
-class Container implements ContainerInterface, ArrayAccess
+class Container implements ContainerInterface
 {
-    use ContainerProxy;
+    use RuntimeContainerProxy;
 
     public const string DEFAULT_ALIAS = 'intermix.default';
 
