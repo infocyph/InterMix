@@ -8,6 +8,7 @@ use Fiber;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\DI\ProductionContainer;
+use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use RuntimeException;
 
 final class ReleaseRegressionLeaf {}
