@@ -173,7 +173,19 @@ class ParameterResolver
             );
         }
 
-        return AttributeResolution::Unresolved;
+        // Transitional 10.x runtime contextual semantics. Builder-owned 11.0
+        // configuration stores only the explicit wrapper/class forms above.
+        if (is_callable($binding)) {
+            return $binding($container);
+        }
+        if (is_string($binding) && $this->repository->hasFunctionReference($binding)) {
+            return $container->get($binding);
+        }
+        if (is_object($binding) && is_a($binding, $dependency->getName())) {
+            return $binding;
+        }
+
+        return $binding;
     }
 
     public function setClassResolverInstance(ClassResolver $classResolver): void
