@@ -6,6 +6,7 @@ use Infocyph\InterMix\DI\Build\DefinitionGraph;
 use Infocyph\InterMix\DI\Build\StaticRuntimePlanner;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\ContainerBuilder;
+use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\DI\Invoker\CompiledCall;
 use Infocyph\InterMix\Exceptions\ContainerException;
 
@@ -37,11 +38,11 @@ function removeInvocationAliasArtifact(string $path): void
 
 it('makes aliases follow target lifetime without owning a cache', function () {
     $builder = ContainerBuilder::create(uniqid('alias_target_lifetime_'));
-    $builder->transient('target', InvocationAliasLeaf::class)
+    $builder->autowire('target', InvocationAliasLeaf::class, lifetime: LifetimeEnum::Transient)
         ->alias('middle', 'target')
         ->alias('root', 'middle');
 
-    $development = $builder->development();
+    $development = $builder->build();
     expect($development->get('root'))->not->toBe($development->get('root'));
 
     $path = invocationAliasArtifactPath();
@@ -59,12 +60,12 @@ it('makes aliases follow target lifetime without owning a cache', function () {
 
 it('flattens pure transient alias chains to their final build-time target', function () {
     $builder = ContainerBuilder::create(uniqid('alias_flatten_'));
-    $builder->singleton('target', InvocationAliasLeaf::class)
+    $builder->autowire('target', InvocationAliasLeaf::class)
         ->alias('middle', 'target')
         ->alias('root', 'middle');
 
     $planned = new StaticRuntimePlanner()->plan(
-        DefinitionGraph::from($builder->development()->getRepository()),
+        $builder->definitionGraph(),
     );
 
     expect($planned['plans']['root']['kind'])->toBe('alias')
@@ -90,8 +91,8 @@ it('rejects alias cycles before artifact publication', function () {
 
 it('makes fresh compiled classes while retaining compiled dependency lifetimes', function () {
     $builder = ContainerBuilder::create(uniqid('compiled_make_'));
-    $builder->singleton(InvocationAliasLeaf::class)
-        ->singleton(InvocationAliasRoot::class);
+    $builder->autowire(InvocationAliasLeaf::class, InvocationAliasLeaf::class)
+        ->autowire(InvocationAliasRoot::class, InvocationAliasRoot::class);
 
     $path = invocationAliasArtifactPath();
     try {
@@ -114,8 +115,8 @@ it('makes fresh compiled classes while retaining compiled dependency lifetimes',
 
 it('keeps compiled getReturn and null resolveNow on the production boundary', function () {
     $builder = ContainerBuilder::create(uniqid('compiled_return_'));
-    $builder->singleton(InvocationAliasRoot::class)
-        ->singleton(InvocationAliasLeaf::class);
+    $builder->autowire(InvocationAliasRoot::class, InvocationAliasRoot::class)
+        ->autowire(InvocationAliasLeaf::class, InvocationAliasLeaf::class);
 
     $path = invocationAliasArtifactPath();
     try {
@@ -132,7 +133,7 @@ it('keeps compiled getReturn and null resolveNow on the production boundary', fu
 it('routes stale compiled definition dispatch through the dynamic resolver after invalidation', function () {
     $container = new Container(uniqid('stale_compiled_'));
     $container->singleton('service', InvocationAliasRoot::class)
-        ->singleton(InvocationAliasLeaf::class);
+        ->autowire(InvocationAliasLeaf::class, InvocationAliasLeaf::class);
 
     $path = invocationAliasArtifactPath();
     try {
