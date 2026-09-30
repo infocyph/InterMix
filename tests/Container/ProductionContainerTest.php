@@ -93,7 +93,7 @@ it('specializes scoped identity and scope seeds in production', function () {
 
 it('keeps dynamic definitions and arbitrary classes as cold fallback islands', function () {
     $builder = ContainerBuilder::create(uniqid('production_dynamic_'))
-        ->singleton('root', ProductionRuntimeRoot::class)
+        ->autowire('root', ProductionRuntimeRoot::class)
         ->factory('dynamic', static fn(): object => new stdClass());
 
     $path = productionRuntimeArtifactPath();
