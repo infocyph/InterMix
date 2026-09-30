@@ -469,3 +469,21 @@ it('accepts canonical numeric-string service id zero in dynamic and compiled run
         removeBuilder11Artifact($path);
     }
 });
+
+
+it('keeps configuration ownership on the builder without manager escape hatches', function (): void {
+    $constructor = new ReflectionMethod(ContainerBuilder::class, '__construct');
+    $parameter = $constructor->getParameters()[0] ?? null;
+
+    expect($parameter)->not->toBeNull()
+        ->and((string) $parameter?->getType())->toBe('string')
+        ->and(method_exists(ContainerBuilder::class, 'bind'))->toBeFalse()
+        ->and(method_exists(ContainerBuilder::class, 'bindFactory'))->toBeFalse()
+        ->and(method_exists(ContainerBuilder::class, 'singleton'))->toBeFalse()
+        ->and(method_exists(ContainerBuilder::class, 'scoped'))->toBeFalse()
+        ->and(method_exists(ContainerBuilder::class, 'transient'))->toBeFalse()
+        ->and(method_exists(ContainerBuilder::class, 'definitions'))->toBeFalse()
+        ->and(method_exists(ContainerBuilder::class, 'registration'))->toBeFalse()
+        ->and(method_exists(ContainerBuilder::class, 'options'))->toBeFalse()
+        ->and(method_exists(ContainerBuilder::class, 'development'))->toBeFalse();
+});
