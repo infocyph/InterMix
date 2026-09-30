@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Remix\TapProxy;
 
@@ -71,10 +72,9 @@ if (!function_exists('direct')) {
         array $parameters = [],
         string $alias = Container::DIRECT_ALIAS,
     ): mixed {
-        $instance = Container::instance($alias)
-            ->options()
-            ->setOptions(false)
-            ->end();
+        $instance = ContainerBuilder::create($alias)
+            ->enableInjection(false)
+            ->build();
 
         return $spec === null
             ? $instance
