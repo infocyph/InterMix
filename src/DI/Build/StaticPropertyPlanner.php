@@ -21,14 +21,18 @@ final class StaticPropertyPlanner
      * @param ReflectionClass<object> $class
      * @return array{properties: list<PropertyPlan>, dependencies: list<string>}
      */
-    public function plan(DefinitionGraph $graph, ReflectionClass $class): array
+    public function plan(
+        DefinitionGraph $graph,
+        ReflectionClass $class,
+        array $supplied = [],
+    ): array
     {
         $properties = [];
         $dependencies = [];
         $seenDependencies = [];
 
         for ($current = $class; $current instanceof ReflectionClass; $current = $current->getParentClass()) {
-            $registered = $this->registeredProperties($graph, $current->getName());
+            $registered = $supplied + $this->registeredProperties($graph, $current->getName());
 
             foreach ($current->getProperties() as $property) {
                 if ($property->getDeclaringClass()->getName() !== $current->getName()) {
