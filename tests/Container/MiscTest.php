@@ -3,24 +3,23 @@
 declare(strict_types=1);
 
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\Tests\Fixture\EmailService;
 use Infocyph\InterMix\Tests\Fixture\InjectionLessClass;
 
-container(null, 'injection_less')
-    ->options()
-    ->setOptions(false)
-    ->registration()
+$injectionLess = ContainerBuilder::create('injection_less')
+    ->enableInjection(false)
     ->registerClass(InjectionLessClass::class, [123])
-    ->registerMethod(InjectionLessClass::class, 'ilc', [456]);
+    ->registerMethod(InjectionLessClass::class, 'ilc', [456])
+    ->autowire(InjectionLessClass::class, InjectionLessClass::class)
+    ->build();
 
-test('Instance', function () {
-    $get1 = container(null, 'injection_less')
-        ->get(InjectionLessClass::class);
-    expect($get1)->toBeInstanceOf(InjectionLessClass::class);
+test('Instance', function () use ($injectionLess) {
+    expect($injectionLess->get(InjectionLessClass::class))
+        ->toBeInstanceOf(InjectionLessClass::class);
 });
 
-$get2 = container(null, 'injection_less')
-    ->getReturn(InjectionLessClass::class);
+$get2 = $injectionLess->getReturn(InjectionLessClass::class);
 
 test('Return', function () use ($get2) {
     expect($get2)->toBeArray();
@@ -34,19 +33,16 @@ test('Method parameter', function () use ($get2) {
     expect($get2['method'])->toBe('456');
 });
 
-container(null, 'injection_less_with_prop')
-    ->options()
-    ->setOptions(false)
-    ->registration()
+$injectionLessWithProperty = ContainerBuilder::create('injection_less_with_prop')
+    ->enableInjection(false)
     ->registerClass(InjectionLessClass::class, [123])
     ->registerMethod(InjectionLessClass::class, 'ilc', [456])
-    ->registerProperty(InjectionLessClass::class, [
-        'internalProperty' => 'propSet'
-    ]);
+    ->registerProperty(InjectionLessClass::class, ['internalProperty' => 'propSet'])
+    ->autowire(InjectionLessClass::class, InjectionLessClass::class)
+    ->build();
 
-test('Non-static Property', function () {
-    $get3 = container(null, 'injection_less_with_prop')
-        ->getReturn(InjectionLessClass::class);
+test('Non-static Property', function () use ($injectionLessWithProperty) {
+    $get3 = $injectionLessWithProperty->getReturn(InjectionLessClass::class);
     expect($get3)
         ->toBeArray()
         ->and($get3['internalProperty'])->toBe('propSet');
@@ -76,17 +72,15 @@ test('resolve() executes closure with DI on, configuring EmailService before sen
 | direct() (DI OFF) — register class + method in one chain, then resolve
 |--------------------------------------------------------------------------
 */
-test('direct() returns method result with DI off when class and method are registered in one chain', function () {
-    // Get a DI-off container instance first (helper configures it)
-    $c = direct(null, [], 'helper_direct_chain');
-    expect($c)->toBeInstanceOf(Container::class);
-
-    // Register constructor + method (same container/alias), then resolve return
-    $ret = $c->registration()
+test('DI-off builder returns the registered method result', function () {
+    $runtime = ContainerBuilder::create('helper_direct_chain')
+        ->enableInjection(false)
         ->registerClass(InjectionLessClass::class, [123])
         ->registerMethod(InjectionLessClass::class, 'ilc', [456])
-        ->invocation()
-        ->getReturn(InjectionLessClass::class);
+        ->autowire(InjectionLessClass::class, InjectionLessClass::class)
+        ->build();
+
+    $ret = $runtime->getReturn(InjectionLessClass::class);
 
     expect($ret)
         ->toBeArray()
@@ -109,16 +103,15 @@ test('direct(null) returns a container (DI off)', function () {
     expect($c)->toBeInstanceOf(Container::class);
 });
 test('Static Property', function () {
-    $get4 = container(null, 'injection_less_with_static_prop')
-        ->options()
-        ->setOptions(injection: false)
-        ->registration()
+    $runtime = ContainerBuilder::create('injection_less_with_static_prop')
+        ->enableInjection(false)
         ->registerClass(InjectionLessClass::class, [123])
         ->registerMethod(InjectionLessClass::class, 'ilc', [456])
-        ->registerProperty(InjectionLessClass::class, [
-            'staticProperty' => 'propSetStatic',
-        ])
-        ->getReturn(InjectionLessClass::class);
+        ->registerProperty(InjectionLessClass::class, ['staticProperty' => 'propSetStatic'])
+        ->autowire(InjectionLessClass::class, InjectionLessClass::class)
+        ->build();
+
+    $get4 = $runtime->getReturn(InjectionLessClass::class);
 
     expect($get4)
         ->toBeArray()
