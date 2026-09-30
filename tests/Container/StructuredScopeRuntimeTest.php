@@ -4,14 +4,16 @@ declare(strict_types=1);
 
 use Fiber;
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
 
 final class StructuredScopeLeaf {}
 
 it('keeps nested child frames carrier-local while sharing the attached parent scope', function () {
-    $container = new Container(uniqid('structured_nested_'));
-    $container->scoped('leaf', StructuredScopeLeaf::class);
+    $container = ContainerBuilder::create(uniqid('structured_nested_'))
+        ->autowire('leaf', StructuredScopeLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->build();
     $container->enterScope('request');
     $parent = $container->get('leaf');
     $context = $container->captureScopeContext();
@@ -62,12 +64,13 @@ it('keeps nested child frames carrier-local while sharing the attached parent sc
 });
 
 it('rejects owner close while a child attachment is live without firing the owner hook', function () {
-    $container = new Container(uniqid('structured_owner_live_'));
-    $container->scoped('leaf', StructuredScopeLeaf::class);
     $leaves = [];
-    $container->onScopeLeave('request', static function (string $scope) use (&$leaves): void {
-        $leaves[] = $scope;
-    });
+    $container = ContainerBuilder::create(uniqid('structured_owner_live_'))
+        ->autowire('leaf', StructuredScopeLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->onScopeLeave('request', static function (string $scope) use (&$leaves): void {
+            $leaves[] = $scope;
+        })
+        ->build();
     $container->enterScope('request');
     $parent = $container->get('leaf');
     $context = $container->captureScopeContext();
@@ -96,20 +99,21 @@ it('rejects owner close while a child attachment is live without firing the owne
 });
 
 it('fails deterministically when sibling carriers cold-resolve the same scoped service', function () {
-    $container = new Container(uniqid('structured_construct_'));
     $calls = 0;
-    $container->bindFactory(
-        'cold',
-        static function () use (&$calls): stdClass {
-            ++$calls;
-            if ($calls === 1 && Fiber::getCurrent() instanceof Fiber) {
-                Fiber::suspend();
-            }
+    $container = ContainerBuilder::create(uniqid('structured_construct_'))
+        ->factory(
+            'cold',
+            static function () use (&$calls): stdClass {
+                ++$calls;
+                if ($calls === 1 && Fiber::getCurrent() instanceof Fiber) {
+                    Fiber::suspend();
+                }
 
-            return new stdClass();
-        },
-        LifetimeEnum::Scoped,
-    );
+                return new stdClass();
+            },
+            lifetime: LifetimeEnum::Scoped,
+        )
+        ->build();
     $container->enterScope('request');
     $context = $container->captureScopeContext();
 
@@ -138,20 +142,21 @@ it('fails deterministically when sibling carriers cold-resolve the same scoped s
 });
 
 it('clears a failed scoped construction guard so a later carrier can retry', function () {
-    $container = new Container(uniqid('structured_construct_failure_'));
     $calls = 0;
-    $container->bindFactory(
-        'cold',
-        static function () use (&$calls): stdClass {
-            ++$calls;
-            if ($calls === 1) {
-                throw new RuntimeException('expected construction failure');
-            }
+    $container = ContainerBuilder::create(uniqid('structured_construct_failure_'))
+        ->factory(
+            'cold',
+            static function () use (&$calls): stdClass {
+                ++$calls;
+                if ($calls === 1) {
+                    throw new RuntimeException('expected construction failure');
+                }
 
-            return new stdClass();
-        },
-        LifetimeEnum::Scoped,
-    );
+                return new stdClass();
+            },
+            lifetime: LifetimeEnum::Scoped,
+        )
+        ->build();
     $container->enterScope('request');
     $context = $container->captureScopeContext();
 
@@ -175,13 +180,14 @@ it('clears a failed scoped construction guard so a later carrier can retry', fun
 });
 
 it('resets only the current owned execution carrier in LIFO hook order and is idempotent', function () {
-    $container = new Container(uniqid('structured_reset_owned_'));
     $leaves = [];
+    $builder = ContainerBuilder::create(uniqid('structured_reset_owned_'));
     foreach (['request', 'nested'] as $scope) {
-        $container->onScopeLeave($scope, static function (string $left) use (&$leaves): void {
+        $builder->onScopeLeave($scope, static function (string $left) use (&$leaves): void {
             $leaves[] = $left;
         });
     }
+    $container = $builder->build();
 
     $fiber = new Fiber(static function () use ($container): array {
         $container->enterScope('request');
@@ -202,14 +208,15 @@ it('resets only the current owned execution carrier in LIFO hook order and is id
 });
 
 it('resets an attached carrier by unwinding child frames and detaching without closing the owner', function () {
-    $container = new Container(uniqid('structured_reset_attached_'));
-    $container->scoped('leaf', StructuredScopeLeaf::class);
     $leaves = [];
+    $builder = ContainerBuilder::create(uniqid('structured_reset_attached_'))
+        ->autowire('leaf', StructuredScopeLeaf::class, lifetime: LifetimeEnum::Scoped);
     foreach (['request', 'nested'] as $scope) {
-        $container->onScopeLeave($scope, static function (string $left) use (&$leaves): void {
+        $builder->onScopeLeave($scope, static function (string $left) use (&$leaves): void {
             $leaves[] = $left;
         });
     }
+    $container = $builder->build();
     $container->enterScope('request');
     $parent = $container->get('leaf');
     $context = $container->captureScopeContext();
