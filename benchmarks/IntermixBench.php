@@ -337,10 +337,7 @@ final class BenchServiceProvider implements ServiceProviderInterface
 {
     public function register(ContainerBuilder $builder): void
     {
-        $builder->bind(
-            'bench.provider.service',
-            static fn(BenchService $service): BenchProvidedService => new BenchProvidedService($service),
-        );
+        $builder->autowire('bench.provider.service', BenchProvidedService::class);
     }
 }
 
