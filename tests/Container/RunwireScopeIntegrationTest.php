@@ -129,13 +129,13 @@ it('keeps compiled Runwire child frames carrier-local while restoring the shared
 });
 
 it('releases attached child scopes when Runwire fail-fast cancels a sibling', function (): void {
+    $nestedLeaves = 0;
     $container = ContainerBuilder::create(uniqid('runwire_fail_fast_'))
         ->autowire('leaf', RunwireIntegrationScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->onScopeLeave('nested', static function () use (&$nestedLeaves): void {
+            ++$nestedLeaves;
+        })
         ->build();
-    $nestedLeaves = 0;
-    $container->onScopeLeave('nested', static function () use (&$nestedLeaves): void {
-        ++$nestedLeaves;
-    });
     $container->enterScope('request');
     $parent = $container->get('leaf');
     $context = $container->captureScopeContext();
@@ -180,13 +180,13 @@ it('releases attached child scopes when Runwire fail-fast cancels a sibling', fu
 });
 
 it('releases an attached nested scope after explicit Runwire task cancellation', function (): void {
+    $nestedLeaves = 0;
     $container = ContainerBuilder::create(uniqid('runwire_explicit_cancel_'))
         ->autowire('leaf', RunwireIntegrationScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->onScopeLeave('nested', static function () use (&$nestedLeaves): void {
+            ++$nestedLeaves;
+        })
         ->build();
-    $nestedLeaves = 0;
-    $container->onScopeLeave('nested', static function () use (&$nestedLeaves): void {
-        ++$nestedLeaves;
-    });
     $container->enterScope('request');
     $parent = $container->get('leaf');
     $context = $container->captureScopeContext();
@@ -231,13 +231,13 @@ it('releases an attached nested scope after explicit Runwire task cancellation',
 });
 
 it('releases attached scopes when a Runwire deadline expires', function (): void {
+    $nestedLeaves = 0;
     $container = ContainerBuilder::create(uniqid('runwire_deadline_'))
         ->autowire('leaf', RunwireIntegrationScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->onScopeLeave('nested', static function () use (&$nestedLeaves): void {
+            ++$nestedLeaves;
+        })
         ->build();
-    $nestedLeaves = 0;
-    $container->onScopeLeave('nested', static function () use (&$nestedLeaves): void {
-        ++$nestedLeaves;
-    });
     $container->enterScope('request');
     $parent = $container->get('leaf');
     $context = $container->captureScopeContext();
