@@ -429,8 +429,17 @@ it('separates definition-cache keys by explicit namespace and generation', funct
     $secondKey = $second->getRepository()->makeDefinitionCacheKey('cached');
     $thirdKey = $third->getRepository()->makeDefinitionCacheKey('cached');
 
+    $equivalent = ContainerBuilder::create(uniqid('builder11_key_equivalent_'))
+        ->factory('other', static fn(): int => 2)
+        ->definitionCache($cache, 'application-a', 'release-1')
+        ->factory('cached', static fn(): int => 1)
+        ->cacheDefinition('cached')
+        ->build();
+    $equivalentKey = $equivalent->getRepository()->makeDefinitionCacheKey('cached');
+
     expect($firstKey)->not->toBe($secondKey)
         ->and($firstKey)->not->toBe($thirdKey)
+        ->and($equivalentKey)->toBe($firstKey)
         ->and(str_starts_with($firstKey, 'imx11.'))->toBeTrue();
 });
 
@@ -486,4 +495,38 @@ it('keeps configuration ownership on the builder without manager escape hatches'
         ->and(method_exists(ContainerBuilder::class, 'registration'))->toBeFalse()
         ->and(method_exists(ContainerBuilder::class, 'options'))->toBeFalse()
         ->and(method_exists(ContainerBuilder::class, 'development'))->toBeFalse();
+});
+
+
+it('reuses safe opted-in values across equivalent explicit cache generations', function (): void {
+    $cache = Cache::memory('builder11.shared.' . bin2hex(random_bytes(4)));
+    $firstRuns = 0;
+    $secondRuns = 0;
+
+    $first = ContainerBuilder::create(uniqid('builder11_shared_first_'))
+        ->definitionCache($cache, 'application-a', 'release-shared')
+        ->factory('cached', static function () use (&$firstRuns): int {
+            ++$firstRuns;
+
+            return 41;
+        })
+        ->cacheDefinition('cached')
+        ->build();
+
+    expect($first->get('cached'))->toBe(41)
+        ->and($firstRuns)->toBe(1);
+
+    $second = ContainerBuilder::create(uniqid('builder11_shared_second_'))
+        ->factory('unrelated', static fn(): int => 99)
+        ->definitionCache($cache, 'application-a', 'release-shared')
+        ->factory('cached', static function () use (&$secondRuns): int {
+            ++$secondRuns;
+
+            return 42;
+        })
+        ->cacheDefinition('cached')
+        ->build();
+
+    expect($second->get('cached'))->toBe(41)
+        ->and($secondRuns)->toBe(0);
 });
