@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Infocyph\InterMix\DI\ContainerBuilder;
+use Infocyph\InterMix\DI\Support\LifetimeEnum;
 
 final class MethodCompiledDependency {}
 
@@ -121,14 +122,14 @@ function removeMethodCompilationArtifact(string $path): void
 
 it('compiles deterministic registered constructor parameters', function () {
     $builder = ContainerBuilder::create(uniqid('method_constructor_'));
-    $builder->singleton(MethodCompiledDependency::class)
-        ->singleton(MethodRegisteredConstructor::class);
-    $builder->registration()->registerClass(
+    $builder->autowire(MethodCompiledDependency::class, MethodCompiledDependency::class)
+        ->autowire(MethodRegisteredConstructor::class, MethodRegisteredConstructor::class);
+    $builder->registerClass(
         MethodRegisteredConstructor::class,
         ['label' => 'compiled-constructor'],
     );
 
-    expect($builder->development()->get(MethodRegisteredConstructor::class)->label)
+    expect($builder->build()->get(MethodRegisteredConstructor::class)->label)
         ->toBe('compiled-constructor');
 
     $path = methodCompilationArtifactPath();
@@ -147,9 +148,9 @@ it('compiles deterministic registered constructor parameters', function () {
 
 it('compiles registered post-construction method invocation', function () {
     $builder = ContainerBuilder::create(uniqid('method_registered_'));
-    $builder->singleton(MethodCompiledDependency::class)
-        ->singleton(MethodRegisteredInvocation::class);
-    $builder->registration()->registerMethod(
+    $builder->autowire(MethodCompiledDependency::class, MethodCompiledDependency::class)
+        ->autowire(MethodRegisteredInvocation::class, MethodRegisteredInvocation::class);
+    $builder->registerMethod(
         MethodRegisteredInvocation::class,
         'boot',
         ['label' => 'compiled-method'],
@@ -177,9 +178,9 @@ it('compiles public static methods without a reflection island', function () {
     MethodStaticInvocation::$label = 'unset';
 
     $builder = ContainerBuilder::create(uniqid('method_static_'));
-    $builder->singleton(MethodCompiledDependency::class)
-        ->singleton(MethodStaticInvocation::class);
-    $builder->registration()->registerMethod(
+    $builder->autowire(MethodCompiledDependency::class, MethodCompiledDependency::class)
+        ->autowire(MethodStaticInvocation::class, MethodStaticInvocation::class);
+    $builder->registerMethod(
         MethodStaticInvocation::class,
         'boot',
         ['label' => 'compiled-static'],
@@ -207,11 +208,11 @@ it('compiles public static methods without a reflection island', function () {
 
 it('compiles supplied named and positional method arguments over the static plan', function () {
     $builder = ContainerBuilder::create(uniqid('method_runtime_parameters_'));
-    $builder->singleton(MethodCompiledDependency::class)
-        ->transient(MethodRuntimeParameterInvocation::class);
-    $builder->registration()->registerMethod(MethodRuntimeParameterInvocation::class, 'run');
+    $builder->autowire(MethodCompiledDependency::class, MethodCompiledDependency::class)
+        ->autowire(MethodRuntimeParameterInvocation::class, MethodRuntimeParameterInvocation::class, lifetime: LifetimeEnum::Transient);
+    $builder->registerMethod(MethodRuntimeParameterInvocation::class, 'run');
 
-    $development = $builder->development();
+    $development = $builder->build();
     $developmentNamed = $development->resolveNow(
         [MethodRuntimeParameterInvocation::class, 'run'],
         ['label' => 'runtime-named'],
@@ -248,8 +249,8 @@ it('compiles supplied named and positional method arguments over the static plan
 
 it('keeps variadic runtime arguments on the existing dynamic resolver', function () {
     $builder = ContainerBuilder::create(uniqid('method_variadic_parameters_'));
-    $builder->transient(MethodVariadicInvocation::class);
-    $builder->registration()->registerMethod(MethodVariadicInvocation::class, 'run');
+    $builder->autowire(MethodVariadicInvocation::class, MethodVariadicInvocation::class, lifetime: LifetimeEnum::Transient);
+    $builder->registerMethod(MethodVariadicInvocation::class, 'run');
     $path = methodCompilationArtifactPath();
 
     try {
@@ -272,9 +273,9 @@ it('keeps variadic runtime arguments on the existing dynamic resolver', function
 
 it('compiles CALL_ON and invokable post-construction methods while fresh make skips them', function () {
     $builder = ContainerBuilder::create(uniqid('method_implicit_'));
-    $builder->singleton(MethodCompiledDependency::class)
-        ->singleton(MethodCallOnInvocation::class)
-        ->singleton(MethodInvokableInvocation::class);
+    $builder->autowire(MethodCompiledDependency::class, MethodCompiledDependency::class)
+        ->autowire(MethodCallOnInvocation::class, MethodCallOnInvocation::class)
+        ->autowire(MethodInvokableInvocation::class, MethodInvokableInvocation::class);
 
     $path = methodCompilationArtifactPath();
     try {
@@ -302,9 +303,9 @@ it('compiles CALL_ON and invokable post-construction methods while fresh make sk
 
 it('compiles the configured default method when it is statically resolvable', function () {
     $builder = ContainerBuilder::create(uniqid('method_default_'));
-    $builder->singleton(MethodCompiledDependency::class)
-        ->singleton(MethodDefaultInvocation::class);
-    $builder->options()->setOptions(defaultMethod: 'boot');
+    $builder->autowire(MethodCompiledDependency::class, MethodCompiledDependency::class)
+        ->autowire(MethodDefaultInvocation::class, MethodDefaultInvocation::class);
+    $builder->setDefaultMethod('boot');
 
     $path = methodCompilationArtifactPath();
     try {
@@ -321,7 +322,7 @@ it('compiles the configured default method when it is statically resolvable', fu
 
 it('keeps non-public implicit methods as targeted reflection islands', function () {
     $builder = ContainerBuilder::create(uniqid('method_protected_'));
-    $builder->singleton(MethodProtectedInvocation::class);
+    $builder->autowire(MethodProtectedInvocation::class, MethodProtectedInvocation::class);
 
     $path = methodCompilationArtifactPath();
     try {
