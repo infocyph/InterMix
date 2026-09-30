@@ -35,8 +35,7 @@ class DefinitionResolver
     /** @var (Closure(): array{ClassResolver, ParameterResolver})|null */
     private ?Closure $resolverFactory = null;
 
-    public function __construct(protected readonly Repository $repository)
-    {}
+    public function __construct(protected readonly Repository $repository) {}
 
     /** @throws ContainerException|InvalidArgumentException|ReflectionException */
     public function resolve(string $name): mixed
@@ -58,8 +57,7 @@ class DefinitionResolver
     public function setResolverInstance(
         ClassResolver $classResolver,
         ParameterResolver $parameterResolver,
-    ): void
-    {
+    ): void {
         $this->classResolver = $classResolver;
         $this->parameterResolver = $parameterResolver;
     }
@@ -117,8 +115,7 @@ class DefinitionResolver
         CacheItemPoolInterface $cache,
         CacheItemInterface $item,
         mixed $value,
-    ): void
-    {
+    ): void {
         try {
             $item->set($value);
             if (!$cache->save($item)) {
@@ -182,8 +179,7 @@ class DefinitionResolver
     private function resolveAutowireDefinition(
         string $name,
         AutowireDefinition $definition,
-    ): mixed
-    {
+    ): mixed {
         [$classResolver] = $this->resolvers();
         if ($this->repository->isTracingEnabled()) {
             $this->repository->tracer()->recordDependency($name, $definition->class, 'definition-class');
