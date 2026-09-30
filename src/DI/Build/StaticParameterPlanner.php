@@ -76,7 +76,11 @@ final class StaticParameterPlanner
      * @param ReflectionClass<object> $class
      * @return array{arguments: list<ServiceArgument>, dependencies: list<string>}|string
      */
-    public function constructorPlan(DefinitionGraph $graph, ReflectionClass $class): array|string
+    public function constructorPlan(
+        DefinitionGraph $graph,
+        ReflectionClass $class,
+        array $supplied = [],
+    ): array|string
     {
         $constructor = $class->getConstructor();
         if ($constructor === null) {
@@ -87,7 +91,9 @@ final class StaticParameterPlanner
             $graph,
             $class,
             $constructor,
-            $this->resourceParameters($graph, $class->getName(), 'constructor'),
+            $supplied !== []
+                ? $supplied
+                : $this->resourceParameters($graph, $class->getName(), 'constructor'),
             'constructor',
             false,
         );
