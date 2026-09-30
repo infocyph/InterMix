@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use Infocyph\InterMix\DI\Attribute\Inject;
-use Infocyph\InterMix\DI\Build\DefinitionGraph;
 use Infocyph\InterMix\DI\Build\StaticRuntimeGenerator;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\ContainerBuilder;
@@ -167,13 +166,13 @@ it('falls back for arbitrary autowireable classes without replacing compiled sta
 });
 
 it('validates the generated runtime against its metadata sidecar before loading', function () {
-    $container = new Container(uniqid('static_batch_manifest_'));
-    $container->autowire('stable', StaticBatchStableService::class);
+    $builder = ContainerBuilder::create(uniqid('static_batch_manifest_'))
+        ->autowire('stable', StaticBatchStableService::class);
 
     $path = staticBatchArtifactPath();
     try {
         $generator = new StaticRuntimeGenerator();
-        $generator->generate(DefinitionGraph::from($container->getRepository()), $path);
+        $generator->generate($builder->definitionGraph(), $path);
         file_put_contents($path, "\n", FILE_APPEND);
 
         expect(fn() => $generator->load($path))->toThrow(
