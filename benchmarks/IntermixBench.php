@@ -168,56 +168,55 @@ final class IntermixBench
 
     public function setUpContainer(): void
     {
-        $this->container = new Container('__intermix_phpbench__' . spl_object_id($this));
-        $this->container->options()->setOptions(injection: true)->end();
-        $this->container->definitions()->bind(
-            'bench.config',
-            static fn(): BenchConfig => new BenchConfig(),
-        );
-        $container = $this->container;
-        $this->container->bindFactory(
-            'bench.factory.direct',
-            static fn(): BenchFactoryProduct => new BenchFactoryProduct($container),
-            LifetimeEnum::Transient,
-        );
-        $this->container->bind(
-            'bench.factory.reflected',
-            static fn(): BenchFactoryProduct => new BenchFactoryProduct($container),
-            LifetimeEnum::Transient,
-        );
-        $this->container->definitions()->bind(
-            'bench.scoped',
-            static fn(): BenchScopedToken => new BenchScopedToken(),
-            LifetimeEnum::Scoped,
-        );
-        $this->container->definitions()->bind(
-            'bench.pipeline.a',
-            static fn(): BenchPipelineA => new BenchPipelineA(),
-            LifetimeEnum::Singleton,
-            ['bench.pipeline.pre'],
-        );
-        $this->container->definitions()->bind(
-            'bench.pipeline.b',
-            static fn(): BenchPipelineB => new BenchPipelineB(),
-            LifetimeEnum::Singleton,
-            ['bench.pipeline.pre'],
-        );
-        $this->container->registration()->registerMethod(
-            BenchMethodConsumer::class,
-            'handle',
-            ['value' => 1],
-        );
-        $this->container->registration()->registerProperty(
-            BenchPropertyConsumer::class,
-            ['seed' => 41],
-        );
-        $this->container->registration()->import(BenchServiceProvider::class);
-        $this->container->options()->bindInterfaceForEnv(
-            'bench',
-            BenchClockInterface::class,
-            BenchClockBench::class,
-        );
-        $this->container->setEnvironment('bench');
+        $builder = ContainerBuilder::create('__intermix_phpbench__' . spl_object_id($this));
+        $builder->enableInjection()
+            ->factory(
+                'bench.config',
+                static fn(Container $runtime): BenchConfig => new BenchConfig(),
+            )
+            ->factory(
+                'bench.factory.direct',
+                static fn(Container $runtime): BenchFactoryProduct => new BenchFactoryProduct($runtime),
+                lifetime: LifetimeEnum::Transient,
+            )
+            ->factory(
+                'bench.factory.reflected',
+                static fn(Container $runtime): BenchFactoryProduct => new BenchFactoryProduct($runtime),
+                lifetime: LifetimeEnum::Transient,
+            )
+            ->factory(
+                'bench.scoped',
+                static fn(Container $runtime): BenchScopedToken => new BenchScopedToken(),
+                lifetime: LifetimeEnum::Scoped,
+            )
+            ->autowire(
+                'bench.pipeline.a',
+                BenchPipelineA::class,
+                tags: ['bench.pipeline.pre'],
+            )
+            ->autowire(
+                'bench.pipeline.b',
+                BenchPipelineB::class,
+                tags: ['bench.pipeline.pre'],
+            )
+            ->registerMethod(
+                BenchMethodConsumer::class,
+                'handle',
+                ['value' => 1],
+            )
+            ->registerProperty(
+                BenchPropertyConsumer::class,
+                ['seed' => 41],
+            )
+            ->import(new BenchServiceProvider())
+            ->bindInterfaceForEnv(
+                'bench',
+                BenchClockInterface::class,
+                BenchClockBench::class,
+            )
+            ->setEnvironment('bench');
+
+        $this->container = $builder->build();
         $this->invoker = Invoker::with($this->container);
         $this->diHandler = static fn(BenchService $service): int => $service->handle(1);
         $this->zeroArgumentHandler = static fn(): int => 1;
@@ -233,7 +232,7 @@ final class IntermixBench
         $this->container->findByTag('bench.pipeline.pre');
         $this->container->get('bench.provider.service');
         $this->container->make(BenchEnvConsumer::class)->tick();
-    }
+
 }
 
 final readonly class BenchConfig
