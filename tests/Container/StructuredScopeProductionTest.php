@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Fiber;
 use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\DI\ProductionContainer;
+use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
 
 final class StructuredProductionLeaf {}
