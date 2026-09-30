@@ -88,8 +88,8 @@ function removeStaticAttributeArtifact(string $path): void
 
 it('does not deoptimize methods for unregistered parameter attributes', function () {
     $builder = ContainerBuilder::create(uniqid('static_ignored_attribute_'));
-    $builder->options()->setOptions(methodAttributes: true);
-    $builder->singleton('consumer', StaticIgnoredAttributeConsumer::class);
+    $builder->enableMethodAttributes();
+    $builder->autowire('consumer', StaticIgnoredAttributeConsumer::class);
     $path = staticAttributeArtifactPath();
 
     try {
@@ -105,12 +105,12 @@ it('does not deoptimize methods for unregistered parameter attributes', function
 
 it('keeps registered custom method attribute resolvers as targeted runtime islands', function () {
     $builder = ContainerBuilder::create(uniqid('static_runtime_attribute_'));
-    $builder->options()->registerAttributeResolver(
+    $builder->registerAttributeResolver(
         StaticRuntimeParameterAttribute::class,
         StaticRuntimeParameterAttributeResolver::class,
     );
-    $builder->options()->setOptions(methodAttributes: true);
-    $builder->singleton('consumer', StaticRuntimeAttributeConsumer::class);
+    $builder->enableMethodAttributes();
+    $builder->autowire('consumer', StaticRuntimeAttributeConsumer::class);
     $path = staticAttributeArtifactPath();
 
     try {
@@ -128,16 +128,16 @@ it('keeps registered custom method attribute resolvers as targeted runtime islan
 
 it('preserves development semantics by ignoring method attributes on constructors', function () {
     $builder = ContainerBuilder::create(uniqid('static_constructor_attribute_'));
-    $builder->options()->registerAttributeResolver(
+    $builder->registerAttributeResolver(
         StaticRuntimeParameterAttribute::class,
         StaticRuntimeParameterAttributeResolver::class,
     );
-    $builder->options()->setOptions(methodAttributes: true);
-    $builder->singleton('consumer', StaticConstructorAttributeConsumer::class);
+    $builder->enableMethodAttributes();
+    $builder->autowire('consumer', StaticConstructorAttributeConsumer::class);
     $path = staticAttributeArtifactPath();
 
     try {
-        expect($builder->development()->get('consumer')->value)->toBe('fallback');
+        expect($builder->build()->get('consumer')->value)->toBe('fallback');
 
         $report = $builder->compile($path);
         $consumer = $builder->productionPrevalidated($path, $report['digest'])->get('consumer');
@@ -151,12 +151,12 @@ it('preserves development semantics by ignoring method attributes on constructor
 
 it('keeps registered custom property attribute resolvers as targeted runtime islands', function () {
     $builder = ContainerBuilder::create(uniqid('static_runtime_property_attribute_'));
-    $builder->options()->registerAttributeResolver(
+    $builder->registerAttributeResolver(
         StaticRuntimePropertyAttribute::class,
         StaticRuntimePropertyAttributeResolver::class,
     );
-    $builder->options()->setOptions(propertyAttributes: true);
-    $builder->singleton('consumer', StaticRuntimePropertyConsumer::class);
+    $builder->enablePropertyAttributes();
+    $builder->autowire('consumer', StaticRuntimePropertyConsumer::class);
     $path = staticAttributeArtifactPath();
 
     try {
