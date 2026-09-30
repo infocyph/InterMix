@@ -71,7 +71,7 @@ it('shares one dynamic logical scope through Runwire task-local snapshots', func
 
 it('keeps compiled Runwire child frames carrier-local while restoring the shared parent', function () {
     $builder = ContainerBuilder::create(uniqid('runwire_compiled_'));
-    $builder->scoped('leaf', RunwireIntegrationScopedLeaf::class);
+    $builder->autowire('leaf', RunwireIntegrationScopedLeaf::class, lifetime: LifetimeEnum::Scoped);
 
     $path = runwireIntegrationArtifactPath();
     try {
