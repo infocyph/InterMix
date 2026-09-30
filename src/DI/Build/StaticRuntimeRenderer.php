@@ -226,9 +226,14 @@ final class StaticRuntimeRenderer
     /** @param array<string, ServicePlan> $plans */
     private function renderCompiledIds(array $plans): string
     {
+        $ids = array_map(
+            static fn(int|string $id): string => (string) $id,
+            array_keys($plans),
+        );
+
         return "    protected function compiledIds(): array\n"
             . "    {\n"
-            . '        return ' . var_export(array_keys($plans), true) . ";\n"
+            . '        return ' . var_export($ids, true) . ";\n"
             . "    }\n\n";
     }
 
@@ -243,7 +248,8 @@ final class StaticRuntimeRenderer
         StaticLifecycleHookRenderer $lifecycleRenderer,
     ): string {
         $entries = [];
-        foreach ($plans as $id => $plan) {
+        foreach ($plans as $rawId => $plan) {
+            $id = (string) $rawId;
             if ($plan['lifetime'] !== LifetimeEnum::Singleton) {
                 continue;
             }
@@ -296,7 +302,8 @@ final class StaticRuntimeRenderer
     private function renderDefinitionMap(DefinitionGraph $graph, array $plans): string
     {
         $definitions = [];
-        foreach (array_keys($plans) as $id) {
+        foreach (array_keys($plans) as $rawId) {
+            $id = (string) $rawId;
             if ($graph->hasDefinition($id)) {
                 $definitions[] = $id;
             }
@@ -428,7 +435,8 @@ final class StaticRuntimeRenderer
         $source = "    public function get(string \$id): mixed\n    {\n";
         $source .= "        if (\$this->isDeoptimized()) {\n            return \$this->fallbackGet(\$id);\n        }\n\n";
         $source .= "        return match (\$id) {\n";
-        foreach ($plans as $id => $_plan) {
+        foreach ($plans as $rawId => $_plan) {
+            $id = (string) $rawId;
             $source .= '            ' . var_export($id, true) . ' => $this->s' . $slots[$id] . "(),\n";
         }
         $source .= "            default => \$this->fallbackGet(\$id),\n";
@@ -443,7 +451,10 @@ final class StaticRuntimeRenderer
         $source .= "        if (\$this->isDeoptimized()) {\n            return \$this->fallbackHas(\$id);\n        }\n\n";
         $source .= "        return match (\$id) {\n";
         if ($plans !== []) {
-            $ids = implode(', ', array_map(static fn(string $id): string => var_export($id, true), array_keys($plans)));
+            $ids = implode(', ', array_map(
+                static fn(int|string $id): string => var_export((string) $id, true),
+                array_keys($plans),
+            ));
             $source .= "            {$ids} => true,\n";
         }
         $source .= "            default => \$this->fallbackHas(\$id),\n";
@@ -468,7 +479,8 @@ final class StaticRuntimeRenderer
         StaticLifecycleHookRenderer $lifecycleRenderer,
     ): string {
         $source = '';
-        foreach ($plans as $id => $plan) {
+        foreach ($plans as $rawId => $plan) {
+            $id = (string) $rawId;
             $source .= match ($plan['kind']) {
                 'alias' => $this->renderAliasMethod(
                     $graph,
@@ -537,7 +549,8 @@ final class StaticRuntimeRenderer
     private function renderSlotMap(array $slots): string
     {
         $source = "    protected function slotFor(string \$id): ?int\n    {\n        return match (\$id) {\n";
-        foreach ($slots as $id => $slot) {
+        foreach ($slots as $rawId => $slot) {
+            $id = (string) $rawId;
             $source .= '            ' . var_export($id, true) . " => {$slot},\n";
         }
         $source .= "            default => null,\n";
@@ -552,7 +565,8 @@ final class StaticRuntimeRenderer
     private function renderTags(DefinitionGraph $graph, array $plans, array $slots): string
     {
         $tags = [];
-        foreach (array_keys($plans) as $id) {
+        foreach (array_keys($plans) as $rawId) {
+            $id = (string) $rawId;
             foreach ($graph->definitionMetaFor($id)['tags'] as $tag) {
                 $tags[$tag][] = $id;
             }

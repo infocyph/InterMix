@@ -107,7 +107,8 @@ final class StaticLifecycleHookRenderer
     /** @param array<string, ServicePlan> $plans */
     public function renderValueSingletonProperties(DefinitionGraph $graph, array $plans): string
     {
-        foreach ($plans as $id => $plan) {
+        foreach ($plans as $rawId => $plan) {
+            $id = (string) $rawId;
             if ($plan['kind'] === 'value'
                 && $plan['lifetime'] === LifetimeEnum::Singleton
                 && $this->hasResolutionHooks($graph, $id)
