@@ -40,7 +40,10 @@ function removeStaticRuntimeContainerInterfaceArtifact(string $path): void
 
 it('compiles the intrinsic container interface as the generated production container', function () {
     $builder = ContainerBuilder::create(uniqid('container_interface_'))
-        ->singleton(StaticRuntimeContainerInterfaceConsumer::class);
+        ->autowire(
+            StaticRuntimeContainerInterfaceConsumer::class,
+            StaticRuntimeContainerInterfaceConsumer::class,
+        );
     $path = staticRuntimeContainerInterfaceArtifactPath();
 
     try {
