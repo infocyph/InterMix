@@ -7,6 +7,9 @@ namespace Infocyph\InterMix\DI\Build;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Internal\BoundedValueInspector;
 use Infocyph\InterMix\DI\Support\AliasDefinition;
+use Infocyph\InterMix\DI\Support\AutowireDefinition;
+use Infocyph\InterMix\DI\Support\InputDefinition;
+use Infocyph\InterMix\DI\Support\RuntimeFactoryDefinition;
 use Infocyph\InterMix\DI\Support\FactoryDefinition;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\DI\Support\ValueDefinition;
@@ -77,6 +80,8 @@ final class StaticRuntimePlanner
         DefinitionGraph $graph,
         string $id,
         ReflectionClass $class,
+        array $constructorParameters = [],
+        array $propertyParameters = [],
     ): array|string
     {
         if (!$class->isInstantiable()) {
@@ -91,11 +96,15 @@ final class StaticRuntimePlanner
             return $dynamicReason;
         }
 
-        $constructor = new StaticParameterPlanner()->constructorPlan($graph, $class);
+        $constructor = new StaticParameterPlanner()->constructorPlan(
+            $graph,
+            $class,
+            $constructorParameters,
+        );
         if (is_string($constructor)) {
             return $constructor;
         }
-        $property = new StaticPropertyPlanner()->plan($graph, $class);
+        $property = new StaticPropertyPlanner()->plan($graph, $class, $propertyParameters);
         $postMethod = new StaticMethodPlanner()->plan($graph, $class);
         $methodDependencies = is_array($postMethod) ? $postMethod['dependencies'] : [];
 
@@ -332,8 +341,23 @@ final class StaticRuntimePlanner
         if ($definition instanceof AliasDefinition) {
             return $this->planAlias($graph, $definition);
         }
+        if ($definition instanceof AutowireDefinition) {
+            return $this->classPlan(
+                $graph,
+                $id,
+                ReflectionResource::getClassReflection($definition->class),
+                $definition->arguments,
+                $definition->properties,
+            );
+        }
         if ($definition instanceof FactoryDefinition) {
             return new StaticFactoryPlanner()->plan($graph, $id, $definition);
+        }
+        if ($definition instanceof RuntimeFactoryDefinition) {
+            return 'runtime factory requires the frozen dynamic fallback';
+        }
+        if ($definition instanceof InputDefinition) {
+            return 'scoped input requires the runtime scope store';
         }
         if ($definition instanceof ValueDefinition) {
             return $this->valuePlan($graph, $id, $definition->value, true)
