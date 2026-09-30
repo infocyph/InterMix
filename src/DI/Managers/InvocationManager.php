@@ -50,10 +50,6 @@ class InvocationManager implements ArrayAccess
         return $this->callClass($classOrClosure, $method);
     }
 
-    public function definitions(): DefinitionManager
-    {
-        return $this->container->definitions();
-    }
 
     /**
      * Cached singleton and scoped entries are returned before broad resolvability
@@ -150,15 +146,7 @@ class InvocationManager implements ArrayAccess
         return $fresh->methodInvoked ? $fresh->returned : $fresh->instance;
     }
 
-    public function options(): OptionsManager
-    {
-        return $this->container->options();
-    }
 
-    public function registration(): RegistrationManager
-    {
-        return $this->container->registration();
-    }
 
     /** @throws ContainerException|ReflectionException */
     protected function resolveDefinition(string $id): mixed
