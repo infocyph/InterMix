@@ -8,6 +8,8 @@ use Closure;
 use Infocyph\InterMix\DI\Build\DefinitionGraph;
 use Infocyph\InterMix\DI\Build\StaticRuntimeGenerator;
 use Infocyph\InterMix\DI\Build\StaticRuntimePlanner;
+use Infocyph\InterMix\DI\Invoker\GenericCall;
+use Infocyph\InterMix\DI\Invoker\InjectedCall;
 use Infocyph\InterMix\DI\Managers\DefinitionManager;
 use Infocyph\InterMix\DI\Managers\OptionsManager;
 use Infocyph\InterMix\DI\Managers\RegistrationManager;
@@ -17,15 +19,22 @@ use Infocyph\InterMix\DI\Support\ContextualBindingBuilder;
 use Infocyph\InterMix\DI\Support\FactoryDefinition;
 use Infocyph\InterMix\DI\Support\InputDefinition;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
+use Infocyph\InterMix\DI\Support\PreloadGenerator;
 use Infocyph\InterMix\DI\Support\RuntimeFactoryDefinition;
 use Infocyph\InterMix\DI\Support\ServiceProviderInterface;
+use Infocyph\InterMix\DI\Support\TraceLevelEnum;
 use Infocyph\InterMix\DI\Support\ValueDefinition;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\CacheItemPoolInterface;
 use ReflectionClass;
+use ReflectionReference;
 
 final class ContainerBuilder
 {
+    private const int METADATA_MAX_DEPTH = 64;
+
+    private const int METADATA_MAX_VALUES = 100_000;
+
     private readonly Container $configuration;
 
     /** @var array<string, true> */
@@ -82,7 +91,11 @@ final class ContainerBuilder
     ): self {
         $this->registerExplicit(
             $id,
-            new AutowireDefinition($class, $arguments, $properties),
+            new AutowireDefinition(
+                $class,
+                $this->snapshotMetadata($arguments, 'Autowire arguments'),
+                $this->snapshotMetadata($properties, 'Autowire properties'),
+            ),
             $lifetime,
             $tags,
         );
@@ -190,6 +203,97 @@ final class ContainerBuilder
             namespace: $namespace,
             explicitOnly: true,
         );
+
+        return $this;
+    }
+
+    public function bindInterfaceForEnv(string $environment, string $interface, string $concrete): self
+    {
+        $this->assertMutable();
+        $this->configuration->getRepository()->bindInterfaceForEnv($environment, $interface, $concrete);
+
+        return $this;
+    }
+
+    public function enableDebugTracing(
+        bool $enable = true,
+        TraceLevelEnum $level = TraceLevelEnum::Node,
+    ): self {
+        $this->assertMutable();
+        $this->configuration->getRepository()->tracer()->setLevel(
+            $enable ? $level : TraceLevelEnum::Off,
+        );
+
+        return $this;
+    }
+
+    public function enableInjection(bool $enable = true): self
+    {
+        $this->assertMutable();
+        $this->configuration->setResolverClass($enable ? InjectedCall::class : GenericCall::class);
+
+        return $this;
+    }
+
+    public function enableMethodAttributes(bool $enable = true): self
+    {
+        $this->assertMutable();
+        $this->configuration->getRepository()->enableMethodAttribute($enable);
+
+        return $this;
+    }
+
+    public function enablePropertyAttributes(bool $enable = true): self
+    {
+        $this->assertMutable();
+        $this->configuration->getRepository()->enablePropertyAttribute($enable);
+
+        return $this;
+    }
+
+    public function exportGraph(?string $warmFromId = null, bool $clear = false): array
+    {
+        return $this->build()->exportGraph($warmFromId, $clear);
+    }
+
+    public function generatePreload(string $path): self
+    {
+        $this->finalizeGraph();
+        new PreloadGenerator()->generate($this->configuration, $path);
+
+        return $this;
+    }
+
+    public function registerAttributeResolver(string $attributeFqcn, string $resolverFqcn): self
+    {
+        $this->assertMutable();
+        $this->configuration->getRepository()->attributeRegistry()->register(
+            $attributeFqcn,
+            $resolverFqcn,
+        );
+
+        return $this;
+    }
+
+    /** @param array<int, string>|null $tags */
+    public function setDefinitionMetaForEnv(
+        string $environment,
+        string $id,
+        ?LifetimeEnum $lifetime = null,
+        ?array $tags = null,
+    ): self {
+        $this->assertMutable();
+        $this->assertIdentifier($id);
+
+        $meta = [];
+        if ($lifetime !== null) {
+            $meta['lifetime'] = $lifetime;
+        }
+        if ($tags !== null) {
+            $meta['tags'] = $tags;
+        }
+
+        $this->configuration->getRepository()->setDefinitionMetaForEnv($environment, $id, $meta);
 
         return $this;
     }
@@ -393,11 +497,23 @@ final class ContainerBuilder
         return $this;
     }
 
+    public function warmDefinitionCache(): array
+    {
+        $this->finalizeGraph();
+
+        return $this->configuration->definitions()->warmDefinitionCache();
+    }
+
     public function when(string $consumer): ContextualBindingBuilder
     {
         $this->assertMutable();
+        $this->assertIdentifier($consumer, 'Contextual consumer');
 
-        return $this->configuration->when($consumer);
+        return new ContextualBindingBuilder(
+            $this,
+            $this->configuration->getRepository(),
+            $consumer,
+        );
     }
 
     private function assertIdentifier(string $id, string $label = 'Service ID'): void
@@ -609,6 +725,67 @@ final class ContainerBuilder
         }
 
         $repository->setDefinition($id, $definition, $lifetime, $tags);
+    }
+
+    /** @param array<int|string, mixed> $values */
+    private function snapshotMetadata(array $values, string $label): array
+    {
+        $activeReferences = [];
+        $visited = 0;
+
+        return $this->snapshotMetadataLevel($values, $label, 0, $activeReferences, $visited);
+    }
+
+    /**
+     * @param array<int|string, mixed> $values
+     * @param array<string, true> $activeReferences
+     * @return array<int|string, mixed>
+     */
+    private function snapshotMetadataLevel(
+        array $values,
+        string $label,
+        int $depth,
+        array &$activeReferences,
+        int &$visited,
+    ): array {
+        if ($depth > self::METADATA_MAX_DEPTH) {
+            throw new ContainerException("{$label} exceed the maximum nesting depth.");
+        }
+
+        $snapshot = [];
+        foreach ($values as $key => $value) {
+            if (++$visited > self::METADATA_MAX_VALUES) {
+                throw new ContainerException("{$label} exceed the maximum value budget.");
+            }
+            if (!is_array($value)) {
+                $snapshot[$key] = $value;
+
+                continue;
+            }
+
+            $reference = ReflectionReference::fromArrayElement($values, $key);
+            $referenceId = $reference?->getId();
+            if ($referenceId !== null && isset($activeReferences[$referenceId])) {
+                throw new ContainerException("{$label} contain a cyclic array reference.");
+            }
+            if ($referenceId !== null) {
+                $activeReferences[$referenceId] = true;
+            }
+
+            $snapshot[$key] = $this->snapshotMetadataLevel(
+                $value,
+                $label,
+                $depth + 1,
+                $activeReferences,
+                $visited,
+            );
+
+            if ($referenceId !== null) {
+                unset($activeReferences[$referenceId]);
+            }
+        }
+
+        return $snapshot;
     }
 
     /** @return list<string> */

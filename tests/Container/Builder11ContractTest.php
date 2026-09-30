@@ -14,6 +14,17 @@ final class Builder11Singleton {}
 
 final class Builder11Transient {}
 
+interface Builder11ContextContract {}
+
+final class Builder11ContextDefault implements Builder11ContextContract {}
+
+final class Builder11ContextAlternate implements Builder11ContextContract {}
+
+final class Builder11ContextConsumer
+{
+    public function __construct(public Builder11ContextContract $dependency) {}
+}
+
 final class Builder11Configured
 {
     public string $label = 'default';
@@ -307,4 +318,121 @@ it('rejects strict compilation before publishing unsupported definitions', funct
     } finally {
         removeBuilder11Artifact($path);
     }
+});
+
+
+it('uses explicit contextual binding kinds without mixed dispatch', function (): void {
+    $literal = new Builder11ContextAlternate();
+
+    $classRuntime = ContainerBuilder::create(uniqid('builder11_context_class_'))
+        ->autowire('consumer', Builder11ContextConsumer::class, lifetime: LifetimeEnum::Transient)
+        ->when(Builder11ContextConsumer::class)
+        ->needs(Builder11ContextContract::class)
+        ->giveClass(Builder11ContextDefault::class)
+        ->build();
+
+    $valueRuntime = ContainerBuilder::create(uniqid('builder11_context_value_'))
+        ->autowire('consumer', Builder11ContextConsumer::class, lifetime: LifetimeEnum::Transient)
+        ->when(Builder11ContextConsumer::class)
+        ->needs(Builder11ContextContract::class)
+        ->giveValue($literal)
+        ->build();
+
+    $referenceRuntime = ContainerBuilder::create(uniqid('builder11_context_reference_'))
+        ->autowire('alternate', Builder11ContextAlternate::class)
+        ->autowire('consumer', Builder11ContextConsumer::class, lifetime: LifetimeEnum::Transient)
+        ->when(Builder11ContextConsumer::class)
+        ->needs(Builder11ContextContract::class)
+        ->giveReference('alternate')
+        ->build();
+
+    $factoryRuntime = ContainerBuilder::create(uniqid('builder11_context_factory_'))
+        ->autowire('consumer', Builder11ContextConsumer::class, lifetime: LifetimeEnum::Transient)
+        ->when(Builder11ContextConsumer::class)
+        ->needs(Builder11ContextContract::class)
+        ->giveFactory(static fn(): Builder11ContextContract => new Builder11ContextAlternate())
+        ->build();
+
+    expect($classRuntime->get('consumer')->dependency)->toBeInstanceOf(Builder11ContextDefault::class)
+        ->and($valueRuntime->get('consumer')->dependency)->toBe($literal)
+        ->and($referenceRuntime->get('consumer')->dependency)->toBe($referenceRuntime->get('alternate'))
+        ->and($factoryRuntime->get('consumer')->dependency)->toBeInstanceOf(Builder11ContextAlternate::class);
+});
+
+it('snapshots autowire metadata without retaining writable array references', function (): void {
+    $port = 443;
+    $label = 'secure';
+    $arguments = ['port' => &$port];
+    $properties = ['label' => &$label];
+
+    $builder = ContainerBuilder::create(uniqid('builder11_snapshot_'))
+        ->autowire(
+            'configured',
+            Builder11Configured::class,
+            arguments: $arguments,
+            properties: $properties,
+        );
+
+    $port = 80;
+    $label = 'mutated';
+
+    $configured = $builder->build()->get('configured');
+
+    expect($configured->port)->toBe(443)
+        ->and($configured->label)->toBe('secure');
+});
+
+it('warms only explicitly eligible definition-cache entries through the builder', function (): void {
+    $cache = Cache::memory('builder11.warm.' . bin2hex(random_bytes(4)));
+    $cachedRuns = 0;
+    $uncachedRuns = 0;
+
+    $builder = ContainerBuilder::create(uniqid('builder11_warm_'))
+        ->definitionCache($cache, 'application-a', 'release-1')
+        ->factory('cached', static function () use (&$cachedRuns): int {
+            return ++$cachedRuns;
+        })
+        ->cacheDefinition('cached')
+        ->factory('uncached', static function () use (&$uncachedRuns): int {
+            return ++$uncachedRuns;
+        });
+
+    $report = $builder->warmDefinitionCache();
+    $runtime = $builder->build();
+
+    expect($report['written'])->toBe(1)
+        ->and($runtime->get('cached'))->toBe(1)
+        ->and($cachedRuns)->toBe(1)
+        ->and($runtime->get('uncached'))->toBe(1)
+        ->and($uncachedRuns)->toBe(1);
+});
+
+it('separates definition-cache keys by explicit namespace and generation', function (): void {
+    $cache = Cache::memory('builder11.keys.' . bin2hex(random_bytes(4)));
+
+    $first = ContainerBuilder::create(uniqid('builder11_key_a_'))
+        ->definitionCache($cache, 'application-a', 'release-1')
+        ->factory('cached', static fn(): int => 1)
+        ->cacheDefinition('cached')
+        ->build();
+
+    $second = ContainerBuilder::create(uniqid('builder11_key_b_'))
+        ->definitionCache($cache, 'application-b', 'release-1')
+        ->factory('cached', static fn(): int => 1)
+        ->cacheDefinition('cached')
+        ->build();
+
+    $third = ContainerBuilder::create(uniqid('builder11_key_c_'))
+        ->definitionCache($cache, 'application-a', 'release-2')
+        ->factory('cached', static fn(): int => 1)
+        ->cacheDefinition('cached')
+        ->build();
+
+    $firstKey = $first->getRepository()->makeDefinitionCacheKey('cached');
+    $secondKey = $second->getRepository()->makeDefinitionCacheKey('cached');
+    $thirdKey = $third->getRepository()->makeDefinitionCacheKey('cached');
+
+    expect($firstKey)->not->toBe($secondKey)
+        ->and($firstKey)->not->toBe($thirdKey)
+        ->and(str_starts_with($firstKey, 'imx11.'))->toBeTrue();
 });

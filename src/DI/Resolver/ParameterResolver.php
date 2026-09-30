@@ -9,7 +9,11 @@ use Infocyph\InterMix\DI\Attribute\Inject;
 use Infocyph\InterMix\DI\Resolver\Concerns\ResolvesAssociativeParameters;
 use Infocyph\InterMix\DI\Resolver\Concerns\ResolvesNumericAndVariadicParameters;
 use Infocyph\InterMix\DI\Resolver\Concerns\ResolvesParameterAttributes;
+use Infocyph\InterMix\DI\Support\FactoryDefinition;
+use Infocyph\InterMix\DI\Support\RuntimeFactoryDefinition;
+use Infocyph\InterMix\DI\Support\ServiceReference;
 use Infocyph\InterMix\DI\Support\TraceLevelEnum;
+use Infocyph\InterMix\DI\Support\ValueDefinition;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Internal\ReflectionResource;
 use ReflectionAttribute;
@@ -152,28 +156,24 @@ class ParameterResolver
         }
 
         $binding = $this->repository->getContextualBinding($consumer, $dependency->getName());
+        $container = $this->repository->container();
 
-        if (is_callable($binding)) {
-            return $binding($this->repository->container());
+        if ($binding instanceof ServiceReference) {
+            return $container->get($binding->id);
+        }
+        if ($binding instanceof ValueDefinition) {
+            return $binding->value;
+        }
+        if ($binding instanceof RuntimeFactoryDefinition || $binding instanceof FactoryDefinition) {
+            return $binding->resolve($container);
+        }
+        if (is_string($binding) && (class_exists($binding) || interface_exists($binding))) {
+            return $this->classResolver->resolveClassInstance(
+                ReflectionResource::getClassReflection($this->applyEnvOverride($binding)),
+            );
         }
 
-        if (is_string($binding)) {
-            if ($this->repository->hasFunctionReference($binding)) {
-                return $this->repository->container()->get($binding);
-            }
-
-            if (class_exists($binding) || interface_exists($binding)) {
-                return $this->classResolver->resolveClassInstance(
-                    ReflectionResource::getClassReflection($this->applyEnvOverride($binding)),
-                );
-            }
-        }
-
-        if (is_object($binding) && is_a($binding, $dependency->getName())) {
-            return $binding;
-        }
-
-        return $binding;
+        return AttributeResolution::Unresolved;
     }
 
     public function setClassResolverInstance(ClassResolver $classResolver): void

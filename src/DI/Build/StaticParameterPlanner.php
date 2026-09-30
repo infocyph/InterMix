@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Build;
 
 use Infocyph\InterMix\DI\Internal\BoundedValueInspector;
+use Infocyph\InterMix\DI\Support\ServiceReference;
+use Infocyph\InterMix\DI\Support\ValueDefinition;
 use ReflectionClass;
 use ReflectionFunctionAbstract;
 use ReflectionIntersectionType;
@@ -267,14 +269,19 @@ final class StaticParameterPlanner
         }
 
         $binding = $graph->contextualBinding($consumer, $dependency);
+        if ($binding instanceof ServiceReference) {
+            return ['kind' => 'service', 'id' => $binding->id];
+        }
+        if ($binding instanceof ValueDefinition) {
+            return BoundedValueInspector::isScalarNullArray($binding->value)
+                ? ['kind' => 'value', 'code' => var_export($binding->value, true)]
+                : "{$label} dependency '$dependency' has a dynamic contextual value";
+        }
         if (!is_string($binding)) {
             return "{$label} dependency '$dependency' has a dynamic contextual binding";
         }
-        if ($graph->hasDefinition($binding)) {
-            return ['kind' => 'service', 'id' => $binding];
-        }
         if (!class_exists($binding) && !interface_exists($binding)) {
-            return "{$label} dependency '$dependency' has a non-service contextual binding";
+            return "{$label} dependency '$dependency' has an invalid contextual class";
         }
 
         return [

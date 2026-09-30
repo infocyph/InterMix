@@ -905,7 +905,7 @@ batch is closed.
 | Batch | Packages | Status | Package status / implementation evidence |
 | --- | --- | --- | --- |
 | 1 | P0 + P1 — baseline and runtime hardening | **Complete** | Closed on `f55be8b`: P0 contract/baseline frozen; P1 F1–F3 fixed. Corrected 10.1.1 regression gate, PHPForge QA/analysis/benchmarks, clean install, and Swoole/OpenSwoole PHP 8.4/8.5 are green. |
-| 2 | P2 + P3 — builder/definitions and runtime/scope contract | **In progress — P2 stage 1** | P2 B1/B2/B7 audit is complete. Stage 1 is implementing builder finalization/freeze plus explicit value/autowire/factory/alias/input definition kinds; P3 remains blocked until all P2 stages and focused QA close. |
+| 2 | P2 + P3 — builder/definitions and runtime/scope contract | **In progress — P2 completeness pass** | P2 core definition/freeze work is implemented. A full B1/B2/B7 cross-check found and closed contextual-binding, cache-warmup and metadata-snapshot gaps; focused P2 QA remains the gate before P3. |
 | 3 | P4 + P5 — compiled graph and provider boundaries | Pending | P4: B6 generated/fallback graph. P5: CacheLayer 4.0 / Runwire 2.1 optional provider boundaries. Run focused QA after each package, then full batch QA. |
 | 4 | P6 + P7 + P8 — migration, measured acceptance and release candidate | Pending | P6: docs/consumer migration. P7: benchmarks/soak/host acceptance. P8: exact-SHA CI, packaging and RC evidence. P8 remains the final gate inside this batch. |
 
@@ -927,7 +927,7 @@ focused QA and tracker evidence are complete.
 
 ### Batch 2 / P2 mid-update
 
-Current stage: **P2 stage 1 — builder/freeze and explicit definition model**.
+Current stage: **P2 completeness pass — full B1/B2/B7 cross-check before focused QA**.
 
 Repository review against the P2 contract found that the current builder still owns
 a mutable development container, mutation listeners, active production-runtime
@@ -969,9 +969,11 @@ P2 is implemented as one cohesive definition/configuration slice before focused 
   per-definition eligibility with an `imx11` key discriminator;
 - [x] bounded F3 value admission remains shared by cache hits/writes and
   exportability checks;
-- [x] P2 contract regression tests added for literal semantics, factories,
-  autowire overrides, inputs, alias lifetimes, freeze/retry behavior, cache
-  opt-in and compiled literal/alias behavior;
+- [x] contextual bindings use explicit class/value/factory/reference terminals and return the builder;
+- [x] autowire metadata arrays are snapshotted through a bounded reference-breaking boundary;
+- [x] definition-cache bulk warmup is builder-owned and preserves explicit per-definition eligibility;
+- [x] builder-owned configuration entry points cover environment bindings, attribute resolvers, tracing, injection/attribute toggles, graph export, preload and environment metadata without requiring manager access;
+- [x] P2 contract regression tests cover literal semantics, factories, autowire overrides, inputs, alias lifetimes, freeze/retry behavior, contextual kinds, metadata snapshotting, cache opt-in/warmup/key separation and compiled literal/alias behavior;
 - [ ] focused P2 QA on the committed slice;
 - [ ] migrate/remove the temporary 10.x builder manager/development access during
   P3 before Batch 2 closes; retained handles are locked at P2 finalization and
