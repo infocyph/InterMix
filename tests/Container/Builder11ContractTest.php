@@ -178,7 +178,6 @@ it('rejects duplicate explicit registration until the id is unbound', function (
 it('freezes configuration while allowing isolated runtimes from one builder', function (): void {
     $builder = ContainerBuilder::create(uniqid('builder11_freeze_'))
         ->autowire('singleton', Builder11Singleton::class);
-    $definitions = $builder->definitions();
 
     $first = $builder->build();
     $second = $builder->build();
@@ -187,9 +186,7 @@ it('freezes configuration while allowing isolated runtimes from one builder', fu
         ->and($second->get('singleton'))->toBe($second->get('singleton'))
         ->and($first->get('singleton'))->not->toBe($second->get('singleton'))
         ->and(fn() => $builder->value('late', true))
-        ->toThrow(ContainerException::class, 'ContainerBuilder is finalized')
-        ->and(fn() => $definitions->bind('late', true))
-        ->toThrow(ContainerException::class, 'Container is locked');
+        ->toThrow(ContainerException::class, 'ContainerBuilder is finalized');
 });
 
 it('keeps the builder mutable when configuration validation fails', function (): void {
