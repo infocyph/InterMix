@@ -132,7 +132,7 @@ final class StructuredScopeBench
     private function newCompiled(string $purpose): ProductionContainer
     {
         $builder = ContainerBuilder::create('__structured_scope_bench_compiled_' . $purpose . '_' . bin2hex(random_bytes(4)));
-        $builder->scoped('leaf', StructuredScopeBenchLeaf::class);
+        $builder->autowire('leaf', StructuredScopeBenchLeaf::class, lifetime: LifetimeEnum::Scoped);
         $path = sys_get_temp_dir() . '/intermix-structured-scope-bench-' . bin2hex(random_bytes(8)) . '.php';
         $builder->compile($path);
         register_shutdown_function(static function () use ($path): void {
