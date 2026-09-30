@@ -64,9 +64,9 @@ function removeFreshInvocationArtifact(string $path): void
 it('uses generated fresh recipes for explicit make and resolveNow method calls', function () {
     FreshInvocationHandler::$instances = 0;
     $builder = ContainerBuilder::create(uniqid('fresh_invocation_'));
-    $builder->singleton(FreshInvocationDependency::class)
+    $builder->autowire(FreshInvocationDependency::class, FreshInvocationDependency::class)
         ->singleton('handler.result', [FreshInvocationHandler::class, 'handle']);
-    $builder->registration()
+    $builder
         ->registerProperty(FreshInvocationHandler::class, ['prefix' => 'compiled'])
         ->registerMethod(FreshInvocationHandler::class, 'handle', ['suffix' => 'registered']);
 
@@ -91,7 +91,7 @@ it('uses generated fresh recipes for explicit make and resolveNow method calls',
 it('treats null as a handled compiled fresh invocation result', function () {
     FreshInvocationHandler::$instances = 0;
     $builder = ContainerBuilder::create(uniqid('fresh_invocation_null_'));
-    $builder->singleton(FreshInvocationDependency::class)
+    $builder->autowire(FreshInvocationDependency::class, FreshInvocationDependency::class)
         ->singleton('nullable.result', [FreshInvocationHandler::class, 'nullable']);
 
     $path = freshInvocationArtifactPath();
@@ -110,8 +110,8 @@ it('treats null as a handled compiled fresh invocation result', function () {
 it('reuses a compiled class post-method recipe for explicit fresh invocation', function () {
     FreshImplicitInvocation::$instances = 0;
     $builder = ContainerBuilder::create(uniqid('fresh_implicit_invocation_'));
-    $builder->singleton(FreshInvocationDependency::class)
-        ->singleton(FreshImplicitInvocation::class);
+    $builder->autowire(FreshInvocationDependency::class, FreshInvocationDependency::class)
+        ->autowire(FreshImplicitInvocation::class, FreshImplicitInvocation::class);
 
     $path = freshInvocationArtifactPath();
     try {
