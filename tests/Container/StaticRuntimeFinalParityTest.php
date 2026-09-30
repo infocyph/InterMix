@@ -36,18 +36,18 @@ function removeStaticFinalParityArtifact(string $path): void
 
 it('preserves compiled call error semantics for missing methods', function () {
     $developmentBuilder = ContainerBuilder::create(uniqid('final_dev_call_'));
-    $developmentBuilder->singleton('callable', StaticFinalParityCallable::class);
+    $developmentBuilder->autowire('callable', StaticFinalParityCallable::class);
 
     $developmentError = null;
 
     try {
-        $developmentBuilder->development()->call('callable', 'missing');
+        $developmentBuilder->build()->call('callable', 'missing');
     } catch (ContainerException $exception) {
         $developmentError = $exception;
     }
 
     $productionBuilder = ContainerBuilder::create(uniqid('final_prod_call_'));
-    $productionBuilder->singleton('callable', StaticFinalParityCallable::class);
+    $productionBuilder->autowire('callable', StaticFinalParityCallable::class);
     $path = staticFinalParityArtifactPath();
 
     try {
@@ -66,7 +66,7 @@ it('preserves compiled call error semantics for missing methods', function () {
 
 it('keeps arbitrary closure invocation in a narrow dynamic island with compiled dependency identity', function () {
     $builder = ContainerBuilder::create(uniqid('final_closure_'));
-    $builder->singleton(StaticFinalParityDependency::class);
+    $builder->autowire(StaticFinalParityDependency::class, StaticFinalParityDependency::class);
     $path = staticFinalParityArtifactPath();
 
     try {
@@ -88,13 +88,13 @@ it('preserves callable parser errors across development and production fallback'
     $developmentError = null;
 
     try {
-        $developmentBuilder->development()->resolveNow(['StaticFinalParityMissingClass', 'run']);
+        $developmentBuilder->build()->resolveNow(['StaticFinalParityMissingClass', 'run']);
     } catch (ContainerException $exception) {
         $developmentError = $exception;
     }
 
     $productionBuilder = ContainerBuilder::create(uniqid('final_prod_parser_'));
-    $productionBuilder->singleton(StaticFinalParityDependency::class);
+    $productionBuilder->autowire(StaticFinalParityDependency::class, StaticFinalParityDependency::class);
     $path = staticFinalParityArtifactPath();
 
     try {
@@ -112,7 +112,7 @@ it('preserves callable parser errors across development and production fallback'
 });
 
 it('preserves malformed array callable errors without production warnings', function () {
-    $development = ContainerBuilder::create(uniqid('final_dev_array_parser_'))->development();
+    $development = ContainerBuilder::create(uniqid('final_dev_array_parser_'))->build();
     $developmentError = null;
 
     try {
@@ -122,7 +122,7 @@ it('preserves malformed array callable errors without production warnings', func
     }
 
     $builder = ContainerBuilder::create(uniqid('final_prod_array_parser_'));
-    $builder->singleton(StaticFinalParityDependency::class);
+    $builder->autowire(StaticFinalParityDependency::class, StaticFinalParityDependency::class);
     $path = staticFinalParityArtifactPath();
 
     try {
@@ -141,8 +141,8 @@ it('preserves malformed array callable errors without production warnings', func
 
 it('keeps dynamic resolver machinery out of a fully static generated artifact', function () {
     $builder = ContainerBuilder::create(uniqid('final_artifact_'));
-    $builder->singleton(StaticFinalParityDependency::class)
-        ->singleton('root', StaticFinalParityRoot::class);
+    $builder->autowire(StaticFinalParityDependency::class, StaticFinalParityDependency::class)
+        ->autowire('root', StaticFinalParityRoot::class);
     $path = staticFinalParityArtifactPath();
 
     try {
