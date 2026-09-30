@@ -22,10 +22,13 @@ final readonly class FactoryDefinition
      * @param string|null $method Public static factory name, or null for construction.
      * @param array<int, scalar|array<array-key, mixed>|ServiceReference|null> $arguments
      */
+    /** @var array<int, scalar|array<array-key, mixed>|ServiceReference|null> */
+    public readonly array $arguments;
+
     private function __construct(
         public string $class,
         public ?string $method,
-        public array $arguments,
+        array $arguments,
     ) {
         if (!class_exists($this->class)) {
             throw new InvalidArgumentException("Factory class '{$this->class}' does not exist.");
@@ -47,13 +50,20 @@ final readonly class FactoryDefinition
             throw new InvalidArgumentException('Declarative factory arguments must be a positional list.');
         }
 
-        foreach ($this->arguments as $argument) {
+        foreach ($arguments as $argument) {
             if (!$argument instanceof ServiceReference && !self::isExportable($argument)) {
                 throw new InvalidArgumentException(
                     'Declarative factory arguments must be service references or exportable values.',
                 );
             }
         }
+
+        $this->arguments = array_map(
+            static fn(mixed $argument): mixed => $argument instanceof ServiceReference
+                ? $argument
+                : self::snapshotValue($argument),
+            $arguments,
+        );
     }
 
     /**
@@ -114,6 +124,20 @@ final readonly class FactoryDefinition
             'method' => $this->method,
             'arguments' => $arguments,
         ];
+    }
+
+    private static function snapshotValue(mixed $value): mixed
+    {
+        if (!is_array($value)) {
+            return $value;
+        }
+
+        $snapshot = [];
+        foreach ($value as $key => $item) {
+            $snapshot[$key] = self::snapshotValue($item);
+        }
+
+        return $snapshot;
     }
 
     private static function isExportable(mixed $value): bool

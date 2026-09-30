@@ -436,3 +436,14 @@ it('separates definition-cache keys by explicit namespace and generation', funct
         ->and($firstKey)->not->toBe($thirdKey)
         ->and(str_starts_with($firstKey, 'imx11.'))->toBeTrue();
 });
+
+
+it('snapshots declarative factory argument arrays without writable references', function (): void {
+    $port = 443;
+    $arguments = [['port' => &$port]];
+    $definition = FactoryDefinition::construct(Builder11Configured::class, $arguments);
+
+    $port = 80;
+
+    expect($definition->arguments[0]['port'])->toBe(443);
+});
