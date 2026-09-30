@@ -251,6 +251,7 @@ final class ContainerBuilder
         return $this;
     }
 
+    /** @return array<string, mixed> */
     public function exportGraph(?string $warmFromId = null, bool $clear = false): array
     {
         return $this->build()->exportGraph($warmFromId, $clear);
@@ -497,6 +498,7 @@ final class ContainerBuilder
         return $this;
     }
 
+    /** @return array{hits: int, written: int, skipped: int, failed: int} */
     public function warmDefinitionCache(): array
     {
         $this->finalizeGraph();
@@ -729,7 +731,11 @@ final class ContainerBuilder
         $repository->setDefinition($id, $definition, $lifetime, $tags);
     }
 
-    /** @param array<int|string, mixed> $values */
+    /**
+     * @template TKey of array-key
+     * @param array<TKey, mixed> $values
+     * @return array<TKey, mixed>
+     */
     private function snapshotMetadata(array $values, string $label): array
     {
         $activeReferences = [];
@@ -739,9 +745,10 @@ final class ContainerBuilder
     }
 
     /**
-     * @param array<int|string, mixed> $values
+     * @template TKey of array-key
+     * @param array<TKey, mixed> $values
      * @param array<string, true> $activeReferences
-     * @return array<int|string, mixed>
+     * @return array<TKey, mixed>
      */
     private function snapshotMetadataLevel(
         array $values,
