@@ -31,8 +31,9 @@ function removeRunwireIntegrationArtifact(string $path): void
 }
 
 it('shares one dynamic logical scope through Runwire task-local snapshots', function () {
-    $container = new Container(uniqid('runwire_dynamic_'));
-    $container->scoped('leaf', RunwireIntegrationScopedLeaf::class);
+    $container = ContainerBuilder::create(uniqid('runwire_dynamic_'))
+        ->autowire('leaf', RunwireIntegrationScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->build();
     $container->enterScope('request');
     $parent = $container->get('leaf');
     $context = $container->captureScopeContext();
@@ -127,8 +128,9 @@ it('keeps compiled Runwire child frames carrier-local while restoring the shared
 });
 
 it('releases attached child scopes when Runwire fail-fast cancels a sibling', function (): void {
-    $container = new Container(uniqid('runwire_fail_fast_'));
-    $container->scoped('leaf', RunwireIntegrationScopedLeaf::class);
+    $container = ContainerBuilder::create(uniqid('runwire_fail_fast_'))
+        ->autowire('leaf', RunwireIntegrationScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->build();
     $nestedLeaves = 0;
     $container->onScopeLeave('nested', static function () use (&$nestedLeaves): void {
         ++$nestedLeaves;
@@ -177,8 +179,9 @@ it('releases attached child scopes when Runwire fail-fast cancels a sibling', fu
 });
 
 it('releases an attached nested scope after explicit Runwire task cancellation', function (): void {
-    $container = new Container(uniqid('runwire_explicit_cancel_'));
-    $container->scoped('leaf', RunwireIntegrationScopedLeaf::class);
+    $container = ContainerBuilder::create(uniqid('runwire_explicit_cancel_'))
+        ->autowire('leaf', RunwireIntegrationScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->build();
     $nestedLeaves = 0;
     $container->onScopeLeave('nested', static function () use (&$nestedLeaves): void {
         ++$nestedLeaves;
@@ -227,8 +230,9 @@ it('releases an attached nested scope after explicit Runwire task cancellation',
 });
 
 it('releases attached scopes when a Runwire deadline expires', function (): void {
-    $container = new Container(uniqid('runwire_deadline_'));
-    $container->scoped('leaf', RunwireIntegrationScopedLeaf::class);
+    $container = ContainerBuilder::create(uniqid('runwire_deadline_'))
+        ->autowire('leaf', RunwireIntegrationScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->build();
     $nestedLeaves = 0;
     $container->onScopeLeave('nested', static function () use (&$nestedLeaves): void {
         ++$nestedLeaves;
