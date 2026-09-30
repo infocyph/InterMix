@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\DI\ProductionContainer;
+use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
 
 final class ProductionRuntimeLeaf {}
@@ -34,7 +35,7 @@ function removeProductionRuntimeArtifact(string $path): void
 
 it('separates build configuration from the generated production runtime', function () {
     $builder = ContainerBuilder::create(uniqid('production_builder_'))
-        ->singleton('root', ProductionRuntimeRoot::class)
+        ->autowire('root', ProductionRuntimeRoot::class)
         ->value('app.name', 'InterMix');
 
     $path = productionRuntimeArtifactPath();
@@ -60,7 +61,7 @@ it('separates build configuration from the generated production runtime', functi
 
 it('specializes scoped identity and scope seeds in production', function () {
     $builder = ContainerBuilder::create(uniqid('production_scope_'))
-        ->scoped('leaf', ProductionRuntimeLeaf::class);
+        ->autowire('leaf', ProductionRuntimeLeaf::class, lifetime: LifetimeEnum::Scoped);
 
     $path = productionRuntimeArtifactPath();
 
@@ -93,7 +94,7 @@ it('specializes scoped identity and scope seeds in production', function () {
 it('keeps dynamic definitions and arbitrary classes as cold fallback islands', function () {
     $builder = ContainerBuilder::create(uniqid('production_dynamic_'))
         ->singleton('root', ProductionRuntimeRoot::class)
-        ->bind('dynamic', static fn(): object => new stdClass());
+        ->factory('dynamic', static fn(): object => new stdClass());
 
     $path = productionRuntimeArtifactPath();
 
@@ -112,8 +113,8 @@ it('keeps dynamic definitions and arbitrary classes as cold fallback islands', f
 
 it('compiles direct eager and lazy tag dispatch for known production services', function () {
     $builder = ContainerBuilder::create(uniqid('production_tags_'))
-        ->singleton('first', ProductionRuntimeLeaf::class, ['worker'])
-        ->transient('second', ProductionRuntimeLeaf::class, ['worker']);
+        ->autowire('first', ProductionRuntimeLeaf::class, tags: ['worker'])
+        ->autowire('second', ProductionRuntimeLeaf::class, lifetime: LifetimeEnum::Transient, tags: ['worker']);
 
     $path = productionRuntimeArtifactPath();
 
