@@ -232,7 +232,7 @@ final class IntermixBench
         $this->container->findByTag('bench.pipeline.pre');
         $this->container->get('bench.provider.service');
         $this->container->make(BenchEnvConsumer::class)->tick();
-
+    }
 }
 
 final readonly class BenchConfig
