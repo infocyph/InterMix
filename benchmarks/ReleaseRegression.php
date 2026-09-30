@@ -158,8 +158,16 @@ final class ReleaseRegression
             $production->enterScope('request');
             $production->get('leaf');
 
-            $dynamic = new Container('__release_regression_fiber_' . bin2hex(random_bytes(4)));
-            $dynamic->scoped('leaf', ReleaseRegressionLeaf::class);
+            if (method_exists($builder, 'build')) {
+                $dynamic = ContainerBuilder::create(
+                    '__release_regression_fiber_' . bin2hex(random_bytes(4)),
+                )
+                    ->autowire('leaf', ReleaseRegressionLeaf::class, lifetime: LifetimeEnum::Scoped)
+                    ->build();
+            } else {
+                $dynamic = new Container('__release_regression_fiber_' . bin2hex(random_bytes(4)));
+                $dynamic->scoped('leaf', ReleaseRegressionLeaf::class);
+            }
 
             self::warmSequential($production);
             self::warmFiber($dynamic);
