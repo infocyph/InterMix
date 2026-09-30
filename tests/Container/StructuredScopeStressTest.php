@@ -122,7 +122,7 @@ it('reuses one dynamic container across persistent attached request churn withou
 
 it('reuses one frozen production runtime across persistent attached request churn', function (): void {
     $builder = ContainerBuilder::create(uniqid('structured_stress_production_'));
-    $builder->scoped('leaf', StructuredStressScopedLeaf::class);
+    $builder->autowire('leaf', StructuredStressScopedLeaf::class, lifetime: LifetimeEnum::Scoped);
 
     $path = structuredStressArtifactPath();
     try {
