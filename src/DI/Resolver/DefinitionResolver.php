@@ -35,19 +35,23 @@ class DefinitionResolver
     /** @var (Closure(): array{ClassResolver, ParameterResolver})|null */
     private ?Closure $resolverFactory = null;
 
-    public function __construct(protected readonly Repository $repository) {}
+    public function __construct(protected readonly Repository $repository)
+    {}
 
     /** @throws ContainerException|InvalidArgumentException|ReflectionException */
-    public function resolve(string $name): mixed {
+    public function resolve(string $name): mixed
+    {
         return $this->resolveTracked($name, false);
     }
 
-    public function resolveForDefinitionCacheWarmup(string $name): mixed {
+    public function resolveForDefinitionCacheWarmup(string $name): mixed
+    {
         return $this->resolveTracked($name, true);
     }
 
     /** @param Closure(): array{ClassResolver, ParameterResolver} $resolverFactory */
-    public function setResolverFactory(Closure $resolverFactory): void {
+    public function setResolverFactory(Closure $resolverFactory): void
+    {
         $this->resolverFactory = $resolverFactory;
     }
 
@@ -60,7 +64,8 @@ class DefinitionResolver
     }
 
     /** @throws ContainerException|ReflectionException|InvalidArgumentException */
-    protected function resolveDefinition(string $name): mixed {
+    protected function resolveDefinition(string $name): mixed
+    {
         $definition = $this->repository->getFunctionDefinition($name);
 
         return match (true) {
@@ -88,7 +93,8 @@ class DefinitionResolver
      * only decides whether a safe singleton value may use the optional external
      * definition cache; it no longer maintains a second in-process singleton map.
      */
-    private function getFromCacheOrResolve(string $name, bool $skipExternalCache = false): mixed {
+    private function getFromCacheOrResolve(string $name, bool $skipExternalCache = false): mixed
+    {
         if ($this->repository->getDefinitionLifetime($name) !== LifetimeEnum::Singleton
             || $skipExternalCache
             || !$this->repository->usesDefinitionCacheFor($name)
@@ -99,7 +105,8 @@ class DefinitionResolver
         return $this->resolveSingletonDefinition($name);
     }
 
-    private function ignoreDefinitionCacheFailure(Throwable $failure): void {
+    private function ignoreDefinitionCacheFailure(Throwable $failure): void
+    {
         if (!$this->repository->isDefinitionCacheFailOpen()) {
             throw $failure;
         }
@@ -121,7 +128,8 @@ class DefinitionResolver
     }
 
     /** @return array{CacheItemInterface, bool, mixed} */
-    private function readCachedDefinition(CacheItemPoolInterface $cache, string $key): array {
+    private function readCachedDefinition(CacheItemPoolInterface $cache, string $key): array
+    {
         $item = $cache->getItem($key);
         $hit = $item->isHit();
         $value = $hit ? $item->get() : null;
@@ -130,7 +138,8 @@ class DefinitionResolver
         return [$item, $hit, $value];
     }
 
-    private function resolveAliasDefinition(string $name, AliasDefinition $definition): mixed {
+    private function resolveAliasDefinition(string $name, AliasDefinition $definition): mixed
+    {
         if ($this->repository->isTracingEnabled()) {
             $this->repository->tracer()->recordDependency($name, $definition->target, 'alias');
         }
@@ -139,7 +148,8 @@ class DefinitionResolver
     }
 
     /** @param array<int, mixed> $definition */
-    private function resolveArrayDefinition(array $definition): mixed {
+    private function resolveArrayDefinition(array $definition): mixed
+    {
         [$classResolver] = $this->resolvers();
         $class = $definition[0] ?? null;
         if (!is_string($class)) {
@@ -157,7 +167,8 @@ class DefinitionResolver
     }
 
     /** @param array<int|string, mixed> $definition */
-    private function resolveArrayDefinitionTracked(string $name, array $definition): mixed {
+    private function resolveArrayDefinitionTracked(string $name, array $definition): mixed
+    {
         $class = $definition[0] ?? null;
         if ($this->repository->isTracingEnabled() && is_string($class)) {
             $this->repository->tracer()->recordDependency($name, $class, 'definition-class');
@@ -183,7 +194,8 @@ class DefinitionResolver
         )->instance;
     }
 
-    private function resolveClassDefinition(string $name, string $definition): mixed {
+    private function resolveClassDefinition(string $name, string $definition): mixed
+    {
         [$classResolver] = $this->resolvers();
         if ($this->repository->isTracingEnabled()) {
             $this->repository->tracer()->recordDependency($name, $definition, 'definition-class');
@@ -195,7 +207,8 @@ class DefinitionResolver
         )->instance;
     }
 
-    private function resolveClosure(Closure $definition): mixed {
+    private function resolveClosure(Closure $definition): mixed
+    {
         [, $parameterResolver] = $this->resolvers();
         $reflectionFn = ReflectionResource::getFunctionReflection($definition);
 
@@ -203,7 +216,8 @@ class DefinitionResolver
     }
 
     /** @return array{ClassResolver, ParameterResolver} */
-    private function resolvers(): array {
+    private function resolvers(): array
+    {
         $classResolver = $this->classResolver;
         $parameterResolver = $this->parameterResolver;
         if (!$classResolver instanceof ClassResolver || !$parameterResolver instanceof ParameterResolver) {
@@ -216,7 +230,8 @@ class DefinitionResolver
         return [$classResolver, $parameterResolver];
     }
 
-    private function resolveSingletonDefinition(string $name): mixed {
+    private function resolveSingletonDefinition(string $name): mixed
+    {
         $definitionCache = $this->repository->getDefinitionCache();
         if ($definitionCache === null) {
             return $this->resolveDefinition($name);
@@ -243,7 +258,8 @@ class DefinitionResolver
         return $value;
     }
 
-    private function resolveTracked(string $name, bool $skipExternalCache): mixed {
+    private function resolveTracked(string $name, bool $skipExternalCache): mixed
+    {
         $context = $this->beginResolutionEntry(
             $name,
             "Circular dependency for definition '$name'.",
