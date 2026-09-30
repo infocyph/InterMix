@@ -159,8 +159,9 @@ final class ProductionRequestPathBench
     {
         static $fiber;
         if (!$fiber instanceof Fiber) {
-            $container = new Container($this->alias('dynamic-fiber'));
-            $container->scoped('root', ProductionRequestRoot::class);
+            $container = ContainerBuilder::create($this->alias('dynamic-fiber'))
+                ->autowire('root', ProductionRequestRoot::class, lifetime: LifetimeEnum::Scoped)
+                ->build();
             $fiber = new Fiber(static function () use ($container): never {
                 $container->enterScope('request');
                 while (true) {
@@ -180,8 +181,9 @@ final class ProductionRequestPathBench
     {
         static $container;
         if (!$container instanceof Container) {
-            $container = new Container($this->alias('dynamic-scope-cycle'));
-            $container->scoped('root', ProductionRequestRoot::class);
+            $container = ContainerBuilder::create($this->alias('dynamic-scope-cycle'))
+                ->autowire('root', ProductionRequestRoot::class, lifetime: LifetimeEnum::Scoped)
+                ->build();
         }
         $container->enterScope('request');
         $this->sink = $container->get('root');
