@@ -37,8 +37,8 @@ final class ContextualBindingBuilder
             );
         }
 
-        $this->assertDependencySelected('give(...)');
-        $this->repository->setContextualBinding($this->consumer, $this->dependency, $implementation);
+        $dependency = $this->selectedDependency('give(...)');
+        $this->repository->setContextualBinding($this->consumer, $dependency, $implementation);
 
         return $this->owner;
     }
@@ -86,19 +86,21 @@ final class ContextualBindingBuilder
         return $this;
     }
 
-    private function assertDependencySelected(string $terminal): void
+    private function selectedDependency(string $terminal): string
     {
         if ($this->dependency === null) {
             throw new ContainerException(
                 "Contextual binding requires needs(<dependency>) before {$terminal}.",
             );
         }
+
+        return $this->dependency;
     }
 
     private function store(mixed $binding): Container|ContainerBuilder
     {
-        $this->assertDependencySelected('selecting a binding kind');
-        $this->repository->setContextualBinding($this->consumer, $this->dependency, $binding);
+        $dependency = $this->selectedDependency('selecting a binding kind');
+        $this->repository->setContextualBinding($this->consumer, $dependency, $binding);
 
         return $this->owner;
     }
