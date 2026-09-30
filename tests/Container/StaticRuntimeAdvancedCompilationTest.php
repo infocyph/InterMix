@@ -81,13 +81,13 @@ function removeAdvancedCompilationArtifact(string $path): void
 
 it('compiles registered public property injection directly', function () {
     $builder = ContainerBuilder::create(uniqid('advanced_property_'));
-    $builder->singleton(AdvancedRegisteredProperty::class);
-    $builder->registration()->registerProperty(
+    $builder->autowire(AdvancedRegisteredProperty::class, AdvancedRegisteredProperty::class);
+    $builder->registerProperty(
         AdvancedRegisteredProperty::class,
         ['name' => 'compiled'],
     );
 
-    expect($builder->development()->get(AdvancedRegisteredProperty::class)->name)->toBe('compiled');
+    expect($builder->build()->get(AdvancedRegisteredProperty::class)->name)->toBe('compiled');
 
     $path = advancedCompilationArtifactPath();
     try {
@@ -103,9 +103,9 @@ it('compiles registered public property injection directly', function () {
 
 it('compiles deterministic property Inject attributes', function () {
     $builder = ContainerBuilder::create(uniqid('advanced_inject_'));
-    $builder->singleton(AdvancedCompiledDependency::class)
-        ->singleton(AdvancedInjectedProperty::class);
-    $builder->options()->setOptions(propertyAttributes: true);
+    $builder->autowire(AdvancedCompiledDependency::class, AdvancedCompiledDependency::class)
+        ->autowire(AdvancedInjectedProperty::class, AdvancedInjectedProperty::class);
+    $builder->enablePropertyAttributes();
 
     $path = advancedCompilationArtifactPath();
     try {
@@ -122,9 +122,9 @@ it('compiles deterministic property Inject attributes', function () {
 
 it('compiles constructor parameter attributes with the current development semantics', function () {
     $builder = ContainerBuilder::create(uniqid('advanced_constructor_attr_'));
-    $builder->singleton(AdvancedCompiledDependency::class)
-        ->singleton('advanced.dep', AdvancedCompiledDependency::class)
-        ->singleton(AdvancedConstructorAttribute::class);
+    $builder->autowire(AdvancedCompiledDependency::class, AdvancedCompiledDependency::class)
+        ->autowire('advanced.dep', AdvancedCompiledDependency::class)
+        ->autowire(AdvancedConstructorAttribute::class, AdvancedConstructorAttribute::class);
 
     $path = advancedCompilationArtifactPath();
     try {
@@ -144,8 +144,8 @@ it('compiles constructor parameter attributes with the current development seman
 
 it('compiles declarative constructor and static factories with service references', function () {
     $builder = ContainerBuilder::create(uniqid('advanced_factory_'));
-    $builder->singleton(AdvancedCompiledDependency::class)
-        ->bind(
+    $builder->autowire(AdvancedCompiledDependency::class, AdvancedCompiledDependency::class)
+        ->factory(
             'factory.construct',
             FactoryDefinition::construct(
                 AdvancedFactoryProduct::class,
@@ -153,7 +153,7 @@ it('compiles declarative constructor and static factories with service reference
             ),
             LifetimeEnum::Singleton,
         )
-        ->bind(
+        ->factory(
             'factory.static',
             FactoryDefinition::staticFactory(
                 AdvancedFactoryMaker::class,
@@ -185,8 +185,8 @@ it('compiles declarative constructor and static factories with service reference
 
 it('keeps reflection-only property writes as targeted compiled property islands', function () {
     $builder = ContainerBuilder::create(uniqid('advanced_protected_'));
-    $builder->singleton(AdvancedProtectedProperty::class);
-    $builder->registration()->registerProperty(
+    $builder->autowire(AdvancedProtectedProperty::class, AdvancedProtectedProperty::class);
+    $builder->registerProperty(
         AdvancedProtectedProperty::class,
         ['name' => 'compiled-reflection'],
     );
@@ -207,8 +207,8 @@ it('keeps reflection-only property writes as targeted compiled property islands'
 
 it('keeps compiled singleton and scope identity after builder finalization', function () {
     $builder = ContainerBuilder::create(uniqid('advanced_frozen_'));
-    $builder->singleton(AdvancedCompiledDependency::class)
-        ->singleton(AdvancedDeoptRoot::class)
+    $builder->autowire(AdvancedCompiledDependency::class, AdvancedCompiledDependency::class)
+        ->autowire(AdvancedDeoptRoot::class, AdvancedDeoptRoot::class)
         ->scoped(AdvancedDeoptScoped::class);
 
     $path = advancedCompilationArtifactPath();
