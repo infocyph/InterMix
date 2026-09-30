@@ -45,7 +45,7 @@ function structuredProductionRuntime(bool $cold = false): array
     $builder = ContainerBuilder::create(uniqid('structured_production_'))
         ->scoped('leaf', StructuredProductionLeaf::class);
     if ($cold) {
-        $builder->scoped('cold', StructuredProductionCold::class);
+        $builder->autowire('cold', StructuredProductionCold::class, lifetime: LifetimeEnum::Scoped);
     }
 
     $path = structuredProductionArtifactPath();
