@@ -45,10 +45,10 @@ function removeStaticPropertyInjectArtifact(string $path): void
 
 it('keeps compile-known private Inject dependencies out of attribute resolution islands', function () {
     $builder = ContainerBuilder::create(uniqid('private_property_inject_'));
-    $builder->options()->setOptions(propertyAttributes: true);
-    $builder->singleton(StaticPrivateInjectDependency::class)
-        ->singleton(StaticPrivateInjectConsumer::class)
-        ->singleton(StaticReadonlyInjectConsumer::class);
+    $builder->enablePropertyAttributes();
+    $builder->autowire(StaticPrivateInjectDependency::class, StaticPrivateInjectDependency::class)
+        ->autowire(StaticPrivateInjectConsumer::class, StaticPrivateInjectConsumer::class)
+        ->autowire(StaticReadonlyInjectConsumer::class, StaticReadonlyInjectConsumer::class);
     $path = staticPropertyInjectArtifactPath();
 
     try {
