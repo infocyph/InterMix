@@ -58,10 +58,7 @@ trait ManagesDefinitionCache
             $this->definitionCachePrefix ??= 'imx11.'
                 . substr(hash('xxh128', $this->definitionCacheNamespace), 0, 16)
                 . '.' . substr(
-                    hash(
-                        'xxh128',
-                        ($this->definitionCacheGeneration ?? '') . "\0" . $this->definitionCacheRevision,
-                    ),
+                    hash('xxh128', $this->definitionCacheGeneration ?? ''),
                     0,
                     16,
                 )
