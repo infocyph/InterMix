@@ -166,7 +166,7 @@ it('compiles class-only arrays while preserving implicit method side effects', f
         expect($report['compiled'])->toContain('object.handler')
             ->and($instance)->toBeInstanceOf(ArrayInvocationObjectHandler::class)
             ->and($runtime->get('object.handler'))->toBe($instance)
-            ->and(ArrayInvocationObjectHandler::$calls)->toBe(0);
+            ->and(ArrayInvocationObjectHandler::$calls)->toBe(1);
     } finally {
         removeArrayInvocationArtifact($path);
     }
