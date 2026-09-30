@@ -8,6 +8,7 @@ use Closure;
 use Infocyph\InterMix\DI\Build\DefinitionGraph;
 use Infocyph\InterMix\DI\Build\StaticRuntimeGenerator;
 use Infocyph\InterMix\DI\Build\StaticRuntimePlanner;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\DI\Invoker\GenericCall;
 use Infocyph\InterMix\DI\Invoker\InjectedCall;
 use Infocyph\InterMix\DI\Support\AliasDefinition;
@@ -32,7 +33,7 @@ final class ContainerBuilder
 
     private const int METADATA_MAX_VALUES = 100_000;
 
-    private readonly Container $configuration;
+    private readonly ConfigurationContainer $configuration;
 
     /** @var array<string, true> */
     private array $cacheDefinitionIds = [];
@@ -56,7 +57,7 @@ final class ContainerBuilder
 
     public function __construct(string $alias = Container::DEFAULT_ALIAS)
     {
-        $this->configuration = new Container($alias);
+        $this->configuration = new ConfigurationContainer($alias);
     }
 
     public static function create(string $alias = Container::DEFAULT_ALIAS): self
