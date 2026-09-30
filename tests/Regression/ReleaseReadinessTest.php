@@ -401,15 +401,21 @@ it('invokes explicit methods on definition IDs', function () {
         ->toThrow(ContainerException::class);
 });
 
-it('validates provider classes before construction', function () {
+it('rejects runtime provider reconfiguration without constructing provider classes', function () {
     ReleaseProviderSideEffectMixin::$constructed = 0;
     $container = releaseContainer('providers');
 
     expect(fn() => $container->registration()->import(ReleaseProviderSideEffectMixin::class))
-        ->toThrow(ContainerException::class)
+        ->toThrow(
+            ContainerException::class,
+            'Service providers must be imported through ContainerBuilder before runtime finalization.',
+        )
         ->and(ReleaseProviderSideEffectMixin::$constructed)->toBe(0)
         ->and(fn() => $container->registration()->import(ReleaseRequiredConstructorProvider::class))
-        ->toThrow(ContainerException::class, 'zero arguments');
+        ->toThrow(
+            ContainerException::class,
+            'Service providers must be imported through ContainerBuilder before runtime finalization.',
+        );
 });
 
 it('normalizes service IDs and makes offset unset remove definitions', function () {
