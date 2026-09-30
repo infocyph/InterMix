@@ -959,8 +959,9 @@ are all green on one exact revision.
   and environment-specific metadata;
 - [x] canonical numeric-string service ID `"0"` is normalized across graph,
   planning, generated dispatch, reports/manifests, dynamic runtime and compiled runtime;
-- [x] F2 performance recovery uses a WeakReference last-Fiber fast path, preserving
-  collection of completed Fibers while avoiding repeated WeakMap lookups;
+- [x] F2 Fiber identity uses the live Fiber object's intrinsic `spl_object_id()`;
+  no static Fiber registry/strong reference is retained, while the hot path avoids
+  WeakMap lookup overhead;
 - [x] P2 regression coverage includes literal values, factories, autowire overrides,
   inputs, alias lifetimes, freeze/retry behavior, contextual kinds, metadata snapshots,
   cache opt-in/warmup/key separation, compiled literal/alias behavior and `"0"` IDs;
@@ -1001,7 +1002,8 @@ revision**, followed by recording that revision below.
 
 No PHPForge threshold, skip policy, or benchmark budget has been weakened.
 The release-regression Fiber failure seen on earlier P2 revisions is resolved by
-the weak last-Fiber fast path and is green at this head.
+the intrinsic live-Fiber identity fast path and was green on the most recent
+completed pre-closure workflow.
 
 ### Batch 1 superseded tuning evidence
 
