@@ -140,27 +140,26 @@ it('compiles direct eager and lazy tag dispatch for known production services', 
 
 it('loads independent production runtimes from the same frozen graph', function () {
     $builder = ContainerBuilder::create(uniqid('production_reload_'))
-        ->singleton('leaf', ProductionRuntimeLeaf::class);
+        ->autowire('leaf', ProductionRuntimeLeaf::class);
     $path = productionRuntimeArtifactPath();
 
     try {
         $report = $builder->compile($path);
         $first = $builder->production($path);
         $second = $builder->productionPrevalidated($path, $report['digest']);
-        $development = $builder->development();
 
         expect($first)->not->toBe($second)
-            ->and($development->getRepository()->getFunctionDefinition('leaf'))
-            ->toBe(ProductionRuntimeLeaf::class);
+            ->and($first->get('leaf'))->toBeInstanceOf(ProductionRuntimeLeaf::class)
+            ->and($second->get('leaf'))->toBeInstanceOf(ProductionRuntimeLeaf::class)
+            ->and($first->get('leaf'))->not->toBe($second->get('leaf'));
     } finally {
         removeProductionRuntimeArtifact($path);
     }
 });
 
-it('locks retained configuration managers after builder finalization', function () {
-    $builder = ContainerBuilder::create(uniqid('production_retained_manager_'));
-    $definitions = $builder->definitions();
-    $definitions->bind('leaf', ProductionRuntimeLeaf::class);
+it('rejects builder mutation after finalization without changing built runtimes', function () {
+    $builder = ContainerBuilder::create(uniqid('production_frozen_builder_'))
+        ->autowire('leaf', ProductionRuntimeLeaf::class);
     $path = productionRuntimeArtifactPath();
 
     try {
@@ -168,8 +167,8 @@ it('locks retained configuration managers after builder finalization', function 
         $runtime = $builder->production($path);
         $compiled = $runtime->get('leaf');
 
-        expect(fn() => $definitions->bind('leaf', new ProductionRuntimeLeaf()))
-            ->toThrow(ContainerException::class, 'Container is locked')
+        expect(fn() => $builder->value('late', true))
+            ->toThrow(ContainerException::class, 'ContainerBuilder is finalized')
             ->and($runtime->get('leaf'))->toBe($compiled);
 
         $second = $builder->production($path);
