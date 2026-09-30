@@ -23,7 +23,7 @@ function removeStaticPrevalidatedArtifact(string $path): void
 
 it('loads a production runtime from the deployment digest returned by compile', function () {
     $builder = ContainerBuilder::create(uniqid('static_prevalidated_'));
-    $builder->singleton('service', StaticPrevalidatedService::class);
+    $builder->autowire('service', StaticPrevalidatedService::class);
     $path = staticPrevalidatedArtifactPath();
 
     try {
@@ -40,7 +40,7 @@ it('loads a production runtime from the deployment digest returned by compile', 
 
 it('rejects malformed and mismatched deployment digests', function () {
     $builder = ContainerBuilder::create(uniqid('static_prevalidated_invalid_'));
-    $builder->singleton('service', StaticPrevalidatedService::class);
+    $builder->autowire('service', StaticPrevalidatedService::class);
     $path = staticPrevalidatedArtifactPath();
 
     try {
@@ -59,7 +59,7 @@ it('rejects malformed and mismatched deployment digests', function () {
 it('rejects environment mutation after graph finalization', function () {
     $builder = ContainerBuilder::create(uniqid('static_prevalidated_environment_'));
     $builder->setEnvironment('production')
-        ->singleton('service', StaticPrevalidatedService::class);
+        ->autowire('service', StaticPrevalidatedService::class);
     $path = staticPrevalidatedArtifactPath();
 
     try {
@@ -78,14 +78,14 @@ it('rejects environment mutation after graph finalization', function () {
 it('validates the artifact environment when loading in a fresh process builder', function () {
     $compiler = ContainerBuilder::create(uniqid('static_prevalidated_environment_source_'));
     $compiler->setEnvironment('production')
-        ->singleton('service', StaticPrevalidatedService::class);
+        ->autowire('service', StaticPrevalidatedService::class);
     $path = staticPrevalidatedArtifactPath();
 
     try {
         $report = $compiler->compile($path);
         $loader = ContainerBuilder::create(uniqid('static_prevalidated_environment_loader_'));
         $loader->setEnvironment('staging')
-            ->singleton('service', StaticPrevalidatedService::class);
+            ->autowire('service', StaticPrevalidatedService::class);
 
         expect(fn() => $loader->production($path))
             ->toThrow(ContainerException::class, 'environment')
