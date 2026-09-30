@@ -100,6 +100,14 @@ final class ContainerBuilder
         return $this;
     }
 
+    public function bindInterfaceForEnv(string $environment, string $interface, string $concrete): self
+    {
+        $this->assertMutable();
+        $this->configuration->getRepository()->bindInterfaceForEnv($environment, $interface, $concrete);
+
+        return $this;
+    }
+
     public function build(): Container
     {
         $this->finalizeGraph();
@@ -178,14 +186,6 @@ final class ContainerBuilder
         return $this;
     }
 
-    public function bindInterfaceForEnv(string $environment, string $interface, string $concrete): self
-    {
-        $this->assertMutable();
-        $this->configuration->getRepository()->bindInterfaceForEnv($environment, $interface, $concrete);
-
-        return $this;
-    }
-
     /**
      * Return the finalized immutable definition graph.
      *
@@ -216,6 +216,14 @@ final class ContainerBuilder
         return $this;
     }
 
+    public function enableLazyLoading(bool $lazy = true): self
+    {
+        $this->assertMutable();
+        $this->configuration->enableLazyLoading($lazy);
+
+        return $this;
+    }
+
     public function enableMethodAttributes(bool $enable = true): self
     {
         $this->assertMutable();
@@ -238,10 +246,106 @@ final class ContainerBuilder
         return $this->build()->exportGraph($warmFromId, $clear);
     }
 
+    /** @param array<int, string> $tags */
+    public function factory(
+        string $id,
+        Closure|FactoryDefinition $factory,
+        LifetimeEnum $lifetime = LifetimeEnum::Singleton,
+        array $tags = [],
+    ): self {
+        $definition = $factory instanceof Closure
+            ? new RuntimeFactoryDefinition($factory)
+            : $factory;
+        $this->registerExplicit($id, $definition, $lifetime, $tags);
+
+        return $this;
+    }
+
     public function generatePreload(string $path): self
     {
         $this->finalizeGraph();
         new PreloadGenerator()->generate($this->configuration, $path);
+
+        return $this;
+    }
+
+    public function import(ServiceProviderInterface $provider): self
+    {
+        $this->assertMutable();
+        $provider->register($this);
+
+        return $this;
+    }
+
+    public function input(string $id): self
+    {
+        $this->registerExplicit($id, new InputDefinition(), LifetimeEnum::Scoped);
+
+        return $this;
+    }
+
+    public function onResolved(string $id, callable $callback): self
+    {
+        $this->assertMutable();
+        $this->resolvedHookIds[$id] = true;
+        $this->configuration->onResolved($id, $callback);
+
+        return $this;
+    }
+
+    public function onResolving(string $id, callable $callback): self
+    {
+        $this->assertMutable();
+        $this->resolvingHookIds[$id] = true;
+        $this->configuration->onResolving($id, $callback);
+
+        return $this;
+    }
+
+    public function onScopeLeave(string $scope, callable $callback): self
+    {
+        $this->assertMutable();
+        $this->scopeLeaveHookScopes[$scope] = true;
+        $this->configuration->onScopeLeave($scope, $callback);
+
+        return $this;
+    }
+
+    public function production(string $path): ProductionContainer
+    {
+        $this->finalizeGraph();
+        $fallback = $this->configuration->forkRuntime(false);
+
+        try {
+            return new StaticRuntimeGenerator()->load($path, $fallback);
+        } finally {
+            $fallback->lock();
+        }
+    }
+
+    public function productionPrevalidated(string $path, string $digest): ProductionContainer
+    {
+        $this->finalizeGraph();
+        $fallback = $this->configuration->forkRuntime(false);
+
+        try {
+            return new StaticRuntimeGenerator()->loadPrevalidated(
+                $path,
+                $digest,
+                $fallback,
+            );
+        } finally {
+            $fallback->lock();
+        }
+    }
+
+    public function registerAttributeResolver(string $attributeFqcn, string $resolverFqcn): self
+    {
+        $this->assertMutable();
+        $this->configuration->getRepository()->attributeRegistry()->register(
+            $attributeFqcn,
+            $resolverFqcn,
+        );
 
         return $this;
     }
@@ -322,13 +426,11 @@ final class ContainerBuilder
         return $this;
     }
 
-    public function registerAttributeResolver(string $attributeFqcn, string $resolverFqcn): self
+    /** @internal Removed with implicit method execution in P3. */
+    public function setDefaultMethod(?string $method): self
     {
         $this->assertMutable();
-        $this->configuration->getRepository()->attributeRegistry()->register(
-            $attributeFqcn,
-            $resolverFqcn,
-        );
+        $this->configuration->getRepository()->setDefaultMethod($method);
 
         return $this;
     }
@@ -352,108 +454,6 @@ final class ContainerBuilder
         }
 
         $this->configuration->getRepository()->setDefinitionMetaForEnv($environment, $id, $meta);
-
-        return $this;
-    }
-
-    public function enableLazyLoading(bool $lazy = true): self
-    {
-        $this->assertMutable();
-        $this->configuration->enableLazyLoading($lazy);
-
-        return $this;
-    }
-
-    /** @param array<int, string> $tags */
-    public function factory(
-        string $id,
-        Closure|FactoryDefinition $factory,
-        LifetimeEnum $lifetime = LifetimeEnum::Singleton,
-        array $tags = [],
-    ): self {
-        $definition = $factory instanceof Closure
-            ? new RuntimeFactoryDefinition($factory)
-            : $factory;
-        $this->registerExplicit($id, $definition, $lifetime, $tags);
-
-        return $this;
-    }
-
-    public function import(ServiceProviderInterface $provider): self
-    {
-        $this->assertMutable();
-        $provider->register($this);
-
-        return $this;
-    }
-
-    public function input(string $id): self
-    {
-        $this->registerExplicit($id, new InputDefinition(), LifetimeEnum::Scoped);
-
-        return $this;
-    }
-
-    public function onResolved(string $id, callable $callback): self
-    {
-        $this->assertMutable();
-        $this->resolvedHookIds[$id] = true;
-        $this->configuration->onResolved($id, $callback);
-
-        return $this;
-    }
-
-    public function onResolving(string $id, callable $callback): self
-    {
-        $this->assertMutable();
-        $this->resolvingHookIds[$id] = true;
-        $this->configuration->onResolving($id, $callback);
-
-        return $this;
-    }
-
-    public function onScopeLeave(string $scope, callable $callback): self
-    {
-        $this->assertMutable();
-        $this->scopeLeaveHookScopes[$scope] = true;
-        $this->configuration->onScopeLeave($scope, $callback);
-
-        return $this;
-    }
-
-    public function production(string $path): ProductionContainer
-    {
-        $this->finalizeGraph();
-        $fallback = $this->configuration->forkRuntime(false);
-
-        try {
-            return new StaticRuntimeGenerator()->load($path, $fallback);
-        } finally {
-            $fallback->lock();
-        }
-    }
-
-    public function productionPrevalidated(string $path, string $digest): ProductionContainer
-    {
-        $this->finalizeGraph();
-        $fallback = $this->configuration->forkRuntime(false);
-
-        try {
-            return new StaticRuntimeGenerator()->loadPrevalidated(
-                $path,
-                $digest,
-                $fallback,
-            );
-        } finally {
-            $fallback->lock();
-        }
-    }
-
-    /** @internal Removed with implicit method execution in P3. */
-    public function setDefaultMethod(?string $method): self
-    {
-        $this->assertMutable();
-        $this->configuration->getRepository()->setDefaultMethod($method);
 
         return $this;
     }
