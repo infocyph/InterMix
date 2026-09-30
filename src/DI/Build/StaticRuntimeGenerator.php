@@ -33,9 +33,13 @@ final class StaticRuntimeGenerator
         $planned = new StaticRuntimePlanner()->plan($graph);
         $plans = $planned['plans'];
         $slots = [];
-        foreach (array_keys($plans) as $slot => $id) {
-            $slots[$id] = $slot;
+        foreach (array_keys($plans) as $slot => $rawId) {
+            $slots[(string) $rawId] = $slot;
         }
+        $compiled = array_map(
+            static fn(int|string $id): string => (string) $id,
+            array_keys($plans),
+        );
 
         $source = new StaticRuntimeRenderer()->render($graph, $plans, $slots);
         $source = new StaticScopedConstructionGuard()->apply($source, $plans, $slots);
@@ -50,14 +54,14 @@ final class StaticRuntimeGenerator
         $this->writeManifest(
             $filePath,
             $digest,
-            array_keys($plans),
+            $compiled,
             $planned['skipped'],
             $graph->environment(),
         );
 
         return [
             'runtime' => $this->loadPrevalidated($filePath, $digest, $fallback),
-            'compiled' => array_keys($plans),
+            'compiled' => $compiled,
             'skipped' => $planned['skipped'],
             'digest' => $digest,
         ];

@@ -447,3 +447,28 @@ it('snapshots declarative factory argument arrays without writable references', 
 
     expect($definition->arguments[0]['port'])->toBe(443);
 });
+
+
+it('accepts canonical numeric-string service id zero in dynamic and compiled runtimes', function (): void {
+    $dynamic = ContainerBuilder::create(uniqid('builder11_zero_dynamic_'))
+        ->value('0', 'zero')
+        ->build();
+
+    expect($dynamic->has('0'))->toBeTrue()
+        ->and($dynamic->get('0'))->toBe('zero');
+
+    $path = builder11ArtifactPath();
+    $builder = ContainerBuilder::create(uniqid('builder11_zero_compiled_'))
+        ->value('0', 'zero');
+
+    try {
+        $report = $builder->compile($path);
+        $runtime = $builder->production($path);
+
+        expect($report['compiled'])->toContain('0')
+            ->and($runtime->has('0'))->toBeTrue()
+            ->and($runtime->get('0'))->toBe('zero');
+    } finally {
+        removeBuilder11Artifact($path);
+    }
+});
