@@ -33,7 +33,7 @@ use ReflectionException;
 use Throwable;
 
 /** @implements ArrayAccess<string, mixed> */
-final class Container implements ContainerInterface, ArrayAccess
+class Container implements ContainerInterface, ArrayAccess
 {
     use ContainerProxy;
 
