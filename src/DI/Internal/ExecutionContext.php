@@ -28,20 +28,10 @@ final class ExecutionContext
 
     private static bool $coroutineResolverInitialized = false;
 
-    /** @var WeakMap<Fiber<mixed, mixed, mixed, mixed>, string>|null */
-    private static ?WeakMap $fiberCarrierIds = null;
-
-    private static ?string $lastFiberCarrierId = null;
-
-    /** @var WeakReference<Fiber<mixed, mixed, mixed, mixed>>|null */
-    private static ?WeakReference $lastFiberReference = null;
-
     private static ?string $lastObjectCarrierId = null;
 
     /** @var WeakReference<object>|null */
     private static ?WeakReference $lastObjectCarrierReference = null;
-
-    private static int $nextFiberCarrierId = 0;
 
     private static int $nextObjectCarrierId = 0;
 
@@ -89,22 +79,10 @@ final class ExecutionContext
     /** @param Fiber<mixed, mixed, mixed, mixed> $fiber */
     private static function fiberCarrierId(Fiber $fiber): string
     {
-        $lastFiber = self::$lastFiberReference?->get();
-        if ($lastFiber === $fiber && self::$lastFiberCarrierId !== null) {
-            return self::$lastFiberCarrierId;
-        }
-
-        $ids = self::$fiberCarrierIds ??= self::newFiberCarrierMap();
-        $id = $ids[$fiber] ?? null;
-        if (!is_string($id)) {
-            $id = 'fiber:' . ++self::$nextFiberCarrierId;
-            $ids[$fiber] = $id;
-        }
-
-        self::$lastFiberReference = WeakReference::create($fiber);
-        self::$lastFiberCarrierId = $id;
-
-        return $id;
+        // A live Fiber's object id is stable and unique among live objects.
+        // Scope/construction state is released with the carrier lifecycle, so no
+        // strong or weak Fiber registry is needed on this hot path.
+        return 'fiber:' . spl_object_id($fiber);
     }
 
     private static function initializeCoroutineResolver(): void
@@ -132,15 +110,6 @@ final class ExecutionContext
 
             return;
         }
-    }
-
-    /** @return WeakMap<Fiber<mixed, mixed, mixed, mixed>, string> */
-    private static function newFiberCarrierMap(): WeakMap
-    {
-        /** @var WeakMap<Fiber<mixed, mixed, mixed, mixed>, string> $ids */
-        $ids = new WeakMap();
-
-        return $ids;
     }
 
     private static function objectCarrierId(object $carrier, string $prefix): string
