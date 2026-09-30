@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Infocyph\InterMix\DI\ContainerBuilder;
+use Infocyph\InterMix\DI\Support\LifetimeEnum;
 
 final class StaticGetReturnSingleton
 {
@@ -62,11 +63,11 @@ function removeStaticGetReturnArtifact(string $path): void
 
 it('preserves registered getReturn semantics while still invoking configured methods', function () {
     $builder = ContainerBuilder::create(uniqid('get_return_'));
-    $builder->singleton('singleton', StaticGetReturnSingleton::class)
-        ->scoped('scoped', StaticGetReturnScoped::class)
-        ->transient('transient', StaticGetReturnTransient::class);
+    $builder->autowire('singleton', StaticGetReturnSingleton::class)
+        ->autowire('scoped', StaticGetReturnScoped::class, lifetime: LifetimeEnum::Scoped)
+        ->autowire('transient', StaticGetReturnTransient::class, lifetime: LifetimeEnum::Transient);
 
-    $development = $builder->development();
+    $development = $builder->build();
     $development->enterScope('request');
     $developmentSingleton = $development->getReturn('singleton');
     $developmentScoped = $development->getReturn('scoped');
