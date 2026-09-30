@@ -81,8 +81,7 @@ final class StaticParameterPlanner
         DefinitionGraph $graph,
         ReflectionClass $class,
         array $supplied = [],
-    ): array|string
-    {
+    ): array|string {
         $constructor = $class->getConstructor();
         if ($constructor === null) {
             return ['arguments' => [], 'dependencies' => []];
