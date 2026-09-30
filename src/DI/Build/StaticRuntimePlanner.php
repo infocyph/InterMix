@@ -29,7 +29,8 @@ use ReflectionClass;
 final class StaticRuntimePlanner
 {
     /** @return array{plans: array<string, ServicePlan>, skipped: array<string, string>} */
-    public function plan(DefinitionGraph $graph): array {
+    public function plan(DefinitionGraph $graph): array
+    {
         [$plans, $skipped] = $this->buildPlans($graph);
         $plans = $this->expandImplicitClasses($graph, $plans, $skipped);
         $plans = $this->pruneUnavailableDependencies($plans, $skipped);
@@ -40,7 +41,8 @@ final class StaticRuntimePlanner
     }
 
     /** @return array{array<string, ServicePlan>, array<string, string>} */
-    private function buildPlans(DefinitionGraph $graph): array {
+    private function buildPlans(DefinitionGraph $graph): array
+    {
         $plans = [];
         $skipped = [];
         $definitions = $graph->definitions();
@@ -75,7 +77,8 @@ final class StaticRuntimePlanner
         DefinitionGraph $graph,
         string $id,
         ReflectionClass $class,
-    ): array|string {
+    ): array|string
+    {
         if (!$class->isInstantiable()) {
             return 'class definition is not instantiable';
         }
@@ -158,7 +161,8 @@ final class StaticRuntimePlanner
         DefinitionGraph $graph,
         array $plans,
         array &$skipped,
-    ): array {
+    ): array
+    {
         do {
             $changed = false;
             foreach ($plans as $plan) {
@@ -189,7 +193,8 @@ final class StaticRuntimePlanner
         DefinitionGraph $graph,
         string $id,
         ReflectionClass $class,
-    ): array|string {
+    ): array|string
+    {
         if ($graph->classResourcesFor($class->getName()) !== []) {
             return 'injection-off class has registered generic resources';
         }
@@ -217,7 +222,8 @@ final class StaticRuntimePlanner
      * @param array<string, array{dependencies: list<string>}> $plans
      * @param array<string, true> $remaining
      */
-    private function hasRemainingDependency(array $plans, array $remaining, string $id): bool {
+    private function hasRemainingDependency(array $plans, array $remaining, string $id): bool
+    {
         foreach ($plans[$id]['dependencies'] as $dependency) {
             if (isset($remaining[$dependency])) {
                 return true;
@@ -228,7 +234,8 @@ final class StaticRuntimePlanner
     }
 
     /** @return ClassPlan|string */
-    private function implicitDependencyPlan(DefinitionGraph $graph, string $dependency): array|string {
+    private function implicitDependencyPlan(DefinitionGraph $graph, string $dependency): array|string
+    {
         if (!class_exists($dependency)) {
             return 'implicit dependency is not an autowireable class';
         }
@@ -241,13 +248,15 @@ final class StaticRuntimePlanner
     }
 
     /** @param array<int|string, mixed> $definition */
-    private function isCallableArrayDefinition(array $definition): bool {
+    private function isCallableArrayDefinition(array $definition): bool
+    {
         return isset($definition[0])
             && is_string($definition[0])
             && class_exists($definition[0]);
     }
 
-    private function isExportable(mixed $value): bool {
+    private function isExportable(mixed $value): bool
+    {
         return BoundedValueInspector::isScalarNullArray($value);
     }
 
@@ -260,7 +269,8 @@ final class StaticRuntimePlanner
         array $plans,
         array $skipped,
         string $dependency,
-    ): bool {
+    ): bool
+    {
         return isset($plans[$dependency])
             || isset($skipped[$dependency])
             || $graph->hasDefinition($dependency);
@@ -270,7 +280,8 @@ final class StaticRuntimePlanner
     private function planAlias(
         DefinitionGraph $graph,
         AliasDefinition $definition,
-    ): array {
+    ): array
+    {
         $target = $definition->target;
         $definitions = $graph->definitions();
 
@@ -292,7 +303,8 @@ final class StaticRuntimePlanner
      * @param array<int|string, mixed> $definition
      * @return ClassPlan|InvocationPlan|string
      */
-    private function planArrayDefinition(DefinitionGraph $graph, string $id, array $definition): array|string {
+    private function planArrayDefinition(DefinitionGraph $graph, string $id, array $definition): array|string
+    {
         $className = $definition[0] ?? null;
         if (!is_string($className) || !class_exists($className)) {
             return 'array definition requires the dynamic runtime';
@@ -311,7 +323,8 @@ final class StaticRuntimePlanner
     }
 
     /** @return ServicePlan|string */
-    private function planDefinition(DefinitionGraph $graph, string $id, mixed $definition): array|string {
+    private function planDefinition(DefinitionGraph $graph, string $id, mixed $definition): array|string
+    {
         if ($graph->requiresDynamicService($id)) {
             return 'service requires the dynamic runtime';
         }
@@ -350,7 +363,8 @@ final class StaticRuntimePlanner
      * @param array<string, string> $skipped
      * @return array<string, ServicePlan>
      */
-    private function pruneCycles(array $plans, array &$skipped): array {
+    private function pruneCycles(array $plans, array &$skipped): array
+    {
         $remaining = array_fill_keys(array_keys($plans), true);
         do {
             $changed = false;
@@ -378,7 +392,8 @@ final class StaticRuntimePlanner
      * @param array<string, string> $skipped
      * @return array<string, ServicePlan>
      */
-    private function pruneUnavailableDependencies(array $plans, array &$skipped): array {
+    private function pruneUnavailableDependencies(array $plans, array &$skipped): array
+    {
         do {
             $changed = false;
             foreach ($plans as $id => $plan) {
@@ -404,7 +419,8 @@ final class StaticRuntimePlanner
         string $id,
         mixed $definition,
         bool $literal = false,
-    ): ?array {
+    ): ?array
+    {
         if ($id === ContainerInterface::class && $definition instanceof Container) {
             return [
                 'kind' => 'value',
