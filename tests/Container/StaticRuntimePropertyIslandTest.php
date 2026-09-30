@@ -28,8 +28,8 @@ function removeRuntimePropertyIslandArtifact(string $path): void
 it('keeps non-exportable registered property values in a targeted runtime island', function () {
     $payload = new RuntimePropertyIslandPayload();
     $builder = ContainerBuilder::create(uniqid('runtime_property_island_'));
-    $builder->singleton(RuntimePropertyIslandConsumer::class);
-    $builder->registration()->registerProperty(
+    $builder->autowire(RuntimePropertyIslandConsumer::class, RuntimePropertyIslandConsumer::class);
+    $builder->registerProperty(
         RuntimePropertyIslandConsumer::class,
         ['payload' => $payload],
     );
