@@ -411,10 +411,13 @@ final class ContainerBuilder
         $this->assertMutable();
         $repository = $this->configuration->getRepository();
         $resource = $repository->getClassResourceFor($class);
+        $registered = $resource['property'] ?? [];
         $existing = [];
-        foreach ($resource['property'] ?? [] as $name => $value) {
-            if (is_string($name)) {
-                $existing[$name] = $value;
+        if (is_array($registered)) {
+            foreach ($registered as $name => $value) {
+                if (is_string($name)) {
+                    $existing[$name] = $value;
+                }
             }
         }
         $repository->addClassResource(
