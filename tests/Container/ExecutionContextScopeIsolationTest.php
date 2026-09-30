@@ -419,7 +419,7 @@ it('creates fresh compiled roots for repeated Fibers using the same scope name',
 it('dispatches compiled scope leave hooks for sequential and Fiber scopes', function () {
     $calls = [];
     $builder = ContainerBuilder::create(uniqid('context_compiled_hooks_'))
-        ->scoped('leaf', ExecutionContextScopedLeaf::class)
+        ->autowire('leaf', ExecutionContextScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
         ->onScopeLeave(
             'request',
             static function (string $scope, Container $activeContainer) use (&$calls): void {
