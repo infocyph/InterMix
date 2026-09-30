@@ -209,7 +209,7 @@ it('keeps compiled singleton and scope identity after builder finalization', fun
     $builder = ContainerBuilder::create(uniqid('advanced_frozen_'));
     $builder->autowire(AdvancedCompiledDependency::class, AdvancedCompiledDependency::class)
         ->autowire(AdvancedDeoptRoot::class, AdvancedDeoptRoot::class)
-        ->scoped(AdvancedDeoptScoped::class);
+        ->autowire(AdvancedDeoptScoped::class, AdvancedDeoptScoped::class, lifetime: LifetimeEnum::Scoped);
 
     $path = advancedCompilationArtifactPath();
     try {
