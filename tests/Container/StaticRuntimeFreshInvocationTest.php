@@ -65,7 +65,7 @@ it('uses generated fresh recipes for explicit make and resolveNow method calls',
     FreshInvocationHandler::$instances = 0;
     $builder = ContainerBuilder::create(uniqid('fresh_invocation_'));
     $builder->autowire(FreshInvocationDependency::class, FreshInvocationDependency::class)
-        ->singleton('handler.result', [FreshInvocationHandler::class, 'handle']);
+        ->autowire(FreshInvocationHandler::class, FreshInvocationHandler::class);
     $builder
         ->registerProperty(FreshInvocationHandler::class, ['prefix' => 'compiled'])
         ->registerMethod(FreshInvocationHandler::class, 'handle', ['suffix' => 'registered']);
@@ -78,7 +78,7 @@ it('uses generated fresh recipes for explicit make and resolveNow method calls',
         $made = $runtime->make(FreshInvocationHandler::class, 'handle');
         $resolved = $runtime->resolveNow([FreshInvocationHandler::class, 'handle']);
 
-        expect($report['compiled'])->toContain('handler.result')
+        expect($report['compiled'])->toContain(FreshInvocationHandler::class)
             ->and($made)->toBe('compiled:registered:same')
             ->and($resolved)->toBe('compiled:registered:same')
             ->and($runtime->get(FreshInvocationDependency::class))->toBe($dependency)
@@ -92,7 +92,7 @@ it('treats null as a handled compiled fresh invocation result', function () {
     FreshInvocationHandler::$instances = 0;
     $builder = ContainerBuilder::create(uniqid('fresh_invocation_null_'));
     $builder->autowire(FreshInvocationDependency::class, FreshInvocationDependency::class)
-        ->singleton('nullable.result', [FreshInvocationHandler::class, 'nullable']);
+        ->autowire(FreshInvocationHandler::class, FreshInvocationHandler::class);
 
     $path = freshInvocationArtifactPath();
     try {
