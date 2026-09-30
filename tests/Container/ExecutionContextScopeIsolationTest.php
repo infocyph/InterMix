@@ -201,9 +201,10 @@ function removeExecutionContextArtifact(string $path): void
 }
 
 it('isolates dynamic scoped identity and seeds across interleaved Fibers', function () {
-    $container = new Container(uniqid('context_dynamic_'));
-    $container->scoped('leaf', ExecutionContextScopedLeaf::class)
-        ->scoped('seeded', ExecutionContextScopedLeaf::class);
+    $container = ContainerBuilder::create(uniqid('context_dynamic_'))
+        ->autowire('leaf', ExecutionContextScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->autowire('seeded', ExecutionContextScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->build();
 
     $result = interleaveExecutionContextScopes($container);
 
@@ -217,8 +218,8 @@ it('isolates dynamic scoped identity and seeds across interleaved Fibers', funct
 
 it('isolates compiled scoped identity and seeds across interleaved Fibers', function () {
     $builder = ContainerBuilder::create(uniqid('context_compiled_'))
-        ->scoped('leaf', ExecutionContextScopedLeaf::class)
-        ->scoped('seeded', ExecutionContextScopedLeaf::class);
+        ->autowire('leaf', ExecutionContextScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->autowire('seeded', ExecutionContextScopedLeaf::class, lifetime: LifetimeEnum::Scoped);
     $path = executionContextArtifactPath();
 
     try {
@@ -238,9 +239,10 @@ it('isolates compiled scoped identity and seeds across interleaved Fibers', func
 });
 
 it('keeps sequential scope state isolated around Fiber scopes', function () {
-    $container = new Container(uniqid('context_mixed_'));
-    $container->scoped('leaf', ExecutionContextScopedLeaf::class)
-        ->scoped('seeded', ExecutionContextScopedLeaf::class);
+    $container = ContainerBuilder::create(uniqid('context_mixed_'))
+        ->autowire('leaf', ExecutionContextScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->autowire('seeded', ExecutionContextScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->build();
 
     $beforeSeed = new ExecutionContextScopedLeaf();
     $container->enterScope('request', ['seeded' => $beforeSeed]);
@@ -293,8 +295,9 @@ it('dispatches scope leave hooks for sequential and Fiber scopes', function () {
 });
 
 it('keeps nested dynamic Fiber scope stacks independent', function () {
-    $container = new Container(uniqid('context_nested_dynamic_'));
-    $container->scoped('leaf', ExecutionContextScopedLeaf::class);
+    $container = ContainerBuilder::create(uniqid('context_nested_dynamic_'))
+        ->autowire('leaf', ExecutionContextScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->build();
 
     $result = interleaveNestedExecutionContextScopes($container);
 
@@ -308,7 +311,7 @@ it('keeps nested dynamic Fiber scope stacks independent', function () {
 
 it('keeps nested compiled Fiber scope stacks independent', function () {
     $builder = ContainerBuilder::create(uniqid('context_nested_compiled_'))
-        ->scoped('leaf', ExecutionContextScopedLeaf::class);
+        ->autowire('leaf', ExecutionContextScopedLeaf::class, lifetime: LifetimeEnum::Scoped);
     $path = executionContextArtifactPath();
 
     try {
@@ -328,8 +331,9 @@ it('keeps nested compiled Fiber scope stacks independent', function () {
 });
 
 it('preserves null seed isolation across dynamic Fibers', function () {
-    $container = new Container(uniqid('context_null_dynamic_'));
-    $container->scoped('nullable', ExecutionContextScopedLeaf::class);
+    $container = ContainerBuilder::create(uniqid('context_null_dynamic_'))
+        ->autowire('nullable', ExecutionContextScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->build();
 
     [$nullSeed, $objectSeed] = interleaveNullableExecutionContextSeeds($container);
 
@@ -339,7 +343,7 @@ it('preserves null seed isolation across dynamic Fibers', function () {
 
 it('preserves null seed isolation across compiled Fibers', function () {
     $builder = ContainerBuilder::create(uniqid('context_null_compiled_'))
-        ->scoped('nullable', ExecutionContextScopedLeaf::class);
+        ->autowire('nullable', ExecutionContextScopedLeaf::class, lifetime: LifetimeEnum::Scoped);
     $path = executionContextArtifactPath();
 
     try {
@@ -355,8 +359,9 @@ it('preserves null seed isolation across compiled Fibers', function () {
 });
 
 it('cleans dynamic Fiber scope state when withinScope throws', function () {
-    $container = new Container(uniqid('context_throw_dynamic_'));
-    $container->scoped('leaf', ExecutionContextScopedLeaf::class);
+    $container = ContainerBuilder::create(uniqid('context_throw_dynamic_'))
+        ->autowire('leaf', ExecutionContextScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->build();
 
     [$beforeFailure, $afterFailure] = executionContextThrowableCleanup($container);
 
@@ -367,7 +372,7 @@ it('cleans dynamic Fiber scope state when withinScope throws', function () {
 
 it('cleans compiled Fiber scope state when withinScope throws', function () {
     $builder = ContainerBuilder::create(uniqid('context_throw_compiled_'))
-        ->scoped('leaf', ExecutionContextScopedLeaf::class);
+        ->autowire('leaf', ExecutionContextScopedLeaf::class, lifetime: LifetimeEnum::Scoped);
     $path = executionContextArtifactPath();
 
     try {
@@ -384,8 +389,9 @@ it('cleans compiled Fiber scope state when withinScope throws', function () {
 });
 
 it('creates fresh dynamic roots for repeated Fibers using the same scope name', function () {
-    $container = new Container(uniqid('context_repeat_dynamic_'));
-    $container->scoped('leaf', ExecutionContextScopedLeaf::class);
+    $container = ContainerBuilder::create(uniqid('context_repeat_dynamic_'))
+        ->autowire('leaf', ExecutionContextScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->build();
 
     $resolved = repeatedExecutionContextScopeRoots($container);
     $objectIds = array_map(spl_object_id(...), $resolved);
@@ -395,7 +401,7 @@ it('creates fresh dynamic roots for repeated Fibers using the same scope name', 
 
 it('creates fresh compiled roots for repeated Fibers using the same scope name', function () {
     $builder = ContainerBuilder::create(uniqid('context_repeat_compiled_'))
-        ->scoped('leaf', ExecutionContextScopedLeaf::class);
+        ->autowire('leaf', ExecutionContextScopedLeaf::class, lifetime: LifetimeEnum::Scoped);
     $path = executionContextArtifactPath();
 
     try {
