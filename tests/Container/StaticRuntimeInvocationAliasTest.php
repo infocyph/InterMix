@@ -2,12 +2,9 @@
 
 declare(strict_types=1);
 
-use Infocyph\InterMix\DI\Build\DefinitionGraph;
 use Infocyph\InterMix\DI\Build\StaticRuntimePlanner;
-use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
-use Infocyph\InterMix\DI\Invoker\CompiledCall;
 use Infocyph\InterMix\Exceptions\ContainerException;
 
 final class InvocationAliasLeaf {}
@@ -130,36 +127,41 @@ it('keeps compiled getReturn and null resolveNow on the production boundary', fu
     }
 });
 
-it('routes stale compiled definition dispatch through the dynamic resolver after invalidation', function () {
-    $container = new Container(uniqid('stale_compiled_'));
-    $container->singleton('service', InvocationAliasRoot::class)
-        ->autowire(InvocationAliasLeaf::class, InvocationAliasLeaf::class);
+it('keeps compiled definition dispatch frozen after builder finalization', function () {
+    $builder = ContainerBuilder::create(uniqid('frozen_compiled_'))
+        ->autowire(InvocationAliasLeaf::class, InvocationAliasLeaf::class)
+        ->autowire('service', InvocationAliasRoot::class);
 
     $path = invocationAliasArtifactPath();
     try {
-        $container->compileTo($path, true);
-        expect($container->getCurrentResolver())->toBeInstanceOf(CompiledCall::class)
-            ->and($container->getRepository()->hasCompiledResolvers())->toBeTrue();
+        $report = $builder->compile($path);
+        $runtime = $builder->productionPrevalidated($path, $report['digest']);
+        $service = $runtime->get('service');
 
-        $container->enableLazyLoading(false);
-
-        expect($container->getRepository()->hasCompiledResolvers())->toBeFalse()
-            ->and($container->get('service'))->toBeInstanceOf(InvocationAliasRoot::class);
+        expect($report['compiled'])->toContain('service', InvocationAliasLeaf::class)
+            ->and($service)->toBeInstanceOf(InvocationAliasRoot::class)
+            ->and(fn() => $builder->enableLazyLoading(false))
+            ->toThrow(ContainerException::class, 'ContainerBuilder is finalized')
+            ->and($runtime->get('service'))->toBe($service);
     } finally {
-        if (is_file($path)) {
-            unlink($path);
-        }
+        removeInvocationAliasArtifact($path);
     }
 });
 
-it('does not let the empty property fast path hide later property registration', function () {
-    $container = new Container(uniqid('property_fast_flag_'));
-    $container->get(InvocationAliasLeaf::class);
+it('applies property metadata before finalization and freezes later mutation', function () {
+    $builder = ContainerBuilder::create(uniqid('property_fast_flag_'))
+        ->registerProperty(
+            InvocationAliasPropertyTarget::class,
+            ['value' => 'registered'],
+        )
+        ->autowire('target', InvocationAliasPropertyTarget::class);
 
-    $container->registration()->registerProperty(
-        InvocationAliasPropertyTarget::class,
-        ['value' => 'registered'],
-    );
+    $runtime = $builder->build();
 
-    expect($container->get(InvocationAliasPropertyTarget::class)->value)->toBe('registered');
+    expect($runtime->get('target')->value)->toBe('registered')
+        ->and(fn() => $builder->registerProperty(
+            InvocationAliasPropertyTarget::class,
+            ['value' => 'late'],
+        ))->toThrow(ContainerException::class, 'ContainerBuilder is finalized')
+        ->and($runtime->get('target')->value)->toBe('registered');
 });
