@@ -138,13 +138,13 @@ it('reuses one frozen production runtime across persistent attached request chur
 });
 
 it('cleans nested attached frames after repeated child exceptions', function (): void {
+    $nestedLeaves = 0;
     $container = ContainerBuilder::create(uniqid('structured_stress_exception_'))
         ->autowire('leaf', StructuredStressScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->onScopeLeave('nested', static function () use (&$nestedLeaves): void {
+            ++$nestedLeaves;
+        })
         ->build();
-    $nestedLeaves = 0;
-    $container->onScopeLeave('nested', static function () use (&$nestedLeaves): void {
-        ++$nestedLeaves;
-    });
 
     for ($iteration = 0; $iteration < 32; ++$iteration) {
         $container->enterScope('request');
