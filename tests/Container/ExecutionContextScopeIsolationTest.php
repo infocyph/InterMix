@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Fiber;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\ContainerBuilder;
+use Infocyph\InterMix\DI\Support\LifetimeEnum;
 
 final class ExecutionContextScopedLeaf {}
 
