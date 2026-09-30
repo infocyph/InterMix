@@ -78,20 +78,20 @@ class Container implements ContainerInterface, ArrayAccess
         return self::$instances[$instanceAlias] ??= new self($instanceAlias);
     }
 
-    public function alias(string $id, string $target, LifetimeEnum $lifetime = LifetimeEnum::Singleton): self
+    protected function alias(string $id, string $target, LifetimeEnum $lifetime = LifetimeEnum::Singleton): self
     {
         $this->definitions()->bind($id, $target, $lifetime);
 
         return $this;
     }
 
-    public function attributeRegistry(): AttributeRegistry
+    protected function attributeRegistry(): AttributeRegistry
     {
         return $this->repository->attributeRegistry();
     }
 
     /** @param array<int, string> $tags */
-    public function bind(
+    protected function bind(
         string $id,
         mixed $definition,
         LifetimeEnum $lifetime = LifetimeEnum::Singleton,
@@ -103,7 +103,7 @@ class Container implements ContainerInterface, ArrayAccess
     }
 
     /** @param array<int, string> $tags */
-    public function bindFactory(
+    protected function bindFactory(
         string $id,
         Closure $factory,
         LifetimeEnum $lifetime = LifetimeEnum::Singleton,
@@ -157,12 +157,12 @@ class Container implements ContainerInterface, ArrayAccess
         return $tracer->toArray();
     }
 
-    public function definitions(): DefinitionManager
+    protected function definitions(): DefinitionManager
     {
         return $this->definitionManager ??= new DefinitionManager($this->repository, $this);
     }
 
-    public function enableLazyLoading(bool $lazy = true): self
+    protected function enableLazyLoading(bool $lazy = true): self
     {
         $this->repository->enableLazyLoading($lazy);
 
@@ -187,7 +187,7 @@ class Container implements ContainerInterface, ArrayAccess
         return $this->repository->tracer()->dependencyGraph($clear);
     }
 
-    public function factory(string $id, Closure $factory): PendingFactoryBinding
+    protected function factory(string $id, Closure $factory): PendingFactoryBinding
     {
         return new PendingFactoryBinding($this, $id, $factory);
     }
@@ -321,35 +321,35 @@ class Container implements ContainerInterface, ArrayAccess
         return $this->invocationManager->make($class, $method);
     }
 
-    public function onMissing(callable $callback): self
+    protected function onMissing(callable $callback): self
     {
         $this->repository->onMissing($callback);
 
         return $this;
     }
 
-    public function onResolved(string $id, callable $callback): self
+    protected function onResolved(string $id, callable $callback): self
     {
         $this->repository->onResolved($id, $callback);
 
         return $this;
     }
 
-    public function onResolving(string $id, callable $callback): self
+    protected function onResolving(string $id, callable $callback): self
     {
         $this->repository->onResolving($id, $callback);
 
         return $this;
     }
 
-    public function onScopeLeave(string $scope, callable $callback): self
+    protected function onScopeLeave(string $scope, callable $callback): self
     {
         $this->repository->onScopeLeave($scope, $callback);
 
         return $this;
     }
 
-    public function options(): OptionsManager
+    protected function options(): OptionsManager
     {
         return $this->optionsManager ??= new OptionsManager($this->repository, $this);
     }
@@ -396,7 +396,7 @@ class Container implements ContainerInterface, ArrayAccess
         return new TaggedPipeline($this, $tag);
     }
 
-    public function registration(): RegistrationManager
+    protected function registration(): RegistrationManager
     {
         return $this->registrationManager ??= new RegistrationManager($this->repository, $this);
     }
@@ -422,14 +422,14 @@ class Container implements ContainerInterface, ArrayAccess
     }
 
     /** @param array<int, string> $tags */
-    public function scoped(string $id, mixed $definition = null, array $tags = []): self
+    protected function scoped(string $id, mixed $definition = null, array $tags = []): self
     {
         $this->definitions()->bind($id, $definition ?? $id, LifetimeEnum::Scoped, $tags);
 
         return $this;
     }
 
-    public function setEnvironment(string $env): self
+    protected function setEnvironment(string $env): self
     {
         $this->repository->setEnvironment($env);
 
@@ -440,7 +440,7 @@ class Container implements ContainerInterface, ArrayAccess
      * @param class-string<InjectedCall|GenericCall> $resolverClass
      * @internal
      */
-    public function setResolverClass(string $resolverClass): void
+    protected function setResolverClass(string $resolverClass): void
     {
         $this->repository->assertMutable();
         if ($this->resolverClass === $resolverClass) {
@@ -452,7 +452,7 @@ class Container implements ContainerInterface, ArrayAccess
     }
 
     /** @param array<int, string> $tags */
-    public function singleton(string $id, mixed $definition = null, array $tags = []): self
+    protected function singleton(string $id, mixed $definition = null, array $tags = []): self
     {
         $this->definitions()->bind($id, $definition ?? $id, LifetimeEnum::Singleton, $tags);
 
@@ -471,14 +471,14 @@ class Container implements ContainerInterface, ArrayAccess
     }
 
     /** @param array<int, string> $tags */
-    public function transient(string $id, mixed $definition = null, array $tags = []): self
+    protected function transient(string $id, mixed $definition = null, array $tags = []): self
     {
         $this->definitions()->bind($id, $definition ?? $id, LifetimeEnum::Transient, $tags);
 
         return $this;
     }
 
-    public function unbind(string $id): self
+    protected function unbind(string $id): self
     {
         $this->definitions()->unbind($id);
 
@@ -524,14 +524,14 @@ class Container implements ContainerInterface, ArrayAccess
         return $issues;
     }
 
-    public function value(string $id, mixed $value): self
+    protected function value(string $id, mixed $value): self
     {
         $this->definitions()->bind($id, $value, LifetimeEnum::Singleton);
 
         return $this;
     }
 
-    public function when(string $consumer): ContextualBindingBuilder
+    protected function when(string $consumer): ContextualBindingBuilder
     {
         return new ContextualBindingBuilder($this, $this->repository, $consumer);
     }
