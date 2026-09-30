@@ -929,7 +929,10 @@ focused QA and tracker evidence are complete.
 
 Current stage: **P2 contract cleanup + focused QA**.
 
-Latest implementation/QA head reviewed: `c03499be734147703278e128b472aee8a02ff9d7`.
+Latest closed QA evidence reviewed: `c03499be734147703278e128b472aee8a02ff9d7`.
+Current P2 working head is advancing beyond that revision; tracker-only and
+migration/compiler commits after `c03499be` are not closure evidence until the
+full gate reruns.
 P3 has **not** started. P2 closes only when the B1/B2/B7 contract, focused tests,
 PHPForge QA/analysis, release regression, clean install and runtime-extension lanes
 are all green on one exact revision.
@@ -962,12 +965,16 @@ are all green on one exact revision.
 - [x] P2 regression coverage includes literal values, factories, autowire overrides,
   inputs, alias lifetimes, freeze/retry behavior, contextual kinds, metadata snapshots,
   cache opt-in/warmup/key separation, compiled literal/alias behavior and `"0"` IDs;
-- [ ] remove builder-side overloaded 10.x registration shortcuts:
-  `bind()`, `bindFactory()`, `singleton()`, `scoped()`, `transient()`;
-- [ ] remove builder manager/development escape hatches:
-  `definitions()`, `registration()`, `options()`, `development()`;
-- [ ] migrate branch tests/fixtures that still use those builder-only legacy surfaces
-  to the explicit 11.0 builder API;
+- [x] remove builder-side overloaded 10.x registration shortcuts:
+  `bind()`, `bindFactory()`, `singleton()`, `scoped()`, `transient()` — closed in
+  `32d86646`;
+- [x] remove builder manager/development escape hatches:
+  `definitions()`, `registration()`, `options()`, `development()` — closed in
+  `32d86646`;
+- [ ] migrate branch tests/fixtures that still use removed builder/runtime
+  configuration surfaces to the explicit 11.0 builder API — **in progress**;
+- [x] static planning recognizes explicit `AutowireDefinition` and carries its
+  constructor/property metadata into generated-runtime planning;
 - [ ] focused P2 QA green on one exact revision;
 - [ ] update this tracker with the exact P2 closure SHA and evidence.
 
@@ -987,14 +994,11 @@ Green:
 - Pest, PHPCS, Deptrac, syntax/reference, duplicate and comment-policy checks;
 - Psalm on PHP 8.4 and PHP 8.5.
 
-Still failing and therefore blocking P2 closure:
-
-- Pint: `StaticRuntimePlanner.php`, `ContainerBuilder.php`,
-  `DefinitionResolver.php`;
-- Rector dry-run: readonly-property visibility normalization in
-  `FactoryDefinition.php`;
-- PHPStan: five remaining type findings in contextual/static-parameter planning,
-  contextual dependency narrowing and factory snapshot return typing.
+At `c03499be`, Pint/Rector/PHPStan still blocked closure. Those findings were
+subsequently addressed, and the builder escape-hatch removal plus test migration
+introduced a new focused migration/compiled-planner QA cycle. The current blocker
+is therefore **fresh QA on the post-removal working head**, not the superseded
+`c03499be` diagnostics.
 
 No PHPForge threshold, skip policy, or benchmark budget has been weakened.
 The release-regression Fiber failure seen on earlier P2 revisions is resolved by
