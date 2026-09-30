@@ -15,6 +15,7 @@ use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\DI\Support\DirectFactory;
 use Infocyph\InterMix\DI\Support\FactoryDefinition;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
+use Infocyph\InterMix\DI\Support\RuntimeFactoryDefinition;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\CacheItemInterface;
 use Psr\Cache\CacheItemPoolInterface;
@@ -169,7 +170,8 @@ class DefinitionManager implements ArrayAccess
             && (!is_object($definition)
                 || $definition instanceof Closure
                 || $definition instanceof DirectFactory
-                || $definition instanceof FactoryDefinition);
+                || $definition instanceof FactoryDefinition
+                || $definition instanceof RuntimeFactoryDefinition);
     }
 
     private function commitDefinitionCache(CacheItemPoolInterface $cache): bool
