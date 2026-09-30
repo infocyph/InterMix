@@ -147,7 +147,7 @@ final class ReleaseRegression
 
         try {
             $builder = ContainerBuilder::create('__release_regression_' . bin2hex(random_bytes(4)));
-            $builder->scoped('leaf', ReleaseRegressionLeaf::class);
+            $builder->autowire('leaf', ReleaseRegressionLeaf::class, lifetime: LifetimeEnum::Scoped);
             $builder->compile($artifact);
             $production = $builder->production($artifact);
             $production->enterScope('request');
