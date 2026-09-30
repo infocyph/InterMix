@@ -905,7 +905,7 @@ batch is closed.
 | Batch | Packages | Status | Package status / implementation evidence |
 | --- | --- | --- | --- |
 | 1 | P0 + P1 — baseline and runtime hardening | **Complete** | Closed on `f55be8b`: P0 contract/baseline frozen; P1 F1–F3 fixed. Corrected 10.1.1 regression gate, PHPForge QA/analysis/benchmarks, clean install, and Swoole/OpenSwoole PHP 8.4/8.5 are green. |
-| 2 | P2 + P3 — builder/definitions and runtime/scope contract | **In progress — P2 contract cleanup + QA** | P2 core definition/freeze/cache work is implemented. Full B1/B2/B7 cross-check is active: contextual kinds, metadata snapshots, cache warmup/keying, canonical numeric-string IDs, and weak Fiber fast-path performance are implemented. Remaining P2 blockers are removal of builder-side 10.x registration/manager/development escape hatches plus final PHPForge QA/analysis. P3 has not started. |
+| 2 | P2 + P3 — builder/definitions and runtime/scope contract | **In progress — P2 runtime configuration closure** | Builder-side B1/B2/B7 work and migration are implemented and current QA is nearly green. Final P2 contract audit found that runtime `Container` still exposes public registration/configuration and manager mutation surfaces; those are P2 blockers because B1 makes `ContainerBuilder` the sole configuration owner. P3 has not started. |
 | 3 | P4 + P5 — compiled graph and provider boundaries | Pending | P4: B6 generated/fallback graph. P5: CacheLayer 4.0 / Runwire 2.1 optional provider boundaries. Run focused QA after each package, then full batch QA. |
 | 4 | P6 + P7 + P8 — migration, measured acceptance and release candidate | Pending | P6: docs/consumer migration. P7: benchmarks/soak/host acceptance. P8: exact-SHA CI, packaging and RC evidence. P8 remains the final gate inside this batch. |
 
@@ -976,6 +976,10 @@ are all green on one exact revision.
   surfaces belong to P3;
 - [x] static planning recognizes explicit `AutowireDefinition` and carries its
   constructor/property metadata into generated-runtime planning;
+- [ ] remove runtime `Container` registration/configuration mutation surfaces required by B1:
+  direct bind/lifetime/factory/value/alias/unbind operations, manager navigation,
+  contextual/environment/attribute/lifecycle mutation, mutable runtime compilation,
+  and write-capable proxy/ArrayAccess paths;
 - [ ] focused P2 QA green on one exact revision;
 - [ ] update this tracker with the exact P2 closure SHA and evidence.
 
@@ -985,6 +989,11 @@ and B1/B2. Runtime-side 10.x execution APIs remain P3 work; **builder-side**
 configuration escape hatches are P2 blockers.
 
 #### Latest P2 QA state
+
+Full contract cross-check after the builder migration found an additional B1 gap:
+the runtime `Container` still exposes configuration mutation and manager navigation.
+That surface must be removed before P2 closure; a green workflow alone is not
+sufficient evidence while the public contract is still wrong.
 
 Most recent completed workflow before `614c5740` showed:
 
