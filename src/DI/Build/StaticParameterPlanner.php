@@ -254,7 +254,7 @@ final class StaticParameterPlanner
         return $this->typedServicePlan($graph, $consumer->getName(), $dependency, $label);
     }
 
-    /** @return array{kind: 'service', id: string}|string */
+    /** @return ServiceArgument|string */
     private function typedServicePlan(
         DefinitionGraph $graph,
         string $consumer,
