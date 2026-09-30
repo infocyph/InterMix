@@ -8,8 +8,6 @@ use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Internal\BoundedValueInspector;
 use Infocyph\InterMix\DI\Support\AliasDefinition;
 use Infocyph\InterMix\DI\Support\AutowireDefinition;
-use Infocyph\InterMix\DI\Support\InputDefinition;
-use Infocyph\InterMix\DI\Support\RuntimeFactoryDefinition;
 use Infocyph\InterMix\DI\Support\FactoryDefinition;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\DI\Support\ValueDefinition;
@@ -74,6 +72,8 @@ final class StaticRuntimePlanner
 
     /**
      * @param ReflectionClass<object> $class
+     * @param array<int|string, mixed> $constructorParameters
+     * @param array<string, mixed> $propertyParameters
      * @return ClassPlan|string
      */
     private function classPlan(
@@ -352,12 +352,6 @@ final class StaticRuntimePlanner
         }
         if ($definition instanceof FactoryDefinition) {
             return new StaticFactoryPlanner()->plan($graph, $id, $definition);
-        }
-        if ($definition instanceof RuntimeFactoryDefinition) {
-            return 'runtime factory requires the frozen dynamic fallback';
-        }
-        if ($definition instanceof InputDefinition) {
-            return 'scoped input requires the runtime scope store';
         }
         if ($definition instanceof ValueDefinition) {
             return $this->valuePlan($graph, $id, $definition->value, true)
