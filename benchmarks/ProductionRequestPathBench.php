@@ -276,7 +276,7 @@ final class ProductionRequestPathBench
         }
 
         $builder = ContainerBuilder::create($this->alias('boot'))
-            ->singleton('root', ProductionRequestRoot::class);
+            ->autowire('root', ProductionRequestRoot::class);
         $path = $this->artifactPath();
         $report = $builder->compile($path);
         register_shutdown_function(static function () use ($path): void {
@@ -293,11 +293,11 @@ final class ProductionRequestPathBench
     private function controllerRuntime(): ProductionContainer
     {
         $builder = ContainerBuilder::create($this->alias('controller'))
-            ->singleton(ProductionRequestLeaf::class)
-            ->singleton(ProductionRequestMiddle::class)
-            ->singleton(ProductionRequestRoot::class)
-            ->transient(ProductionRequestController::class);
-        $builder->registration()->registerMethod(ProductionRequestController::class, 'handle');
+            ->autowire(ProductionRequestLeaf::class, ProductionRequestLeaf::class)
+            ->autowire(ProductionRequestMiddle::class, ProductionRequestMiddle::class)
+            ->autowire(ProductionRequestRoot::class, ProductionRequestRoot::class)
+            ->autowire(ProductionRequestController::class, ProductionRequestController::class, lifetime: LifetimeEnum::Transient);
+        $builder->registerMethod(ProductionRequestController::class, 'handle');
 
         return $this->production($builder);
     }
@@ -305,8 +305,8 @@ final class ProductionRequestPathBench
     private function hybridRuntime(): ProductionContainer
     {
         $builder = ContainerBuilder::create($this->alias('hybrid'))
-            ->singleton(ProductionRequestLeaf::class)
-            ->bind('dynamic', static fn(): ProductionRequestLeaf => new ProductionRequestLeaf());
+            ->autowire(ProductionRequestLeaf::class, ProductionRequestLeaf::class)
+            ->factory('dynamic', static fn(): ProductionRequestLeaf => new ProductionRequestLeaf());
 
         return $this->production($builder);
     }
@@ -314,8 +314,8 @@ final class ProductionRequestPathBench
     private function methodRuntime(string $class, string $id): ProductionContainer
     {
         $builder = ContainerBuilder::create($this->alias($id))
-            ->singleton(ProductionRequestLeaf::class)
-            ->transient($id, $class);
+            ->autowire(ProductionRequestLeaf::class, ProductionRequestLeaf::class)
+            ->autowire($id, $class, lifetime: LifetimeEnum::Transient);
 
         return $this->production($builder);
     }
@@ -333,9 +333,9 @@ final class ProductionRequestPathBench
     private function propertyInjectRuntime(): ProductionContainer
     {
         $builder = ContainerBuilder::create($this->alias('private-inject'));
-        $builder->options()->setOptions(propertyAttributes: true);
-        $builder->singleton(ProductionRequestLeaf::class)
-            ->transient(ProductionRequestPrivateInject::class);
+        $builder->enablePropertyAttributes();
+        $builder->autowire(ProductionRequestLeaf::class, ProductionRequestLeaf::class)
+            ->autowire(ProductionRequestPrivateInject::class, ProductionRequestPrivateInject::class, lifetime: LifetimeEnum::Transient);
 
         return $this->production($builder);
     }
@@ -352,9 +352,9 @@ final class ProductionRequestPathBench
     private function staticMethodRuntime(): ProductionContainer
     {
         $builder = ContainerBuilder::create($this->alias('static-method'))
-            ->singleton(ProductionRequestLeaf::class)
-            ->transient(ProductionRequestStaticMethod::class);
-        $builder->registration()->registerMethod(ProductionRequestStaticMethod::class, 'boot');
+            ->autowire(ProductionRequestLeaf::class, ProductionRequestLeaf::class)
+            ->autowire(ProductionRequestStaticMethod::class, ProductionRequestStaticMethod::class, lifetime: LifetimeEnum::Transient);
+        $builder->registerMethod(ProductionRequestStaticMethod::class, 'boot');
 
         return $this->production($builder);
     }
@@ -362,9 +362,9 @@ final class ProductionRequestPathBench
     private function taggedRuntime(): ProductionContainer
     {
         $builder = ContainerBuilder::create($this->alias('tags'))
-            ->singleton('middleware.a', ProductionRequestMiddlewareA::class, ['middleware'])
-            ->singleton('middleware.b', ProductionRequestMiddlewareB::class, ['middleware'])
-            ->singleton('middleware.c', ProductionRequestMiddlewareC::class, ['middleware']);
+            ->autowire('middleware.a', ProductionRequestMiddlewareA::class, tags: ['middleware'])
+            ->autowire('middleware.b', ProductionRequestMiddlewareB::class, tags: ['middleware'])
+            ->autowire('middleware.c', ProductionRequestMiddlewareC::class, tags: ['middleware']);
 
         return $this->production($builder);
     }
@@ -384,7 +384,7 @@ final class ProductionRequestPathBench
             ProductionRequestNode9::class,
             ProductionRequestNode10::class,
         ] as $class) {
-            $builder->bind($class, $class, $lifetime);
+            $builder->autowire($class, $class, lifetime: $lifetime);
         }
 
         return $this->production($builder);
@@ -393,9 +393,9 @@ final class ProductionRequestPathBench
     private function threeNodeRuntime(LifetimeEnum $lifetime, string $purpose): ProductionContainer
     {
         $builder = ContainerBuilder::create($this->alias($purpose));
-        $builder->bind(ProductionRequestLeaf::class, ProductionRequestLeaf::class, $lifetime)
-            ->bind(ProductionRequestMiddle::class, ProductionRequestMiddle::class, $lifetime)
-            ->bind('root', ProductionRequestRoot::class, $lifetime);
+        $builder->autowire(ProductionRequestLeaf::class, ProductionRequestLeaf::class, lifetime: $lifetime)
+            ->autowire(ProductionRequestMiddle::class, ProductionRequestMiddle::class, lifetime: $lifetime)
+            ->autowire('root', ProductionRequestRoot::class, lifetime: $lifetime);
 
         return $this->production($builder);
     }
