@@ -115,7 +115,8 @@ final class StaticRuntimePlanner
      * @param array<string, mixed> $definitions
      * @return array<string, true>
      */
-    private function detectAliasCycles(array $definitions): array {
+    private function detectAliasCycles(array $definitions): array
+    {
         $cyclic = [];
         foreach ($definitions as $rawId => $definition) {
             $id = (string) $rawId;
