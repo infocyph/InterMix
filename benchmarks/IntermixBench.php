@@ -170,10 +170,7 @@ final class IntermixBench
     {
         $builder = ContainerBuilder::create('__intermix_phpbench__' . spl_object_id($this));
         $builder->enableInjection()
-            ->factory(
-                'bench.config',
-                static fn(Container $runtime): BenchConfig => new BenchConfig(),
-            )
+            ->autowire('bench.config', BenchConfig::class)
             ->factory(
                 'bench.factory.direct',
                 static fn(Container $runtime): BenchFactoryProduct => new BenchFactoryProduct($runtime),
@@ -184,9 +181,9 @@ final class IntermixBench
                 static fn(Container $runtime): BenchFactoryProduct => new BenchFactoryProduct($runtime),
                 lifetime: LifetimeEnum::Transient,
             )
-            ->factory(
+            ->autowire(
                 'bench.scoped',
-                static fn(Container $runtime): BenchScopedToken => new BenchScopedToken(),
+                BenchScopedToken::class,
                 lifetime: LifetimeEnum::Scoped,
             )
             ->autowire(
