@@ -6,6 +6,7 @@ namespace Infocyph\InterMix\Benchmarks;
 
 use Closure;
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\DI\Invoker;
 use Infocyph\InterMix\Remix\MacroMix;
 use Infocyph\InterMix\Serializer\ClosureSerializer;
@@ -43,8 +44,11 @@ final class RuntimeFeaturesBench
 
     public function setUp(): void
     {
-        $this->container = new Container('__runtime_benchmark__' . spl_object_id($this));
-        $this->container->singleton('runtime.singleton', new RuntimeInvokable());
+        $this->container = ContainerBuilder::create(
+            '__runtime_benchmark__' . spl_object_id($this),
+        )
+            ->value('runtime.singleton', new RuntimeInvokable())
+            ->build();
         $this->container->get('runtime.singleton');
         $this->invoker = Invoker::with($this->container);
         $this->invokable = new RuntimeInvokable();
@@ -74,10 +78,12 @@ final class RuntimeFeaturesBench
     #[BeforeMethods('setUp')]
     public function benchContainerClassRegistration(): void
     {
-        $this->container->registration()->registerClass(
-            RuntimeInvokable::class,
-            ['sequence' => ++$this->macroSequence],
-        );
+        ContainerBuilder::create('__runtime_registration_benchmark__' . ++$this->macroSequence)
+            ->autowire(
+                RuntimeInvokable::class,
+                RuntimeInvokable::class,
+                arguments: ['sequence' => $this->macroSequence],
+            );
     }
 
     #[BeforeMethods('setUp')]
