@@ -10,9 +10,6 @@ use Infocyph\InterMix\DI\Build\StaticRuntimeGenerator;
 use Infocyph\InterMix\DI\Build\StaticRuntimePlanner;
 use Infocyph\InterMix\DI\Invoker\GenericCall;
 use Infocyph\InterMix\DI\Invoker\InjectedCall;
-use Infocyph\InterMix\DI\Managers\DefinitionManager;
-use Infocyph\InterMix\DI\Managers\OptionsManager;
-use Infocyph\InterMix\DI\Managers\RegistrationManager;
 use Infocyph\InterMix\DI\Support\AliasDefinition;
 use Infocyph\InterMix\DI\Support\AutowireDefinition;
 use Infocyph\InterMix\DI\Support\ContextualBindingBuilder;
@@ -103,32 +100,6 @@ final class ContainerBuilder
         return $this;
     }
 
-    /** @param array<int, string> $tags */
-    public function bind(
-        string $id,
-        mixed $definition,
-        LifetimeEnum $lifetime = LifetimeEnum::Singleton,
-        array $tags = [],
-    ): self {
-        $this->assertMutable();
-        $this->configuration->bind($id, $definition, $lifetime, $tags);
-
-        return $this;
-    }
-
-    /** @param array<int, string> $tags */
-    public function bindFactory(
-        string $id,
-        Closure $factory,
-        LifetimeEnum $lifetime = LifetimeEnum::Singleton,
-        array $tags = [],
-    ): self {
-        $this->assertMutable();
-        $this->configuration->bindFactory($id, $factory, $lifetime, $tags);
-
-        return $this;
-    }
-
     public function build(): Container
     {
         $this->finalizeGraph();
@@ -215,6 +186,16 @@ final class ContainerBuilder
         return $this;
     }
 
+    /**
+     * Return the finalized immutable definition graph.
+     *
+     * @internal
+     */
+    public function definitionGraph(): DefinitionGraph
+    {
+        return $this->finalizeGraph();
+    }
+
     public function enableDebugTracing(
         bool $enable = true,
         TraceLevelEnum $level = TraceLevelEnum::Node,
@@ -265,6 +246,82 @@ final class ContainerBuilder
         return $this;
     }
 
+    /**
+     * @param array<int|string, mixed> $parameters
+     * @internal Transitional construction metadata; migrated by P3.
+     */
+    public function registerClass(string $class, array $parameters = []): self
+    {
+        $this->assertMutable();
+        $this->configuration->getRepository()->addClassResource($class, 'constructor', [
+            'on' => '__constructor',
+            'params' => $this->snapshotMetadata($parameters, 'Class constructor parameters'),
+        ]);
+
+        return $this;
+    }
+
+    /**
+     * @param array<int|string, mixed> $parameters
+     * @internal Transitional callable metadata; migrated by P3.
+     */
+    public function registerClosure(
+        string $alias,
+        callable|Closure $closure,
+        array $parameters = [],
+    ): self {
+        $this->assertMutable();
+        $this->configuration->getRepository()->addClosureResource(
+            $alias,
+            $closure,
+            $this->snapshotMetadata($parameters, 'Closure parameters'),
+        );
+
+        return $this;
+    }
+
+    /**
+     * @param array<int|string, mixed> $parameters
+     * @internal Transitional method metadata; removed by P3.
+     */
+    public function registerMethod(
+        string $class,
+        string $method,
+        array $parameters = [],
+    ): self {
+        $this->assertMutable();
+        $this->configuration->getRepository()->addClassResource($class, 'method', [
+            'on' => $method,
+            'params' => $this->snapshotMetadata($parameters, 'Method parameters'),
+        ]);
+
+        return $this;
+    }
+
+    /**
+     * @param array<string, mixed> $properties
+     * @internal Transitional property metadata; migrated by P3.
+     */
+    public function registerProperty(string $class, array $properties): self
+    {
+        $this->assertMutable();
+        $repository = $this->configuration->getRepository();
+        $resource = $repository->getClassResourceFor($class);
+        $existing = [];
+        foreach ($resource['property'] ?? [] as $name => $value) {
+            if (is_string($name)) {
+                $existing[$name] = $value;
+            }
+        }
+        $repository->addClassResource(
+            $class,
+            'property',
+            $this->snapshotMetadata($properties, 'Property metadata') + $existing,
+        );
+
+        return $this;
+    }
+
     public function registerAttributeResolver(string $attributeFqcn, string $resolverFqcn): self
     {
         $this->assertMutable();
@@ -297,24 +354,6 @@ final class ContainerBuilder
         $this->configuration->getRepository()->setDefinitionMetaForEnv($environment, $id, $meta);
 
         return $this;
-    }
-
-    /**
-     * Transitional 10.x configuration access. The returned manager becomes
-     * immutable with the builder at finalization and is removed by P3.
-     */
-    public function definitions(): DefinitionManager
-    {
-        return $this->configuration->definitions();
-    }
-
-    /**
-     * Transitional 10.x configuration access. The returned container is locked
-     * at finalization and the escape hatch is removed by P3.
-     */
-    public function development(): Container
-    {
-        return $this->configuration;
     }
 
     public function enableLazyLoading(bool $lazy = true): self
@@ -355,14 +394,6 @@ final class ContainerBuilder
         return $this;
     }
 
-    public function onMissing(callable $callback): self
-    {
-        $this->assertMutable();
-        $this->configuration->onMissing($callback);
-
-        return $this;
-    }
-
     public function onResolved(string $id, callable $callback): self
     {
         $this->assertMutable();
@@ -388,12 +419,6 @@ final class ContainerBuilder
         $this->configuration->onScopeLeave($scope, $callback);
 
         return $this;
-    }
-
-    /** Transitional 10.x configuration access; removed by P3. */
-    public function options(): OptionsManager
-    {
-        return $this->configuration->options();
     }
 
     public function production(string $path): ProductionContainer
@@ -424,17 +449,11 @@ final class ContainerBuilder
         }
     }
 
-    /** Transitional 10.x configuration access; removed by P3. */
-    public function registration(): RegistrationManager
-    {
-        return $this->configuration->registration();
-    }
-
-    /** @param array<int, string> $tags */
-    public function scoped(string $id, mixed $definition = null, array $tags = []): self
+    /** @internal Removed with implicit method execution in P3. */
+    public function setDefaultMethod(?string $method): self
     {
         $this->assertMutable();
-        $this->configuration->scoped($id, $definition, $tags);
+        $this->configuration->getRepository()->setDefaultMethod($method);
 
         return $this;
     }
@@ -443,24 +462,6 @@ final class ContainerBuilder
     {
         $this->assertMutable();
         $this->configuration->setEnvironment($environment);
-
-        return $this;
-    }
-
-    /** @param array<int, string> $tags */
-    public function singleton(string $id, mixed $definition = null, array $tags = []): self
-    {
-        $this->assertMutable();
-        $this->configuration->singleton($id, $definition, $tags);
-
-        return $this;
-    }
-
-    /** @param array<int, string> $tags */
-    public function transient(string $id, mixed $definition = null, array $tags = []): self
-    {
-        $this->assertMutable();
-        $this->configuration->transient($id, $definition, $tags);
 
         return $this;
     }
