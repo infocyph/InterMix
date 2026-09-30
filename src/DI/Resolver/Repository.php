@@ -481,9 +481,9 @@ class Repository
 
         if ($env === null) {
             return array_map(
-            static fn(int|string $id): string => (string) $id,
-            array_keys($ids),
-        );
+                static fn(int|string $id): string => (string) $id,
+                array_keys($ids),
+            );
         }
 
         foreach ($this->tagIndexByEnv[$env][$tag] ?? [] as $id => $_) {
