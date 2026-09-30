@@ -43,7 +43,7 @@ function removeStructuredProductionArtifact(string $path): void
 function structuredProductionRuntime(bool $cold = false): array
 {
     $builder = ContainerBuilder::create(uniqid('structured_production_'))
-        ->scoped('leaf', StructuredProductionLeaf::class);
+        ->autowire('leaf', StructuredProductionLeaf::class, lifetime: LifetimeEnum::Scoped);
     if ($cold) {
         $builder->autowire('cold', StructuredProductionCold::class, lifetime: LifetimeEnum::Scoped);
     }
@@ -104,7 +104,7 @@ it('shares a compiled logical scope while keeping sibling nested frames carrier-
 it('rejects compiled owner close while an attachment is live before firing leave hooks', function () {
     $leaves = [];
     $builder = ContainerBuilder::create(uniqid('structured_production_owner_'))
-        ->scoped('leaf', StructuredProductionLeaf::class)
+        ->autowire('leaf', StructuredProductionLeaf::class, lifetime: LifetimeEnum::Scoped)
         ->onScopeLeave('request', static function (string $scope) use (&$leaves): void {
             $leaves[] = $scope;
         });
@@ -179,7 +179,7 @@ it('guards cold compiled scoped construction across sibling carriers', function 
 it('resets a compiled attached carrier without closing the shared owner scope', function () {
     $leaves = [];
     $builder = ContainerBuilder::create(uniqid('structured_production_reset_'))
-        ->scoped('leaf', StructuredProductionLeaf::class)
+        ->autowire('leaf', StructuredProductionLeaf::class, lifetime: LifetimeEnum::Scoped)
         ->onScopeLeave('request', static function (string $scope) use (&$leaves): void {
             $leaves[] = $scope;
         })
