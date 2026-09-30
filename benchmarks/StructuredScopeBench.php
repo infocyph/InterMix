@@ -149,10 +149,11 @@ final class StructuredScopeBench
 
     private function newDynamic(string $purpose): Container
     {
-        $container = new Container('__structured_scope_bench_' . $purpose . '_' . bin2hex(random_bytes(4)));
-        $container->scoped('leaf', StructuredScopeBenchLeaf::class);
-
-        return $container;
+        return ContainerBuilder::create(
+            '__structured_scope_bench_' . $purpose . '_' . bin2hex(random_bytes(4)),
+        )
+            ->autowire('leaf', StructuredScopeBenchLeaf::class, lifetime: LifetimeEnum::Scoped)
+            ->build();
     }
 
     private function sequentialCompiled(): ProductionContainer
