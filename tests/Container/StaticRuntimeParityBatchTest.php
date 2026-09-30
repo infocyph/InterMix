@@ -49,8 +49,8 @@ function removeStaticBatchArtifact(string $path): void
 it('keeps lifecycle-hooked services compiled without affecting unhooked neighbors', function () {
     $builder = ContainerBuilder::create(uniqid('static_batch_hooks_'));
     $resolved = 0;
-    $builder->singleton('stable', StaticBatchStableService::class)
-        ->singleton('hooked', StaticBatchDynamicService::class)
+    $builder->autowire('stable', StaticBatchStableService::class)
+        ->autowire('hooked', StaticBatchDynamicService::class)
         ->onResolved('hooked', function () use (&$resolved): void {
             ++$resolved;
         });
@@ -75,9 +75,9 @@ it('keeps lifecycle-hooked services compiled without affecting unhooked neighbor
 
 it('compiles deterministic property attributes when property attributes are enabled', function () {
     $builder = ContainerBuilder::create(uniqid('static_batch_property_'));
-    $builder->singleton(StaticBatchStableService::class)
-        ->singleton('attributed', StaticBatchAttributedPropertyService::class);
-    $builder->options()->setOptions(propertyAttributes: true);
+    $builder->autowire(StaticBatchStableService::class, StaticBatchStableService::class)
+        ->autowire('attributed', StaticBatchAttributedPropertyService::class);
+    $builder->enablePropertyAttributes();
 
     $path = staticBatchArtifactPath();
     try {
@@ -96,7 +96,7 @@ it('compiles deterministic property attributes when property attributes are enab
 
 it('uses the compiled service for calls to known definition ids', function () {
     $builder = ContainerBuilder::create(uniqid('static_batch_call_'));
-    $builder->singleton('callable', StaticBatchCallableService::class);
+    $builder->autowire('callable', StaticBatchCallableService::class);
 
     $path = staticBatchArtifactPath();
     try {
@@ -113,7 +113,7 @@ it('uses the compiled service for calls to known definition ids', function () {
 
 it('keeps explicit runtime factories as isolated dynamic services', function () {
     $builder = ContainerBuilder::create(uniqid('static_batch_dynamic_defs_'));
-    $builder->singleton(StaticBatchStableService::class)
+    $builder->autowire(StaticBatchStableService::class, StaticBatchStableService::class)
         ->factory(
             'factory',
             static fn(Container $runtime): object => new StaticBatchDynamicConsumer(
@@ -149,7 +149,7 @@ it('keeps explicit runtime factories as isolated dynamic services', function () 
 
 it('falls back for arbitrary autowireable classes without replacing compiled state', function () {
     $builder = ContainerBuilder::create(uniqid('static_batch_arbitrary_'));
-    $builder->singleton(StaticBatchStableService::class);
+    $builder->autowire(StaticBatchStableService::class, StaticBatchStableService::class);
 
     $path = staticBatchArtifactPath();
     try {
@@ -168,7 +168,7 @@ it('falls back for arbitrary autowireable classes without replacing compiled sta
 
 it('validates the generated runtime against its metadata sidecar before loading', function () {
     $container = new Container(uniqid('static_batch_manifest_'));
-    $container->singleton('stable', StaticBatchStableService::class);
+    $container->autowire('stable', StaticBatchStableService::class);
 
     $path = staticBatchArtifactPath();
     try {
