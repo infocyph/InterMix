@@ -65,7 +65,8 @@ final readonly class DefinitionGraph
     ): self {
         $definitions = $repository->getFunctionReference();
         $definitionMeta = [];
-        foreach ($definitions as $id => $_definition) {
+        foreach ($definitions as $rawId => $_definition) {
+            $id = (string) $rawId;
             $definitionMeta[$id] = $repository->getDefinitionMeta($id);
         }
 

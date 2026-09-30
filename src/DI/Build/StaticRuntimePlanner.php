@@ -47,7 +47,8 @@ final class StaticRuntimePlanner
         $aliasCycles = $this->detectAliasCycles($definitions);
         ksort($definitions, SORT_STRING);
 
-        foreach ($definitions as $id => $definition) {
+        foreach ($definitions as $rawId => $definition) {
+            $id = (string) $rawId;
             if (isset($aliasCycles[$id])) {
                 $skipped[$id] = 'alias graph contains a cycle';
 
@@ -116,7 +117,8 @@ final class StaticRuntimePlanner
      */
     private function detectAliasCycles(array $definitions): array {
         $cyclic = [];
-        foreach ($definitions as $id => $definition) {
+        foreach ($definitions as $rawId => $definition) {
+            $id = (string) $rawId;
             if (!$definition instanceof AliasDefinition) {
                 continue;
             }
@@ -351,7 +353,8 @@ final class StaticRuntimePlanner
         $remaining = array_fill_keys(array_keys($plans), true);
         do {
             $changed = false;
-            foreach (array_keys($remaining) as $id) {
+            foreach (array_keys($remaining) as $rawId) {
+                $id = (string) $rawId;
                 if ($this->hasRemainingDependency($plans, $remaining, $id)) {
                     continue;
                 }
@@ -360,7 +363,8 @@ final class StaticRuntimePlanner
             }
         } while ($changed);
 
-        foreach (array_keys($remaining) as $id) {
+        foreach (array_keys($remaining) as $rawId) {
+            $id = (string) $rawId;
             $skipped[$id] = 'static dependency graph contains or depends on a cycle';
             unset($plans[$id]);
         }
