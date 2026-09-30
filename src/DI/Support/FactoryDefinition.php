@@ -18,7 +18,7 @@ use ReflectionClass;
 final readonly class FactoryDefinition
 {
     /** @var array<int, scalar|array<array-key, mixed>|ServiceReference|null> */
-    public readonly array $arguments;
+    public array $arguments;
 
     /**
      * @param class-string $class
@@ -152,8 +152,13 @@ final readonly class FactoryDefinition
     /** @return scalar|array<array-key, mixed>|null */
     private static function snapshotValue(mixed $value): mixed
     {
-        if (!is_array($value)) {
+        if (is_scalar($value) || $value === null) {
             return $value;
+        }
+        if (!is_array($value)) {
+            throw new InvalidArgumentException(
+                'Declarative factory arguments must be service references or exportable values.',
+            );
         }
 
         $snapshot = [];
