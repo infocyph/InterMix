@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Support;
 
 use Closure;
+use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\Exceptions\ContainerException;
@@ -15,13 +16,34 @@ final class ContextualBindingBuilder
 
     /** @internal */
     public function __construct(
-        private readonly ContainerBuilder $builder,
+        private readonly Container|ContainerBuilder $owner,
         private readonly Repository $repository,
         private readonly string $consumer,
     ) {}
 
-    /** @param class-string $class */
-    public function giveClass(string $class): ContainerBuilder
+    /**
+     * Transitional 10.x contextual binding terminal.
+     *
+     * New builder configuration must use the explicit giveClass(),
+     * giveFactory(), giveReference(), or giveValue() terminals.
+     *
+     * @internal
+     */
+    public function give(mixed $implementation): Container
+    {
+        if (!$this->owner instanceof Container) {
+            throw new ContainerException(
+                'ContainerBuilder contextual bindings require an explicit binding terminal.',
+            );
+        }
+
+        $this->assertDependencySelected('give(...)');
+        $this->repository->setContextualBinding($this->consumer, $this->dependency, $implementation);
+
+        return $this->owner;
+    }
+
+    public function giveClass(string $class): Container|ContainerBuilder
     {
         if ($class === '' || (!class_exists($class) && !interface_exists($class))) {
             throw new ContainerException("Contextual class '{$class}' does not exist.");
@@ -30,7 +52,7 @@ final class ContextualBindingBuilder
         return $this->store($class);
     }
 
-    public function giveFactory(Closure|FactoryDefinition $factory): ContainerBuilder
+    public function giveFactory(Closure|FactoryDefinition $factory): Container|ContainerBuilder
     {
         return $this->store(
             $factory instanceof Closure
@@ -39,7 +61,7 @@ final class ContextualBindingBuilder
         );
     }
 
-    public function giveReference(string $id): ContainerBuilder
+    public function giveReference(string $id): Container|ContainerBuilder
     {
         if ($id === '') {
             throw new ContainerException('Contextual service reference must be a non-empty string.');
@@ -48,7 +70,7 @@ final class ContextualBindingBuilder
         return $this->store(new ServiceReference($id));
     }
 
-    public function giveValue(mixed $value): ContainerBuilder
+    public function giveValue(mixed $value): Container|ContainerBuilder
     {
         return $this->store(new ValueDefinition($value));
     }
@@ -64,16 +86,20 @@ final class ContextualBindingBuilder
         return $this;
     }
 
-    private function store(mixed $binding): ContainerBuilder
+    private function assertDependencySelected(string $terminal): void
     {
         if ($this->dependency === null) {
             throw new ContainerException(
-                'Contextual binding requires needs(<dependency>) before selecting a binding kind.',
+                "Contextual binding requires needs(<dependency>) before {$terminal}.",
             );
         }
+    }
 
+    private function store(mixed $binding): Container|ContainerBuilder
+    {
+        $this->assertDependencySelected('selecting a binding kind');
         $this->repository->setContextualBinding($this->consumer, $this->dependency, $binding);
 
-        return $this->builder;
+        return $this->owner;
     }
 }
