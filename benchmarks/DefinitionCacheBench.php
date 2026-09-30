@@ -7,7 +7,8 @@ namespace Infocyph\InterMix\Benchmarks;
 use DateInterval;
 use DateTimeInterface;
 use Infocyph\CacheLayer\Cache\Cache;
-use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\ContainerBuilder;
+use Infocyph\InterMix\DI\Support\FactoryDefinition;
 use PhpBench\Attributes\BeforeMethods;
 use PhpBench\Attributes\Iterations;
 use PhpBench\Attributes\Revs;
@@ -74,8 +75,9 @@ final class DefinitionCacheBench
 
     public function benchGenerationRotation(): void
     {
-        $container = $this->warmupContainer(100, Cache::memory('intermix.rotation'));
-        $container->definitions()->warmDefinitionCache(rotateGeneration: true);
+        $pool = Cache::memory('intermix.rotation');
+        $this->warmupBuilder(100, $pool, 'release-1')->warmDefinitionCache();
+        $this->warmupBuilder(100, $pool, 'release-2')->warmDefinitionCache();
     }
 
     #[BeforeMethods('setUp')]
@@ -91,50 +93,78 @@ final class DefinitionCacheBench
 
     public function benchUncachedSingletonScalarResolve(): void
     {
-        $container = new Container(uniqid('__definition_cache_uncached__', true));
-        $container->bind('value', static fn(): int => 42);
-        $container->get('value');
+        ContainerBuilder::create(uniqid('__definition_cache_uncached__', true))
+            ->factory(
+                'value',
+                FactoryDefinition::staticFactory(DefinitionCacheBenchFactory::class, 'value'),
+            )
+            ->build()
+            ->get('value');
     }
 
     private function resolveHit(CacheItemPoolInterface $pool, string $alias): void
     {
-        $container = new Container($alias);
-        $container->definitions()->enableDefinitionCache($pool, 'benchmark');
-        $container->bind('value', static fn(): int => 99);
-        $container->get('value');
+        ContainerBuilder::create($alias)
+            ->definitionCache($pool, 'benchmark', $alias)
+            ->factory(
+                'value',
+                FactoryDefinition::staticFactory(DefinitionCacheBenchFactory::class, 'value'),
+            )
+            ->cacheDefinition('value')
+            ->build()
+            ->get('value');
     }
 
     private function seedHit(CacheItemPoolInterface $pool, string $alias): void
     {
-        $container = new Container($alias);
-        $container->definitions()->enableDefinitionCache($pool, 'benchmark');
-        $container->bind('value', static fn(): int => 42);
-        $container->get('value');
+        $this->resolveHit($pool, $alias);
     }
 
     private function warm(int $count, bool $bulk): void
     {
-        $container = $this->warmupContainer($count, Cache::memory('intermix.warm.' . $count));
+        $builder = $this->warmupBuilder(
+            $count,
+            Cache::memory('intermix.warm.' . $count),
+            'release-1',
+        );
         if ($bulk) {
-            $container->definitions()->warmDefinitionCache();
+            $builder->warmDefinitionCache();
 
             return;
         }
 
+        $container = $builder->build();
         for ($index = 0; $index < $count; ++$index) {
             $container->get('value.' . $index);
         }
     }
 
-    private function warmupContainer(int $count, CacheItemPoolInterface $pool): Container
-    {
-        $container = new Container(uniqid('__definition_cache_warm__', true));
-        $container->definitions()->enableDefinitionCache($pool, 'benchmark');
+    private function warmupBuilder(
+        int $count,
+        CacheItemPoolInterface $pool,
+        string $generation,
+    ): ContainerBuilder {
+        $builder = ContainerBuilder::create(uniqid('__definition_cache_warm__', true))
+            ->definitionCache($pool, 'benchmark', $generation);
         for ($index = 0; $index < $count; ++$index) {
-            $container->bind('value.' . $index, $index);
+            $id = 'value.' . $index;
+            $builder
+                ->factory(
+                    $id,
+                    FactoryDefinition::staticFactory(DefinitionCacheBenchFactory::class, 'value'),
+                )
+                ->cacheDefinition($id);
         }
 
-        return $container;
+        return $builder;
+    }
+}
+
+final class DefinitionCacheBenchFactory
+{
+    public static function value(): int
+    {
+        return 42;
     }
 }
 
