@@ -201,6 +201,7 @@ class Repository
         $target->functionReference = $this->functionReference;
         $target->functionReference[ContainerInterface::class] = $target->container;
         $target->hasHooks = $this->hasHooks;
+        $target->hasPropertyResources = $this->hasPropertyResources;
         $target->lazyLoading = $this->lazyLoading;
         $target->onResolvedHooks = $this->onResolvedHooks;
         $target->onResolvingHooks = $this->onResolvingHooks;
