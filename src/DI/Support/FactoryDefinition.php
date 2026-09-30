@@ -17,14 +17,14 @@ use ReflectionClass;
  */
 final readonly class FactoryDefinition
 {
+    /** @var array<int, scalar|array<array-key, mixed>|ServiceReference|null> */
+    public readonly array $arguments;
+
     /**
      * @param class-string $class
      * @param string|null $method Public static factory name, or null for construction.
      * @param array<int, scalar|array<array-key, mixed>|ServiceReference|null> $arguments
      */
-    /** @var array<int, scalar|array<array-key, mixed>|ServiceReference|null> */
-    public readonly array $arguments;
-
     private function __construct(
         public string $class,
         public ?string $method,
@@ -46,7 +46,7 @@ final readonly class FactoryDefinition
                 throw new InvalidArgumentException('Declarative factory methods must be public and static.');
             }
         }
-        if (!array_is_list($this->arguments)) {
+        if (!array_is_list($arguments)) {
             throw new InvalidArgumentException('Declarative factory arguments must be a positional list.');
         }
 
