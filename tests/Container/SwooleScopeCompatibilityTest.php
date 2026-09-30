@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\ContainerBuilder;
+use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\DI\Internal\ExecutionContext;
 
 final class SwooleCompatibilityScopedLeaf {}
@@ -101,8 +103,9 @@ it('shares a logical scope explicitly across a Swoole family child without chang
     }
 
     [$coroutineClass, $namespace] = $runtime;
-    $container = new Container(uniqid('swoole_scope_'));
-    $container->scoped('leaf', SwooleCompatibilityScopedLeaf::class);
+    $container = ContainerBuilder::create(uniqid('swoole_scope_'))
+        ->autowire('leaf', SwooleCompatibilityScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->build();
     $shared = null;
     $isolated = null;
 
