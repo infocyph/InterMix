@@ -893,7 +893,7 @@ Migration execution order:
 
 ## Implementation tracker
 
-Updated: 2026-09-29
+Updated: 2026-09-30
 
 This tracker is the authoritative execution state for this plan. A **batch is a
 coherent tranche containing multiple P-packages**, not a 1:1 alias for a package.
@@ -905,7 +905,7 @@ batch is closed.
 | Batch | Packages | Status | Package status / implementation evidence |
 | --- | --- | --- | --- |
 | 1 | P0 + P1 — baseline and runtime hardening | **Complete** | Closed on `f55be8b`: P0 contract/baseline frozen; P1 F1–F3 fixed. Corrected 10.1.1 regression gate, PHPForge QA/analysis/benchmarks, clean install, and Swoole/OpenSwoole PHP 8.4/8.5 are green. |
-| 2 | P2 + P3 — builder/definitions and runtime/scope contract | **In progress — P2 completeness pass** | P2 core definition/freeze work is implemented. A full B1/B2/B7 cross-check found and closed contextual-binding, cache-warmup and metadata-snapshot gaps; focused P2 QA remains the gate before P3. |
+| 2 | P2 + P3 — builder/definitions and runtime/scope contract | **In progress — P2 contract cleanup + QA** | P2 core definition/freeze/cache work is implemented. Full B1/B2/B7 cross-check is active: contextual kinds, metadata snapshots, cache warmup/keying, canonical numeric-string IDs, and weak Fiber fast-path performance are implemented. Remaining P2 blockers are removal of builder-side 10.x registration/manager/development escape hatches plus final PHPForge QA/analysis. P3 has not started. |
 | 3 | P4 + P5 — compiled graph and provider boundaries | Pending | P4: B6 generated/fallback graph. P5: CacheLayer 4.0 / Runwire 2.1 optional provider boundaries. Run focused QA after each package, then full batch QA. |
 | 4 | P6 + P7 + P8 — migration, measured acceptance and release candidate | Pending | P6: docs/consumer migration. P7: benchmarks/soak/host acceptance. P8: exact-SHA CI, packaging and RC evidence. P8 remains the final gate inside this batch. |
 
@@ -925,87 +925,88 @@ Batch 1 acceptance revision: `f55be8ba4b69201fa8f9bb2d34efb3e30cbc3b87`.
 Batch 1 is closed. Batch 2 starts with P2 only; P3 does not begin until P2
 focused QA and tracker evidence are complete.
 
-### Batch 2 / P2 mid-update
+### Batch 2 / P2 live tracker
 
-Current stage: **P2 completeness pass — full B1/B2/B7 cross-check before focused QA**.
+Current stage: **P2 contract cleanup + focused QA**.
 
-Repository review against the P2 contract found that the current builder still owns
-a mutable development container, mutation listeners, active production-runtime
-tracking/deoptimization, public manager escape hatches, ambiguous binding helpers,
-and provider registration through the runtime container. The existing definition
-cache also still uses automatic eligibility and container-alias-derived cache keys.
+Latest implementation/QA head reviewed: `c03499be734147703278e128b472aee8a02ff9d7`.
+P3 has **not** started. P2 closes only when the B1/B2/B7 contract, focused tests,
+PHPForge QA/analysis, release regression, clean install and runtime-extension lanes
+are all green on one exact revision.
 
-Stage 1 implementation scope is therefore:
+#### P2 implementation checklist
 
-- make builder finalization one-way and remove live-runtime deoptimization coupling;
-- add `build()` from the finalized graph while keeping runtime instances isolated;
-- introduce explicit `value`, `autowire`, `factory`, `alias`, and `input`
-  definition kinds with duplicate rejection and builder-only `unbind`;
-- change service-provider registration to accept a supplied provider instance and
-  register against `ContainerBuilder`;
-- retain caller-owned literal object identity while snapshotting writable metadata;
-- keep P3 retrieval/scope API changes out of this stage.
+- [x] builder finalization is one-way after successful graph validation;
+- [x] `build()` creates isolated locked runtimes with separate singleton/scope stores;
+- [x] explicit `value()`, `autowire()`, `factory()`, `alias()`, and `input()`
+  definition kinds are implemented;
+- [x] duplicate explicit registration requires builder-only `unbind()` before replacement;
+- [x] provider registration accepts a supplied provider instance and registers against
+  `ContainerBuilder`;
+- [x] explicit definition-cache namespace/generation and per-definition opt-in are
+  implemented with an `imx11` key discriminator;
+- [x] bounded F3 admission/exportability checks are shared across cache/build paths;
+- [x] contextual builder configuration uses explicit class/value/factory/reference
+  terminals and returns the builder;
+- [x] autowire and declarative-factory metadata are snapshotted without writable
+  PHP array-reference aliases back to the builder;
+- [x] definition-cache bulk warmup is reachable from the builder and preserves
+  explicit eligibility;
+- [x] builder-owned configuration entry points cover environment bindings, attribute
+  resolvers, tracing, injection/attribute toggles, graph export, preload generation,
+  and environment-specific metadata;
+- [x] canonical numeric-string service ID `"0"` is normalized across graph,
+  planning, generated dispatch, reports/manifests, dynamic runtime and compiled runtime;
+- [x] F2 performance recovery uses a WeakReference last-Fiber fast path, preserving
+  collection of completed Fibers while avoiding repeated WeakMap lookups;
+- [x] P2 regression coverage includes literal values, factories, autowire overrides,
+  inputs, alias lifetimes, freeze/retry behavior, contextual kinds, metadata snapshots,
+  cache opt-in/warmup/key separation, compiled literal/alias behavior and `"0"` IDs;
+- [ ] remove builder-side overloaded 10.x registration shortcuts:
+  `bind()`, `bindFactory()`, `singleton()`, `scoped()`, `transient()`;
+- [ ] remove builder manager/development escape hatches:
+  `definitions()`, `registration()`, `options()`, `development()`;
+- [ ] migrate branch tests/fixtures that still use those builder-only legacy surfaces
+  to the explicit 11.0 builder API;
+- [ ] focused P2 QA green on one exact revision;
+- [ ] update this tracker with the exact P2 closure SHA and evidence.
 
-Stage 2 will apply B7's explicit definition-cache namespace/generation and
-per-definition opt-in rules. Focused P2 QA and tracker closure follow both stages;
-P3 does not start before that gate is green.
+The previous note that deferred builder manager/development removal to P3 was
+incorrect relative to the P2 completion criterion (“no manager mutation escape”)
+and B1/B2. Runtime-side 10.x execution APIs remain P3 work; **builder-side**
+configuration escape hatches are P2 blockers.
 
-### Batch 2 / P2 implementation tracker
+#### Latest P2 QA evidence at `c03499be`
 
-P2 is implemented as one cohesive definition/configuration slice before focused QA:
+Green:
 
-- [x] explicit definition carriers for literal values, runtime factories,
-  autowiring and required scoped inputs;
-- [x] aliases resolve through the target and do not own a second dynamic or
-  compiled singleton/scoped cache;
-- [x] autowire constructor/property overrides are explicit definition metadata;
-- [x] builder `build()` snapshots/finalizes configuration and creates isolated
-  locked runtimes with separate singleton/scope stores;
-- [x] successful finalization freezes later builder mutation; validation failure
-  remains mutable; artifact failure after finalization remains frozen;
-- [x] duplicate explicit registration requires `unbind()` before replacement;
-- [x] `compile(path, strict)` supports pre-publication strict rejection;
-- [x] external definition cache supports explicit namespace/generation and
-  per-definition eligibility with an `imx11` key discriminator;
-- [x] bounded F3 value admission remains shared by cache hits/writes and
-  exportability checks;
-- [x] contextual bindings use explicit class/value/factory/reference terminals and return the builder;
-- [x] autowire metadata arrays are snapshotted through a bounded reference-breaking boundary;
-- [x] definition-cache bulk warmup is builder-owned and preserves explicit per-definition eligibility;
-- [x] builder-owned configuration entry points cover environment bindings, attribute resolvers, tracing, injection/attribute toggles, graph export, preload and environment metadata without requiring manager access;
-- [x] P2 contract regression tests cover literal semantics, factories, autowire overrides, inputs, alias lifetimes, freeze/retry behavior, contextual kinds, metadata snapshotting, cache opt-in/warmup/key separation and compiled literal/alias behavior;
-- [ ] focused P2 QA on the committed slice;
-- [ ] migrate/remove the temporary 10.x builder manager/development access during
-  P3 before Batch 2 closes; retained handles are locked at P2 finalization and
-  cannot mutate finalized wiring.
+- release regression against exact 10.1.1 baseline on PHP 8.4 and PHP 8.5;
+- Swoole/OpenSwoole scope compatibility matrix;
+- PHPForge benchmark lanes on PHP 8.4 and PHP 8.5;
+- clean production install;
+- Pest, PHPCS, Deptrac, syntax/reference, duplicate and comment-policy checks;
+- Psalm on PHP 8.4 and PHP 8.5.
 
-P3 does not start until the P2 focused QA checkbox is closed.
+Still failing and therefore blocking P2 closure:
 
-### Batch 1 / P1 historical QA tuning evidence
+- Pint: `StaticRuntimePlanner.php`, `ContainerBuilder.php`,
+  `DefinitionResolver.php`;
+- Rector dry-run: readonly-property visibility normalization in
+  `FactoryDefinition.php`;
+- PHPStan: five remaining type findings in contextual/static-parameter planning,
+  contextual dependency narrowing and factory snapshot return typing.
 
-Latest implementation/QA head before this tracker-only update:
-`07b44e5d3eb2a32793a66f9e202e0234d7c6b323`.
+No PHPForge threshold, skip policy, or benchmark budget has been weakened.
+The release-regression Fiber failure seen on earlier P2 revisions is resolved by
+the weak last-Fiber fast path and is green at this head.
 
-P1 implementation now covers F1 carrier-local concurrent-resolution ownership,
-deterministic singleton contention, F2 weak Fiber fast-path ownership, and F3
-bounded/cycle-safe cache/export traversal. Regression tests for those defects are
-present and the latest full quality matrix is green outside the dedicated release
-performance comparison.
+### Batch 1 superseded tuning evidence
 
-Latest release-regression evidence:
-
-- PHP 8.4: sequential production **-0.63%** (passes 3% budget), isolated Fiber
-  **+10.85%** (fails 5% budget).
-- PHP 8.5: sequential production **+6.67%** (fails 3% budget), isolated Fiber
-  **+12.00%** (fails 5% budget).
-
-P1 is therefore not complete and **Batch 1** remains open. Batch 2 (P2 + P3)
-must not start until the release-regression gate is green on the final P1 revision.
-
-The historical failures above were produced by the legacy 10.0.4 comparison
-workflow. They remain diagnostic evidence, but they are not the final 11.0
-acceptance comparison. The Batch 1 workflow is corrected to the immutable
-10.1.1 baseline before closure.
+Earlier P1 tuning revisions temporarily failed the release-regression budget while
+F1–F3 were being hardened. Those intermediate failures are retained in Git/Actions
+history for diagnosis but are superseded by the exact Batch 1 closure evidence
+above. **Batch 1 is complete at `f55be8ba4b69201fa8f9bb2d34efb3e30cbc3b87`.**
+They must not be used to reopen Batch 1 or to justify starting P3 before P2 closes.
 
 ### Batch 1 / P0 frozen baseline
 
