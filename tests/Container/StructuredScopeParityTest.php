@@ -104,9 +104,10 @@ function exerciseStructuredScopeParity(object $container): void
 }
 
 it('keeps structured scope semantics identical in the dynamic container', function (): void {
-    $container = new Container(uniqid('structured_parity_dynamic_'));
-    $container->autowire('leaf', StructuredParityScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
-        ->bindFactory('island', static fn(): stdClass => new stdClass(), LifetimeEnum::Scoped);
+    $container = ContainerBuilder::create(uniqid('structured_parity_dynamic_'))
+        ->autowire('leaf', StructuredParityScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->factory('island', static fn(): stdClass => new stdClass(), lifetime: LifetimeEnum::Scoped)
+        ->build();
 
     exerciseStructuredScopeParity($container);
 });
@@ -114,7 +115,7 @@ it('keeps structured scope semantics identical in the dynamic container', functi
 it('keeps structured scope semantics identical across compiled runtime islands', function (): void {
     $builder = ContainerBuilder::create(uniqid('structured_parity_compiled_'));
     $builder->autowire('leaf', StructuredParityScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
-        ->bindFactory('island', static fn(): stdClass => new stdClass(), LifetimeEnum::Scoped);
+        ->factory('island', static fn(): stdClass => new stdClass(), lifetime: LifetimeEnum::Scoped);
 
     $path = structuredParityArtifactPath();
     try {
@@ -129,7 +130,7 @@ it('keeps structured scope semantics identical across compiled runtime islands',
 it('keeps structured scope semantics identical across independent frozen production runtimes', function (): void {
     $builder = ContainerBuilder::create(uniqid('structured_parity_frozen_'));
     $builder->autowire('leaf', StructuredParityScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
-        ->bindFactory('island', static fn(): stdClass => new stdClass(), LifetimeEnum::Scoped);
+        ->factory('island', static fn(): stdClass => new stdClass(), lifetime: LifetimeEnum::Scoped);
 
     $path = structuredParityArtifactPath();
     try {
