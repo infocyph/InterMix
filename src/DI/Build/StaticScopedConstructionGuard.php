@@ -25,7 +25,8 @@ final class StaticScopedConstructionGuard
     public function apply(string $source, array $plans, array $slots): string
     {
         $wrappers = '';
-        foreach ($plans as $id => $plan) {
+        foreach ($plans as $rawId => $plan) {
+            $id = (string) $rawId;
             if ($plan['lifetime'] !== LifetimeEnum::Scoped) {
                 continue;
             }
