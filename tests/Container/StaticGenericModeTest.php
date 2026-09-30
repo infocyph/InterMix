@@ -41,18 +41,18 @@ function removeStaticGenericArtifact(string $path): void
 
 it('captures injection-off mode in the immutable definition graph', function () {
     $builder = ContainerBuilder::create(uniqid('static_generic_graph_'));
-    $builder->options()->setOptions(injection: false);
+    $builder->enableInjection(false);
 
-    $graph = DefinitionGraph::from($builder->development()->getRepository());
+    $graph = $builder->definitionGraph();
 
     expect($graph->injectionEnabled())->toBeFalse();
 });
 
 it('compiles zero-required-argument generic classes without autowiring machinery', function () {
     $builder = ContainerBuilder::create(uniqid('static_generic_compiled_'));
-    $builder->options()->setOptions(injection: false);
-    $builder->singleton('empty', StaticGenericEmptyService::class);
-    $builder->singleton('optional', StaticGenericOptionalService::class);
+    $builder->enableInjection(false);
+    $builder->autowire('empty', StaticGenericEmptyService::class);
+    $builder->autowire('optional', StaticGenericOptionalService::class);
     $path = staticGenericArtifactPath();
 
     try {
@@ -74,9 +74,9 @@ it('compiles zero-required-argument generic classes without autowiring machinery
 
 it('keeps registered generic constructor behavior in the dynamic island', function () {
     $builder = ContainerBuilder::create(uniqid('static_generic_configured_'));
-    $builder->options()->setOptions(injection: false);
-    $builder->registration()->registerClass(StaticGenericConfiguredService::class, ['value' => 9]);
-    $builder->singleton('configured', StaticGenericConfiguredService::class);
+    $builder->enableInjection(false);
+    $builder->registerClass(StaticGenericConfiguredService::class, ['value' => 9]);
+    $builder->autowire('configured', StaticGenericConfiguredService::class);
     $path = staticGenericArtifactPath();
 
     try {
@@ -95,8 +95,8 @@ it('keeps registered generic constructor behavior in the dynamic island', functi
 
 it('keeps DI-style class recipes dynamic when injection is disabled', function () {
     $builder = ContainerBuilder::create(uniqid('static_generic_class_'));
-    $builder->options()->setOptions(injection: false);
-    $builder->singleton('consumer', StaticGenericConsumer::class);
+    $builder->enableInjection(false);
+    $builder->autowire('consumer', StaticGenericConsumer::class);
     $builder->value('answer', 42);
     $path = staticGenericArtifactPath();
 
