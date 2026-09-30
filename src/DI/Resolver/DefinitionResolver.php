@@ -57,8 +57,7 @@ class DefinitionResolver
     public function setResolverInstance(
         ClassResolver $classResolver,
         ParameterResolver $parameterResolver,
-    ): void
-    {
+    ): void {
         $this->classResolver = $classResolver;
         $this->parameterResolver = $parameterResolver;
     }
@@ -181,8 +180,7 @@ class DefinitionResolver
     private function resolveAutowireDefinition(
         string $name,
         AutowireDefinition $definition,
-    ): mixed
-    {
+    ): mixed {
         [$classResolver] = $this->resolvers();
         if ($this->repository->isTracingEnabled()) {
             $this->repository->tracer()->recordDependency($name, $definition->class, 'definition-class');

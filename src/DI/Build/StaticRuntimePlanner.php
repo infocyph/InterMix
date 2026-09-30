@@ -76,8 +76,7 @@ final class StaticRuntimePlanner
         DefinitionGraph $graph,
         string $id,
         ReflectionClass $class,
-    ): array|string
-    {
+    ): array|string {
         if (!$class->isInstantiable()) {
             return 'class definition is not instantiable';
         }
@@ -278,8 +277,7 @@ final class StaticRuntimePlanner
     private function planAlias(
         DefinitionGraph $graph,
         AliasDefinition $definition,
-    ): array
-    {
+    ): array {
         $target = $definition->target;
         $definitions = $graph->definitions();
 
@@ -415,8 +413,7 @@ final class StaticRuntimePlanner
         string $id,
         mixed $definition,
         bool $literal = false,
-    ): ?array
-    {
+    ): ?array {
         if ($id === ContainerInterface::class && $definition instanceof Container) {
             return [
                 'kind' => 'value',
