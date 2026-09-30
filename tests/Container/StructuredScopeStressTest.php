@@ -110,8 +110,9 @@ function structuredStressContainerAliases(): array
 }
 
 it('reuses one dynamic container across persistent attached request churn without leaking scope state', function (): void {
-    $container = new Container(uniqid('structured_stress_dynamic_'));
-    $container->scoped('leaf', StructuredStressScopedLeaf::class);
+    $container = ContainerBuilder::create(uniqid('structured_stress_dynamic_'))
+        ->autowire('leaf', StructuredStressScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->build();
 
     exercisePersistentAttachedScopeChurn($container, 64);
 
@@ -136,8 +137,9 @@ it('reuses one frozen production runtime across persistent attached request chur
 });
 
 it('cleans nested attached frames after repeated child exceptions', function (): void {
-    $container = new Container(uniqid('structured_stress_exception_'));
-    $container->scoped('leaf', StructuredStressScopedLeaf::class);
+    $container = ContainerBuilder::create(uniqid('structured_stress_exception_'))
+        ->autowire('leaf', StructuredStressScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->build();
     $nestedLeaves = 0;
     $container->onScopeLeave('nested', static function () use (&$nestedLeaves): void {
         ++$nestedLeaves;
@@ -166,8 +168,9 @@ it('cleans nested attached frames after repeated child exceptions', function ():
 });
 
 it('stabilizes memory and releases carrier and logical scope bookkeeping after persistent churn', function (): void {
-    $container = new Container(uniqid('structured_stress_memory_'));
-    $container->scoped('leaf', StructuredStressScopedLeaf::class);
+    $container = ContainerBuilder::create(uniqid('structured_stress_memory_'))
+        ->autowire('leaf', StructuredStressScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->build();
 
     exerciseMeasuredStructuredScopeChurn($container, 64);
     gc_collect_cycles();
