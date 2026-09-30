@@ -46,8 +46,8 @@ it('keeps live Fiber carrier identities distinct', function () {
 
 it('preserves compiled and fallback scoped identity after builder finalization', function () {
     $builder = ContainerBuilder::create(uniqid('runtime_alignment_fallback_'));
-    $builder->scoped('compiled', RuntimeAlignmentCompiledLeaf::class)
-        ->bindFactory('dynamic', static fn(): stdClass => new stdClass(), LifetimeEnum::Scoped);
+    $builder->autowire('compiled', RuntimeAlignmentCompiledLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->factory('dynamic', static fn(): stdClass => new stdClass(), LifetimeEnum::Scoped);
 
     $path = runtimeAlignmentArtifactPath();
     try {
@@ -105,9 +105,7 @@ it('rejects dynamic configuration mutation from a foreign carrier while its scop
 
 it('keeps a finalized compiled graph immutable while a propagated child is attached', function () {
     $builder = ContainerBuilder::create(uniqid('runtime_alignment_compiled_mutation_'));
-    $builder->scoped('compiled', RuntimeAlignmentCompiledLeaf::class);
-    $development = $builder->development();
-
+    $builder->autowire('compiled', RuntimeAlignmentCompiledLeaf::class, lifetime: LifetimeEnum::Scoped);
     $path = runtimeAlignmentArtifactPath();
     try {
         $builder->compile($path);
@@ -130,7 +128,7 @@ it('keeps a finalized compiled graph immutable while a propagated child is attac
         expect(fn() => $builder->value('late.value', 'blocked'))
             ->toThrow(ContainerException::class, 'ContainerBuilder is finalized')
             ->and($builder->compilationReport())->toBe($report)
-            ->and($development->getRepository()->hasFunctionReference('late.value'))->toBeFalse();
+            ->and($builder->build()->getRepository()->hasFunctionReference('late.value'))->toBeFalse();
 
         $child->resume();
 
