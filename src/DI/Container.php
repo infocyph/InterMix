@@ -533,7 +533,7 @@ final class Container implements ContainerInterface, ArrayAccess
 
     public function when(string $consumer): ContextualBindingBuilder
     {
-        return new ContextualBindingBuilder($this, $consumer);
+        return new ContextualBindingBuilder($this, $this->repository, $consumer);
     }
 
     /** @param array<string, mixed> $instances */
