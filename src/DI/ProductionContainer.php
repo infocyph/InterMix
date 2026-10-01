@@ -18,11 +18,11 @@ use Throwable;
 
 abstract class ProductionContainer implements RuntimeContainerInterface
 {
+    protected bool $compiledSingletonResolutionActive = false;
+
     protected bool $contextScopesActive = false;
 
     protected ScopeState $scope;
-
-    protected bool $compiledSingletonResolutionActive = false;
 
     /** @var array<int|string, int> */
     private array $compiledSingletonResolutionOwners = [];
@@ -369,26 +369,6 @@ abstract class ProductionContainer implements RuntimeContainerInterface
         return false;
     }
 
-    final protected function resolveCompiledSingleton(callable $resolver): mixed
-    {
-        $owner = ExecutionContext::id() ?? "\0intermix.production.root";
-        $this->compiledSingletonResolutionOwners[$owner]
-            = ($this->compiledSingletonResolutionOwners[$owner] ?? 0) + 1;
-        $this->compiledSingletonResolutionActive = true;
-
-        try {
-            return $resolver();
-        } finally {
-            $remaining = $this->compiledSingletonResolutionOwners[$owner] - 1;
-            if ($remaining > 0) {
-                $this->compiledSingletonResolutionOwners[$owner] = $remaining;
-            } else {
-                unset($this->compiledSingletonResolutionOwners[$owner]);
-            }
-            $this->compiledSingletonResolutionActive = $this->compiledSingletonResolutionOwners !== [];
-        }
-    }
-
     final protected function invokeCompiledRuntimeMethod(
         object $instance,
         string $className,
@@ -432,6 +412,26 @@ abstract class ProductionContainer implements RuntimeContainerInterface
     protected function requiresScopeLeaveHook(string $scope): bool
     {
         return false;
+    }
+
+    final protected function resolveCompiledSingleton(callable $resolver): mixed
+    {
+        $owner = ExecutionContext::id() ?? "\0intermix.production.root";
+        $this->compiledSingletonResolutionOwners[$owner]
+            = ($this->compiledSingletonResolutionOwners[$owner] ?? 0) + 1;
+        $this->compiledSingletonResolutionActive = true;
+
+        try {
+            return $resolver();
+        } finally {
+            $remaining = $this->compiledSingletonResolutionOwners[$owner] - 1;
+            if ($remaining > 0) {
+                $this->compiledSingletonResolutionOwners[$owner] = $remaining;
+            } else {
+                unset($this->compiledSingletonResolutionOwners[$owner]);
+            }
+            $this->compiledSingletonResolutionActive = $this->compiledSingletonResolutionOwners !== [];
+        }
     }
 
     /** @return array<int, string> */
