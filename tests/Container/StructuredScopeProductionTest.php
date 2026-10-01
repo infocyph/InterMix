@@ -59,16 +59,16 @@ it('shares a compiled logical scope while keeping sibling nested frames carrier-
     [$runtime, $path] = structuredProductionRuntime();
 
     try {
-        $runtime->enterScope('request');
+        testEnterScope($runtime, 'request');
         $parent = $runtime->get('leaf');
         $context = $runtime->captureScopeContext();
 
         $child = static function () use ($runtime, $context): array {
             return $runtime->withinScopeContext($context, static function (ProductionContainer $active): array {
-                $active->enterScope('nested');
+                testEnterScope($active, 'nested');
                 $nested = $active->get('leaf');
                 Fiber::suspend($nested);
-                $active->leaveScope();
+                testLeaveScope($active);
                 $restored = $active->get('leaf');
                 Fiber::suspend($restored);
 
@@ -96,7 +96,7 @@ it('shares a compiled logical scope while keeping sibling nested frames carrier-
         expect($fiberA->getReturn()[1])->toBe($parent)
             ->and($fiberB->getReturn()[1])->toBe($parent);
 
-        $runtime->leaveScope();
+        testLeaveScope($runtime);
     } finally {
         removeStructuredProductionArtifact($path);
     }
@@ -114,7 +114,7 @@ it('rejects compiled owner close while an attachment is live before firing leave
     try {
         $builder->compile($path);
         $runtime = $builder->production($path);
-        $runtime->enterScope('request');
+        testEnterScope($runtime, 'request');
         $context = $runtime->captureScopeContext();
 
         $child = new Fiber(static fn(): mixed => $runtime->withinScopeContext(
@@ -128,12 +128,12 @@ it('rejects compiled owner close while an attachment is live before firing leave
         ));
         $child->start();
 
-        expect(fn() => $runtime->leaveScope())
+        expect(fn() => testLeaveScope($runtime))
             ->toThrow(ContainerException::class, 'child execution carriers are still attached');
         expect($leaves)->toBe([]);
 
         $child->resume();
-        $runtime->leaveScope();
+        testLeaveScope($runtime);
 
         expect($leaves)->toBe(['request']);
     } finally {
@@ -147,7 +147,7 @@ it('guards cold compiled scoped construction across sibling carriers', function 
     [$runtime, $path] = structuredProductionRuntime(true);
 
     try {
-        $runtime->enterScope('request');
+        testEnterScope($runtime, 'request');
         $context = $runtime->captureScopeContext();
 
         $first = new Fiber(static fn(): StructuredProductionCold => $runtime->withinScopeContext(
@@ -170,7 +170,7 @@ it('guards cold compiled scoped construction across sibling carriers', function 
         expect($runtime->get('cold'))->toBe($resolved)
             ->and(StructuredProductionCold::$calls)->toBe(1);
 
-        $runtime->leaveScope();
+        testLeaveScope($runtime);
     } finally {
         StructuredProductionCold::$suspend = false;
         removeStructuredProductionArtifact($path);
@@ -192,21 +192,21 @@ it('resets a compiled attached carrier without closing the shared owner scope', 
     try {
         $builder->compile($path);
         $runtime = $builder->production($path);
-        $runtime->enterScope('request');
+        testEnterScope($runtime, 'request');
         $parent = $runtime->get('leaf');
         $context = $runtime->captureScopeContext();
 
         $child = new Fiber(static function () use ($runtime, $context): StructuredProductionLeaf {
             $runtime->withinScopeContext($context, static function (ProductionContainer $active): void {
-                $active->enterScope('nested');
+                testEnterScope($active, 'nested');
                 $active->get('leaf');
                 $active->resetCurrentExecutionScope();
                 $active->resetCurrentExecutionScope();
             });
 
-            $runtime->enterScope('independent');
+            testEnterScope($runtime, 'independent');
             $fresh = $runtime->get('leaf');
-            $runtime->leaveScope();
+            testLeaveScope($runtime);
 
             return $fresh;
         });
@@ -216,7 +216,7 @@ it('resets a compiled attached carrier without closing the shared owner scope', 
             ->and($child->getReturn())->not->toBe($parent)
             ->and($runtime->get('leaf'))->toBe($parent);
 
-        $runtime->leaveScope();
+        testLeaveScope($runtime);
         expect($leaves)->toBe(['nested', 'request']);
     } finally {
         removeStructuredProductionArtifact($path);
@@ -228,7 +228,7 @@ it('rejects foreign and stale compiled scope contexts', function () {
     [$foreign, $foreignPath] = structuredProductionRuntime();
 
     try {
-        $owner->enterScope('request');
+        testEnterScope($owner, 'request');
         $context = $owner->captureScopeContext();
 
         $fiber = new Fiber(static fn(): mixed => $foreign->withinScopeContext(
@@ -238,7 +238,7 @@ it('rejects foreign and stale compiled scope contexts', function () {
         expect(fn() => $fiber->start())
             ->toThrow(ContainerException::class, 'different container');
 
-        $owner->leaveScope();
+        testLeaveScope($owner);
 
         $stale = new Fiber(static fn(): mixed => $owner->withinScopeContext(
             $context,

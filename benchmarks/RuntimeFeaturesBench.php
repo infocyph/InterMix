@@ -7,7 +7,6 @@ namespace Infocyph\InterMix\Benchmarks;
 use Closure;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\ContainerBuilder;
-use Infocyph\InterMix\DI\Invoker;
 use Infocyph\InterMix\Remix\MacroMix;
 use Infocyph\InterMix\Serializer\ClosureSerializer;
 use Infocyph\InterMix\Serializer\SignedClosureSerializer;
@@ -32,8 +31,6 @@ final class RuntimeFeaturesBench
 
     private RuntimeInvokable $invokable;
 
-    private Invoker $invoker;
-
     private int $macroSequence = 0;
 
     private string $serializedClosure;
@@ -50,7 +47,6 @@ final class RuntimeFeaturesBench
             ->value('runtime.singleton', new RuntimeInvokable())
             ->build();
         $this->container->get('runtime.singleton');
-        $this->invoker = Invoker::with($this->container);
         $this->invokable = new RuntimeInvokable();
         $this->closure = static fn(): int => 1;
         $this->serializedClosure = ClosureSerializer::serialize($this->closure);
@@ -95,31 +91,31 @@ final class RuntimeFeaturesBench
     #[BeforeMethods('setUp')]
     public function benchInvokerClassDynamic(): void
     {
-        $this->invoker->invoke(RuntimeInvokable::class);
+        $this->container->invoke(RuntimeInvokable::class);
     }
 
     #[BeforeMethods('setUp')]
     public function benchInvokerClosure(): void
     {
-        $this->invoker->invoke($this->closure);
+        $this->container->invoke($this->closure);
     }
 
     #[BeforeMethods('setUp')]
     public function benchInvokerFunction(): void
     {
-        $this->invoker->invoke(__NAMESPACE__ . '\\runtimeBenchmarkFunction');
+        $this->container->invoke(__NAMESPACE__ . '\\runtimeBenchmarkFunction');
     }
 
     #[BeforeMethods('setUp')]
     public function benchInvokerInvokableObject(): void
     {
-        $this->invoker->invoke($this->invokable);
+        $this->container->invoke($this->invokable);
     }
 
     #[BeforeMethods('setUp')]
     public function benchInvokerStaticMethodString(): void
     {
-        $this->invoker->invoke(RuntimeStaticTarget::class . '::run');
+        $this->container->invoke(RuntimeStaticTarget::class . '::run');
     }
 
     public function benchMacroBulkOverwriteLockDisabled(): void

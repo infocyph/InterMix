@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Support;
 
 use Closure;
-use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\RuntimeContainerInterface;
 
 /** @internal */
 final readonly class RuntimeFactoryDefinition
 {
     public function __construct(private Closure $factory) {}
 
-    public function resolve(Container $container): mixed
+    public function resolve(RuntimeContainerInterface $container): mixed
     {
         return ($this->factory)($container);
     }

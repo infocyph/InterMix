@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Infocyph\InterMix\DI\ContainerBuilder;
+use Infocyph\InterMix\DI\RuntimeContainerInterface;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Container\ContainerInterface;
 
@@ -54,9 +55,11 @@ it('compiles the intrinsic container interface as the generated production conta
         expect($report['skipped'])->toBe([])
             ->and($report['compiled'])->toContain(
                 ContainerInterface::class,
+                RuntimeContainerInterface::class,
                 StaticRuntimeContainerInterfaceConsumer::class,
             )
             ->and($runtime->get(ContainerInterface::class))->toBe($runtime)
+            ->and($runtime->get(RuntimeContainerInterface::class))->toBe($runtime)
             ->and($consumer)->toBeInstanceOf(StaticRuntimeContainerInterfaceConsumer::class)
             ->and($consumer->container)->toBe($runtime);
     } finally {

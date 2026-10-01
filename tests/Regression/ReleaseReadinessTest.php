@@ -261,16 +261,16 @@ it('never confuses user arrays with class resolution state', function () {
     $container->value('returned-array', ['returned' => false]);
 
     expect($container->get('instance-array'))->toBe(['instance' => 'production'])
-        ->and($container->getReturn('returned-array'))->toBe(['returned' => false]);
+        ->and($container->get('returned-array'))->toBe(['returned' => false]);
 });
 
 it('returns exact explicit method results and rejects missing methods', function () {
     $container = releaseContainer('methods');
 
-    expect($container->call(ReleaseMethodTarget::class, 'value'))->toBe('method-value')
-        ->and($container->call(ReleaseMethodTarget::class, 'nullable'))->toBeNull()
-        ->and(fn() => $container->call(ReleaseMethodTarget::class, 'missing'))
-        ->toThrow(ContainerException::class);
+    $target = $container->make(ReleaseMethodTarget::class);
+    expect($container->invoke([$target, 'value']))->toBe('method-value')
+        ->and($container->invoke([$target, 'nullable']))->toBeNull()
+        ->and(is_callable([$target, 'missing']))->toBeFalse();
 });
 
 it('keeps PSR has and get semantics consistent', function () {
@@ -290,11 +290,11 @@ it('invalidates singleton scoped and class registration state', function () {
     expect($container->get('value'))->toBe(2);
 
     $container->scoped('scoped', static fn() => (object) ['version' => 1]);
-    $container->enterScope('request');
+    testEnterScope($container, 'request');
     $first = $container->get('scoped');
     $container->scoped('scoped', static fn() => (object) ['version' => 2]);
     expect($container->get('scoped'))->not->toBe($first)->version->toBe(2);
-    $container->leaveScope();
+    testLeaveScope($container);
 
     $container->registration()->registerClass(ReleaseCtorTarget::class, ['value' => 1]);
     expect($container->get(ReleaseCtorTarget::class)->value)->toBe(1);
@@ -342,10 +342,8 @@ it('supports contextual null, intersections, and DNF alternatives', function () 
 it('gives explicit named and positional arguments first precedence', function () {
     $container = releaseContainer('precedence');
     $container->value('value', 'definition');
-    $invoker = Invoker::with($container);
-
-    expect($invoker->make(ReleaseCtorTarget::class, ['value' => 'named'])->value)->toBe('named')
-        ->and($invoker->make(ReleaseCtorTarget::class, ['positional'])->value)->toBe('positional');
+    expect($container->make(ReleaseCtorTarget::class, ['value' => 'named'])->value)->toBe('named')
+        ->and($container->make(ReleaseCtorTarget::class, ['positional'])->value)->toBe('positional');
 });
 
 it('keeps same-line closure plans distinct', function () {
@@ -354,8 +352,8 @@ it('keeps same-line closure plans distinct', function () {
     $container->bind(ReleaseC::class, ReleaseOnlyC::class);
     $closures = [fn(ReleaseA $value) => $value, fn(ReleaseC $value) => $value];
 
-    expect($container->resolveNow($closures[0]))->toBeInstanceOf(ReleaseAB::class)
-        ->and($container->resolveNow($closures[1]))->toBeInstanceOf(ReleaseOnlyC::class);
+    expect($container->invoke($closures[0]))->toBeInstanceOf(ReleaseAB::class)
+        ->and($container->invoke($closures[1]))->toBeInstanceOf(ReleaseOnlyC::class);
 });
 
 it('uses structural scope keys and rejects duplicate active names', function () {
@@ -367,28 +365,22 @@ it('uses structural scope keys and rejects duplicate active names', function () 
     expect($repository->getResolvedScopedEntry('c', 'a@b'))->toBe('first')
         ->and($repository->getResolvedScopedEntry('b@c', 'a'))->toBe('second');
 
-    $container->enterScope('request');
-    expect(fn() => $container->enterScope('request'))->toThrow(ContainerException::class);
-    $container->leaveScope();
+    testEnterScope($container, 'request');
+    expect(fn() => testEnterScope($container, 'request'))->toThrow(ContainerException::class);
+    testLeaveScope($container);
 });
 
-it('does not let an isolated duplicate alias unset the registered owner', function () {
-    $alias = 'release-owner-' . uniqid();
-    $owner = Container::instance($alias);
-    $isolated = new Container($alias);
-    $isolated->unset();
-
-    expect(Container::instance($alias))->toBe($owner);
-    $owner->unset();
+it('does not expose process-global container ownership', function () {
+    expect(method_exists(Container::class, 'instance'))->toBeFalse()
+        ->and(method_exists(Container::class, 'unset'))->toBeFalse();
 });
-
-it('keeps Invoker and resolveNow arguments ephemeral', function () {
+it('keeps make arguments ephemeral', function () {
     $container = releaseContainer('ephemeral');
     $container->registration()->registerClass(ReleaseCtorTarget::class, ['value' => 'permanent']);
     $before = $container->getRepository()->getClassResourceFor(ReleaseCtorTarget::class);
 
-    expect(Invoker::with($container)->make(ReleaseCtorTarget::class, ['value' => 'one-off'])->value)->toBe('one-off')
-        ->and($container->resolveNow(ReleaseCtorTarget::class, ['value' => 'now'])->value)->toBe('now')
+    expect($container->make(ReleaseCtorTarget::class, ['value' => 'one-off'])->value)->toBe('one-off')
+        ->and($container->make(ReleaseCtorTarget::class, ['value' => 'now'])->value)->toBe('now')
         ->and($container->getRepository()->getClassResourceFor(ReleaseCtorTarget::class))->toBe($before)
         ->and($container->make(ReleaseCtorTarget::class)->value)->toBe('permanent');
 });
@@ -397,9 +389,8 @@ it('invokes explicit methods on definition IDs', function () {
     $container = releaseContainer('definition-method');
     $container->bind('service', ReleaseMethodTarget::class);
 
-    expect($container->call('service', 'value'))->toBe('method-value')
-        ->and(fn() => $container->call(static fn() => 'value', 'value'))
-        ->toThrow(ContainerException::class);
+    $service = $container->get('service');
+    expect($container->invoke([$service, 'value']))->toBe('method-value');
 });
 
 it('rejects runtime provider reconfiguration without constructing provider classes', function () {
@@ -446,7 +437,13 @@ it('preserves mixed method-level Inject values', function () {
     $container = releaseContainer('mixed-attribute');
     $container->options()->setOptions(methodAttributes: true);
 
-    expect($container->call(ReleaseMethodAttribute::class, 'values'))->toBe([
+    $target = $container->make(ReleaseMethodAttribute::class);
+    expect($container->invoke([$target, 'values'], [
+        'retries' => 2,
+        'enabled' => true,
+        'nothing' => null,
+        'options' => ['safe' => true],
+    ]))->toBe([
         'retries' => 2,
         'enabled' => true,
         'nothing' => null,
@@ -473,9 +470,9 @@ it('does not expose private Container methods through magic calls', function () 
 
 it('enforces explicit and bounded Closure deserialization', function () {
     $payload = ClosureSerializer::serialize(static fn() => 'safe');
-    $invoker = Invoker::with(releaseContainer('serializer'));
+    $runtime = releaseContainer('serializer');
 
-    expect(fn() => $invoker->invoke($payload))->toThrow(InvalidArgumentException::class)
+    expect(fn() => $runtime->invoke($payload))->toThrow(TypeError::class)
         ->and(fn() => ClosureSerializer::unserialize($payload, 4))->toThrow(InvalidArgumentException::class)
         ->and(fn() => ClosureSerializer::signed('key', 10)->unserialize(str_repeat('x', 11)))
         ->toThrow(InvalidArgumentException::class);

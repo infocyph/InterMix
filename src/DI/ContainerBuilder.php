@@ -9,8 +9,7 @@ use Infocyph\InterMix\DI\Build\DefinitionGraph;
 use Infocyph\InterMix\DI\Build\StaticRuntimeGenerator;
 use Infocyph\InterMix\DI\Build\StaticRuntimePlanner;
 use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
-use Infocyph\InterMix\DI\Invoker\GenericCall;
-use Infocyph\InterMix\DI\Invoker\InjectedCall;
+use Infocyph\InterMix\DI\Internal\ContainerAccess;
 use Infocyph\InterMix\DI\Support\AliasDefinition;
 use Infocyph\InterMix\DI\Support\AutowireDefinition;
 use Infocyph\InterMix\DI\Support\ContextualBindingBuilder;
@@ -55,14 +54,14 @@ final class ContainerBuilder
     /** @var array<string, true> */
     private array $scopeLeaveHookScopes = [];
 
-    public function __construct(string $alias = Container::DEFAULT_ALIAS)
+    public function __construct(string $namespace = 'intermix.default')
     {
-        $this->configuration = new ConfigurationContainer($alias);
+        $this->configuration = new ConfigurationContainer($namespace);
     }
 
-    public static function create(string $alias = Container::DEFAULT_ALIAS): self
+    public static function create(string $namespace = 'intermix.default'): self
     {
-        return new self($alias);
+        return new self($namespace);
     }
 
     public function alias(string $id, string $target): self
@@ -113,7 +112,7 @@ final class ContainerBuilder
     {
         $this->finalizeGraph();
 
-        return $this->configuration->forkRuntime();
+        return ContainerAccess::fork($this->configuration);
     }
 
     public function cacheDefinition(string $id): self
@@ -209,14 +208,6 @@ final class ContainerBuilder
         return $this;
     }
 
-    public function enableInjection(bool $enable = true): self
-    {
-        $this->assertMutable();
-        $this->configuration->setResolverClass($enable ? InjectedCall::class : GenericCall::class);
-
-        return $this;
-    }
-
     public function enableLazyLoading(bool $lazy = true): self
     {
         $this->assertMutable();
@@ -244,7 +235,7 @@ final class ContainerBuilder
     /** @return array<string, mixed> */
     public function exportGraph(?string $warmFromId = null, bool $clear = false): array
     {
-        return $this->build()->exportGraph($warmFromId, $clear);
+        return ContainerAccess::graph($this->build(), $warmFromId, $clear);
     }
 
     /** @param array<int, string> $tags */
@@ -347,94 +338,6 @@ final class ContainerBuilder
             $attributeFqcn,
             $resolverFqcn,
         );
-
-        return $this;
-    }
-
-    /**
-     * @param array<int|string, mixed> $parameters
-     * @internal Transitional construction metadata; migrated by P3.
-     */
-    public function registerClass(string $class, array $parameters = []): self
-    {
-        $this->assertMutable();
-        $this->configuration->getRepository()->addClassResource($class, 'constructor', [
-            'on' => '__constructor',
-            'params' => $this->snapshotMetadata($parameters, 'Class constructor parameters'),
-        ]);
-
-        return $this;
-    }
-
-    /**
-     * @param array<int|string, mixed> $parameters
-     * @internal Transitional callable metadata; migrated by P3.
-     */
-    public function registerClosure(
-        string $alias,
-        callable|Closure $closure,
-        array $parameters = [],
-    ): self {
-        $this->assertMutable();
-        $this->configuration->getRepository()->addClosureResource(
-            $alias,
-            $closure,
-            $this->snapshotMetadata($parameters, 'Closure parameters'),
-        );
-
-        return $this;
-    }
-
-    /**
-     * @param array<int|string, mixed> $parameters
-     * @internal Transitional method metadata; removed by P3.
-     */
-    public function registerMethod(
-        string $class,
-        string $method,
-        array $parameters = [],
-    ): self {
-        $this->assertMutable();
-        $this->configuration->getRepository()->addClassResource($class, 'method', [
-            'on' => $method,
-            'params' => $this->snapshotMetadata($parameters, 'Method parameters'),
-        ]);
-
-        return $this;
-    }
-
-    /**
-     * @param array<string, mixed> $properties
-     * @internal Transitional property metadata; migrated by P3.
-     */
-    public function registerProperty(string $class, array $properties): self
-    {
-        $this->assertMutable();
-        $repository = $this->configuration->getRepository();
-        $resource = $repository->getClassResourceFor($class);
-        $registered = $resource['property'] ?? [];
-        $existing = [];
-        if (is_array($registered)) {
-            foreach ($registered as $name => $value) {
-                if (is_string($name)) {
-                    $existing[$name] = $value;
-                }
-            }
-        }
-        $repository->addClassResource(
-            $class,
-            'property',
-            $this->snapshotMetadata($properties, 'Property metadata') + $existing,
-        );
-
-        return $this;
-    }
-
-    /** @internal Removed with implicit method execution in P3. */
-    public function setDefaultMethod(?string $method): self
-    {
-        $this->assertMutable();
-        $this->configuration->getRepository()->setDefaultMethod($method);
 
         return $this;
     }
@@ -649,6 +552,39 @@ final class ContainerBuilder
         return $issues;
     }
 
+    /** @return list<string> */
+    private function captiveDependencyIssues(DefinitionGraph $graph): array
+    {
+        $plans = new StaticRuntimePlanner()->plan($graph)['plans'];
+        $issues = [];
+        foreach ($plans as $id => $plan) {
+            if ($plan['lifetime'] !== LifetimeEnum::Singleton) {
+                continue;
+            }
+
+            $pending = $plan['dependencies'];
+            $seen = [];
+            while (($dependency = array_pop($pending)) !== null) {
+                if (isset($seen[$dependency])) {
+                    continue;
+                }
+                $seen[$dependency] = true;
+                $dependencyPlan = $plans[$dependency] ?? null;
+                if (!is_array($dependencyPlan)) {
+                    continue;
+                }
+                if ($dependencyPlan['lifetime'] === LifetimeEnum::Scoped) {
+                    $issues[] = "Singleton '{$id}' depends on scoped entry '{$dependency}'.";
+
+                    break;
+                }
+                array_push($pending, ...$dependencyPlan['dependencies']);
+            }
+        }
+
+        return $issues;
+    }
+
     private function finalizeGraph(): DefinitionGraph
     {
         if ($this->graph instanceof DefinitionGraph) {
@@ -671,6 +607,13 @@ final class ContainerBuilder
             array_keys($this->resolvedHookIds),
             array_keys($this->scopeLeaveHookScopes),
         );
+
+        $captiveIssues = $this->captiveDependencyIssues($graph);
+        if ($captiveIssues !== []) {
+            throw new ContainerException(
+                "Container validation failed:\n- " . implode("\n- ", $captiveIssues),
+            );
+        }
 
         $this->configuration->lock();
         $this->graph = $graph;

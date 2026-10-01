@@ -97,36 +97,36 @@ it('makes fresh compiled classes while retaining compiled dependency lifetimes',
         $runtime = $builder->production($path);
         $shared = $runtime->get(InvocationAliasRoot::class);
         $fresh = $runtime->make(InvocationAliasRoot::class);
-        $resolvedNow = $runtime->resolveNow(InvocationAliasRoot::class);
+        $secondFresh = $runtime->make(InvocationAliasRoot::class);
 
         expect($fresh)->toBeInstanceOf(InvocationAliasRoot::class)
             ->and($fresh)->not->toBe($shared)
-            ->and($resolvedNow)->toBeInstanceOf(InvocationAliasRoot::class)
-            ->and($resolvedNow)->not->toBe($shared)
+            ->and($secondFresh)->toBeInstanceOf(InvocationAliasRoot::class)
+            ->and($secondFresh)->not->toBe($shared)
             ->and($fresh->leaf)->toBe($runtime->get(InvocationAliasLeaf::class))
-            ->and($resolvedNow->leaf)->toBe($runtime->get(InvocationAliasLeaf::class));
+            ->and($secondFresh->leaf)->toBe($runtime->get(InvocationAliasLeaf::class));
     } finally {
         removeInvocationAliasArtifact($path);
     }
 });
 
-it('keeps compiled getReturn and null resolveNow on the production boundary', function () {
-    $builder = ContainerBuilder::create(uniqid('compiled_return_'));
-    $builder->autowire(InvocationAliasRoot::class, InvocationAliasRoot::class)
+it('exposes only canonical retrieval and construction methods', function () {
+    $builder = ContainerBuilder::create(uniqid('compiled_boundary_'))
+        ->autowire(InvocationAliasRoot::class, InvocationAliasRoot::class)
         ->autowire(InvocationAliasLeaf::class, InvocationAliasLeaf::class);
-
     $path = invocationAliasArtifactPath();
+
     try {
         $builder->compile($path);
         $runtime = $builder->production($path);
-
-        expect($runtime->getReturn(InvocationAliasRoot::class))->toBe($runtime->get(InvocationAliasRoot::class))
-            ->and($runtime->resolveNow(null))->toBe($runtime);
+        expect($runtime->get(InvocationAliasRoot::class))->toBe($runtime->get(InvocationAliasRoot::class))
+            ->and($runtime->make(InvocationAliasRoot::class))->not->toBe($runtime->get(InvocationAliasRoot::class))
+            ->and(method_exists($runtime, 'getReturn'))->toBeFalse()
+            ->and(method_exists($runtime, 'resolveNow'))->toBeFalse();
     } finally {
         removeInvocationAliasArtifact($path);
     }
 });
-
 it('keeps compiled definition dispatch frozen after builder finalization', function () {
     $builder = ContainerBuilder::create(uniqid('frozen_compiled_'))
         ->autowire(InvocationAliasLeaf::class, InvocationAliasLeaf::class)
@@ -150,18 +150,15 @@ it('keeps compiled definition dispatch frozen after builder finalization', funct
 
 it('applies property metadata before finalization and freezes later mutation', function () {
     $builder = ContainerBuilder::create(uniqid('property_fast_flag_'))
-        ->registerProperty(
+        ->autowire(
+            'target',
             InvocationAliasPropertyTarget::class,
-            ['value' => 'registered'],
-        )
-        ->autowire('target', InvocationAliasPropertyTarget::class);
+            properties: ['value' => 'registered'],
+        );
 
     $runtime = $builder->build();
 
     expect($runtime->get('target')->value)->toBe('registered')
-        ->and(fn() => $builder->registerProperty(
-            InvocationAliasPropertyTarget::class,
-            ['value' => 'late'],
-        ))->toThrow(ContainerException::class, 'ContainerBuilder is finalized')
+        ->and(fn() => $builder->value('late', true))->toThrow(ContainerException::class, 'ContainerBuilder is finalized')
         ->and($runtime->get('target')->value)->toBe('registered');
 });

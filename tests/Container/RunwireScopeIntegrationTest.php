@@ -35,7 +35,7 @@ it('shares one dynamic logical scope through Runwire task-local snapshots', func
     $container = ContainerBuilder::create(uniqid('runwire_dynamic_'))
         ->autowire('leaf', RunwireIntegrationScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
         ->build();
-    $container->enterScope('request');
+    testEnterScope($container, 'request');
     $parent = $container->get('leaf');
     $context = $container->captureScopeContext();
     $scopeLocal = new TaskLocal();
@@ -68,7 +68,7 @@ it('shares one dynamic logical scope through Runwire task-local snapshots', func
     expect($resolved[0])->toBe($parent)
         ->and($resolved[1])->toBe($parent);
 
-    $container->leaveScope();
+    testLeaveScope($container);
 });
 
 it('keeps compiled Runwire child frames carrier-local while restoring the shared parent', function () {
@@ -79,7 +79,7 @@ it('keeps compiled Runwire child frames carrier-local while restoring the shared
     try {
         $builder->compile($path);
         $container = $builder->production($path);
-        $container->enterScope('request');
+        testEnterScope($container, 'request');
         $parent = $container->get('leaf');
         $context = $container->captureScopeContext();
         $scopeLocal = new TaskLocal();
@@ -98,10 +98,10 @@ it('keeps compiled Runwire child frames carrier-local while restoring the shared
                         return $container->withinScopeContext(
                             $captured,
                             static function (ProductionContainer $active) use ($scope): array {
-                                $active->enterScope('nested');
+                                testEnterScope($active, 'nested');
                                 $nested = $active->get('leaf');
                                 $scope->yieldNow();
-                                $active->leaveScope();
+                                testLeaveScope($active);
 
                                 return [$nested, $active->get('leaf')];
                             },
@@ -122,7 +122,7 @@ it('keeps compiled Runwire child frames carrier-local while restoring the shared
             ->and($resolved[0][1])->toBe($parent)
             ->and($resolved[1][1])->toBe($parent);
 
-        $container->leaveScope();
+        testLeaveScope($container);
     } finally {
         removeRunwireIntegrationArtifact($path);
     }
@@ -136,7 +136,7 @@ it('releases attached child scopes when Runwire fail-fast cancels a sibling', fu
             ++$nestedLeaves;
         })
         ->build();
-    $container->enterScope('request');
+    testEnterScope($container, 'request');
     $parent = $container->get('leaf');
     $context = $container->captureScopeContext();
     $scopeLocal = new TaskLocal();
@@ -155,7 +155,7 @@ it('releases attached child scopes when Runwire fail-fast cancels a sibling', fu
                 $container->withinScopeContext(
                     $captured,
                     static function (Container $active) use ($scope): void {
-                        $active->enterScope('nested');
+                        testEnterScope($active, 'nested');
                         $active->get('leaf');
                         $scope->sleep(30.0);
                     },
@@ -176,7 +176,7 @@ it('releases attached child scopes when Runwire fail-fast cancels a sibling', fu
         ->and($nestedLeaves)->toBe(1)
         ->and($container->get('leaf'))->toBe($parent);
 
-    $container->leaveScope();
+    testLeaveScope($container);
 });
 
 it('releases an attached nested scope after explicit Runwire task cancellation', function (): void {
@@ -187,7 +187,7 @@ it('releases an attached nested scope after explicit Runwire task cancellation',
             ++$nestedLeaves;
         })
         ->build();
-    $container->enterScope('request');
+    testEnterScope($container, 'request');
     $parent = $container->get('leaf');
     $context = $container->captureScopeContext();
     $scopeLocal = new TaskLocal();
@@ -204,7 +204,7 @@ it('releases an attached nested scope after explicit Runwire task cancellation',
             $container->withinScopeContext(
                 $captured,
                 static function (Container $active) use ($scope): void {
-                    $active->enterScope('nested');
+                    testEnterScope($active, 'nested');
                     $active->get('leaf');
                     $scope->sleep(30.0);
                 },
@@ -227,7 +227,7 @@ it('releases an attached nested scope after explicit Runwire task cancellation',
         ->and($nestedLeaves)->toBe(1)
         ->and($container->get('leaf'))->toBe($parent);
 
-    $container->leaveScope();
+    testLeaveScope($container);
 });
 
 it('releases attached scopes when a Runwire deadline expires', function (): void {
@@ -238,7 +238,7 @@ it('releases attached scopes when a Runwire deadline expires', function (): void
             ++$nestedLeaves;
         })
         ->build();
-    $container->enterScope('request');
+    testEnterScope($container, 'request');
     $parent = $container->get('leaf');
     $context = $container->captureScopeContext();
     $scopeLocal = new TaskLocal();
@@ -263,7 +263,7 @@ it('releases attached scopes when a Runwire deadline expires', function (): void
                         $container->withinScopeContext(
                             $captured,
                             static function (Container $active) use ($inner): void {
-                                $active->enterScope('nested');
+                                testEnterScope($active, 'nested');
                                 $active->get('leaf');
                                 $inner->sleep(30.0);
                             },
@@ -283,5 +283,5 @@ it('releases attached scopes when a Runwire deadline expires', function (): void
         ->and($nestedLeaves)->toBe(1)
         ->and($container->get('leaf'))->toBe($parent);
 
-    $container->leaveScope();
+    testLeaveScope($container);
 });

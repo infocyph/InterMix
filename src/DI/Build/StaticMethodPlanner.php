@@ -48,7 +48,7 @@ final class StaticMethodPlanner
     public function plan(DefinitionGraph $graph, ReflectionClass $class): ?array
     {
         $resource = $graph->classResourcesFor($class->getName())['method'] ?? null;
-        $methodName = $this->targetMethod($graph, $class, $resource);
+        $methodName = $this->targetMethod($class, $resource);
         if ($methodName === null) {
             return null;
         }
@@ -168,7 +168,7 @@ final class StaticMethodPlanner
     }
 
     /** @param ReflectionClass<object> $class */
-    private function targetMethod(DefinitionGraph $graph, ReflectionClass $class, mixed $resource): ?string
+    private function targetMethod(ReflectionClass $class, mixed $resource): ?string
     {
         $registered = $this->configuredMethod(
             $class,
@@ -178,20 +178,6 @@ final class StaticMethodPlanner
             return $registered['method'];
         }
 
-        $constant = $class->hasConstant('CALL_ON') ? 'CALL_ON' : 'callOn';
-        $callOn = $this->configuredMethod(
-            $class,
-            $class->hasConstant($constant) ? $class->getConstant($constant) : null,
-        );
-        if ($callOn['configured']) {
-            return $callOn['method'];
-        }
-
-        $default = $this->configuredMethod($class, $graph->defaultMethod());
-        if ($default['configured']) {
-            return $default['method'];
-        }
-
-        return $class->hasMethod('__invoke') ? '__invoke' : null;
+        return null;
     }
 }

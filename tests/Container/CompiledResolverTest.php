@@ -287,7 +287,7 @@ it('falls back before automatic compilation can bypass dynamic injection semanti
     $defaultMethod = $defaultContainer->get('default-method');
     $defaultReport = $defaultContainer->compilationReport();
 
-    expect($report['compiled'])->toBe([])
+    expect($report['compiled'])->toContain('invokable', 'call-on')
         ->and($report['skipped']['contextual'])->toContain('contextual binding')
         ->and($report['skipped']['named-consumer'])->toContain('named definition')
         ->and($report['skipped']['attributed.constructor'])->toContain('has attributes')
@@ -298,9 +298,7 @@ it('falls back before automatic compilation can bypass dynamic injection semanti
         ->and($report['skipped']['registered.method'])->toContain('registered method')
         ->and($report['skipped']['duplicate'])->toContain('occurs more than once')
         ->and($report['skipped']['union'])->toContain('union or intersection')
-        ->and($report['skipped']['invokable'])->toContain('implicit method')
-        ->and($report['skipped']['call-on'])->toContain('implicit method')
-        ->and($defaultReport['skipped']['default-method'])->toContain("'boot'")
+        ->and($defaultReport['compiled'])->toContain('default-method')
         ->and($contextualConsumer->service)->toBe($contextual)
         ->and($namedConsumer->namedDependency)->toBe($named)
         ->and($propertyConsumer->injected)->toBeInstanceOf(CompiledResolverDependency::class)
@@ -308,9 +306,9 @@ it('falls back before automatic compilation can bypass dynamic injection semanti
         ->and($resourceConsumer->value)->toBe('registered')
         ->and($registeredProperty->configured)->toBe('registered')
         ->and($registeredMethod->called)->toBeTrue()
-        ->and($invokable->called)->toBeTrue()
-        ->and($callOn->called)->toBeTrue()
-        ->and($defaultMethod->called)->toBeTrue();
+        ->and($invokable->called)->toBeFalse()
+        ->and($callOn->called)->toBeFalse()
+        ->and($defaultMethod->called)->toBeFalse();
 });
 
 it('keeps closures and direct factories dynamic after a compiled map is active', function () {
@@ -363,16 +361,16 @@ it('preserves singleton transient and scoped lifetimes around compiled recipes',
 
     $singleton = $container->get('singleton');
     $transient = $container->get('transient');
-    $firstScope = $container->enterScope('first')->get('scoped');
+    $firstScope = testEnterScope($container, 'first')->get('scoped');
 
     expect($container->get('singleton'))->toBe($singleton)
         ->and($container->get('transient'))->not->toBe($transient)
         ->and($container->get('scoped'))->toBe($firstScope);
 
-    $container->leaveScope();
-    $secondScope = $container->enterScope('second')->get('scoped');
+    testLeaveScope($container);
+    $secondScope = testEnterScope($container, 'second')->get('scoped');
     expect($secondScope)->not->toBe($firstScope);
-    $container->leaveScope();
+    testLeaveScope($container);
 });
 
 it('preserves tag lookup around compiled recipes', function () {

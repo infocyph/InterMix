@@ -36,6 +36,21 @@ final class ProductionScopeStore
         return $this->rootContextActive ? self::ROOT_CONTEXT : null;
     }
 
+    public function assertCurrent(ScopeContext $scopeContext): void
+    {
+        [$scope] = $this->unwrap($scopeContext);
+        $context = $this->activeContext();
+        $state = $context === null ? null : ($this->states[$context] ?? null);
+        if ($scope->closed
+            || !$state instanceof ProductionExecutionScopeState
+            || $state->current !== $scope
+        ) {
+            throw new ContainerException(
+                'Tagged iterator scope is no longer active on the current execution carrier.',
+            );
+        }
+    }
+
     public function attach(ScopeState $scope, ScopeState $sequentialScope): string
     {
         if ($scope->closed) {
@@ -267,18 +282,19 @@ final class ProductionScopeStore
         }
 
         $this->assertNoAttachments($current);
-        $beforeClose($current);
-        $this->close($current);
 
-        $parent = $current->parent;
-        if ($parent instanceof ScopeState && $parent->name !== 'root') {
-            $state->current = $parent;
-
-            return;
+        try {
+            $beforeClose($current);
+        } finally {
+            $this->close($current);
+            $parent = $current->parent;
+            if ($parent instanceof ScopeState && $parent->name !== 'root') {
+                $state->current = $parent;
+            } else {
+                unset($this->states[$context]);
+                $this->finishContext($context);
+            }
         }
-
-        unset($this->states[$context]);
-        $this->finishContext($context);
     }
 
     /** @param callable(ScopeState): void $beforeClose */
@@ -289,8 +305,12 @@ final class ProductionScopeStore
         }
 
         $this->assertNoAttachments($scope);
-        $beforeClose($scope);
-        $this->close($scope);
+
+        try {
+            $beforeClose($scope);
+        } finally {
+            $this->close($scope);
+        }
 
         return $scope->parent ?? new ScopeState('root');
     }

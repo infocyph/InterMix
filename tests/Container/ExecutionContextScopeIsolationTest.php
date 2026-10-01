@@ -21,25 +21,25 @@ function interleaveExecutionContextScopes(object $container): array
     $seedB = new ExecutionContextScopedLeaf();
 
     $fiberA = new Fiber(static function () use ($container, $seedA): array {
-        $container->enterScope('request', ['seeded' => $seedA]);
+        testEnterScope($container, 'request', ['seeded' => $seedA]);
         $first = $container->get('leaf');
         $seeded = $container->get('seeded');
         Fiber::suspend();
         $again = $container->get('leaf');
         $seededAgain = $container->get('seeded');
-        $container->leaveScope();
+        testLeaveScope($container);
 
         return [$first, $again, $seeded, $seededAgain];
     });
 
     $fiberB = new Fiber(static function () use ($container, $seedB): array {
-        $container->enterScope('request', ['seeded' => $seedB]);
+        testEnterScope($container, 'request', ['seeded' => $seedB]);
         $first = $container->get('leaf');
         $seeded = $container->get('seeded');
         Fiber::suspend();
         $again = $container->get('leaf');
         $seededAgain = $container->get('seeded');
-        $container->leaveScope();
+        testLeaveScope($container);
 
         return [$first, $again, $seeded, $seededAgain];
     });
@@ -64,33 +64,33 @@ function interleaveExecutionContextScopes(object $container): array
 function interleaveNestedExecutionContextScopes(object $container): array
 {
     $fiberA = new Fiber(static function () use ($container): array {
-        $container->enterScope('request');
+        testEnterScope($container, 'request');
         $parent = $container->get('leaf');
         Fiber::suspend();
 
-        $container->enterScope('nested-a');
+        testEnterScope($container, 'nested-a');
         $nested = $container->get('leaf');
         Fiber::suspend();
 
-        $container->leaveScope();
+        testLeaveScope($container);
         $restored = $container->get('leaf');
-        $container->leaveScope();
+        testLeaveScope($container);
 
         return [$parent, $nested, $restored];
     });
 
     $fiberB = new Fiber(static function () use ($container): array {
-        $container->enterScope('request');
+        testEnterScope($container, 'request');
         $parent = $container->get('leaf');
         Fiber::suspend();
 
-        $container->enterScope('nested-b');
+        testEnterScope($container, 'nested-b');
         $nested = $container->get('leaf');
         Fiber::suspend();
 
-        $container->leaveScope();
+        testLeaveScope($container);
         $restored = $container->get('leaf');
-        $container->leaveScope();
+        testLeaveScope($container);
 
         return [$parent, $nested, $restored];
     });
@@ -114,19 +114,19 @@ function interleaveNullableExecutionContextSeeds(object $container): array
     $seedB = new ExecutionContextScopedLeaf();
 
     $fiberA = new Fiber(static function () use ($container): mixed {
-        $container->enterScope('request', ['nullable' => null]);
+        testEnterScope($container, 'request', ['nullable' => null]);
         $seed = $container->get('nullable');
         Fiber::suspend();
-        $container->leaveScope();
+        testLeaveScope($container);
 
         return $seed;
     });
 
     $fiberB = new Fiber(static function () use ($container, $seedB): mixed {
-        $container->enterScope('request', ['nullable' => $seedB]);
+        testEnterScope($container, 'request', ['nullable' => $seedB]);
         $seed = $container->get('nullable');
         Fiber::suspend();
-        $container->leaveScope();
+        testLeaveScope($container);
 
         return $seed;
     });
@@ -157,9 +157,9 @@ function executionContextThrowableCleanup(object $container): array
             }
         }
 
-        $container->enterScope('request');
+        testEnterScope($container, 'request');
         $second = $container->get('leaf');
-        $container->leaveScope();
+        testLeaveScope($container);
 
         return [$first, $second];
     });
@@ -174,9 +174,9 @@ function repeatedExecutionContextScopeRoots(object $container, int $iterations =
     $resolved = [];
     for ($i = 0; $i < $iterations; ++$i) {
         $fiber = new Fiber(static function () use ($container): ExecutionContextScopedLeaf {
-            $container->enterScope('request');
+            testEnterScope($container, 'request');
             $leaf = $container->get('leaf');
-            $container->leaveScope();
+            testLeaveScope($container);
 
             return $leaf;
         });
@@ -246,19 +246,19 @@ it('keeps sequential scope state isolated around Fiber scopes', function () {
         ->build();
 
     $beforeSeed = new ExecutionContextScopedLeaf();
-    $container->enterScope('request', ['seeded' => $beforeSeed]);
+    testEnterScope($container, 'request', ['seeded' => $beforeSeed]);
     $before = $container->get('leaf');
     $beforeAgain = $container->get('leaf');
     $beforeSeeded = $container->get('seeded');
-    $container->leaveScope();
+    testLeaveScope($container);
 
     $fibers = interleaveExecutionContextScopes($container);
 
     $afterSeed = new ExecutionContextScopedLeaf();
-    $container->enterScope('request', ['seeded' => $afterSeed]);
+    testEnterScope($container, 'request', ['seeded' => $afterSeed]);
     $after = $container->get('leaf');
     $afterSeeded = $container->get('seeded');
-    $container->leaveScope();
+    testLeaveScope($container);
 
     expect($before)->toBe($beforeAgain)
         ->and($beforeSeeded)->toBe($beforeSeed)
@@ -282,12 +282,12 @@ it('dispatches scope leave hooks for sequential and Fiber scopes', function () {
         );
     $container = $builder->build();
 
-    $container->enterScope('request');
-    $container->leaveScope();
+    testEnterScope($container, 'request');
+    testLeaveScope($container);
 
     $fiber = new Fiber(static function () use ($container): void {
-        $container->enterScope('request');
-        $container->leaveScope();
+        testEnterScope($container, 'request');
+        testLeaveScope($container);
     });
     $fiber->start();
 
@@ -434,12 +434,12 @@ it('dispatches compiled scope leave hooks for sequential and Fiber scopes', func
     try {
         $builder->compile($path);
         $runtime = $builder->production($path);
-        $runtime->enterScope('request');
-        $runtime->leaveScope();
+        testEnterScope($runtime, 'request');
+        testLeaveScope($runtime);
 
         $fiber = new Fiber(static function () use ($runtime): void {
-            $runtime->enterScope('request');
-            $runtime->leaveScope();
+            testEnterScope($runtime, 'request');
+            testLeaveScope($runtime);
         });
         $fiber->start();
 

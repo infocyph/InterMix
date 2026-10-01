@@ -142,7 +142,7 @@ it('requires explicit scoped inputs and returns the supplied seed', function ():
         ),
     )->toBe('req-42')
         ->and(fn() => $runtime->get('request.id'))
-        ->toThrow(ContainerException::class, "Required scoped input 'request.id' was not supplied.");
+        ->toThrow(ContainerException::class, "Scoped entry 'request.id' requires an active scope.");
 });
 
 it('makes aliases follow target identity and lifetime without alias caching', function (): void {

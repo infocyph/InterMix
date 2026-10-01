@@ -893,7 +893,7 @@ Migration execution order:
 
 ## Implementation tracker
 
-Updated: 2026-09-30
+Updated: 2026-10-01
 
 This tracker is the authoritative execution state for this plan. A **batch is a
 coherent tranche containing multiple P-packages**, not a 1:1 alias for a package.
@@ -905,7 +905,7 @@ batch is closed.
 | Batch | Packages | Status | Package status / implementation evidence |
 | --- | --- | --- | --- |
 | 1 | P0 + P1 — baseline and runtime hardening | **Complete** | Closed on `f55be8b`: P0 contract/baseline frozen; P1 F1–F3 fixed. Corrected 10.1.1 regression gate, PHPForge QA/analysis/benchmarks, clean install, and Swoole/OpenSwoole PHP 8.4/8.5 are green. |
-| 2 | P2 + P3 — builder/definitions and runtime/scope contract | **In progress — P2 runtime configuration closure** | Builder-side B1/B2/B7 work is implemented. Runtime configuration mutators, manager navigation, and write-capable ArrayAccess/proxy paths have been removed from the public `Container` surface; legacy internal tests/benchmarks are being migrated to the internal configuration host. Remaining P2 blockers are the production-fallback bridge still calling protected configuration methods, the mutable repository escape, residual legacy fixtures, formatting/analysis fallout, and one exact all-green gate. P3 has not started. |
+| 2 | P2 + P3 - builder/definitions and runtime/scope contract | **Complete in working tree** | B1-B5 and B7 builder/runtime contracts implemented; legacy execution/global ownership removed; strict scopes, captive guards, tagged-scope liveness, cleanup aggregation, and dynamic/compiled parity covered. Final local `composer ic:process` and `composer ic:ci` are green. |
 | 3 | P4 + P5 — compiled graph and provider boundaries | Pending | P4: B6 generated/fallback graph. P5: CacheLayer 4.0 / Runwire 2.1 optional provider boundaries. Run focused QA after each package, then full batch QA. |
 | 4 | P6 + P7 + P8 — migration, measured acceptance and release candidate | Pending | P6: docs/consumer migration. P7: benchmarks/soak/host acceptance. P8: exact-SHA CI, packaging and RC evidence. P8 remains the final gate inside this batch. |
 
@@ -922,109 +922,60 @@ Batch 1 acceptance revision: `f55be8ba4b69201fa8f9bb2d34efb3e30cbc3b87`.
 - Swoole and OpenSwoole scope-carrier lanes passed on PHP 8.4/8.5.
 - The pull-request release publication job remained correctly skipped.
 
-Batch 1 is closed. Batch 2 starts with P2 only; P3 does not begin until P2
-focused QA and tracker evidence are complete.
+Batch 1 is closed. Batch 2 P2 and P3 are closed by the evidence below.
 
-### Batch 2 / P2 live tracker
+### Batch 2 closure evidence
 
-Current stage: **P2 contract cleanup + focused QA**.
+Batch 2 (P2 + P3) is complete in the working tree based on
+`f97a94953f4a9ac3cb27d4dbad22b0330e469901`. The implementation is intentionally
+uncommitted, so this is workspace evidence rather than an immutable release
+revision; P8 still requires CI on the exact committed/tagged revision.
 
-Latest fully inspected working revision before this tracker update: `355c8628a040429cbe365d33c9d37ca9db59f52e`.
-This revision is **not** P2 closure evidence: the current workflow is red while
-runtime-configuration fallout is being migrated. P2 remains open until one exact
-revision passes the complete workflow matrix.
-P3 has **not** started. P2 closes only when the B1/B2/B7 contract, focused tests,
-PHPForge QA/analysis, release regression, clean install and runtime-extension lanes
-are all green on one exact revision.
+P2 closure:
 
-#### P2 implementation checklist
+- configuration ownership is builder-only through explicit `value()`,
+  `autowire()`, `factory()`, `alias()`, and `input()` definition kinds;
+- builder finalization freezes a validated graph and creates isolated runtimes;
+- public manager/configuration mutation, write-capable proxies, generic builder
+  shortcuts, and mutable repository escape hatches are absent from built runtimes;
+- explicit definition-cache eligibility, namespace/generation separation, bounded
+  admission, metadata snapshots, provider import, and numeric-string IDs are
+  covered by executable contracts.
 
-- [x] builder finalization is one-way after successful graph validation;
-- [x] `build()` creates isolated locked runtimes with separate singleton/scope stores;
-- [x] explicit `value()`, `autowire()`, `factory()`, `alias()`, and `input()`
-  definition kinds are implemented;
-- [x] duplicate explicit registration requires builder-only `unbind()` before replacement;
-- [x] provider registration accepts a supplied provider instance and registers against
-  `ContainerBuilder`;
-- [x] explicit definition-cache namespace/generation and per-definition opt-in are
-  implemented with an `imx11` key discriminator;
-- [x] bounded F3 admission/exportability checks are shared across cache/build paths;
-- [x] contextual builder configuration uses explicit class/value/factory/reference
-  terminals and returns the builder;
-- [x] autowire and declarative-factory metadata are snapshotted without writable
-  PHP array-reference aliases back to the builder;
-- [x] definition-cache bulk warmup is reachable from the builder and preserves
-  explicit eligibility;
-- [x] builder-owned configuration entry points cover environment bindings, attribute
-  resolvers, tracing, injection/attribute toggles, graph export, preload generation,
-  and environment-specific metadata;
-- [x] canonical numeric-string service ID `"0"` is normalized across graph,
-  planning, generated dispatch, reports/manifests, dynamic runtime and compiled runtime;
-- [x] F2 Fiber identity uses the live Fiber object's intrinsic `spl_object_id()`;
-  no static Fiber registry/strong reference is retained, while the hot path avoids
-  WeakMap lookup overhead;
-- [x] P2 regression coverage includes literal values, factories, autowire overrides,
-  inputs, alias lifetimes, freeze/retry behavior, contextual kinds, metadata snapshots,
-  cache opt-in/warmup/key separation, compiled literal/alias behavior and `"0"` IDs;
-- [x] remove builder-side overloaded 10.x registration shortcuts:
-  `bind()`, `bindFactory()`, `singleton()`, `scoped()`, `transient()` — closed in
-  `32d86646`;
-- [x] remove builder manager/development escape hatches:
-  `definitions()`, `registration()`, `options()`, `development()` — closed in
-  `32d86646`;
-- [x] migrate branch tests/fixtures that use removed **builder-side** configuration
-  surfaces to the explicit 11.0 builder API; remaining runtime-side 10.x execution
-  surfaces belong to P3;
-- [x] static planning recognizes explicit `AutowireDefinition` and carries its
-  constructor/property metadata into generated-runtime planning;
-- [ ] remove runtime `Container` registration/configuration mutation surfaces required by B1 — **mostly implemented**:
-  public direct bind/lifetime/factory/value/alias/unbind operations, manager navigation,
-  contextual/environment/attribute/lifecycle mutation, and write-capable proxy/ArrayAccess
-  paths are no longer public; remaining work is to move internal production-fallback
-  mutation off protected runtime methods, internalize the mutable repository accessor,
-  and finish residual fixture migration;
-- [ ] focused P2 QA green on one exact revision;
-- [ ] update this tracker with the exact P2 closure SHA and evidence.
+P3 closure:
 
-The previous note that deferred builder manager/development removal to P3 was
-incorrect relative to the P2 completion criterion (“no manager mutation escape”)
-and B1/B2. Runtime-side 10.x execution APIs remain P3 work; **builder-side**
-configuration escape hatches are P2 blockers.
+- `RuntimeContainerInterface` is the canonical dynamic/production contract:
+  PSR-11 `get()/has()`, `make()`, `invoke()`, `tagged()`, structured scope
+  entry/capture/reattachment/reset, and no lifecycle ownership transfer;
+- PSR-11 lookup is strict: missing IDs, declared-entry resolution failures, and
+  scoped access outside an active scope remain distinguishable;
+- scoped inputs require declaration; singleton-to-scoped captive dependencies are
+  rejected in dynamic and compiled construction; tagged iteration validates the
+  captured scope and cannot escape into a later request;
+- scope cleanup executes all hooks, closes state deterministically, preserves the
+  application failure as `previous`, and retains a bounded failure list through
+  `ScopeCleanupException`;
+- process-global container aliases, DI lookup globals, `Invoker`,
+  `RuntimeContainerProxy`, descriptor parsing, `call()`, `getReturn()`,
+  `resolveNow()`, inferred `CALL_ON`/`__invoke`/default methods, and public
+  low-level enter/leave APIs are removed;
+- production runtimes resolve both `ContainerInterface` and
+  `RuntimeContainerInterface` to the active production instance while retaining
+  host ownership of worker/event-loop lifecycle.
 
-#### Latest P2 QA state
+Batch 2 validation on 2026-10-01, PHP 8.5.4 / Composer 2.10.3:
 
-Latest inspected revision: `355c8628a040429cbe365d33c9d37ca9db59f52e`.
+- focused and full code suite: **395 passed, 2,089 assertions**;
+- `composer ic:process`: Composer Normalize, Rector, Pint, and PHPCBF completed;
+- final `composer ic:ci`: all configured gates passed - syntax, reference
+  integrity, duplicate code, comment policy, Pest, Pint, PHPCS, Deptrac, PHPStan,
+  Psalm, and Rector;
+- `git diff --check`: passed;
+- plan inventory: exactly this one file remains under `docs/plans/`.
 
-Green on that revision:
-
-- Swoole/OpenSwoole scope compatibility on PHP 8.4/8.5;
-- clean production install;
-- syntax/reference, duplicate-code, comment-policy, PHPCS, Deptrac and Rector in the
-  inspected QA lane before Pest halted the job.
-
-Current blockers are migration fallout from intentionally removing runtime
-configuration APIs, not relaxed standards:
-
-- `ProductionContainer::installFallbackBridges()` still calls protected
-  `Container::bindFactory()`; this must move to an internal bridge/configuration path;
-- residual regression/internal fixtures still call protected manager/configuration
-  methods or assume DI ArrayAccess writes; 314 tests pass and 115 fail at the current
-  migration checkpoint;
-- Pint reports two style issues in `Container.php` and `InvocationManager.php`;
-- analysis, benchmark, and release-regression lanes are red while those source/test
-  migrations remain unresolved;
-- `getRepository()` still exposes mutable repository state and remains a B1 cleanup
-  item before P2 closure.
-
-The previous pre-refactor workflow had release regression, PHPForge analysis,
-benchmarks, clean install, and Swoole/OpenSwoole green. Those results remain useful
-diagnostic evidence but are **not** closure evidence for the post-refactor head.
-
-
-No PHPForge threshold, skip policy, or benchmark budget has been weakened.
-The release-regression Fiber failure seen on earlier P2 revisions is resolved by
-the intrinsic live-Fiber identity fast path and was green on the most recent
-completed pre-closure workflow.
+No PHPForge threshold, baseline, skip, or exclusion was added. CacheLayer 4.0 and
+Runwire 2.1 transitive context sharing remain Batch 3/P5 work; Batch 2 establishes
+the runtime and ownership contract they will consume.
 
 ### Batch 1 superseded tuning evidence
 

@@ -7,7 +7,6 @@ namespace Infocyph\InterMix\Benchmarks;
 use Closure;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\ContainerBuilder;
-use Infocyph\InterMix\DI\Invoker;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\DI\Support\ServiceProviderInterface;
 use PhpBench\Attributes\BeforeMethods;
@@ -23,8 +22,6 @@ final class IntermixBench
     private Container $container;
 
     private Closure $diHandler;
-
-    private Invoker $invoker;
 
     private int $scopeCounter = 0;
 
@@ -57,19 +54,19 @@ final class IntermixBench
     #[BeforeMethods('setUpContainer')]
     public function benchInvokerMethodInvoke(): void
     {
-        $this->invoker->invoke([BenchMethodConsumer::class, 'handle'], ['value' => 1]);
+        $this->container->invoke([BenchMethodConsumer::class, 'handle'], ['value' => 1]);
     }
 
     #[BeforeMethods('setUpContainer')]
     public function benchInvokerStaticMethodInvoke(): void
     {
-        $this->invoker->invoke([BenchStaticMethodConsumer::class, 'handle'], ['value' => 1]);
+        $this->container->invoke([BenchStaticMethodConsumer::class, 'handle'], ['value' => 1]);
     }
 
     #[BeforeMethods('setUpContainer')]
     public function benchInvokerZeroArgumentClosure(): void
     {
-        $this->invoker->invoke($this->zeroArgumentHandler);
+        $this->container->invoke($this->zeroArgumentHandler);
     }
 
     public function benchManualObjectGraph(): void
@@ -214,7 +211,6 @@ final class IntermixBench
             ->setEnvironment('bench');
 
         $this->container = $builder->build();
-        $this->invoker = Invoker::with($this->container);
         $this->diHandler = static fn(BenchService $service): int => $service->handle(1);
         $this->zeroArgumentHandler = static fn(): int => 1;
 

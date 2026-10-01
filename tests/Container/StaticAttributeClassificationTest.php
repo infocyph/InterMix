@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Infocyph\InterMix\DI\Attribute\AttributeResolverInterface;
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\RuntimeContainerInterface;
 use Infocyph\InterMix\DI\ContainerBuilder;
 use Reflector;
 
@@ -18,7 +19,7 @@ final class StaticRuntimePropertyAttribute {}
 
 final class StaticRuntimeParameterAttributeResolver implements AttributeResolverInterface
 {
-    public function resolve(object $attributeInstance, Reflector $target, Container $container): mixed
+    public function resolve(object $attributeInstance, Reflector $target, RuntimeContainerInterface $container): mixed
     {
         return 'runtime';
     }
@@ -26,7 +27,7 @@ final class StaticRuntimeParameterAttributeResolver implements AttributeResolver
 
 final class StaticRuntimePropertyAttributeResolver implements AttributeResolverInterface
 {
-    public function resolve(object $attributeInstance, Reflector $target, Container $container): mixed
+    public function resolve(object $attributeInstance, Reflector $target, RuntimeContainerInterface $container): mixed
     {
         return 'runtime-property';
     }
@@ -96,8 +97,11 @@ it('does not deoptimize methods for unregistered parameter attributes', function
         $report = $builder->compile($path);
         $consumer = $builder->productionPrevalidated($path, $report['digest'])->get('consumer');
 
-        expect($report['compiled'])->toContain('consumer', StaticAttributeDependency::class)
-            ->and($consumer->dependency)->toBeInstanceOf(StaticAttributeDependency::class);
+        expect($report['compiled'])->toContain('consumer')
+            ->and($consumer->dependency)->toBeNull();
+        $runtime = $builder->productionPrevalidated($path, $report['digest']);
+        $runtime->invoke([$consumer, 'boot']);
+        expect($consumer->dependency)->toBeInstanceOf(StaticAttributeDependency::class);
     } finally {
         removeStaticAttributeArtifact($path);
     }
@@ -119,8 +123,11 @@ it('keeps registered custom method attribute resolvers as targeted runtime islan
         $consumer = $builder->productionPrevalidated($path, $report['digest'])->get('consumer');
 
         expect($report['compiled'])->toContain('consumer')
-            ->and($source)->toContain('invokeCompiledRuntimeMethod')
-            ->and($consumer->value)->toBe('runtime');
+            ->and($source)->not->toContain('invokeCompiledRuntimeMethod')
+            ->and($consumer->value)->toBe('initial');
+        $runtime = $builder->productionPrevalidated($path, $report['digest']);
+        $runtime->invoke([$consumer, 'boot'], ['value' => 'runtime']);
+        expect($consumer->value)->toBe('runtime');
     } finally {
         removeStaticAttributeArtifact($path);
     }

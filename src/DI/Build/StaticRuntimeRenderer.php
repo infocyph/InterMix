@@ -30,7 +30,8 @@ final class StaticRuntimeRenderer
         $lifecycleRenderer = new StaticLifecycleHookRenderer();
         $returnRenderer = new StaticReturnRenderer();
         $source = "<?php\n\ndeclare(strict_types=1);\n\n";
-        $source .= "use Infocyph\\InterMix\\DI\\ProductionContainer;\n\n";
+        $source .= "use Infocyph\\InterMix\\DI\\ProductionContainer;\n";
+        $source .= "use Infocyph\\InterMix\\DI\\Support\\LifetimeEnum;\n\n";
         $source .= "return new class extends ProductionContainer\n{\n";
         $source .= $this->renderFactorySingletonProperties($plans);
         $source .= $invocationRenderer->renderSingletonProperties($plans);
@@ -41,6 +42,8 @@ final class StaticRuntimeRenderer
         $source .= $this->renderHas($plans);
         $source .= $this->renderSlotMap($slots);
         $source .= $this->renderCompiledIds($plans);
+        $source .= $this->renderCompiledLifetimes($plans);
+        $source .= $this->renderCompiledScopedDefinitions($plans);
         $source .= $returnRenderer->renderDispatch($plans, $slots);
         $source .= $this->renderDefinitionMap($graph, $plans);
         $source .= $this->renderFreshMap($plans, $slots);
@@ -234,6 +237,42 @@ final class StaticRuntimeRenderer
         return "    protected function compiledIds(): array\n"
             . "    {\n"
             . '        return ' . var_export($ids, true) . ";\n"
+            . "    }\n\n";
+    }
+
+    /** @param array<string, ServicePlan> $plans */
+    private function renderCompiledLifetimes(array $plans): string
+    {
+        $source = "    protected function compiledLifetimeFor(string \$id): ?LifetimeEnum\n"
+            . "    {\n"
+            . "        return match (\$id) {\n";
+        foreach ($plans as $id => $plan) {
+            $source .= '            ' . var_export((string) $id, true)
+                . ' => LifetimeEnum::' . $plan['lifetime']->name . ",\n";
+        }
+        $source .= "            default => null,\n"
+            . "        };\n"
+            . "    }\n\n";
+
+        return $source;
+    }
+
+    /** @param array<string, ServicePlan> $plans */
+    private function renderCompiledScopedDefinitions(array $plans): string
+    {
+        $ids = [];
+        foreach ($plans as $id => $plan) {
+            if ($plan['lifetime'] === LifetimeEnum::Scoped) {
+                $ids[] = (string) $id;
+            }
+        }
+        if ($ids === []) {
+            return '';
+        }
+
+        return "    protected function isCompiledScopedDefinition(string \$id): bool\n"
+            . "    {\n"
+            . '        return in_array($id, ' . var_export($ids, true) . ", true);\n"
             . "    }\n\n";
     }
 
@@ -434,14 +473,21 @@ final class StaticRuntimeRenderer
     {
         $source = "    public function get(string \$id): mixed\n    {\n";
         $source .= "        if (\$this->isDeoptimized()) {\n            return \$this->fallbackGet(\$id);\n        }\n\n";
-        $source .= "        return match (\$id) {\n";
+        $source .= "        \$this->beginCompiledResolution(\$id);\n";
+        $source .= "        try {\n";
+        $source .= "            return match (\$id) {\n";
         foreach ($plans as $rawId => $_plan) {
             $id = (string) $rawId;
-            $source .= '            ' . var_export($id, true) . ' => $this->s' . $slots[$id] . "(),\n";
+            $source .= '                ' . var_export($id, true) . ' => $this->s' . $slots[$id] . "(),\n";
         }
-        $source .= "            default => \$this->fallbackGet(\$id),\n";
+        $source .= "                default => \$this->fallbackGet(\$id),\n";
 
-        return $source . "        };\n    }\n\n";
+        return $source
+            . "            };\n"
+            . "        } finally {\n"
+            . "            \$this->endCompiledResolution(\$id);\n"
+            . "        }\n"
+            . "    }\n\n";
     }
 
     /** @param array<string, ServicePlan> $plans */

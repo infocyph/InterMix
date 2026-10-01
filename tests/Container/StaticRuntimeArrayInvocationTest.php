@@ -134,14 +134,14 @@ it('specializes scoped class-array invocation result caching', function () {
         $report = $builder->compile($path);
         $runtime = $builder->production($path);
 
-        $runtime->enterScope('request-a');
+        testEnterScope($runtime, 'request-a');
         $first = $runtime->get('scoped.handler');
         $second = $runtime->get('scoped.handler');
-        $runtime->leaveScope();
+        testLeaveScope($runtime);
 
-        $runtime->enterScope('request-b');
+        testEnterScope($runtime, 'request-b');
         $third = $runtime->get('scoped.handler');
-        $runtime->leaveScope();
+        testLeaveScope($runtime);
 
         expect($report['compiled'])->not->toContain('scoped.handler')
             ->and($first)->toBe($second)
@@ -166,7 +166,9 @@ it('compiles class-only arrays while preserving implicit method side effects', f
         expect($report['compiled'])->toContain('object.handler')
             ->and($instance)->toBeInstanceOf(ArrayInvocationObjectHandler::class)
             ->and($runtime->get('object.handler'))->toBe($instance)
-            ->and(ArrayInvocationObjectHandler::$calls)->toBe(1);
+            ->and(ArrayInvocationObjectHandler::$calls)->toBe(0);
+        $runtime->invoke($instance);
+        expect(ArrayInvocationObjectHandler::$calls)->toBe(1);
     } finally {
         removeArrayInvocationArtifact($path);
     }

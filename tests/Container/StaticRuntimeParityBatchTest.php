@@ -103,8 +103,8 @@ it('uses the compiled service for calls to known definition ids', function () {
         $runtime = $builder->production($path);
         $service = $runtime->get('callable');
 
-        expect($runtime->call('callable'))->toBe($service)
-            ->and($runtime->call('callable', 'ping'))->toBe('pong');
+        expect($runtime->get('callable'))->toBe($service)
+            ->and($runtime->invoke([$service, 'ping']))->toBe('pong');
     } finally {
         removeStaticBatchArtifact($path);
     }
@@ -155,7 +155,7 @@ it('falls back for arbitrary autowireable classes without replacing compiled sta
         $builder->compile($path);
         $runtime = $builder->production($path);
         $stable = $runtime->get(StaticBatchStableService::class);
-        $dynamic = $runtime->get(StaticBatchDynamicConsumer::class);
+        $dynamic = $runtime->make(StaticBatchDynamicConsumer::class);
 
         expect($dynamic)->toBeInstanceOf(StaticBatchDynamicConsumer::class)
             ->and($dynamic->stable)->toBe($stable)

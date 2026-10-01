@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Build;
 
 use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
+use Infocyph\InterMix\DI\Internal\ProductionContainerAccess;
 use Infocyph\InterMix\DI\ProductionContainer;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Internal\AtomicFileWriter;
@@ -136,7 +137,7 @@ final class StaticRuntimeGenerator
     private function attachFallback(ProductionContainer $runtime, ?ConfigurationContainer $fallback): ProductionContainer
     {
         if ($fallback instanceof ConfigurationContainer) {
-            $runtime->attachFallback($fallback);
+            ProductionContainerAccess::attachFallback($runtime, $fallback);
         }
 
         return $runtime;

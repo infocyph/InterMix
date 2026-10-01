@@ -47,12 +47,12 @@ it('preserves lifetimes registered by missing-service activation', function () {
             $container->scoped($id, DiHotPathActivatedService::class);
         }
     });
-    $scoped->enterScope('one');
+    testEnterScope($scoped, 'one');
     $first = $scoped->get(DiHotPathActivatedContract::class);
     $firstAgain = $scoped->get(DiHotPathActivatedContract::class);
-    $scoped->leaveScope()->enterScope('two');
+    testLeaveScope($scoped)->enterScope('two');
     $second = $scoped->get(DiHotPathActivatedContract::class);
-    $scoped->leaveScope();
+    testLeaveScope($scoped);
 
     $transient = new ConfigurationContainer(uniqid('hot_path_transient_', true));
     $transient->onMissing(function (string $id, Container $container): void {

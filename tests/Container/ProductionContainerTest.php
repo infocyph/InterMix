@@ -73,19 +73,25 @@ it('specializes scoped identity and scope seeds in production', function () {
             ->toContain('$scope->hasSeeds && array_key_exists(');
 
         $runtime = $builder->production($path);
-        $root = $runtime->get('leaf');
+        expect(fn() => $runtime->get('leaf'))->toThrow(ContainerException::class);
 
-        $runtime->enterScope('request-a');
-        $requestA = $runtime->get('leaf');
-        expect($requestA)->toBe($runtime->get('leaf'))->not->toBe($root);
-        $runtime->leaveScope();
+        $requestA = $runtime->withinScope('request-a', static function (ProductionContainer $active): object {
+            $leaf = $active->get('leaf');
+            expect($active->get('leaf'))->toBe($leaf);
+
+            return $leaf;
+        });
 
         $seed = new ProductionRuntimeLeaf();
-        $runtime->enterScope('request-b', ['leaf' => $seed]);
-        expect($runtime->get('leaf'))->toBe($seed);
-        $runtime->leaveScope();
+        $requestB = $runtime->withinScope(
+            'request-b',
+            static fn(ProductionContainer $active): object => $active->get('leaf'),
+            ['leaf' => $seed],
+        );
 
-        expect($runtime->get('leaf'))->toBe($root);
+        expect($requestB)->toBe($seed)
+            ->and($requestA)->not->toBe($requestB)
+            ->and(fn() => $runtime->get('leaf'))->toThrow(ContainerException::class);
     } finally {
         removeProductionRuntimeArtifact($path);
     }
@@ -122,18 +128,17 @@ it('compiles direct eager and lazy tag dispatch for known production services', 
         $builder->compile($path);
         $source = file_get_contents($path);
         $runtime = $builder->production($path);
-        $eager = $runtime->findByTag('worker');
-        $lazy = iterator_to_array($runtime->findByTagLazy('worker'));
+        $firstPass = iterator_to_array($runtime->tagged('worker'));
+        $secondPass = iterator_to_array($runtime->tagged('worker'));
 
         expect($source)->toBeString()
             ->toContain('protected function compiledTagged(string $tag): ?array')
-            ->toContain('protected function compiledTaggedLazy(string $tag): ?iterable')
-            ->and(array_keys($eager))->toBe(['first', 'second'])
-            ->and(array_keys($lazy))->toBe(['first', 'second'])
-            ->and($lazy['first']())->toBe($eager['first'])
-            ->and($lazy['second']())->toBeInstanceOf(ProductionRuntimeLeaf::class)
-            ->and($runtime->findByTag('missing'))->toBe([])
-            ->and(iterator_to_array($runtime->findByTagLazy('missing')))->toBe([]);
+            ->and(array_keys($firstPass))->toBe(['first', 'second'])
+            ->and(array_keys($secondPass))->toBe(['first', 'second'])
+            ->and($secondPass['first'])->toBe($firstPass['first'])
+            ->and($secondPass['second'])->toBeInstanceOf(ProductionRuntimeLeaf::class)
+            ->and($secondPass['second'])->not->toBe($firstPass['second'])
+            ->and(iterator_to_array($runtime->tagged('missing')))->toBe([]);
     } finally {
         removeProductionRuntimeArtifact($path);
     }

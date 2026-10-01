@@ -1,53 +1,35 @@
 <?php
 
 declare(strict_types=1);
-/**
- * @covers \Infocyph\InterMix\DI\Invoker
- */
 
-use Infocyph\InterMix\DI\Container;
-use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
-use Infocyph\InterMix\DI\Invoker;
-use Infocyph\InterMix\Exceptions\ContainerException;
+use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\Serializer\ClosureSerializer;
 
-/* -----------------------------------------------------------------
- |  Fixtures
- |-----------------------------------------------------------------*/
-class InvokableFoo
-{
-    public function __invoke(string $msg = 'foo'): string
-    {
-        return strtoupper($msg);
-    }
-}
-
-class ConstructOnlyInvokable
-{
-    public int $calls = 0;
-
-    public ?string $lastArgument = null;
-
-    public function __invoke(string $required): void
-    {
-        ++$this->calls;
-        $this->lastArgument = $required;
-    }
-}
-
-class MyService
+final class RuntimeInvokeTarget
 {
     public function __construct(public string $id = '') {}
 
-    public function run(string $p): string
+    public function run(string $value): string
     {
-        return "$p processed";
+        return $value . ' processed';
     }
 }
 
-class StaticController
+final class RuntimeInvokableTarget
 {
-    public static function clock(DateTimeZone $timezone): string
+    public int $calls = 0;
+
+    public function __invoke(string $value): string
+    {
+        ++$this->calls;
+
+        return strtoupper($value);
+    }
+}
+
+final class RuntimeStaticTarget
+{
+    public static function timezone(DateTimeZone $timezone): string
     {
         return $timezone->getName();
     }
@@ -56,260 +38,92 @@ class StaticController
     {
         return new stdClass();
     }
-
-    public static function health(): array
-    {
-        return ['status' => 'ok'];
-    }
-
-    public static function json(): array
-    {
-        return ['memory' => 1];
-    }
 }
 
-/* -----------------------------------------------------------------
- |  Shared test setup
- |-----------------------------------------------------------------*/
-beforeEach(function () {
-    $this->c = new ConfigurationContainer(uniqid('invoker_'));
-    $this->c->definitions()
-        ->bind(DateTimeZone::class, fn() => new DateTimeZone('UTC'));
-    $this->inv = Invoker::with($this->c);
-});
-
-/* -----------------------------------------------------------------
- |  1. invoke() happy-paths
- |-----------------------------------------------------------------*/
-it('invokes a native closure', function () {
-    expect($this->inv->invoke(fn() => 'hi'))->toBe('hi');
-});
-
-it('invokes a function string', function () {
-    expect($this->inv->invoke('strtoupper', ['abc']))->toBe('ABC');
-});
-
-it('invokes an invokable object', function () {
-    expect($this->inv->invoke(new InvokableFoo(), ['bar']))->toBe('BAR');
-});
-
-it('invokes a [class,method] pair', function () {
-    $out = $this->inv->invoke([MyService::class, 'run'], ['go']);
-    expect($out)->toBe('go processed');
-});
-
-it('keeps static methods on the same class independently invokable', function () {
-    expect($this->inv->invoke([StaticController::class, 'health']))
-        ->toBe(['status' => 'ok'])
-        ->and($this->inv->invoke([StaticController::class, 'json']))
-        ->toBe(['memory' => 1]);
-});
-
-it('returns a fresh result from every static method invocation', function () {
-    $first = $this->inv->invoke([StaticController::class, 'fresh']);
-    $second = $this->inv->invoke([StaticController::class, 'fresh']);
-
-    expect($first)->toBeInstanceOf(stdClass::class)
-        ->and($second)->toBeInstanceOf(stdClass::class)
-        ->and($first)->not->toBe($second);
-});
-
-it('ignores surplus supplied arguments for zero-parameter static methods', function () {
-    expect($this->inv->invoke([StaticController::class, 'health'], ['unused']))
-        ->toBe(['status' => 'ok']);
-});
-
-it('autowires missing static method parameters', function () {
-    expect($this->inv->invoke([StaticController::class, 'clock']))
-        ->toBe('UTC');
-});
-
-it('throws an InvalidArgumentException on unsupported target', function () {
-    $this->inv->invoke('not-a-callable');
-})->throws(InvalidArgumentException::class);
-
-/* Opis-packed closure ------------------------------------------------------ */
-it('requires explicit serialized-closure deserialization', function () {
-    $packed = ClosureSerializer::serialize(fn() => 'packed');
-    expect(fn() => $this->inv->invoke($packed))->toThrow(InvalidArgumentException::class)
-        ->and($this->inv->invoke(ClosureSerializer::unserialize($packed)))->toBe('packed');
-});
-
-it('invokes a static class-method string', function () {
-    expect($this->inv->invoke(StaticController::class . '::health'))
-        ->toBe(['status' => 'ok']);
-});
-
-it('resolves a class-string', function () {
-    expect($this->inv->invoke(MyService::class))
-        ->toBeInstanceOf(MyService::class);
-});
-
-/* -----------------------------------------------------------------
- |  2. resolve()
- |-----------------------------------------------------------------*/
-it('resolves a bound scalar service', function () {
-    $this->c->definitions()->bind('foo', 99);
-    expect($this->inv->resolve('foo'))->toBe(99);
-});
-
-/* -----------------------------------------------------------------
- |  3. make()
- |-----------------------------------------------------------------*/
-it('make() returns fresh instances', function () {
-    $a = $this->inv->make(MyService::class, ['A']);
-    $b = $this->inv->make(MyService::class, ['B']);
-    expect($a)->not->toBe($b)
-        ->and($a->id)->toBe('A')
-        ->and($b->id)->toBe('B');
-});
-
-it('make() can call a method', function () {
-    $out = $this->inv->make(MyService::class, [], 'run', ['X']);
-    expect($out)->toBe('X processed');
-});
-
-it('make() constructs invokable classes without invoking them', function () {
-    $instance = $this->inv->make(ConstructOnlyInvokable::class);
-
-    expect($instance)
-        ->toBeInstanceOf(ConstructOnlyInvokable::class)
-        ->and($instance->calls)->toBe(0)
-        ->and($instance->lastArgument)->toBeNull();
-});
-
-/* -----------------------------------------------------------------
- |  4. Serializer round-trip
- |-----------------------------------------------------------------*/
-/* -----------------------------------------------------------------
- |  5. NEW — pure callable + DI-injected parameters
- |-----------------------------------------------------------------*/
-
-/* helper expectation */
-
-expect()->extend('toStartWith', function (string $prefix) {
-    /** @var \Pest\Expectation $this */
-    return $this->and(substr($this->value, 0, strlen($prefix)) === $prefix);
-});
-
-it('invokes an anonymous closure with DI-resolved parameters', function () {
-
-    // Enable autowiring so DateTimeImmutable can be injected
-    $this->c->options()->setOptions(injection: true);
-
-    $closure = function (DateTimeImmutable $now, string $name): string {
-        return "Hi $name — " . $now->format('Y-m-d H:i');
-    };
-
-    $out = $this->inv->invoke($closure, ['name' => 'Bob']);
-
-    expect($out)->toStartWith('Hi Bob — ');
-});
-
-if (!function_exists('greet_time_test')) {
-    function greet_time_test(DateTimeImmutable $now, string $name): string
-    {
-        return strtoupper("hello $name @ " . $now->format('H:i'));
-    }
-}
-
-it('invokes a named function string with DI-resolved parameters', function () {
-
-    $this->c->options()->setOptions(injection: true);
-
-    $out = $this->inv->invoke('greet_time_test', ['name' => 'Alice']);
-
-    expect($out)->toMatch('/HELLO ALICE @ \d{2}:\d{2}/');
-});
-
-class Request
+function runtimeInvokeContainer(): \Infocyph\InterMix\DI\RuntimeContainerInterface
 {
-    // imagine PSR-7 or your own request here …
-    public string $uuid;
-
-    public function __construct()
-    {
-        $this->uuid = uniqid('req_', true);
-    }
+    return ContainerBuilder::create()
+        ->value(DateTimeZone::class, new DateTimeZone('UTC'))
+        ->build();
 }
 
-class CachedCallableService
-{
-    public function __construct(private readonly DateTimeZone $timezone) {}
+test('invoke supports native closure, function, invokable object, instance method, and static method callables', function () {
+    $runtime = runtimeInvokeContainer();
+    $target = new RuntimeInvokeTarget();
+    $invokable = new RuntimeInvokableTarget();
 
-    public function __invoke(): string
-    {
-        return $this->timezone->getName();
-    }
-}
+    expect($runtime->invoke(static fn(): string => 'ok'))->toBe('ok')
+        ->and($runtime->invoke('strtoupper', ['abc']))->toBe('ABC')
+        ->and($runtime->invoke($invokable, ['value' => 'hello']))->toBe('HELLO')
+        ->and($runtime->invoke([$target, 'run'], ['value' => 'work']))->toBe('work processed')
+        ->and($runtime->invoke([RuntimeStaticTarget::class, 'timezone']))->toBe('UTC');
+});
 
-/* 6. Invoker should autowire an argument-less class ----------------*/
-it('invokes a closure and autowires a Request instance', function () {
-    $out = $this->inv->invoke(
-        fn(Request $request) => $request->uuid,
+test('invoke preserves exact values and never caches results', function () {
+    $runtime = runtimeInvokeContainer();
+
+    expect($runtime->invoke(static fn(): null => null))->toBeNull()
+        ->and($runtime->invoke(static fn(): false => false))->toBeFalse()
+        ->and($runtime->invoke([RuntimeStaticTarget::class, 'fresh']))
+        ->not->toBe($runtime->invoke([RuntimeStaticTarget::class, 'fresh']));
+});
+
+test('instance methods require an explicit receiver', function () {
+    $runtime = runtimeInvokeContainer();
+
+    expect(fn() => $runtime->invoke([RuntimeInvokeTarget::class, 'run'], ['value' => 'x']))
+        ->toThrow(TypeError::class);
+});
+
+test('serialized closures require explicit bounded deserialization', function () {
+    $runtime = runtimeInvokeContainer();
+    $payload = ClosureSerializer::serialize(static fn(): string => 'packed');
+
+    expect(fn() => $runtime->invoke($payload))->toThrow(TypeError::class)
+        ->and($runtime->invoke(ClosureSerializer::unserialize($payload)))->toBe('packed');
+});
+
+test('make constructs fresh roots with named and positional arguments', function () {
+    $runtime = runtimeInvokeContainer();
+    $named = $runtime->make(RuntimeInvokeTarget::class, ['id' => 'named']);
+    $positional = $runtime->make(RuntimeInvokeTarget::class, ['positional']);
+
+    expect($named)->not->toBe($positional)
+        ->and($named->id)->toBe('named')
+        ->and($positional->id)->toBe('positional');
+});
+
+test('make constructs invokable classes without invoking them', function () {
+    $runtime = runtimeInvokeContainer();
+    $target = $runtime->make(RuntimeInvokableTarget::class);
+
+    expect($target)->toBeInstanceOf(RuntimeInvokableTarget::class)
+        ->and($target->calls)->toBe(0);
+});
+
+test('invoke autowires missing concrete parameters and honors explicit arguments', function () {
+    $runtime = runtimeInvokeContainer();
+
+    $value = $runtime->invoke(
+        static fn(DateTimeImmutable $now, string $name): string => $name . ':' . $now->format('Y'),
+        ['name' => 'Ada'],
     );
 
-    // just assert we got **some** non-empty UUID back
-    expect($out)->toBeString()->not->toBe('')->toStartWith('req_');
+    expect($value)->toMatch('/^Ada:\\d{4}$/');
 });
 
-it('isolates callableFor cache per container', function () {
-    $c1 = new ConfigurationContainer(uniqid('invoker_cache_a_'));
-    $c1->definitions()->bind(DateTimeZone::class, fn() => new DateTimeZone('UTC'));
-
-    $c2 = new ConfigurationContainer(uniqid('invoker_cache_b_'));
-    $c2->definitions()->bind(DateTimeZone::class, fn() => new DateTimeZone('Asia/Dhaka'));
-
-    $inv1 = Invoker::with($c1);
-    $inv2 = Invoker::with($c2);
-
-    $f1 = $inv1->callableFor(CachedCallableService::class);
-    $f2 = $inv2->callableFor(CachedCallableService::class);
-
-    expect($f1())->toBe('UTC')
-        ->and($f2())->toBe('Asia/Dhaka');
-});
-
-it('does not pin a concrete invokable service in callableFor', function () {
-    $container = new ConfigurationContainer(uniqid('invoker_cache_lifecycle_'));
-    $container->definitions()->bind(DateTimeZone::class, fn() => new DateTimeZone('UTC'));
-    $invoker = Invoker::with($container);
-    $callable = $invoker->callableFor(CachedCallableService::class);
-
-    $reflection = new ReflectionFunction($callable);
-    expect($reflection->getClosureThis())->toBe($invoker)
-        ->and($callable())->toBe('UTC');
-});
-
-it('invokes closures directly without storing closure aliases', function () {
-    $before = count($this->c->getRepository()->getClosureResource());
-
-    for ($i = 0; $i < 5; $i++) {
-        expect($this->inv->invoke(fn() => 'ok'))->toBe('ok');
-    }
-
-    $after = count($this->c->getRepository()->getClosureResource());
-    expect($after)->toBe($before);
-});
-
-it('does not retain prepared closures after their caller releases them', function () {
+test('invoke does not retain caller-owned closures', function () {
+    $runtime = runtimeInvokeContainer();
     $closure = static fn(): string => 'ok';
     $weak = WeakReference::create($closure);
 
-    expect($this->inv->invoke($closure))->toBe('ok');
-
+    expect($runtime->invoke($closure))->toBe('ok');
     unset($closure);
     gc_collect_cycles();
 
     expect($weak->get())->toBeNull();
 });
 
-it('resolves one-off closures without storing closure aliases', function () {
-    $before = count($this->c->getRepository()->getClosureResource());
-
-    for ($i = 0; $i < 5; $i++) {
-        expect($this->c->resolveNow(fn() => 'ok'))->toBe('ok');
-    }
-
-    expect($this->c->getRepository()->getClosureResource())->toHaveCount($before);
+test('the retired Invoker facade is absent', function () {
+    expect(class_exists('Infocyph\\InterMix\\DI\\Invoker'))->toBeFalse();
 });

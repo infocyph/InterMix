@@ -54,7 +54,7 @@ it('preserves compiled and fallback scoped identity after builder finalization',
     try {
         $builder->compile($path);
         $runtime = $builder->production($path);
-        $runtime->enterScope('request');
+        testEnterScope($runtime, 'request');
         $compiled = $runtime->get('compiled');
         $dynamic = $runtime->get('dynamic');
         $context = $runtime->captureScopeContext();
@@ -75,7 +75,7 @@ it('preserves compiled and fallback scoped identity after builder finalization',
         expect($childCompiled)->toBe($compiled)
             ->and($childDynamic)->toBe($dynamic);
 
-        $runtime->leaveScope();
+        testLeaveScope($runtime);
     } finally {
         removeRuntimeAlignmentArtifact($path);
     }
@@ -86,9 +86,9 @@ it('rejects dynamic configuration mutation from a foreign carrier while its scop
     $container->value('stable', 'baseline');
 
     $fiber = new Fiber(static function () use ($container): void {
-        $container->enterScope('request');
+        testEnterScope($container, 'request');
         Fiber::suspend();
-        $container->leaveScope();
+        testLeaveScope($container);
     });
     $fiber->start();
 
@@ -112,7 +112,7 @@ it('keeps a finalized compiled graph immutable while a propagated child is attac
         $builder->compile($path);
         $report = $builder->compilationReport();
         $runtime = $builder->production($path);
-        $runtime->enterScope('request');
+        testEnterScope($runtime, 'request');
         $context = $runtime->captureScopeContext();
 
         $child = new Fiber(static fn(): RuntimeAlignmentCompiledLeaf => $runtime->withinScopeContext(
@@ -137,7 +137,7 @@ it('keeps a finalized compiled graph immutable while a propagated child is attac
             ->toThrow(ContainerException::class, 'ContainerBuilder is finalized')
             ->and($runtime->get('compiled'))->toBeInstanceOf(RuntimeAlignmentCompiledLeaf::class);
 
-        $runtime->leaveScope();
+        testLeaveScope($runtime);
     } finally {
         removeRuntimeAlignmentArtifact($path);
     }

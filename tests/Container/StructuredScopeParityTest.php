@@ -27,7 +27,7 @@ function removeStructuredParityArtifact(string $path): void
 /** @param Container|ProductionContainer $container */
 function exerciseStructuredScopeParity(object $container): void
 {
-    $container->enterScope('request', ['request.seed' => 'seeded']);
+    testEnterScope($container, 'request', ['request.seed' => 'seeded']);
     $parentLeaf = $container->get('leaf');
     $parentIsland = $container->get('island');
     $context = $container->captureScopeContext();
@@ -39,11 +39,11 @@ function exerciseStructuredScopeParity(object $container): void
                 $sharedLeaf = $active->get('leaf');
                 $sharedIsland = $active->get('island');
                 $seed = $active->get('request.seed');
-                $active->enterScope('nested');
+                testEnterScope($active, 'nested');
                 $nestedLeaf = $active->get('leaf');
                 $nestedIsland = $active->get('island');
                 Fiber::suspend('nested-ready');
-                $active->leaveScope();
+                testLeaveScope($active);
 
                 return [
                     $sharedLeaf,
@@ -83,7 +83,7 @@ function exerciseStructuredScopeParity(object $container): void
     $throwing = new Fiber(static fn() => $container->withinScopeContext(
         $context,
         static function (Container|ProductionContainer $active): never {
-            $active->enterScope('nested-failure');
+            testEnterScope($active, 'nested-failure');
             $active->get('leaf');
             throw new RuntimeException('parity-child-failure');
         },
@@ -92,7 +92,7 @@ function exerciseStructuredScopeParity(object $container): void
         ->and($container->get('leaf'))->toBe($parentLeaf)
         ->and($container->get('island'))->toBe($parentIsland);
 
-    $container->leaveScope();
+    testLeaveScope($container);
     $container->resetCurrentExecutionScope();
     $container->resetCurrentExecutionScope();
 
@@ -105,6 +105,7 @@ function exerciseStructuredScopeParity(object $container): void
 
 it('keeps structured scope semantics identical in the dynamic container', function (): void {
     $container = ContainerBuilder::create(uniqid('structured_parity_dynamic_'))
+        ->input('request.seed')
         ->autowire('leaf', StructuredParityScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
         ->factory('island', static fn(): stdClass => new stdClass(), lifetime: LifetimeEnum::Scoped)
         ->build();
@@ -114,7 +115,8 @@ it('keeps structured scope semantics identical in the dynamic container', functi
 
 it('keeps structured scope semantics identical across compiled runtime islands', function (): void {
     $builder = ContainerBuilder::create(uniqid('structured_parity_compiled_'));
-    $builder->autowire('leaf', StructuredParityScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+    $builder->input('request.seed')
+        ->autowire('leaf', StructuredParityScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
         ->factory('island', static fn(): stdClass => new stdClass(), lifetime: LifetimeEnum::Scoped);
 
     $path = structuredParityArtifactPath();
@@ -129,7 +131,8 @@ it('keeps structured scope semantics identical across compiled runtime islands',
 
 it('keeps structured scope semantics identical across independent frozen production runtimes', function (): void {
     $builder = ContainerBuilder::create(uniqid('structured_parity_frozen_'));
-    $builder->autowire('leaf', StructuredParityScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+    $builder->input('request.seed')
+        ->autowire('leaf', StructuredParityScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
         ->factory('island', static fn(): stdClass => new stdClass(), lifetime: LifetimeEnum::Scoped);
 
     $path = structuredParityArtifactPath();

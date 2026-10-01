@@ -45,6 +45,7 @@ final class StaticScopedConstructionGuard
             $exportedId = var_export($id, true);
             $wrappers .= "    private function s{$slot}(): mixed\n"
                 . "    {\n"
+                . "        \$this->assertCompiledScopedResolution({$exportedId});\n"
                 . "        \$scope = \$this->contextScopesActive ? \$this->compiledScope() : \$this->scope;\n"
                 . "        if (\$scope->hasSeeds && array_key_exists({$slot}, \$scope->seeds)) {\n"
                 . "            return \$scope->seeds[{$slot}];\n"

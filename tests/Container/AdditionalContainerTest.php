@@ -216,19 +216,11 @@ test('Inject attribute with unknown reference', function () {
     $container->call(InjectUnknownParam::class, 'doSomething');
 })->throws(ContainerException::class);
 
-test('helper default aliases are readable and isolated', function () {
-    $cDefault = container();
-    $cResolve = resolve();
-    $cDirect = direct();
-
-    expect($cDefault)->toBeInstanceOf(Container::class)
-        ->and($cResolve)->toBeInstanceOf(Container::class)
-        ->and($cDirect)->toBeInstanceOf(Container::class)
-        ->and($cDefault)->not->toBe($cResolve)
-        ->and($cResolve)->not->toBe($cDirect)
-        ->and($cDefault)->not->toBe($cDirect);
+test('global DI lookup helpers are removed', function () {
+    expect(function_exists('container'))->toBeFalse()
+        ->and(function_exists('resolve'))->toBeFalse()
+        ->and(function_exists('direct'))->toBeFalse();
 });
-
 test('composer autoload files does not include global helpers by default', function () {
     $composer = json_decode((string) file_get_contents(__DIR__ . '/../../composer.json'), true, 512, JSON_THROW_ON_ERROR);
     $autoload = is_array($composer['autoload'] ?? null) ? $composer['autoload'] : [];

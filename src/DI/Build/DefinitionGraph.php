@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Build;
 
+use Infocyph\InterMix\DI\Internal\ContainerAccess;
 use Infocyph\InterMix\DI\Invoker\GenericCall;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
@@ -107,7 +108,7 @@ final readonly class DefinitionGraph
             ], true),
             environment: $repository->getEnvironment(),
             defaultMethod: $repository->getDefaultMethod(),
-            injectionEnabled: !$repository->container()->getCurrentResolver() instanceof GenericCall,
+            injectionEnabled: !ContainerAccess::resolver($repository->container()) instanceof GenericCall,
             methodAttributes: $repository->isMethodAttributeEnabled(),
             propertyAttributes: $repository->isPropertyAttributeEnabled(),
         );

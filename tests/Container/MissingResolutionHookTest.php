@@ -236,10 +236,10 @@ it('preserves singleton and scoped lifetimes registered by activation', function
     $scoped->onMissing(function (string $id, Container $container): void {
         $container->scoped($id, MissingResolutionService::class);
     });
-    $scoped->enterScope('first');
+    testEnterScope($scoped, 'first');
     $first = $scoped->get(MissingResolutionContract::class);
     $firstAgain = $scoped->get(MissingResolutionContract::class);
-    $scoped->leaveScope()->enterScope('second');
+    testLeaveScope($scoped)->enterScope('second');
     $second = $scoped->get(MissingResolutionContract::class);
 
     expect($singleton->get(MissingResolutionContract::class))

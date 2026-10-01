@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Support;
 
-use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Internal\BoundedValueInspector;
+use Infocyph\InterMix\DI\RuntimeContainerInterface;
 use InvalidArgumentException;
 use ReflectionClass;
 
@@ -56,7 +56,7 @@ final readonly class FactoryDefinition
         return new self($class, $method, $arguments);
     }
 
-    public function resolve(Container $container): mixed
+    public function resolve(RuntimeContainerInterface $container): mixed
     {
         $arguments = [];
         foreach ($this->arguments as $argument) {

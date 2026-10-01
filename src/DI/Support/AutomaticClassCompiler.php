@@ -147,10 +147,6 @@ final class AutomaticClassCompiler
             return 'class has registered ' . implode(', ', $resources) . ' resources';
         }
 
-        $method = $this->implicitMethod($graph, $class);
-        if ($method !== null) {
-            return "class invokes implicit method '$method'";
-        }
         if ($this->hasInjectablePropertyAttribute($graph, $class)) {
             return 'class has an enabled injectable property attribute';
         }
@@ -192,26 +188,6 @@ final class AutomaticClassCompiler
         }
 
         return false;
-    }
-
-    /**
-     * @param DefinitionGraph $graph Immutable build-time container state.
-     * @param ReflectionClass<object> $class Class being inspected.
-     */
-    private function implicitMethod(DefinitionGraph $graph, ReflectionClass $class): ?string
-    {
-        $constant = $class->hasConstant('CALL_ON') ? 'CALL_ON' : 'callOn';
-        $callOn = $class->hasConstant($constant) ? $class->getConstant($constant) : null;
-        if (is_string($callOn) && $callOn !== '' && $class->hasMethod($callOn)) {
-            return $callOn;
-        }
-
-        $default = $graph->defaultMethod();
-        if (is_string($default) && $default !== '' && $class->hasMethod($default)) {
-            return $default;
-        }
-
-        return $class->hasMethod('__invoke') ? '__invoke' : null;
     }
 
     private function isExportable(mixed $value): bool

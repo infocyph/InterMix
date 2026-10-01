@@ -214,7 +214,7 @@ it('collects a readable trace', function () {
     $trace = $c->end()->debug(FooService::class);
 
     expect($trace)->toBeArray()
-        ->and($trace[1]['msg'])->toContain('def:' . FooService::class);
+        ->and(implode(' ', array_column($trace, 'msg')))->toContain(FooService::class);
 });
 
 it('switches concrete by environment', function () {
@@ -275,7 +275,7 @@ it('stores resolved entries only through lifetime-aware keys', function () {
     $c->definitions()->bind('svc.scoped', fn() => new stdClass(), LifetimeEnum::Scoped);
     $c->definitions()->bind('svc.transient', fn() => new stdClass(), LifetimeEnum::Transient);
 
-    $c->enterScope('request-a');
+    testEnterScope($c, 'request-a');
     $c->get('svc.singleton');
     $c->get('svc.scoped');
     $c->get('svc.transient');
@@ -286,7 +286,7 @@ it('stores resolved entries only through lifetime-aware keys', function () {
         ->and($repo->hasResolved('svc.transient'))->toBeFalse()
         ->and($repo->hasResolvedScoped('request-a', 'svc.transient'))->toBeFalse();
 
-    $c->leaveScope();
+    testLeaveScope($c);
 });
 
 it('honours transient and scoped lifetimes for class-string definitions', function () {
@@ -296,14 +296,14 @@ it('honours transient and scoped lifetimes for class-string definitions', functi
 
     expect($c->get('class.transient'))->not->toBe($c->get('class.transient'));
 
-    $c->enterScope('request-a');
+    testEnterScope($c, 'request-a');
     $firstScoped = $c->get('class.scoped');
     expect($firstScoped)->toBe($c->get('class.scoped'));
-    $c->leaveScope();
+    testLeaveScope($c);
 
-    $c->enterScope('request-b');
+    testEnterScope($c, 'request-b');
     expect($c->get('class.scoped'))->not->toBe($firstScoped);
-    $c->leaveScope();
+    testLeaveScope($c);
 });
 
 it('reads scoped getReturn values from the current scope key', function () {
@@ -329,7 +329,7 @@ it('routes call() definition IDs through lifetime-aware get()', function () {
     $c->definitions()->bind('svc.scoped', fn() => new stdClass(), LifetimeEnum::Scoped);
     $c->definitions()->bind('svc.transient', fn() => new stdClass(), LifetimeEnum::Transient);
 
-    $c->enterScope('request-a');
+    testEnterScope($c, 'request-a');
     $firstScoped = $c->call('svc.scoped');
     $secondScoped = $c->call('svc.scoped');
     $firstTransient = $c->call('svc.transient');
@@ -369,10 +369,10 @@ it('offers the same sugar directly on DefinitionManager', function () {
     $def['barSvc'] = fn() => 'BAR';
 
     // ------------- resolve through *container* -------------
-    expect($c->fooSvc)
+    expect($c->get('fooSvc'))
         ->toBeInstanceOf(stdClass::class)
-        ->and($c->barSvc)->toBe('BAR')
-        ->and($def('fooSvc'))->toBe($c->fooSvc)
+        ->and($c->get('barSvc'))->toBe('BAR')
+        ->and($def('fooSvc'))->toBe($c->get('fooSvc'))
         ->and($def->barSvc)->toBe('BAR')
         ->and($def['fooSvc'])->toBeInstanceOf(stdClass::class);
 
@@ -387,7 +387,7 @@ it('offers the same sugar directly on DefinitionManager', function () {
         ->end();
 
     expect($result)->toBe($c)
-        ->and($c->answer)->toBe(42);
+        ->and($c->get('answer'))->toBe(42);
 });
 
 it('generates a preload list', function () {
@@ -430,31 +430,15 @@ it('imports a supplied service provider through the builder', function () {
     expect($runtime->get(FooService::class))->toBeInstanceOf(FooService::class);
 });
 
-it('supports retained read sugar with explicit internal registration', function () {
-    /** fresh alias so each run is isolated */
-    $c = new ConfigurationContainer(uniqid('cs_'));
-
-    // (1) property assignment → definition
+it('uses explicit PSR-11 reads for internally registered definitions', function () {
+    $c = new ConfigurationContainer(uniqid('explicit_reads_'));
     $c->definitions()->bind('logger', fn() => new DummyLogger());
-
-    // (2) array assignment → definition
     $c->definitions()->bind('cfg', fn() => ['debug' => true, 'dsn' => 'mysql://dummy']);
 
-    // ---------- retrieval paths ----------
-    $viaCallObject = $c('logger');   // __invoke
-    $viaMagicGet = $c->logger;     // __get
-    $viaExplicitGet = $c->get('logger');
-
-    expect($viaCallObject)
-        ->toBeInstanceOf(DummyLogger::class)
-        ->and($viaMagicGet)->toBe($viaCallObject)
-        ->and($viaExplicitGet)->toBe($viaCallObject)
-        ->and($c('cfg'))
-        ->toHaveKey('debug', true)
-        ->and($c->get('cfg'))->toBe($c('cfg'))
-        ->and($c->cfg)->toBe($c('cfg'));
+    expect($c->get('logger'))->toBeInstanceOf(DummyLogger::class)
+        ->and($c->get('logger'))->toBe($c->get('logger'))
+        ->and($c->get('cfg'))->toHaveKey('debug', true);
 });
-
 it('resolves findByTag() eagerly and tagged() lazily', function () {
     $c = new ConfigurationContainer(uniqid('tag_modes_'));
     $eagerBuilt = 0;
@@ -480,8 +464,7 @@ it('resolves findByTag() eagerly and tagged() lazily', function () {
     $lazyResolvers = $c->tagged('event.lazy');
     expect($lazyBuilt)->toBe(0);
 
-    foreach ($lazyResolvers as $factory) {
-        $listener = $factory();
+    foreach ($lazyResolvers as $listener) {
         expect($listener)->toBeInstanceOf(TaggedListener::class)
             ->and($listener->handle($event))->toBe('lazy:' . TagEvent::class);
     }
@@ -498,16 +481,16 @@ it('lets me wire and use services in one-liners', function () {
     // the manager can re-use them transparently
     $def = $c->definitions();
     $def->bind('greeter', function () use ($c) {
-        $c->logger->log('greeted');
+        $c->get('logger')->log('greeted');
 
-        return 'Hello @ ' . $c->now->format('c');
+        return 'Hello @ ' . $c->get('now')->format('c');
     });
 
-    $msg = $c->greeter;
+    $msg = $c->get('greeter');
 
     expect($msg)
         ->toStartWith('Hello @ ')
-        ->and($c->logger->records)->toHaveCount(1);
+        ->and($c->get('logger')->records)->toHaveCount(1);
 });
 
 it('applies environment-scoped lifetime/tag overrides', function () {
@@ -531,11 +514,11 @@ it('supports first-class scope lifecycle API', function () {
     $c = new ConfigurationContainer(uniqid('scope_api_'));
     $c->definitions()->bind('scoped_obj', fn() => new stdClass(), LifetimeEnum::Scoped);
 
-    $first = $c->enterScope('req-1')->get('scoped_obj');
+    $first = testEnterScope($c, 'req-1')->get('scoped_obj');
     $same = $c->get('scoped_obj');
 
-    $c->leaveScope();
-    $second = $c->enterScope('req-2')->get('scoped_obj');
+    testLeaveScope($c);
+    $second = testEnterScope($c, 'req-2')->get('scoped_obj');
 
     expect($first)->toBe($same)
         ->and($first)->not->toBe($second);
@@ -545,7 +528,7 @@ it('restores parent scope after nested withinScope', function () {
     $c = new ConfigurationContainer(uniqid('nested_scope_'));
     $c->definitions()->bind('scoped_obj', fn() => new stdClass(), LifetimeEnum::Scoped);
 
-    $outerFirst = $c->enterScope('outer')->get('scoped_obj');
+    $outerFirst = testEnterScope($c, 'outer')->get('scoped_obj');
     $inner = $c->withinScope('inner', fn(Container $scoped) => $scoped->get('scoped_obj'));
     $outerAgain = $c->get('scoped_obj');
 
@@ -593,7 +576,7 @@ it('supports null scope seeds and restores outer seeds after nesting', function 
     $outer = new stdClass();
     $inner = new stdClass();
 
-    $c->enterScope('outer', ['value' => $outer, 'nullable' => null]);
+    testEnterScope($c, 'outer', ['value' => $outer, 'nullable' => null]);
     $innerResolved = $c->withinScope(
         'inner',
         static fn(Container $container): object => $container->get('value'),
@@ -604,7 +587,7 @@ it('supports null scope seeds and restores outer seeds after nesting', function 
         ->and($c->get('value'))->toBe($outer)
         ->and($c->get('nullable'))->toBeNull();
 
-    $c->leaveScope();
+    testLeaveScope($c);
 });
 
 it('isolates singleton definition resolution cache per environment', function () {
@@ -716,7 +699,8 @@ it('keeps the repository tracing gate synchronized with direct tracer changes', 
 it('does not leak resolved-resource state when make() fails', function () {
     $c = new ConfigurationContainer(uniqid('make_leak_'));
 
-    expect(fn() => $c->make(FailingMakeTarget::class, 'required'))
+    $target = $c->make(FailingMakeTarget::class);
+    expect(fn() => $c->invoke([$target, 'required']))
         ->toThrow(ContainerException::class);
 
     $resolved = $c->getRepository()->getResolvedResource();
@@ -749,25 +733,11 @@ it('does not persist runtime objects to PSR-6 definition cache by default', func
         ->and($pool->savedValues[0])->toBe(['a' => 1, 'b' => ['c' => 2]]);
 });
 
-it('validates callable parsing for malformed method strings', function () {
-    $c = new ConfigurationContainer(uniqid('callable_parse_'));
-
-    expect(fn() => $c->parseCallable('Foo@'))->toThrow(ContainerException::class);
-    expect(fn() => $c->parseCallable('@bar'))->toThrow(ContainerException::class);
-    expect(fn() => $c->parseCallable('Foo::'))->toThrow(ContainerException::class);
-    expect(fn() => $c->parseCallable('::bar'))->toThrow(ContainerException::class);
+it('accepts native PHP callables and removes string callable parsing', function () {
+    $c = new ConfigurationContainer(uniqid('native_callable_'));
+    expect(method_exists($c, 'parseCallable'))->toBeFalse()
+        ->and($c->invoke(static fn(): string => 'ok'))->toBe('ok');
 });
-
-it('validates class and method existence in callable parsing', function () {
-    $c = new ConfigurationContainer(uniqid('callable_exists_'));
-
-    expect(fn() => $c->parseCallable('Missing\\CallableClass@handle'))
-        ->toThrow(ContainerException::class, 'does not exist');
-
-    expect(fn() => $c->parseCallable(CompiledSvc::class . '::missingMethod'))
-        ->toThrow(ContainerException::class, 'does not exist');
-});
-
 it('supports contextual binding per consumer', function () {
     $c = new ConfigurationContainer(uniqid('contextual_'));
     $c->when(OrderService::class)->needs(ContextLogger::class)->give(OrderLogger::class);
@@ -805,8 +775,8 @@ it('runs scope-leave lifecycle hooks', function () {
         $events[] = "left:$scope";
     });
 
-    $c->enterScope('request');
-    $c->leaveScope();
+    testEnterScope($c, 'request');
+    testLeaveScope($c);
 
     expect($events)->toBe(['left:request']);
 });
@@ -823,8 +793,7 @@ it('returns lazy tagged resolvers without eager instantiation', function () {
     $lazy = $c->tagged('lazy.tag');
     expect($built)->toBe(0);
 
-    foreach ($lazy as $factory) {
-        $svc = $factory();
+    foreach ($lazy as $svc) {
         expect($svc)->toBeInstanceOf(LazyTaggedProbe::class);
     }
 

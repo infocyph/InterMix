@@ -7,6 +7,7 @@ namespace Infocyph\InterMix\DI\Managers;
 use ArrayAccess;
 use Closure;
 use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
+use Infocyph\InterMix\DI\Internal\ContainerAccess;
 use Infocyph\InterMix\DI\Internal\ServiceId;
 use Infocyph\InterMix\DI\Invoker\CompiledCall;
 use Infocyph\InterMix\DI\Invoker\GenericCall;
@@ -128,7 +129,7 @@ class DefinitionManager implements ArrayAccess
             $this->repository->rotateDefinitionCacheGeneration();
         }
 
-        $resolver = $this->container->getCurrentResolver();
+        $resolver = ContainerAccess::resolver($this->container);
         if ($resolver instanceof GenericCall) {
             throw new ContainerException('Definition caching requires injection-enabled resolver.');
         }

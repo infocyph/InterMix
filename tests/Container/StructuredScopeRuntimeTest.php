@@ -15,17 +15,17 @@ it('keeps nested child frames carrier-local while sharing the attached parent sc
     $container = ContainerBuilder::create(uniqid('structured_nested_'))
         ->autowire('leaf', StructuredScopeLeaf::class, lifetime: LifetimeEnum::Scoped)
         ->build();
-    $container->enterScope('request');
+    testEnterScope($container, 'request');
     $parent = $container->get('leaf');
     $context = $container->captureScopeContext();
 
     $child = static function () use ($container, $context): array {
         return $container->withinScopeContext($context, static function (Container $active): array {
-            $active->enterScope('nested');
+            testEnterScope($active, 'nested');
             $nested = $active->get('leaf');
             Fiber::suspend($nested);
 
-            $active->leaveScope();
+            testLeaveScope($active);
             $restored = $active->get('leaf');
             Fiber::suspend($restored);
 
@@ -61,7 +61,7 @@ it('keeps nested child frames carrier-local while sharing the attached parent sc
         ->and($fiberB->getReturn()[0])->toBe($nestedB)
         ->and($fiberB->getReturn()[1])->toBe($parent);
 
-    $container->leaveScope();
+    testLeaveScope($container);
 });
 
 it('rejects owner close while a child attachment is live without firing the owner hook', function () {
@@ -72,7 +72,7 @@ it('rejects owner close while a child attachment is live without firing the owne
             $leaves[] = $scope;
         })
         ->build();
-    $container->enterScope('request');
+    testEnterScope($container, 'request');
     $parent = $container->get('leaf');
     $context = $container->captureScopeContext();
 
@@ -87,7 +87,7 @@ it('rejects owner close while a child attachment is live without firing the owne
     ));
     $child->start();
 
-    expect(fn() => $container->leaveScope())
+    expect(fn() => testLeaveScope($container))
         ->toThrow(ContainerException::class, 'child execution carriers are still attached');
     expect($leaves)->toBe([])
         ->and($container->get('leaf'))->toBe($parent);
@@ -95,7 +95,7 @@ it('rejects owner close while a child attachment is live without firing the owne
     $child->resume();
     expect($child->getReturn())->toBe($parent);
 
-    $container->leaveScope();
+    testLeaveScope($container);
     expect($leaves)->toBe(['request']);
 });
 
@@ -115,7 +115,7 @@ it('fails deterministically when sibling carriers cold-resolve the same scoped s
             lifetime: LifetimeEnum::Scoped,
         )
         ->build();
-    $container->enterScope('request');
+    testEnterScope($container, 'request');
     $context = $container->captureScopeContext();
 
     $first = new Fiber(static fn(): stdClass => $container->withinScopeContext(
@@ -139,7 +139,7 @@ it('fails deterministically when sibling carriers cold-resolve the same scoped s
         ->and($container->get('cold'))->toBe($resolved)
         ->and($calls)->toBe(1);
 
-    $container->leaveScope();
+    testLeaveScope($container);
 });
 
 it('clears a failed scoped construction guard so a later carrier can retry', function () {
@@ -158,7 +158,7 @@ it('clears a failed scoped construction guard so a later carrier can retry', fun
             lifetime: LifetimeEnum::Scoped,
         )
         ->build();
-    $container->enterScope('request');
+    testEnterScope($container, 'request');
     $context = $container->captureScopeContext();
 
     $first = new Fiber(static fn(): stdClass => $container->withinScopeContext(
@@ -177,7 +177,7 @@ it('clears a failed scoped construction guard so a later carrier can retry', fun
     expect($second->getReturn())->toBeInstanceOf(stdClass::class)
         ->and($calls)->toBe(2);
 
-    $container->leaveScope();
+    testLeaveScope($container);
 });
 
 it('resets only the current owned execution carrier in LIFO hook order and is idempotent', function () {
@@ -191,14 +191,14 @@ it('resets only the current owned execution carrier in LIFO hook order and is id
     $container = $builder->build();
 
     $fiber = new Fiber(static function () use ($container): array {
-        $container->enterScope('request');
-        $container->enterScope('nested');
+        testEnterScope($container, 'request');
+        testEnterScope($container, 'nested');
         $container->resetCurrentExecutionScope();
         $container->resetCurrentExecutionScope();
 
-        $container->enterScope('fresh');
+        testEnterScope($container, 'fresh');
         $scope = ContainerAccess::repository($container)->getScope();
-        $container->leaveScope();
+        testLeaveScope($container);
 
         return [$scope, ContainerAccess::repository($container)->getScope()];
     });
@@ -218,21 +218,21 @@ it('resets an attached carrier by unwinding child frames and detaching without c
         });
     }
     $container = $builder->build();
-    $container->enterScope('request');
+    testEnterScope($container, 'request');
     $parent = $container->get('leaf');
     $context = $container->captureScopeContext();
 
     $child = new Fiber(static function () use ($container, $context): StructuredScopeLeaf {
         $container->withinScopeContext($context, static function (Container $active): void {
-            $active->enterScope('nested');
+            testEnterScope($active, 'nested');
             $active->get('leaf');
             $active->resetCurrentExecutionScope();
             $active->resetCurrentExecutionScope();
         });
 
-        $container->enterScope('independent');
+        testEnterScope($container, 'independent');
         $fresh = $container->get('leaf');
-        $container->leaveScope();
+        testLeaveScope($container);
 
         return $fresh;
     });
@@ -242,6 +242,6 @@ it('resets an attached carrier by unwinding child frames and detaching without c
         ->and($child->getReturn())->not->toBe($parent)
         ->and($container->get('leaf'))->toBe($parent);
 
-    $container->leaveScope();
+    testLeaveScope($container);
     expect($leaves)->toBe(['nested', 'request']);
 });

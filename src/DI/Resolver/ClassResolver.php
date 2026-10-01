@@ -292,15 +292,7 @@ class ClassResolver
         string $className,
         string|bool|null $callMethod,
     ): ?string {
-        $constant = $class->hasConstant('CALL_ON') ? 'CALL_ON' : 'callOn';
-        $callOn = $class->hasConstant($constant) ? $class->getConstant($constant) : null;
-        $method = $callMethod
-            ?: $this->readConfiguredMethod($className)
-                ?: ($callOn ?: $this->repository->getDefaultMethod());
-
-        if (!$method && $class->hasMethod('__invoke')) {
-            $method = '__invoke';
-        }
+        $method = $callMethod ?: $this->readConfiguredMethod($className);
 
         return is_string($method) && $class->hasMethod($method) ? $method : null;
     }

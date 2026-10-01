@@ -6,6 +6,7 @@ namespace Infocyph\InterMix\DI\Build;
 
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Internal\BoundedValueInspector;
+use Infocyph\InterMix\DI\RuntimeContainerInterface;
 use Infocyph\InterMix\DI\Support\AliasDefinition;
 use Infocyph\InterMix\DI\Support\AutowireDefinition;
 use Infocyph\InterMix\DI\Support\FactoryDefinition;
@@ -433,7 +434,9 @@ final class StaticRuntimePlanner
         mixed $definition,
         bool $literal = false,
     ): ?array {
-        if ($id === ContainerInterface::class && $definition instanceof Container) {
+        if (($id === ContainerInterface::class || $id === RuntimeContainerInterface::class)
+            && $definition instanceof Container
+        ) {
             return [
                 'kind' => 'value',
                 'code' => '$this',

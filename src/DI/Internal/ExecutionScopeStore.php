@@ -31,6 +31,23 @@ final class ExecutionScopeStore
         }
     }
 
+    public function assertCurrentScopeContext(
+        string $context,
+        ScopeContext $scopeContext,
+        object $owner,
+    ): void {
+        $scope = $this->unwrapScopeContext($scopeContext, $owner);
+        $state = $this->states[$context] ?? null;
+        if ($scope->closed
+            || !$state instanceof ExecutionScopeState
+            || $state->logicalCurrent !== $scope
+        ) {
+            throw new ContainerException(
+                'Tagged iterator scope is no longer active on the current execution carrier.',
+            );
+        }
+    }
+
     public function assertMutationSafe(?string $currentContext): void
     {
         if ($this->hasConcurrentActivity($currentContext)) {

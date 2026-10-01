@@ -141,13 +141,13 @@ test('Constructor injection: singletons vs. make for ClassInit', function () {
     expect($rand1)->toEqual($rand2);
 
     // 3) .make() => fresh new instance => different random
-    $newInstance = $container->make(ClassInit::class, 'getValues');
-    $rand3 = $newInstance['random'];
+    $newInstance = $container->make(ClassInit::class);
+    $rand3 = $container->invoke([$newInstance, 'getValues'])['random'];
     expect($rand3)->not->toEqual($rand1);
 
     // Another .make() => another fresh
-    $newInstance2 = $container->make(ClassInit::class, 'getValues');
-    $rand4 = $newInstance2['random'];
+    $newInstance2 = $container->make(ClassInit::class);
+    $rand4 = $container->invoke([$newInstance2, 'getValues'])['random'];
     expect($rand4)->not->toEqual($rand3);
 });
 

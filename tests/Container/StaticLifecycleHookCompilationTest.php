@@ -128,14 +128,14 @@ it('preserves scoped hook and scope-leave semantics in production', function () 
         $report = $builder->compile($path);
         $runtime = $builder->productionPrevalidated($path, $report['digest']);
 
-        $runtime->enterScope('request');
+        testEnterScope($runtime, 'request');
         $first = $runtime->get('service');
         expect($runtime->get('service'))->toBe($first);
-        $runtime->leaveScope();
+        testLeaveScope($runtime);
 
-        $runtime->enterScope('request');
+        testEnterScope($runtime, 'request');
         $second = $runtime->get('service');
-        $runtime->leaveScope();
+        testLeaveScope($runtime);
 
         expect($report['compiled'])->toContain('service')
             ->and($second)->not->toBe($first)
@@ -191,8 +191,8 @@ it('fails closed when a hooked artifact is loaded without its runtime hook graph
         expect(fn() => $runtime->get('service'))
             ->toThrow(ContainerException::class, 'runtime lifecycle-hook graph');
 
-        $runtime->enterScope('request');
-        expect(fn() => $runtime->leaveScope())
+        testEnterScope($runtime, 'request');
+        expect(fn() => testLeaveScope($runtime))
             ->toThrow(ContainerException::class, 'runtime scope-leave hook graph');
     } finally {
         removeStaticLifecycleHookArtifact($path);

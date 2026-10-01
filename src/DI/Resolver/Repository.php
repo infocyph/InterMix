@@ -11,6 +11,7 @@ use Infocyph\InterMix\DI\Internal\ClassResolution;
 use Infocyph\InterMix\DI\Resolver\Concerns\InvalidatesRepositoryState;
 use Infocyph\InterMix\DI\Resolver\Concerns\ManagesDefinitionCache;
 use Infocyph\InterMix\DI\Resolver\Concerns\ResolvesMissingServices;
+use Infocyph\InterMix\DI\RuntimeContainerInterface;
 use Infocyph\InterMix\DI\Support\AliasDefinition;
 use Infocyph\InterMix\DI\Support\DebugTracer;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
@@ -130,6 +131,7 @@ class Repository
         private string $alias = 'default',
     ) {
         $this->functionReference[ContainerInterface::class] = $container;
+        $this->functionReference[RuntimeContainerInterface::class] = $container;
     }
 
     /**
@@ -200,6 +202,7 @@ class Repository
         $target->environment = $this->environment;
         $target->functionReference = $this->functionReference;
         $target->functionReference[ContainerInterface::class] = $target->container;
+        $target->functionReference[RuntimeContainerInterface::class] = $target->container;
         $target->hasHooks = $this->hasHooks;
         $target->hasPropertyResources = $this->hasPropertyResources;
         $target->lazyLoading = $this->lazyLoading;

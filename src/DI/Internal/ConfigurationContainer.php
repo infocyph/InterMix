@@ -34,6 +34,12 @@ final class ConfigurationContainer extends Container
         return $this;
     }
 
+    /** @param array<string, mixed> $instances */
+    public function assertValidScopeSeeds(array $instances): void
+    {
+        parent::validateScopeSeeds($instances);
+    }
+
     public function attributeRegistry(): AttributeRegistry
     {
         return parent::attributeRegistry();
@@ -63,6 +69,31 @@ final class ConfigurationContainer extends Container
         return $this;
     }
 
+    public function call(string|Closure|callable $target, string|bool|null $method = null): mixed
+    {
+        if ($target instanceof Closure || is_callable($target)) {
+            return $this->invoke($target);
+        }
+
+        $service = $this->get($target);
+        if (!is_string($method) || $method === '') {
+            return $service;
+        }
+        if (!is_object($service) || !is_callable([$service, $method])) {
+            throw new \Infocyph\InterMix\Exceptions\ContainerException(
+                "Method {$target}::{$method}() does not exist.",
+            );
+        }
+
+        return $this->invoke(Closure::fromCallable([$service, $method]));
+    }
+
+    /** @return null|array{path: string, fingerprint: string, compiled: array<int, string>, skipped: array<string, string>} */
+    public function compilationReport(): ?array
+    {
+        return parent::compilationReport();
+    }
+
     public function compileTo(string $path, bool $load = false): self
     {
         parent::compileTo($path, $load);
@@ -82,9 +113,35 @@ final class ConfigurationContainer extends Container
         return $this;
     }
 
+    /** @param array<string, mixed> $instances */
+    public function enterScope(string $scope, array $instances = []): self
+    {
+        parent::enterScope($scope, $instances);
+
+        return $this;
+    }
+
+    /** @return array<string, mixed> */
+    public function exportGraph(?string $warmFromId = null, bool $clear = false): array
+    {
+        return parent::exportGraph($warmFromId, $clear);
+    }
+
     public function factory(string $id, Closure $factory): PendingFactoryBinding
     {
         return parent::factory($id, $factory);
+    }
+
+    /** @return array<string, mixed> */
+    public function findByTag(string $tag): array
+    {
+        return parent::findByTag($tag);
+    }
+
+    /** @return iterable<string, callable(): mixed> */
+    public function findByTagLazy(string $tag): iterable
+    {
+        return parent::findByTagLazy($tag);
     }
 
     public function forkConfigurationRuntime(bool $locked = true): self
@@ -95,9 +152,66 @@ final class ConfigurationContainer extends Container
         return $runtime;
     }
 
+    public function get(string $id): mixed
+    {
+        try {
+            return $this->invocation()->getLegacy($id);
+        } catch (\Infocyph\InterMix\Exceptions\NotFoundException|\Infocyph\InterMix\Exceptions\ContainerException $exception) {
+            throw $exception;
+        } catch (\Throwable $throwable) {
+            if ($this->repository->isOnMissingFailure($throwable)) {
+                throw $throwable;
+            }
+
+            throw new \Infocyph\InterMix\Exceptions\ContainerException(
+                "Resolution failed for '$id': {$throwable->getMessage()}",
+                previous: $throwable,
+            );
+        }
+    }
+
+    public function getCurrentResolver(): \Infocyph\InterMix\DI\Invoker\CompiledCall|InjectedCall|GenericCall
+    {
+        return parent::getCurrentResolver();
+    }
+
     public function getRepository(): Repository
     {
         return parent::getRepository();
+    }
+
+    public function getReturn(string $id): mixed
+    {
+        return $this->invocation()->getReturnLegacy($id);
+    }
+
+    public function has(string $id): bool
+    {
+        return $this->invocation()->hasLegacy($id);
+    }
+
+    public function invocation(): \Infocyph\InterMix\DI\Managers\InvocationManager
+    {
+        return parent::invocation();
+    }
+
+    public function isResolved(string $id): bool
+    {
+        return parent::isResolved($id);
+    }
+
+    public function leaveScope(): self
+    {
+        parent::leaveScope();
+
+        return $this;
+    }
+
+    public function lock(): self
+    {
+        parent::lock();
+
+        return $this;
     }
 
     public function onMissing(callable $callback): self
@@ -138,6 +252,25 @@ final class ConfigurationContainer extends Container
         return parent::registration();
     }
 
+    /**
+     * @param array<array-key, mixed>|string|Closure|callable|null $spec
+     * @param array<int|string, mixed> $parameters
+     */
+    public function resolveNow(string|Closure|callable|array|null $spec, array $parameters = []): mixed
+    {
+        if ($spec === null) {
+            return $this;
+        }
+        if (is_callable($spec)) {
+            return $this->invoke($spec, $parameters);
+        }
+        if (is_string($spec) && class_exists($spec)) {
+            return $this->make($spec, $parameters);
+        }
+
+        throw new \InvalidArgumentException('Expected a native callable or class-string.');
+    }
+
     /** @param array<int, string> $tags */
     public function scoped(string $id, mixed $definition = null, array $tags = []): self
     {
@@ -165,6 +298,16 @@ final class ConfigurationContainer extends Container
         parent::singleton($id, $definition, $tags);
 
         return $this;
+    }
+
+    public function strictGet(string $id): mixed
+    {
+        return parent::get($id);
+    }
+
+    public function strictHas(string $id): bool
+    {
+        return parent::has($id);
     }
 
     /** @param array<int, string> $tags */
@@ -196,6 +339,12 @@ final class ConfigurationContainer extends Container
         return $this;
     }
 
+    /** @return array<int, string> */
+    public function validate(bool $strict = false, bool $resolveFactories = false): array
+    {
+        return parent::validate($strict, $resolveFactories);
+    }
+
     public function value(string $id, mixed $value): self
     {
         parent::value($id, $value);
@@ -206,5 +355,17 @@ final class ConfigurationContainer extends Container
     public function when(string $consumer): ContextualBindingBuilder
     {
         return parent::when($consumer);
+    }
+
+    /** @param array<string, mixed> $instances */
+    public function withinScope(string $scope, callable $callback, array $instances = []): mixed
+    {
+        $this->enterScope($scope, $instances);
+
+        try {
+            return $callback($this);
+        } finally {
+            $this->leaveScope();
+        }
     }
 }

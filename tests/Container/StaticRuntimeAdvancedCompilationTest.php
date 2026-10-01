@@ -81,10 +81,10 @@ function removeAdvancedCompilationArtifact(string $path): void
 
 it('compiles registered public property injection directly', function () {
     $builder = ContainerBuilder::create(uniqid('advanced_property_'));
-    $builder->autowire(AdvancedRegisteredProperty::class, AdvancedRegisteredProperty::class);
-    $builder->registerProperty(
+    $builder->autowire(
         AdvancedRegisteredProperty::class,
-        ['name' => 'compiled'],
+        AdvancedRegisteredProperty::class,
+        properties: ['name' => 'compiled'],
     );
 
     expect($builder->build()->get(AdvancedRegisteredProperty::class)->name)->toBe('compiled');
@@ -185,10 +185,10 @@ it('compiles declarative constructor and static factories with service reference
 
 it('keeps reflection-only property writes as targeted compiled property islands', function () {
     $builder = ContainerBuilder::create(uniqid('advanced_protected_'));
-    $builder->autowire(AdvancedProtectedProperty::class, AdvancedProtectedProperty::class);
-    $builder->registerProperty(
+    $builder->autowire(
         AdvancedProtectedProperty::class,
-        ['name' => 'compiled-reflection'],
+        AdvancedProtectedProperty::class,
+        properties: ['name' => 'compiled-reflection'],
     );
 
     $path = advancedCompilationArtifactPath();
@@ -216,7 +216,7 @@ it('keeps compiled singleton and scope identity after builder finalization', fun
         $builder->compile($path);
         $runtime = $builder->production($path);
         $root = $runtime->get(AdvancedDeoptRoot::class);
-        $runtime->enterScope('request');
+        testEnterScope($runtime, 'request');
         $scoped = $runtime->get(AdvancedDeoptScoped::class);
 
         expect(fn() => $builder->value('late.value', 'blocked'))
@@ -225,7 +225,7 @@ it('keeps compiled singleton and scope identity after builder finalization', fun
             ->and($runtime->get(AdvancedCompiledDependency::class))->toBe($root->dependency)
             ->and($runtime->get(AdvancedDeoptScoped::class))->toBe($scoped);
 
-        $runtime->leaveScope();
+        testLeaveScope($runtime);
     } finally {
         removeAdvancedCompilationArtifact($path);
     }
