@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Build;
 
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\DI\ProductionContainer;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Internal\AtomicFileWriter;
@@ -28,7 +29,7 @@ final class StaticRuntimeGenerator
     public function generate(
         DefinitionGraph $graph,
         string $filePath,
-        ?Container $fallback = null,
+        ?ConfigurationContainer $fallback = null,
     ): array {
         $planned = new StaticRuntimePlanner()->plan($graph);
         $plans = $planned['plans'];
@@ -67,7 +68,7 @@ final class StaticRuntimeGenerator
         ];
     }
 
-    public function load(string $filePath, ?Container $fallback = null): ProductionContainer
+    public function load(string $filePath, ?ConfigurationContainer $fallback = null): ProductionContainer
     {
         $manifest = $this->validateManifest($filePath);
         $this->assertEnvironmentMatches($manifest, $fallback);
@@ -84,7 +85,7 @@ final class StaticRuntimeGenerator
     public function loadPrevalidated(
         string $filePath,
         string $expectedDigest,
-        ?Container $fallback = null,
+        ?ConfigurationContainer $fallback = null,
     ): ProductionContainer {
         $this->assertDigest($expectedDigest);
         $manifest = $this->readManifest($filePath);
@@ -109,9 +110,9 @@ final class StaticRuntimeGenerator
     }
 
     /** @param array{abi: int, digest: string, environment: ?string} $manifest */
-    private function assertEnvironmentMatches(array $manifest, ?Container $fallback): void
+    private function assertEnvironmentMatches(array $manifest, ?ConfigurationContainer $fallback): void
     {
-        if (!$fallback instanceof Container) {
+        if (!$fallback instanceof ConfigurationContainer) {
             return;
         }
 
@@ -133,9 +134,9 @@ final class StaticRuntimeGenerator
         }
     }
 
-    private function attachFallback(ProductionContainer $runtime, ?Container $fallback): ProductionContainer
+    private function attachFallback(ProductionContainer $runtime, ?ConfigurationContainer $fallback): ProductionContainer
     {
-        if ($fallback instanceof Container) {
+        if ($fallback instanceof ConfigurationContainer) {
             $runtime->attachFallback($fallback);
         }
 

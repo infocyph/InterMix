@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI;
 
 use Closure;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\DI\Internal\ExecutionContext;
 use Infocyph\InterMix\DI\Internal\ProductionFallbackState;
 use Infocyph\InterMix\DI\Internal\ProductionScopeStore;
@@ -26,7 +27,7 @@ abstract class ProductionContainer implements ContainerInterface
 
     private bool $deoptimized = false;
 
-    private ?Container $fallback;
+    private ?ConfigurationContainer $fallback;
 
     /** @var array<string, mixed> */
     private array $fallbackBridgeDefinitions = [];
@@ -40,11 +41,11 @@ abstract class ProductionContainer implements ContainerInterface
 
     private ?RuntimeIslandResolver $runtimeIslands = null;
 
-    public function __construct(?Container $fallback = null)
+    public function __construct(?ConfigurationContainer $fallback = null)
     {
         $this->scope = new ScopeState('root');
         $this->fallback = $fallback;
-        if ($fallback instanceof Container) {
+        if ($fallback instanceof ConfigurationContainer) {
             $this->captureFallbackDefinitions($fallback);
             $this->installFallbackBridges($fallback);
             $this->deoptimizationReady = true;
@@ -54,7 +55,7 @@ abstract class ProductionContainer implements ContainerInterface
     abstract protected function slotFor(string $id): ?int;
 
     /** @internal */
-    final public function attachFallback(Container $fallback): void
+    final public function attachFallback(ConfigurationContainer $fallback): void
     {
         $this->assertGraphMutationSafe();
         if ($this->fallback !== $fallback) {
@@ -516,7 +517,7 @@ abstract class ProductionContainer implements ContainerInterface
         return $service->{$method}();
     }
 
-    private function captureFallbackDefinitions(Container $fallback): void
+    private function captureFallbackDefinitions(ConfigurationContainer $fallback): void
     {
         $this->fallbackDefinitions = ProductionFallbackState::captureDefinitions(
             $fallback,
@@ -548,13 +549,13 @@ abstract class ProductionContainer implements ContainerInterface
         $this->refreshScopeActivity();
     }
 
-    private function dynamic(): Container
+    private function dynamic(): ConfigurationContainer
     {
         if ($this->fallback instanceof Container) {
             return $this->fallback;
         }
 
-        $fallback = new Container('intermix.production.dynamic.' . spl_object_id($this));
+        $fallback = new ConfigurationContainer('intermix.production.dynamic.' . spl_object_id($this));
         $this->installFallbackBridges($fallback);
         $this->synchronizeFallbackScopes($fallback);
         $this->fallback = $fallback;
@@ -562,7 +563,7 @@ abstract class ProductionContainer implements ContainerInterface
         return $fallback;
     }
 
-    private function hookRuntime(string $id): Container
+    private function hookRuntime(string $id): ConfigurationContainer
     {
         if ($this->fallback instanceof Container) {
             return $this->fallback;
@@ -573,7 +574,7 @@ abstract class ProductionContainer implements ContainerInterface
         );
     }
 
-    private function installFallbackBridges(Container $fallback): void
+    private function installFallbackBridges(ConfigurationContainer $fallback): void
     {
         foreach ($this->compiledIds() as $id) {
             $fallback->bindFactory(
@@ -696,7 +697,7 @@ abstract class ProductionContainer implements ContainerInterface
     /** @param array<string, true> $overridden */
     private function transferCompiledState(?Container $fallback, array $overridden = []): void
     {
-        if (!$fallback instanceof Container) {
+        if (!$fallback instanceof ConfigurationContainer) {
             return;
         }
 

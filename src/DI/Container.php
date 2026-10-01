@@ -214,9 +214,9 @@ class Container implements ContainerInterface
      *
      * @internal
      */
-    public function forkRuntime(bool $locked = true): self
+    public function forkRuntime(bool $locked = true): static
     {
-        $runtime = new self($this->instanceAlias);
+        $runtime = new static($this->instanceAlias);
         $this->repository->copyConfigurationTo($runtime->repository);
         $runtime->resolverClass = $this->resolverClass;
         $runtime->resolver = $runtime->resolverFactory();
