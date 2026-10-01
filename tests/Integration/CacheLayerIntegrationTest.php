@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Infocyph\CacheLayer\Cache\Cache;
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\CacheItemInterface;
@@ -159,7 +160,7 @@ final class IntegrationCachePool implements CacheItemPoolInterface
 
 function cacheLayerContainer(string $alias): Container
 {
-    return new Container('cachelayer.' . $alias);
+    return new ConfigurationContainer('cachelayer.' . $alias);
 }
 
 it('persists only safe singleton values through CacheLayer memory', function () {
@@ -408,7 +409,7 @@ it('reports fail-open warmup failures and surfaces strict failures', function ()
 it('keeps cache configuration idempotent and cache keys opaque', function () {
     $pool = new IntegrationCachePool();
     $replacement = new IntegrationCachePool();
-    $container = new Container('private.tenant.path');
+    $container = new ConfigurationContainer('private.tenant.path');
     $container->setEnvironment('production-secret');
     $container->bind('Sensitive\\Service\\Name', static fn(): string => 'resolved');
     $container->definitions()->enableDefinitionCache($pool, 'release-secret');
