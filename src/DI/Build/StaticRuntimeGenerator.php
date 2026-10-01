@@ -354,12 +354,49 @@ final class StaticRuntimeGenerator
         return $runtime;
     }
 
-    private function stageBuild(
-        string $filePath,
-        string $source,
-        string $manifest,
-        string $build,
-    ): string {
+    private function createStagingDirectory(string $root): string
+    {
+        $staging = $root . DIRECTORY_SEPARATOR . '.staging-' . bin2hex(random_bytes(8));
+        if (!mkdir($staging, 0755)) {
+            throw new ContainerException("Unable to create static runtime staging directory '$staging'.");
+        }
+
+        return $staging;
+    }
+
+    private function existingBuildDirectory(string $buildDirectory, string $build): ?string
+    {
+        if (!is_dir($buildDirectory)) {
+            return null;
+        }
+
+        $runtimePath = $buildDirectory . DIRECTORY_SEPARATOR . StaticRuntimeArtifactMetadata::RUNTIME_NAME;
+        $manifestPath = $buildDirectory . DIRECTORY_SEPARATOR . StaticRuntimeArtifactMetadata::MANIFEST_NAME;
+        if (!is_file($runtimePath) || !is_file($manifestPath)) {
+            throw new ContainerException(
+                "Static runtime build '$build' exists but is incomplete.",
+            );
+        }
+
+        return $buildDirectory;
+    }
+
+    private function loadRuntime(string $artifactPath): ProductionContainer
+    {
+        if (!is_file($artifactPath) || !is_readable($artifactPath)) {
+            throw new ContainerException("Static runtime artifact is not readable: '$artifactPath'.");
+        }
+
+        $runtime = require $artifactPath;
+        if (!$runtime instanceof ProductionContainer) {
+            throw new ContainerException('Static runtime artifact must return a production container.');
+        }
+
+        return $runtime;
+    }
+
+    private function prepareBuildRoot(string $filePath): string
+    {
         if (!is_dir(dirname($filePath))) {
             throw new ContainerException("Output directory does not exist for '$filePath'.");
         }
@@ -369,63 +406,83 @@ final class StaticRuntimeGenerator
             throw new ContainerException("Unable to create static runtime build root '$root'.");
         }
 
+        return $root;
+    }
+
+    private function publishStagedBuild(
+        string $staging,
+        string $buildDirectory,
+        string $build,
+    ): void {
+        if (!rename($staging, $buildDirectory)) {
+            throw new ContainerException(
+                "Unable to atomically publish static runtime build '$build'.",
+            );
+        }
+    }
+
+    private function stageBuild(
+        string $filePath,
+        string $source,
+        string $manifest,
+        string $build,
+    ): string {
+        $root = $this->prepareBuildRoot($filePath);
         $buildDirectory = $root . DIRECTORY_SEPARATOR . $build;
-        if (is_dir($buildDirectory)) {
-            $runtimePath = $buildDirectory . DIRECTORY_SEPARATOR . StaticRuntimeArtifactMetadata::RUNTIME_NAME;
-            $manifestPath = $buildDirectory . DIRECTORY_SEPARATOR . StaticRuntimeArtifactMetadata::MANIFEST_NAME;
-            if (!is_file($runtimePath) || !is_file($manifestPath)) {
-                throw new ContainerException(
-                    "Static runtime build '$build' exists but is incomplete.",
-                );
-            }
-
-            return $buildDirectory;
+        $existing = $this->existingBuildDirectory($buildDirectory, $build);
+        if ($existing !== null) {
+            return $existing;
         }
 
-        $staging = $root . DIRECTORY_SEPARATOR . '.staging-' . bin2hex(random_bytes(8));
-        if (!mkdir($staging, 0755)) {
-            throw new ContainerException("Unable to create static runtime staging directory '$staging'.");
-        }
-
+        $staging = $this->createStagingDirectory($root);
         try {
-            AtomicFileWriter::write(
-                $staging . DIRECTORY_SEPARATOR . StaticRuntimeArtifactMetadata::RUNTIME_NAME,
-                $source,
-                function (string $temporaryPath): void {
-                    $this->loadRuntime($temporaryPath);
-                },
-            );
-            AtomicFileWriter::write(
-                $staging . DIRECTORY_SEPARATOR . StaticRuntimeArtifactMetadata::MANIFEST_NAME,
-                $manifest,
-                static function (string $temporaryPath): void {
-                    $contents = file_get_contents($temporaryPath);
-                    if (!is_string($contents)) {
-                        throw new ContainerException('Unable to validate static runtime manifest.');
-                    }
-                    try {
-                        $decoded = json_decode($contents, true, flags: JSON_THROW_ON_ERROR);
-                    } catch (JsonException $exception) {
-                        throw new ContainerException(
-                            'Static runtime manifest is invalid JSON.',
-                            previous: $exception,
-                        );
-                    }
-                    if (!is_array($decoded)) {
-                        throw new ContainerException('Static runtime manifest must decode to an object.');
-                    }
-                },
-            );
-
-            if (!rename($staging, $buildDirectory)) {
-                throw new ContainerException(
-                    "Unable to atomically publish static runtime build '$build'.",
-                );
-            }
+            $this->writeStagedBuild($staging, $source, $manifest);
+            $this->publishStagedBuild($staging, $buildDirectory, $build);
         } finally {
             $this->cleanupDirectory($staging);
         }
 
         return $buildDirectory;
     }
+
+    private function validateStagedManifest(string $temporaryPath): void
+    {
+        $contents = file_get_contents($temporaryPath);
+        if (!is_string($contents)) {
+            throw new ContainerException('Unable to validate static runtime manifest.');
+        }
+
+        try {
+            $decoded = json_decode($contents, true, flags: JSON_THROW_ON_ERROR);
+        } catch (JsonException $exception) {
+            throw new ContainerException(
+                'Static runtime manifest is invalid JSON.',
+                previous: $exception,
+            );
+        }
+
+        if (!is_array($decoded)) {
+            throw new ContainerException('Static runtime manifest must decode to an object.');
+        }
+    }
+
+    private function writeStagedBuild(
+        string $staging,
+        string $source,
+        string $manifest,
+    ): void {
+        AtomicFileWriter::write(
+            $staging . DIRECTORY_SEPARATOR . StaticRuntimeArtifactMetadata::RUNTIME_NAME,
+            $source,
+            function (string $temporaryPath): void {
+                $this->loadRuntime($temporaryPath);
+            },
+        );
+        AtomicFileWriter::write(
+            $staging . DIRECTORY_SEPARATOR . StaticRuntimeArtifactMetadata::MANIFEST_NAME,
+            $manifest,
+            $this->validateStagedManifest(...),
+        );
+    }
+
 }
