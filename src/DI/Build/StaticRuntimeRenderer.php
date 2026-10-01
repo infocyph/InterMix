@@ -143,7 +143,7 @@ final class StaticRuntimeRenderer
     private function hasSingletonPlan(array $plans): bool
     {
         foreach ($plans as $plan) {
-            if ($plan['lifetime'] === LifetimeEnum::Singleton) {
+            if ($plan['lifetime'] === LifetimeEnum::Singleton && $plan['kind'] !== 'value') {
                 return true;
             }
         }
