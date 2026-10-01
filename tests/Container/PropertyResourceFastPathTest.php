@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 
 final class PropertyFastPathSubject
@@ -13,7 +14,7 @@ final class PropertyFastPathSubject
 }
 
 it('keeps unrelated class resources off the property-resolution fast path', function () {
-    $container = new Container(uniqid('property_fast_flag_'));
+    $container = new ConfigurationContainer(uniqid('property_fast_flag_'));
     $repository = $container->getRepository();
 
     expect($repository->hasPropertyResources())->toBeFalse();
@@ -26,7 +27,7 @@ it('keeps unrelated class resources off the property-resolution fast path', func
 });
 
 it('activates the property-resource flag on late property registration', function () {
-    $container = new Container(uniqid('property_fast_late_'));
+    $container = new ConfigurationContainer(uniqid('property_fast_late_'));
     $container->bind(
         PropertyFastPathSubject::class,
         PropertyFastPathSubject::class,
