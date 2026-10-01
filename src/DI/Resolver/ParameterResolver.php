@@ -113,9 +113,8 @@ class ParameterResolver
 
     public function resolveByDefinitionType(string $name, ReflectionParameter $parameter): mixed
     {
-        $hasScopeSeeds = $this->repository->hasScopeSeeds();
         $seeded = null;
-        if ($hasScopeSeeds && $this->repository->findScopeSeed($name, $seeded)) {
+        if ($this->repository->findScopeSeed($name, $seeded)) {
             return $seeded;
         }
 
@@ -134,7 +133,7 @@ class ParameterResolver
                     $named->getName(),
                     $parameter->getDeclaringClass(),
                 );
-                $resolved = $this->resolveNamedDefinitionType($typeName, $hasScopeSeeds, $seeded);
+                $resolved = $this->resolveNamedDefinitionType($typeName, $seeded);
                 if ($resolved !== AttributeResolution::Unresolved) {
                     return $resolved;
                 }
@@ -471,9 +470,9 @@ class ParameterResolver
         return $value;
     }
 
-    private function resolveNamedDefinitionType(string $name, bool $hasScopeSeeds, mixed &$seeded): mixed
+    private function resolveNamedDefinitionType(string $name, mixed &$seeded): mixed
     {
-        if ($hasScopeSeeds && $this->repository->findScopeSeed($name, $seeded)) {
+        if ($this->repository->findScopeSeed($name, $seeded)) {
             return $seeded;
         }
 

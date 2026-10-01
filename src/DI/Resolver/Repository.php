@@ -408,9 +408,10 @@ class Repository
         return $this->defaultMethod;
     }
 
-    public function getDefinitionLifetime(string $id): LifetimeEnum
+    public function getDefinitionLifetime(string $id, ?AliasDefinition &$alias = null): LifetimeEnum
     {
         $definition = $this->functionReference[$id] ?? null;
+        $alias = $definition instanceof AliasDefinition ? $definition : null;
         if (!$definition instanceof AliasDefinition) {
             return $this->getDirectDefinitionLifetime($id);
         }

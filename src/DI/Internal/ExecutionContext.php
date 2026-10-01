@@ -28,15 +28,15 @@ final class ExecutionContext
 
     private static bool $coroutineResolverInitialized = false;
 
-    private static ?string $lastFiberCarrierId = null;
-
-    /** @var WeakReference<Fiber<mixed, mixed, mixed, mixed>>|null */
-    private static ?WeakReference $lastFiberReference = null;
+    /** @var WeakMap<Fiber<mixed, mixed, mixed, mixed>, string>|null */
+    private static ?WeakMap $fiberCarrierIds = null;
 
     private static ?string $lastObjectCarrierId = null;
 
     /** @var WeakReference<object>|null */
     private static ?WeakReference $lastObjectCarrierReference = null;
+
+    private static int $nextFiberCarrierId = 0;
 
     private static int $nextObjectCarrierId = 0;
 
@@ -84,14 +84,12 @@ final class ExecutionContext
     /** @param Fiber<mixed, mixed, mixed, mixed> $fiber */
     private static function fiberCarrierId(Fiber $fiber): string
     {
-        $lastFiber = self::$lastFiberReference?->get();
-        if ($lastFiber === $fiber && self::$lastFiberCarrierId !== null) {
-            return self::$lastFiberCarrierId;
+        $ids = self::$fiberCarrierIds ??= new WeakMap();
+        $id = $ids[$fiber] ?? null;
+        if (!is_string($id)) {
+            $id = 'fiber:' . ++self::$nextFiberCarrierId;
+            $ids[$fiber] = $id;
         }
-
-        $id = 'fiber:' . spl_object_id($fiber);
-        self::$lastFiberReference = WeakReference::create($fiber);
-        self::$lastFiberCarrierId = $id;
 
         return $id;
     }

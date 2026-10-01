@@ -52,6 +52,24 @@ it('keeps live Fiber carrier identities distinct', function () {
     }
 });
 
+it('does not reuse collected Fiber carrier identities', function () {
+    $ids = [];
+
+    for ($i = 0; $i < 64; ++$i) {
+        $fiber = new Fiber(static fn(): ?string => ExecutionContext::id());
+        $fiber->start();
+        $id = $fiber->getReturn();
+        if (is_string($id)) {
+            $ids[] = $id;
+        }
+        unset($fiber);
+        gc_collect_cycles();
+    }
+
+    expect($ids)->toHaveCount(64)
+        ->and(array_unique($ids))->toHaveCount(64);
+});
+
 it('preserves compiled and fallback scoped identity after builder finalization', function () {
     $builder = ContainerBuilder::create(uniqid('runtime_alignment_fallback_'))
         ->releaseIdentity('intermix-test');

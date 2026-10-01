@@ -55,13 +55,6 @@ class InvocationManager
     /** @throws ContainerException|InvalidArgumentException|ReflectionException */
     public function get(string $id): mixed
     {
-        $seed = null;
-        if ($this->repository->findScopeSeed($id, $seed)) {
-            $this->assertScopedResolutionAllowed($id);
-
-            return $seed;
-        }
-
         $resolved = $this->repository->getResolvedSingletonEntry($id);
         if ($resolved !== null || $this->repository->hasResolvedSingleton($id)) {
             return $resolved;
@@ -71,9 +64,17 @@ class InvocationManager
             throw new NotFoundException("No entry found for '$id'.");
         }
 
-        $lifetime = $this->repository->getDefinitionLifetime($id);
+        $alias = null;
+        $lifetime = $this->repository->getDefinitionLifetime($id, $alias);
         $scope = null;
         if ($lifetime === LifetimeEnum::Scoped) {
+            $seed = null;
+            if ($this->repository->findScopeSeed($id, $seed)) {
+                $this->assertScopedResolutionAllowed($id);
+
+                return $seed;
+            }
+
             $this->assertScopedResolutionAllowed($id);
             $resolved = null;
             $scope = 'root';
@@ -88,9 +89,8 @@ class InvocationManager
             }
         }
 
-        $definition = $this->repository->getFunctionDefinition($id);
-        if ($definition instanceof AliasDefinition) {
-            return $this->resolveAlias($id, $definition);
+        if ($alias instanceof AliasDefinition) {
+            return $this->resolveAlias($id, $alias);
         }
 
         if ($this->repository->isTracingEnabled()) {
