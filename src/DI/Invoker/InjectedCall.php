@@ -15,6 +15,7 @@ use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Internal\ReflectionResource;
 use Psr\Cache\InvalidArgumentException;
 use ReflectionException;
+use ReflectionMethod;
 use WeakMap;
 
 final readonly class InjectedCall
@@ -110,7 +111,7 @@ final readonly class InjectedCall
             ...$this->parameterResolver->resolve(
                 $reflection,
                 $params,
-                'constructor',
+                $reflection instanceof ReflectionMethod ? 'method' : 'constructor',
             ),
         );
     }

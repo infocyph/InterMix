@@ -240,30 +240,47 @@ final class ConcurrentRepository extends Repository
      */
     public function resetCurrentExecutionScope(): void
     {
+        $failures = [];
+        $failureCount = 0;
         $store = $this->executionScopes;
         $context = $this->activeExecutionContext();
         if ($store instanceof ExecutionScopeStore && $context !== null && $store->hasState($context)) {
             if ($store->isAttached($context)) {
                 while ($store->hasNestedScope($context)) {
-                    $this->leaveExecutionScope($store, $context);
+                    try {
+                        $this->leaveExecutionScope($store, $context);
+                    } catch (ScopeCleanupException $failure) {
+                        $this->appendCleanupFailure($failure, $failures, $failureCount);
+                    }
                 }
                 $store->detachCurrentScopeContext($context);
                 $this->finishExecutionContext($store, $context);
+                $this->throwCleanupFailures($failures, $failureCount);
 
                 return;
             }
 
             while ($store->hasState($context)) {
-                $this->leaveExecutionScope($store, $context);
+                try {
+                    $this->leaveExecutionScope($store, $context);
+                } catch (ScopeCleanupException $failure) {
+                    $this->appendCleanupFailure($failure, $failures, $failureCount);
+                }
             }
             $this->finishExecutionContext($store, $context);
+            $this->throwCleanupFailures($failures, $failureCount);
 
             return;
         }
 
         while ($this->currentScope !== 'root') {
-            $this->leaveScope();
+            try {
+                $this->leaveScope();
+            } catch (ScopeCleanupException $failure) {
+                $this->appendCleanupFailure($failure, $failures, $failureCount);
+            }
         }
+        $this->throwCleanupFailures($failures, $failureCount);
     }
 
     public function resetScope(): void
@@ -346,6 +363,23 @@ final class ConcurrentRepository extends Repository
         $this->executionScopes?->assertMutationSafe($this->activeExecutionContext());
     }
 
+    /**
+     * @param list<Throwable> $failures
+     */
+    private function appendCleanupFailure(
+        ScopeCleanupException $failure,
+        array &$failures,
+        int &$failureCount,
+    ): void {
+        $failureCount += $failure->cleanupFailureCount;
+        foreach ($failure->cleanupFailures as $cleanupFailure) {
+            if (count($failures) >= 32) {
+                break;
+            }
+            $failures[] = $cleanupFailure;
+        }
+    }
+
     private function activeExecutionContext(): ?string
     {
         $context = ExecutionContext::id();
@@ -420,5 +454,13 @@ final class ConcurrentRepository extends Repository
     private function scopeContextOwner(): object
     {
         return $this->scopeContextOwner ??= new stdClass();
+    }
+
+    /** @param list<Throwable> $failures */
+    private function throwCleanupFailures(array $failures, int $failureCount): void
+    {
+        if ($failureCount > 0) {
+            throw new ScopeCleanupException($failures, $failureCount);
+        }
     }
 }

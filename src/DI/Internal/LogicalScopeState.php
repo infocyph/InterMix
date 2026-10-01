@@ -14,16 +14,28 @@ final class LogicalScopeState
     /** @var array<string, string> service id => constructing carrier */
     public array $constructing = [];
 
+    public bool $draining = false;
+
     /**
      * @param array<string, mixed> $seeds
      * @param array<string, mixed> $resolvedScoped
      */
     public function __construct(
         public readonly string $name,
-        public readonly ?self $parent = null,
-        public readonly array $seeds = [],
+        public ?self $parent = null,
+        public array $seeds = [],
         public array $resolvedScoped = [],
     ) {}
+
+    public function close(): void
+    {
+        $this->closed = true;
+        $this->constructing = [];
+        $this->draining = false;
+        $this->parent = null;
+        $this->resolvedScoped = [];
+        $this->seeds = [];
+    }
 
     public function contains(string $scope): bool
     {

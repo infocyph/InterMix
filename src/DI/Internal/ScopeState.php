@@ -16,6 +16,8 @@ final class ScopeState
     /** @var array<int, string> service slot => constructing carrier */
     public array $constructing = [];
 
+    public bool $draining = false;
+
     /** @var array<int, mixed> */
     public array $resolved = [];
 
@@ -28,11 +30,23 @@ final class ScopeState
      */
     public function __construct(
         public readonly string $name,
-        public readonly ?self $parent = null,
-        public readonly array $seeds = [],
-        public readonly array $rawSeeds = [],
+        public ?self $parent = null,
+        public array $seeds = [],
+        public array $rawSeeds = [],
     ) {
         $this->hasSeeds = $seeds !== [];
+    }
+
+    public function close(): void
+    {
+        $this->closed = true;
+        $this->constructing = [];
+        $this->draining = false;
+        $this->parent = null;
+        $this->rawSeeds = [];
+        $this->resolved = [];
+        $this->returned = [];
+        $this->seeds = [];
     }
 
     public function contains(string $name): bool

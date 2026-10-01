@@ -27,6 +27,8 @@ final class ExecutionScopeStore
             throw new ContainerException('Cannot leave an attached scope context; detach it instead.');
         }
         if ($scope->attachments > 0) {
+            $scope->draining = true;
+
             throw new ContainerException('Cannot leave a scope while child execution carriers are still attached.');
         }
     }
@@ -62,6 +64,9 @@ final class ExecutionScopeStore
         $scope = $this->unwrapScopeContext($scopeContext, $owner);
         if ($scope->closed) {
             throw new ContainerException('Scope context is no longer active.');
+        }
+        if ($scope->draining) {
+            throw new ContainerException('Scope context is draining and cannot accept new attachments.');
         }
 
         $state = $this->states[$context] ??= new ExecutionScopeState();
@@ -334,9 +339,9 @@ final class ExecutionScopeStore
 
         $this->assertCanLeaveScope($context);
         $scope = $state->logicalCurrent;
-        $scope->closed = true;
-        $scope->constructing = [];
-        $state->logicalCurrent = $scope->parent;
+        $parent = $scope->parent;
+        $scope->close();
+        $state->logicalCurrent = $parent;
         if (!$state->logicalCurrent instanceof LogicalScopeState) {
             unset($this->states[$context]);
         }

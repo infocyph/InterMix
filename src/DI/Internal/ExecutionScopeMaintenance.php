@@ -62,6 +62,8 @@ trait ExecutionScopeMaintenance
             throw new ContainerException('Cannot leave an attached scope context; detach it instead.');
         }
         if ($scope->attachments > 0) {
+            $scope->draining = true;
+
             throw new ContainerException('Cannot leave a scope while child execution carriers are still attached.');
         }
 
@@ -70,12 +72,16 @@ trait ExecutionScopeMaintenance
 
     private function closeLogicalFrames(?LogicalScopeState $scope, ?LogicalScopeState $stopBefore = null): void
     {
-        for (; $scope instanceof LogicalScopeState && $scope !== $stopBefore; $scope = $scope->parent) {
+        while ($scope instanceof LogicalScopeState && $scope !== $stopBefore) {
             if ($scope->attachments > 0) {
+                $scope->draining = true;
+
                 throw new ContainerException('Cannot reset a scope while child execution carriers are still attached.');
             }
-            $scope->closed = true;
-            $scope->constructing = [];
+
+            $parent = $scope->parent;
+            $scope->close();
+            $scope = $parent;
         }
     }
 

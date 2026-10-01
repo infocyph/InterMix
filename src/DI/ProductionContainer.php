@@ -78,10 +78,18 @@ abstract class ProductionContainer implements RuntimeContainerInterface
      */
     final public function resetCurrentExecutionScope(): void
     {
+        $failures = [];
+        $failureCount = 0;
+
         if (!$this->contextScopesActive || !$this->productionScopes instanceof ProductionScopeStore) {
             while ($this->scope->name !== 'root') {
-                $this->leaveSequentialScope(true);
+                try {
+                    $this->leaveSequentialScope(true);
+                } catch (ScopeCleanupException $failure) {
+                    $this->appendCleanupFailure($failure, $failures, $failureCount);
+                }
             }
+            $this->throwCleanupFailures($failures, $failureCount);
 
             return;
         }
@@ -89,9 +97,16 @@ abstract class ProductionContainer implements RuntimeContainerInterface
         $this->scope = $this->productionScopes->resetCurrent(
             $this->scope,
             fn(ScopeState $closing) => $this->beforeScopeClose($closing, true),
+            $failures,
+            $failureCount,
         );
-        $this->fallback?->resetCurrentExecutionScope();
+        try {
+            $this->fallback?->resetCurrentExecutionScope();
+        } catch (ScopeCleanupException $failure) {
+            $this->appendCleanupFailure($failure, $failures, $failureCount);
+        }
         $this->refreshScopeActivity();
+        $this->throwCleanupFailures($failures, $failureCount);
     }
 
     /** @return iterable<string, mixed> */
@@ -459,6 +474,23 @@ abstract class ProductionContainer implements RuntimeContainerInterface
         };
     }
 
+    /**
+     * @param list<Throwable> $failures
+     */
+    private function appendCleanupFailure(
+        ScopeCleanupException $failure,
+        array &$failures,
+        int &$failureCount,
+    ): void {
+        $failureCount += $failure->cleanupFailureCount;
+        foreach ($failure->cleanupFailures as $cleanupFailure) {
+            if (count($failures) >= 32) {
+                break;
+            }
+            $failures[] = $cleanupFailure;
+        }
+    }
+
     private function assertTaggedScope(?ScopeContext $scopeContext): void
     {
         if ($scopeContext instanceof ScopeContext) {
@@ -553,14 +585,19 @@ abstract class ProductionContainer implements RuntimeContainerInterface
             return;
         }
         if ($this->scope->attachments > 0) {
+            $this->scope->draining = true;
+
             throw new ContainerException('Cannot leave a scope while child execution carriers are still attached.');
         }
 
         $closing = $this->scope;
-        $this->beforeScopeClose($closing, $synchronizeFallback);
-        $closing->closed = true;
-        $closing->constructing = [];
-        $this->scope = $closing->parent ?? new ScopeState('root');
+        $parent = $closing->parent ?? new ScopeState('root');
+        try {
+            $this->beforeScopeClose($closing, $synchronizeFallback);
+        } finally {
+            $closing->close();
+            $this->scope = $parent;
+        }
     }
 
     private function refreshScopeActivity(): void
@@ -616,6 +653,14 @@ abstract class ProductionContainer implements RuntimeContainerInterface
                 $this->assertTaggedScope($scopeContext);
                 yield $id => $value;
             }
+        }
+    }
+
+    /** @param list<Throwable> $failures */
+    private function throwCleanupFailures(array $failures, int $failureCount): void
+    {
+        if ($failureCount > 0) {
+            throw new ScopeCleanupException($failures, $failureCount);
         }
     }
 
