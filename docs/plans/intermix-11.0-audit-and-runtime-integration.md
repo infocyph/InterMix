@@ -906,7 +906,7 @@ batch is closed.
 | --- | --- | --- | --- |
 | 1 | P0 + P1 — baseline and runtime hardening | **Complete** | Closed on `f55be8b`: P0 contract/baseline frozen; P1 F1–F3 fixed. Corrected 10.1.1 regression gate, PHPForge QA/analysis/benchmarks, clean install, and Swoole/OpenSwoole PHP 8.4/8.5 are green. |
 | 2 | P2 + P3 - builder/definitions and runtime/scope contract | **Complete** | Closed on `de8bdb18`: B1-B5 and B7 builder/runtime contracts implemented; legacy execution/global ownership removed; strict scopes, captive guards, tagged-scope liveness, cleanup aggregation, and dynamic/compiled parity covered. Exact-head release regression, PHPForge QA/analysis/benchmarks, clean install, and Swoole/OpenSwoole PHP 8.4/8.5 are green. |
-| 3 | P4 + P5 — compiled graph and provider boundaries | Pending | P4: B6 generated/fallback graph. P5: CacheLayer 4.0 / Runwire 2.1 optional provider boundaries. Run focused QA after each package, then full batch QA. |
+| 3 | P4 + P5 — compiled graph and provider boundaries | **In progress — P4** | Batch 2 revalidated on `82ac3942`; P4/B6 compiled graph is now active. P5 follows only after focused P4 QA is green. |
 | 4 | P6 + P7 + P8 — migration, measured acceptance and release candidate | Pending | P6: docs/consumer migration. P7: benchmarks/soak/host acceptance. P8: exact-SHA CI, packaging and RC evidence. P8 remains the final gate inside this batch. |
 
 ### Batch 1 closure evidence
@@ -984,6 +984,29 @@ P3 closure:
 
 Batch 2 is closed. CacheLayer 4.0 and Runwire 2.1 transitive context sharing remain
 Batch 3/P5 work; P4 may now begin from this frozen P2/P3 runtime contract.
+
+Batch 2 was revalidated on branch head
+`82ac394233386ee5e57400c0e8a690481f12f207`: Security & Standards and
+Swoole/OpenSwoole Scope Compatibility were green. The exact-head component
+comparison remained within the unchanged diagnostic budgets: PHP 8.4 sequential
+**-1.30%**, Fiber **+4.35%**; PHP 8.5 sequential **-8.76%**, Fiber **+2.14%**.
+
+#### Performance-regression decision for the remaining release work
+
+The 10.1.1 sequential/Fiber microbenchmarks remain mandatory **diagnostic**
+signals through P4-P8 and their existing 3%/5% budgets are not raised or deleted.
+They are not, however, the sole release-performance verdict for this major because
+11.0 intentionally changes scope entry, cleanup, and runtime contracts. P7 must
+add version-specific setup adapters that keep equivalent work outside measured hot
+loops and a representative host request/job workload. The primary release decision
+will use sustained successful RPM/RPS plus p50/p95/p99, CPU and RSS/peak-memory
+evidence on the same environment, with the plan's default 2% median throughput
+regression ceiling unless measured baseline variance justifies a documented
+workload-specific tolerance. Any component-budget failure still blocks the current
+package until explained and either fixed or shown by an equivalent-workload
+measurement to be harness/API-shape noise; it is never silenced by threshold,
+baseline, skip, or exclusion changes.
+
 
 ### Batch 1 superseded tuning evidence
 
