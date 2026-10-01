@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Infocyph\InterMix\DI\Attribute\Inject;
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\DI\Invoker;
 use Infocyph\InterMix\DI\Invoker\GenericCall;
@@ -251,7 +252,7 @@ return true;
 
 function releaseContainer(string $suffix): Container
 {
-    return new Container('release-' . $suffix . '-' . uniqid());
+    return new ConfigurationContainer('release-' . $suffix . '-' . uniqid());
 }
 
 it('never confuses user arrays with class resolution state', function () {
