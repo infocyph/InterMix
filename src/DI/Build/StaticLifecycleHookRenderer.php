@@ -25,7 +25,7 @@ final class StaticLifecycleHookRenderer
         string $serviceStatements,
     ): string {
         $source = "    private function s{$slot}(): mixed\n    {\n";
-        $source .= $this->seedGuard($slot, $lifetime);
+        $source .= $this->seedGuard($slot, $lifetime, $id);
         if ($lifetime === LifetimeEnum::Scoped) {
             $source .= "        if (isset(\$scope->resolved[{$slot}])) {\n";
             $source .= "            return \$scope->resolved[{$slot}];\n";
@@ -60,7 +60,7 @@ final class StaticLifecycleHookRenderer
         string $singletonStore,
     ): string {
         $source = "    private function s{$slot}(): mixed\n    {\n";
-        $source .= $this->seedGuard($slot, $lifetime);
+        $source .= $this->seedGuard($slot, $lifetime, $id);
         if ($lifetime === LifetimeEnum::Scoped) {
             $source .= "        if (array_key_exists({$slot}, \$scope->resolved)) {\n";
             $source .= "            return \$scope->resolved[{$slot}];\n";
@@ -120,8 +120,8 @@ final class StaticLifecycleHookRenderer
         return '';
     }
 
-    private function seedGuard(int $slot, LifetimeEnum $lifetime): string
+    private function seedGuard(int $slot, LifetimeEnum $lifetime, string $id): string
     {
-        return new StaticScopeAccessRenderer()->seedGuard($slot, $lifetime);
+        return new StaticScopeAccessRenderer()->seedGuard($slot, $lifetime, $id);
     }
 }

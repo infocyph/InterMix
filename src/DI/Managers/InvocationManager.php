@@ -336,13 +336,18 @@ class InvocationManager
 
     private function resolveAndCache(string $id, bool $cacheable, ?string $scope): mixed
     {
-        if ($this->repository instanceof ConcurrentRepository) {
-            if ($scope === null && $cacheable) {
+        if ($scope === null && $cacheable) {
+            if ($this->repository instanceof ConcurrentRepository) {
                 return $this->resolveAndCacheSingletonGuarded($id, $this->repository);
             }
-            if ($scope !== null && $this->repository->requiresScopedConstructionGuard()) {
-                return $this->resolveAndCacheGuarded($id, $cacheable, $scope, $this->repository);
-            }
+
+            return $this->resolveAndCacheSingletonTracked($id);
+        }
+        if ($this->repository instanceof ConcurrentRepository
+            && $scope !== null
+            && $this->repository->requiresScopedConstructionGuard()
+        ) {
+            return $this->resolveAndCacheGuarded($id, $cacheable, $scope, $this->repository);
         }
 
         return $this->resolveAndCacheDirect($id, $cacheable, $scope);
@@ -351,10 +356,8 @@ class InvocationManager
     private function resolveAndCacheDirect(string $id, bool $cacheable, ?string $scope): mixed
     {
         $this->repository->dispatchResolvingHooks($id);
-        $this->pushLifetime($this->repository->getDefinitionLifetime($id));
 
-        try {
-            if ($this->repository->hasFunctionReference($id)) {
+        if ($this->repository->hasFunctionReference($id)) {
                 $resolved = $this->resolveDefinition($id);
             } else {
                 $resolution = ContainerAccess::resolver($this->container)->classSettler($id);
@@ -367,15 +370,12 @@ class InvocationManager
                 return $resolved;
             }
 
-            if ($cacheable) {
-                $this->storeResolvedByLifetime($id, $resolved, $scope);
-            }
-            $this->repository->dispatchResolvedHooks($id, $resolved);
-
-            return $resolved;
-        } finally {
-            $this->popLifetime();
+        if ($cacheable) {
+            $this->storeResolvedByLifetime($id, $resolved, $scope);
         }
+        $this->repository->dispatchResolvedHooks($id, $resolved);
+
+        return $resolved;
     }
 
     private function resolveAndCacheGuarded(
@@ -400,13 +400,26 @@ class InvocationManager
         ConcurrentRepository $repository,
     ): mixed {
         $constructionOwner = $repository->beginSingletonConstruction($id);
+        $this->pushLifetime(LifetimeEnum::Singleton);
 
         try {
             return $this->resolveAndCacheDirect($id, true, null);
         } finally {
+            $this->popLifetime();
             if ($constructionOwner) {
                 $repository->endSingletonConstruction($id);
             }
+        }
+    }
+
+    private function resolveAndCacheSingletonTracked(string $id): mixed
+    {
+        $this->pushLifetime(LifetimeEnum::Singleton);
+
+        try {
+            return $this->resolveAndCacheDirect($id, true, null);
+        } finally {
+            $this->popLifetime();
         }
     }
 

@@ -192,7 +192,7 @@ final class StaticRuntimeRenderer
         }
 
         $source = "    private function s{$slot}(): mixed\n    {\n";
-        $source .= $this->renderSeedGuard($slot, $plan['lifetime']);
+        $source .= $this->renderSeedGuard($slot, $plan['lifetime'], $id);
         $hasSetup = $plan['properties'] !== [] || $plan['postMethod'] !== null;
         $construction = $hasSetup ? null : $this->classConstruction($plan, $slots);
 
@@ -386,7 +386,7 @@ final class StaticRuntimeRenderer
         }
 
         $source = "    private function s{$slot}(): mixed\n    {\n";
-        $source .= $this->renderSeedGuard($slot, $plan['lifetime']);
+        $source .= $this->renderSeedGuard($slot, $plan['lifetime'], $id);
 
         if ($plan['lifetime'] === LifetimeEnum::Scoped) {
             $source .= "        if (array_key_exists({$slot}, \$scope->resolved)) {\n";
@@ -473,21 +473,18 @@ final class StaticRuntimeRenderer
     {
         $source = "    public function get(string \$id): mixed\n    {\n";
         $source .= "        if (\$this->isDeoptimized()) {\n            return \$this->fallbackGet(\$id);\n        }\n\n";
-        $source .= "        \$this->beginCompiledResolution(\$id);\n";
-        $source .= "        try {\n";
-        $source .= "            return match (\$id) {\n";
-        foreach ($plans as $rawId => $_plan) {
+        $source .= "        return match (\$id) {\n";
+        foreach ($plans as $rawId => $plan) {
             $id = (string) $rawId;
-            $source .= '                ' . var_export($id, true) . ' => $this->s' . $slots[$id] . "(),\n";
+            $call = '$this->s' . $slots[$id] . '()';
+            if ($plan['lifetime'] === LifetimeEnum::Singleton) {
+                $call = '$this->resolveCompiledSingleton(fn(): mixed => ' . $call . ')';
+            }
+            $source .= '            ' . var_export($id, true) . ' => ' . $call . ",\n";
         }
-        $source .= "                default => \$this->fallbackGet(\$id),\n";
+        $source .= "            default => \$this->fallbackGet(\$id),\n";
 
-        return $source
-            . "            };\n"
-            . "        } finally {\n"
-            . "            \$this->endCompiledResolution(\$id);\n"
-            . "        }\n"
-            . "    }\n\n";
+        return $source . "        };\n    }\n\n";
     }
 
     /** @param array<string, ServicePlan> $plans */
@@ -508,9 +505,9 @@ final class StaticRuntimeRenderer
         return $source . "        };\n    }\n\n";
     }
 
-    private function renderSeedGuard(int $slot, LifetimeEnum $lifetime): string
+    private function renderSeedGuard(int $slot, LifetimeEnum $lifetime, string $id): string
     {
-        return new StaticScopeAccessRenderer()->seedGuard($slot, $lifetime);
+        return new StaticScopeAccessRenderer()->seedGuard($slot, $lifetime, $id);
     }
 
     /**
@@ -680,7 +677,7 @@ final class StaticRuntimeRenderer
 
         return "    private function s{$slot}(): mixed\n"
             . "    {\n"
-            . $this->renderSeedGuard($slot, $plan['lifetime'])
+            . $this->renderSeedGuard($slot, $plan['lifetime'], $id)
             . '        return ' . $plan['code'] . ";\n"
             . "    }\n\n";
     }

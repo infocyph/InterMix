@@ -22,8 +22,10 @@ abstract class ProductionContainer implements RuntimeContainerInterface
 
     protected ScopeState $scope;
 
-    /** @var array<int|string, list<LifetimeEnum>> */
-    private array $compiledLifetimeStacks = [];
+    protected bool $compiledSingletonResolutionActive = false;
+
+    /** @var array<int|string, int> */
+    private array $compiledSingletonResolutionOwners = [];
 
     /**
      * @var array<string, array{exists: bool, definition: mixed, lifetime: LifetimeEnum, tags: array<int, string>}>
@@ -175,13 +177,12 @@ abstract class ProductionContainer implements RuntimeContainerInterface
 
     final protected function assertCompiledScopedResolution(string $id): void
     {
-        $scope = $this->contextScopesActive ? $this->compiledScope() : $this->scope;
-        if ($scope->name === 'root') {
-            throw new ContainerException("Scoped entry '$id' requires an active scope.");
+        if (!$this->compiledSingletonResolutionActive) {
+            return;
         }
 
         $owner = ExecutionContext::id() ?? "\0intermix.production.root";
-        if (in_array(LifetimeEnum::Singleton, $this->compiledLifetimeStacks[$owner] ?? [], true)) {
+        if (($this->compiledSingletonResolutionOwners[$owner] ?? 0) > 0) {
             throw new ContainerException(
                 "Singleton construction cannot capture scoped entry '$id'.",
             );
@@ -197,20 +198,6 @@ abstract class ProductionContainer implements RuntimeContainerInterface
     ): void {
         $property = ReflectionResource::getClassReflection($declaringClass)->getProperty($propertyName);
         $property->setValue($property->isStatic() ? null : $instance, $value);
-    }
-
-    final protected function beginCompiledResolution(string $id): void
-    {
-        $lifetime = $this->compiledLifetimeFor($id);
-        if (!$lifetime instanceof LifetimeEnum) {
-            return;
-        }
-        if ($lifetime === LifetimeEnum::Scoped) {
-            $this->assertCompiledScopedResolution($id);
-        }
-
-        $owner = ExecutionContext::id() ?? "\0intermix.production.root";
-        $this->compiledLifetimeStacks[$owner][] = $lifetime;
     }
 
     /** @return array<int, string> */
@@ -277,19 +264,6 @@ abstract class ProductionContainer implements RuntimeContainerInterface
     final protected function dispatchCompiledResolvingHooks(string $id): void
     {
         $this->hookRuntime($id)->getRepository()->dispatchResolvingHooks($id);
-    }
-
-    final protected function endCompiledResolution(string $id): void
-    {
-        if (!$this->compiledLifetimeFor($id) instanceof LifetimeEnum) {
-            return;
-        }
-
-        $owner = ExecutionContext::id() ?? "\0intermix.production.root";
-        array_pop($this->compiledLifetimeStacks[$owner]);
-        if ($this->compiledLifetimeStacks[$owner] === []) {
-            unset($this->compiledLifetimeStacks[$owner]);
-        }
     }
 
     /** @param array<string, mixed> $instances */
@@ -393,6 +367,26 @@ abstract class ProductionContainer implements RuntimeContainerInterface
         mixed &$result,
     ): bool {
         return false;
+    }
+
+    final protected function resolveCompiledSingleton(callable $resolver): mixed
+    {
+        $owner = ExecutionContext::id() ?? "\0intermix.production.root";
+        $this->compiledSingletonResolutionOwners[$owner]
+            = ($this->compiledSingletonResolutionOwners[$owner] ?? 0) + 1;
+        $this->compiledSingletonResolutionActive = true;
+
+        try {
+            return $resolver();
+        } finally {
+            $remaining = $this->compiledSingletonResolutionOwners[$owner] - 1;
+            if ($remaining > 0) {
+                $this->compiledSingletonResolutionOwners[$owner] = $remaining;
+            } else {
+                unset($this->compiledSingletonResolutionOwners[$owner]);
+            }
+            $this->compiledSingletonResolutionActive = $this->compiledSingletonResolutionOwners !== [];
+        }
     }
 
     final protected function invokeCompiledRuntimeMethod(
