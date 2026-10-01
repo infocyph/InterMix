@@ -20,7 +20,7 @@ use Infocyph\InterMix\DI\Support\ServiceReference;
 use Infocyph\InterMix\DI\Support\ValueDefinition;
 use Psr\Container\ContainerInterface;
 
-    /**
+/**
  * Immutable build-time snapshot of resolution-affecting container state.
  *
  * The graph deliberately owns copies of mutable repository metadata so future
@@ -60,8 +60,7 @@ final readonly class DefinitionGraph
         private bool $injectionEnabled,
         private bool $methodAttributes,
         private bool $propertyAttributes,
-    )
-    {}
+    ) {}
 
     /**
      * @param array<int, string> $dynamicServiceIds
@@ -339,13 +338,10 @@ final readonly class DefinitionGraph
 
     private function hasOpaqueClassResources(): bool
     {
-        foreach ($this->classResources as $resources) {
-            if (!$this->isPortableMetadata($resources)) {
-                return true;
-            }
-        }
-
-        return false;
+        return array_any(
+            $this->classResources,
+            fn(array $resources): bool => !$this->isPortableMetadata($resources),
+        );
     }
 
     private function hasOpaqueContextualBindings(): bool
@@ -363,13 +359,11 @@ final readonly class DefinitionGraph
 
     private function hasOpaqueDefinitions(): bool
     {
-        foreach ($this->definitions as $rawId => $definition) {
-            if ($this->definitionIsOpaque((string) $rawId, $definition)) {
-                return true;
-            }
-        }
-
-        return false;
+        return array_any(
+            $this->definitions,
+            fn(mixed $definition, int|string $rawId): bool =>
+                $this->definitionIsOpaque((string) $rawId, $definition),
+        );
     }
 
     private function isPortableMetadata(mixed $value): bool
