@@ -905,7 +905,7 @@ batch is closed.
 | Batch | Packages | Status | Package status / implementation evidence |
 | --- | --- | --- | --- |
 | 1 | P0 + P1 — baseline and runtime hardening | **Complete** | Closed on `f55be8b`: P0 contract/baseline frozen; P1 F1–F3 fixed. Corrected 10.1.1 regression gate, PHPForge QA/analysis/benchmarks, clean install, and Swoole/OpenSwoole PHP 8.4/8.5 are green. |
-| 2 | P2 + P3 - builder/definitions and runtime/scope contract | **Complete in working tree** | B1-B5 and B7 builder/runtime contracts implemented; legacy execution/global ownership removed; strict scopes, captive guards, tagged-scope liveness, cleanup aggregation, and dynamic/compiled parity covered. Final local `composer ic:process` and `composer ic:ci` are green. |
+| 2 | P2 + P3 - builder/definitions and runtime/scope contract | **Complete** | Closed on `de8bdb18`: B1-B5 and B7 builder/runtime contracts implemented; legacy execution/global ownership removed; strict scopes, captive guards, tagged-scope liveness, cleanup aggregation, and dynamic/compiled parity covered. Exact-head release regression, PHPForge QA/analysis/benchmarks, clean install, and Swoole/OpenSwoole PHP 8.4/8.5 are green. |
 | 3 | P4 + P5 — compiled graph and provider boundaries | Pending | P4: B6 generated/fallback graph. P5: CacheLayer 4.0 / Runwire 2.1 optional provider boundaries. Run focused QA after each package, then full batch QA. |
 | 4 | P6 + P7 + P8 — migration, measured acceptance and release candidate | Pending | P6: docs/consumer migration. P7: benchmarks/soak/host acceptance. P8: exact-SHA CI, packaging and RC evidence. P8 remains the final gate inside this batch. |
 
@@ -926,10 +926,28 @@ Batch 1 is closed. Batch 2 P2 and P3 are closed by the evidence below.
 
 ### Batch 2 closure evidence
 
-Batch 2 (P2 + P3) is complete in the working tree based on
-`f97a94953f4a9ac3cb27d4dbad22b0330e469901`. The implementation is intentionally
-uncommitted, so this is workspace evidence rather than an immutable release
-revision; P8 still requires CI on the exact committed/tagged revision.
+Batch 2 acceptance revision:
+`de8bdb18ad256909fdb235df658e2015708e1b49`.
+
+Immutable pull-request evidence:
+
+- Security & Standards run `36809303393`: release regression passed on PHP 8.4
+  and 8.5; all four PHPForge QA lanes passed; PHPForge analysis and benchmark
+  lanes passed on PHP 8.4/8.5; clean production install passed; the publication
+  job remained correctly skipped for the pull request.
+- Swoole/OpenSwoole Scope Compatibility run `36809302804`: Swoole and
+  OpenSwoole carrier lanes passed on PHP 8.4 and PHP 8.5.
+- Release regression against exact 10.1.1 baseline `f687452` passed without
+  changing the existing budgets:
+  - PHP 8.4 sequential **-3.21%** (105.295 ns -> 101.911 ns), Fiber **+3.78%**
+    (31,837.735 ns -> 33,041.889 ns);
+  - PHP 8.5 sequential **-5.28%** (91.699 ns -> 86.855 ns), Fiber **+2.60%**
+    (20,622.026 ns -> 21,157.267 ns).
+- The regression closure removed obsolete generated deoptimization checks,
+  moved resolution ancestry bookkeeping off ordinary scoped reads, preserved
+  carrier-local captive validation, and fast-pathed successful empty structured
+  scopes. No PHPForge threshold, benchmark budget, baseline, skip, suppression,
+  or exclusion was weakened.
 
 P2 closure:
 
@@ -950,11 +968,12 @@ P3 closure:
 - PSR-11 lookup is strict: missing IDs, declared-entry resolution failures, and
   scoped access outside an active scope remain distinguishable;
 - scoped inputs require declaration; singleton-to-scoped captive dependencies are
-  rejected in dynamic and compiled construction; tagged iteration validates the
-  captured scope and cannot escape into a later request;
-- scope cleanup executes all hooks, closes state deterministically, preserves the
-  application failure as `previous`, and retains a bounded failure list through
-  `ScopeCleanupException`;
+  rejected in dynamic and compiled construction, including warmed seed/cache paths
+  when a singleton construction is active;
+- tagged iteration validates the captured scope and cannot escape into a later
+  request; scope cleanup executes all hooks, closes state deterministically,
+  preserves the application failure as `previous`, and retains a bounded failure
+  list through `ScopeCleanupException`;
 - process-global container aliases, DI lookup globals, `Invoker`,
   `RuntimeContainerProxy`, descriptor parsing, `call()`, `getReturn()`,
   `resolveNow()`, inferred `CALL_ON`/`__invoke`/default methods, and public
@@ -963,21 +982,8 @@ P3 closure:
   `RuntimeContainerInterface` to the active production instance while retaining
   host ownership of worker/event-loop lifecycle.
 
-Batch 2 validation on 2026-10-01, PHP 8.5.4 / Composer 2.10.3:
-
-- focused and full code suite: **395 passed, 2,089 assertions**;
-- `composer ic:process`: Composer Normalize, Rector, Pint, and PHPCBF completed;
-- `composer ic:bench:quick`: **122 subjects, 0 failures, 0 errors** after migrating
-  every benchmark from retired v10 APIs to the canonical runtime contract;
-- final `composer ic:ci`: all configured gates passed - syntax, reference
-  integrity, duplicate code, comment policy, Pest, Pint, PHPCS, Deptrac, PHPStan,
-  Psalm, and Rector;
-- `git diff --check`: passed;
-- plan inventory: exactly this one file remains under `docs/plans/`.
-
-No PHPForge threshold, baseline, skip, or exclusion was added. CacheLayer 4.0 and
-Runwire 2.1 transitive context sharing remain Batch 3/P5 work; Batch 2 establishes
-the runtime and ownership contract they will consume.
+Batch 2 is closed. CacheLayer 4.0 and Runwire 2.1 transitive context sharing remain
+Batch 3/P5 work; P4 may now begin from this frozen P2/P3 runtime contract.
 
 ### Batch 1 superseded tuning evidence
 
