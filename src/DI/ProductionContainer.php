@@ -37,6 +37,9 @@ abstract class ProductionContainer implements RuntimeContainerInterface
 
     private ?RuntimeIslandResolver $runtimeIslands = null;
 
+    /** @var array<string, true> */
+    private array $validatedScopeSeedIds = [];
+
     public function __construct(private ?ConfigurationContainer $fallback = null)
     {
         $this->scope = new ScopeState('root');
@@ -671,12 +674,18 @@ abstract class ProductionContainer implements RuntimeContainerInterface
     /** @param array<string, mixed> $instances */
     private function validateProductionScopeSeeds(array $instances): void
     {
-        foreach (array_keys($instances) as $id) {
+        foreach ($instances as $id => $instance) {
+            if (isset($this->validatedScopeSeedIds[$id])) {
+                continue;
+            }
             if ($this->isCompiledScopedDefinition($id)) {
+                $this->validatedScopeSeedIds[$id] = true;
+
                 continue;
             }
             if ($this->fallback instanceof ConfigurationContainer) {
-                $this->fallback->assertValidScopeSeeds([$id => $instances[$id]]);
+                $this->fallback->assertValidScopeSeeds([$id => $instance]);
+                $this->validatedScopeSeedIds[$id] = true;
 
                 continue;
             }
