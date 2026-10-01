@@ -166,19 +166,22 @@ class Container implements RuntimeContainerInterface
     /** @param array<string, mixed> $instances */
     public function withinScope(string $scope, callable $callback, array $instances = []): mixed
     {
-        $this->validateScopeSeeds($instances);
+        if ($instances !== []) {
+            $this->validateScopeSeeds($instances);
+        }
         $this->enterScope($scope, $instances);
-        $failure = null;
 
         try {
-            return $callback($this);
+            $result = $callback($this);
         } catch (Throwable $throwable) {
-            $failure = $throwable;
+            $this->leaveScopeAfter($throwable);
 
             throw $throwable;
-        } finally {
-            $this->leaveScopeAfter($failure);
         }
+
+        $this->leaveScope();
+
+        return $result;
     }
 
     public function withinScopeContext(ScopeContext $scopeContext, callable $callback): mixed
