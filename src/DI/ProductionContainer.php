@@ -100,7 +100,7 @@ abstract class ProductionContainer implements ContainerInterface
             return;
         }
         $this->assertGraphMutationSafe();
-        if (!$this->deoptimizationReady || !$this->fallback instanceof Container) {
+        if (!$this->deoptimizationReady || !$this->fallback instanceof ConfigurationContainer) {
             throw new ContainerException(
                 'Production deoptimization requires a configured development fallback graph.',
             );
@@ -153,7 +153,7 @@ abstract class ProductionContainer implements ContainerInterface
             }
         }
 
-        if ($this->fallback instanceof Container) {
+        if ($this->fallback instanceof ConfigurationContainer) {
             foreach ($this->fallback->findByTag($tag) as $id => $value) {
                 $matches[$id] ??= $value;
             }
@@ -181,7 +181,7 @@ abstract class ProductionContainer implements ContainerInterface
             yield from $compiled;
         }
 
-        if (!$this->fallback instanceof Container) {
+        if (!$this->fallback instanceof ConfigurationContainer) {
             return;
         }
 
@@ -314,7 +314,7 @@ abstract class ProductionContainer implements ContainerInterface
         $context = $this->scopeStore()->attach($scope, $this->scope);
         $this->refreshScopeActivity();
 
-        if ($this->fallback instanceof Container && $fallbackContext instanceof ScopeContext) {
+        if ($this->fallback instanceof ConfigurationContainer && $fallbackContext instanceof ScopeContext) {
             try {
                 return $this->fallback->withinScopeContext(
                     $fallbackContext,
@@ -493,7 +493,7 @@ abstract class ProductionContainer implements ContainerInterface
 
     private function beforeScopeClose(ScopeState $scope, bool $synchronizeFallback): void
     {
-        if ($this->requiresScopeLeaveHook($scope->name) && !$this->fallback instanceof Container) {
+        if ($this->requiresScopeLeaveHook($scope->name) && !$this->fallback instanceof ConfigurationContainer) {
             throw new ContainerException(
                 "Compiled scope '{$scope->name}' requires its runtime scope-leave hook graph.",
             );
@@ -551,7 +551,7 @@ abstract class ProductionContainer implements ContainerInterface
 
     private function dynamic(): ConfigurationContainer
     {
-        if ($this->fallback instanceof Container) {
+        if ($this->fallback instanceof ConfigurationContainer) {
             return $this->fallback;
         }
 
@@ -565,7 +565,7 @@ abstract class ProductionContainer implements ContainerInterface
 
     private function hookRuntime(string $id): ConfigurationContainer
     {
-        if ($this->fallback instanceof Container) {
+        if ($this->fallback instanceof ConfigurationContainer) {
             return $this->fallback;
         }
 
@@ -664,7 +664,7 @@ abstract class ProductionContainer implements ContainerInterface
     }
 
     /** @return array<string, true> */
-    private function restoreFallbackDefinitions(Container $fallback): array
+    private function restoreFallbackDefinitions(ConfigurationContainer $fallback): array
     {
         return ProductionFallbackState::restoreDefinitions(
             $fallback,
@@ -675,7 +675,7 @@ abstract class ProductionContainer implements ContainerInterface
 
     private function runtimeIslandResolver(): RuntimeIslandResolver
     {
-        if (!$this->fallback instanceof Container) {
+        if (!$this->fallback instanceof ConfigurationContainer) {
             throw new ContainerException(
                 'Compiled runtime attribute/method islands require the configured development fallback graph.',
             );
@@ -689,13 +689,13 @@ abstract class ProductionContainer implements ContainerInterface
         return $this->productionScopes ??= new ProductionScopeStore();
     }
 
-    private function synchronizeFallbackScopes(Container $fallback): void
+    private function synchronizeFallbackScopes(ConfigurationContainer $fallback): void
     {
         ProductionFallbackState::synchronizeScopes($fallback, $this->currentExecutionScope());
     }
 
     /** @param array<string, true> $overridden */
-    private function transferCompiledState(?Container $fallback, array $overridden = []): void
+    private function transferCompiledState(?ConfigurationContainer $fallback, array $overridden = []): void
     {
         if (!$fallback instanceof ConfigurationContainer) {
             return;
