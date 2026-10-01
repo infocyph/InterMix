@@ -18,22 +18,28 @@ final class HostAcceptanceLeaf
 
 final class HostAcceptanceRequest
 {
-    public function __construct(public readonly string $id) {}
+    public readonly string $id;
+
+    public function __construct(string $id)
+    {
+        $this->id = $id;
+    }
 }
 
 final class HostAcceptanceHandler
 {
-    public function __construct(private readonly HostAcceptanceRequest $request) {}
+    private readonly HostAcceptanceRequest $request;
+
+    public function __construct(HostAcceptanceRequest $request)
+    {
+        $this->request = $request;
+    }
 
     public function handle(HostAcceptanceLeaf $leaf): string
     {
         return $this->request->id . ':' . $leaf->marker;
     }
 }
-
-final class HostExpectedFailure extends RuntimeException {}
-
-final class HostExpectedCancellation extends RuntimeException {}
 
 final class HostAcceptance
 {
@@ -92,9 +98,13 @@ final class HostAcceptance
         $fiber->start();
 
         try {
-            $fiber->throw(new HostExpectedCancellation('expected cancellation'));
-        } catch (HostExpectedCancellation) {
-            return 1;
+            $fiber->throw(new RuntimeException('host-expected-cancellation'));
+        } catch (RuntimeException $exception) {
+            if ($exception->getMessage() === 'host-expected-cancellation') {
+                return 1;
+            }
+
+            throw $exception;
         }
 
         throw new RuntimeException('Expected cancellation probe did not cancel.');
@@ -109,12 +119,16 @@ final class HostAcceptance
                 'request',
                 static function () use ($calls): never {
                     ($calls['get'])(HostAcceptanceHandler::class);
-                    throw new HostExpectedFailure('expected host failure');
+                    throw new RuntimeException('host-expected-failure');
                 },
                 [HostAcceptanceRequest::class => $request],
             );
-        } catch (HostExpectedFailure) {
-            return 1;
+        } catch (RuntimeException $exception) {
+            if ($exception->getMessage() === 'host-expected-failure') {
+                return 1;
+            }
+
+            throw $exception;
         }
 
         throw new RuntimeException('Expected failure probe did not fail.');
