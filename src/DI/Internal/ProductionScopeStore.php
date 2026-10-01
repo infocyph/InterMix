@@ -313,6 +313,7 @@ final class ProductionScopeStore
         $this->assertNoAttachments($current);
 
         $parent = $current->parent;
+
         try {
             $beforeClose($current);
         } finally {
@@ -336,6 +337,7 @@ final class ProductionScopeStore
         $this->assertNoAttachments($scope);
 
         $parent = $scope->parent ?? new ScopeState('root');
+
         try {
             $beforeClose($scope);
         } finally {
@@ -401,6 +403,7 @@ final class ProductionScopeStore
             if (!$current instanceof ScopeState || $current->name === 'root') {
                 break;
             }
+
             try {
                 $this->closeContextScope($context, $beforeClose);
             } catch (ScopeCleanupException $failure) {
@@ -428,6 +431,7 @@ final class ProductionScopeStore
     ): ScopeState {
         while ($scope->name !== 'root') {
             $parent = $scope->parent ?? new ScopeState('root');
+
             try {
                 $scope = $this->closeSequentialScope($scope, $beforeClose);
             } catch (ScopeCleanupException $failure) {
