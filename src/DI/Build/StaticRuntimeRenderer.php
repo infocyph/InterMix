@@ -567,7 +567,6 @@ final class StaticRuntimeRenderer
                     $plan,
                     $slots,
                     $lifecycleRenderer,
-                    $guardCaptive,
                 ),
                 'class' => $this->renderClassMethod(
                     $graph,
