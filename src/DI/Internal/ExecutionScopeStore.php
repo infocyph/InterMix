@@ -117,6 +117,8 @@ final class ExecutionScopeStore
             throw new ContainerException('Cannot capture a scope context without an active scope.');
         }
 
+        $scope->retained = true;
+
         return new CapturedScopeContext($owner, $scope);
     }
 
