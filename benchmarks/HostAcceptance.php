@@ -125,8 +125,9 @@ final class HostAcceptance
         throw new RuntimeException('Expected cancellation probe did not cancel.');
     }
 
-    /** @param list<float> $samples
-     *  @return list<float>
+    /**
+     * @param list<float> $samples
+     * @return list<float>
      */
     private static function compactSamples(array $samples): array
     {
