@@ -192,14 +192,11 @@ it('fails closed when a hooked artifact is loaded without its runtime hook graph
 
     try {
         $report = $builder->compile($path);
-        $runtime = new StaticRuntimeGenerator()->loadPrevalidated($path, $report['digest']);
 
-        expect(fn() => $runtime->get('service'))
-            ->toThrow(ContainerException::class, 'runtime lifecycle-hook graph');
-
-        testEnterScope($runtime, 'request');
-        expect(fn() => testLeaveScope($runtime))
-            ->toThrow(ContainerException::class, 'runtime scope-leave hook graph');
+        expect(fn() => new StaticRuntimeGenerator()->loadPrevalidated(
+            $path,
+            $report['digest'],
+        ))->toThrow(ContainerException::class, 'frozen fallback graph');
     } finally {
         removeStaticLifecycleHookArtifact($path);
     }
