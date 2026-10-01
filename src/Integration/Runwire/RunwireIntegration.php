@@ -111,6 +111,7 @@ final class RunwireIntegration
         $seeds = $this->requestSeeds($runtime, $request, $scope, $instances);
 
         ++$this->activeBoundaries;
+
         try {
             return $this->container->withinScope(
                 'runwire.request',
@@ -142,6 +143,7 @@ final class RunwireIntegration
         $this->validateBoundary($request, $scope);
 
         ++$this->activeBoundaries;
+
         try {
             return $this->container->withinScopeContext(
                 $context,
