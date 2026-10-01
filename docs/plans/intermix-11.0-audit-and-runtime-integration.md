@@ -906,7 +906,7 @@ batch is closed.
 | --- | --- | --- | --- |
 | 1 | P0 + P1 — baseline and runtime hardening | **Complete** | Closed on `f55be8b`: P0 contract/baseline frozen; P1 F1–F3 fixed. Corrected 10.1.1 regression gate, PHPForge QA/analysis/benchmarks, clean install, and Swoole/OpenSwoole PHP 8.4/8.5 are green. |
 | 2 | P2 + P3 - builder/definitions and runtime/scope contract | **Complete** | Closed on `de8bdb18`: B1-B5 and B7 builder/runtime contracts implemented; legacy execution/global ownership removed; strict scopes, captive guards, tagged-scope liveness, cleanup aggregation, and dynamic/compiled parity covered. Exact-head release regression, PHPForge QA/analysis/benchmarks, clean install, and Swoole/OpenSwoole PHP 8.4/8.5 are green. |
-| 3 | P4 + P5 — compiled graph and provider boundaries | **In progress — P4** | Batch 2 revalidated on `82ac3942`; P4/B6 compiled graph is now active. P5 follows only after focused P4 QA is green. |
+| 3 | P4 + P5 — compiled graph and provider boundaries | **In progress — final Batch 3 QA** | P4/B6 frozen artifact/ABI/publication contract is implemented. P5 targets CacheLayer `^4.0` and Runwire `^2.1`, adds the optional host-owned Runwire bridge, real CacheLayer 4 builder-contract coverage, and provider ownership docs. Final exact-head QA remains the only open Batch 3 gate. |
 | 4 | P6 + P7 + P8 — migration, measured acceptance and release candidate | Pending | P6: docs/consumer migration. P7: benchmarks/soak/host acceptance. P8: exact-SHA CI, packaging and RC evidence. P8 remains the final gate inside this batch. |
 
 ### Batch 1 closure evidence
@@ -1008,6 +1008,65 @@ measurement to be harness/API-shape noise; it is never silenced by threshold,
 baseline, skip, or exclusion changes.
 
 
+### Batch 3 / P4 + P5 live tracker
+
+Current implementation candidate before final Batch 3 QA:
+`42ac09022ca4eed25359d4cdd1c5935375fbc366`.
+
+P4 / B6 compiled graph:
+
+- [x] compilation consumes the finalized immutable `DefinitionGraph`;
+- [x] generated artifacts carry InterMix major/ABI, PHP major/minor, source digest,
+  deterministic graph identity, environment identity, fallback metadata, artifact
+  identity and immutable build identity;
+- [x] strict and hybrid loads validate ABI/version/digest/graph/environment/fallback
+  compatibility before activation;
+- [x] opaque runtime factories/callbacks/object metadata require explicit release
+  identity instead of serializing arbitrary runtime state into graph identity;
+- [x] generated runtime builds are staged into complete versioned build
+  directories and atomically activated; failed staging leaves the active build
+  intact;
+- [x] deterministic attribute resolver/environment/contextual metadata is included
+  in graph identity;
+- [x] publication-boundary, stale/tampered artifact, opaque-fixture, frozen
+  fallback and classmap-authoritative cases are executable tests;
+- [x] P4 manifest typing and staging logic meet the existing PHPForge complexity
+  limit without exclusions or raised thresholds.
+
+P5 provider boundaries:
+
+- [x] development compatibility targets are CacheLayer `^4.0` and Runwire
+  `^2.1`; core production dependencies remain PSR-6/PSR-11 only;
+- [x] `Infocyph\\InterMix\\Integration\\Runwire\\RunwireIntegration` is an
+  optional host-owned boundary and never creates a Runwire runtime, request,
+  coroutine runtime, event loop, listener, worker pool or signal owner;
+- [x] Runwire runtime/request/coroutine objects are declared as scoped inputs and
+  the exact host instances are seeded at request entry;
+- [x] child Runwire work inherits the process-local InterMix scope handle through
+  a Runwire `TaskLocal` wrapper; borrowed DI/Runwire scopes are attached/detached
+  only and never closed by the borrower;
+- [x] mismatched/completed request contexts, unsupported coroutine capability and
+  conflicting downstream RuntimeContext bindings fail closed;
+- [x] CacheLayer 4 receives the same RuntimeContext/RequestContext/CoroutineScope
+  identities through its existing Runwire bridge, with one explicit
+  host-designated lifecycle owner and borrower-safe release behavior;
+- [x] CacheLayer 4 concrete tests cover memory, null hits, generation separation,
+  malformed-hit rejection, deferred warmup/commit, tiered storage, SQLite when
+  available and APCu when CLI-enabled;
+- [x] definition caching remains explicit B7 PSR-6 configuration with namespace,
+  generation and per-definition eligibility;
+- [x] operator documentation records supported versions, ownership, child
+  propagation, cache identity and failure policy;
+- [ ] one exact branch revision passes PHPForge QA/analysis/benchmarks on PHP
+  8.4/8.5 stable + lowest, clean install, unchanged release-regression gate, and
+  Swoole/OpenSwoole PHP 8.4/8.5.
+
+No PHPForge threshold, benchmark budget, skip policy, exclusion, suppression or
+baseline has been weakened for Batch 3. The Batch 2 release-regression decision
+remains in force: the unchanged component microbench gate stays mandatory
+diagnostic evidence, while P7 adds representative host RPM/RPS, tail latency,
+CPU and RSS evidence for the final major-release performance verdict.
+
 ### Batch 1 superseded tuning evidence
 
 Earlier P1 tuning revisions temporarily failed the release-regression budget while
@@ -1031,9 +1090,9 @@ Deptrac-uncovered dependencies, and the released-source CacheLayer 4.0 / Runwire
 11.0 branch QA. Batch QA requires fresh evidence tied to the batch commit.
 
 The current dependency baseline is PHP `>=8.4`, PSR Cache `^3.0`, PSR
-Container `^2.0`; development currently targets CacheLayer `^3.2.0`, Runwire
-`^1.0`, Opis `^4.5`, and mutable PHPForge `dev-main@dev`. P5 is responsible
-for moving the optional integration targets to CacheLayer 4.0 and Runwire 2.1.
+Container `^2.0`; development now targets CacheLayer `^4.0`, Runwire `^2.1`,
+Opis `^4.5`, and mutable PHPForge `dev-main@dev`. CacheLayer and Runwire remain
+optional production integrations; core DI still installs without them.
 
 ### P0 public API disposition
 
