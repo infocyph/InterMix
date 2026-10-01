@@ -6,7 +6,7 @@ namespace Infocyph\InterMix\DI\Managers;
 
 use ArrayAccess;
 use Closure;
-use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\DI\Support\ServiceProviderInterface;
 use Infocyph\InterMix\Exceptions\ContainerException;
@@ -24,11 +24,11 @@ class RegistrationManager implements ArrayAccess
      * Initializes the registration manager with a repository and a container.
      *
      * @param Repository $repository The internal repository of definitions, resolved instances, etc.
-     * @param Container $container The container instance to which this manager is bound.
+     * @param ConfigurationContainer $container The container instance to which this manager is bound.
      */
     public function __construct(
         protected Repository $repository,
-        protected Container  $container,
+        protected ConfigurationContainer $container,
     ) {}
 
     /**
