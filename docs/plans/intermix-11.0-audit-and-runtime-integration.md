@@ -905,7 +905,7 @@ batch is closed.
 | Batch | Packages | Status | Package status / implementation evidence |
 | --- | --- | --- | --- |
 | 1 | P0 + P1 — baseline and runtime hardening | **Complete** | Closed on `f55be8b`: P0 contract/baseline frozen; P1 F1–F3 fixed. Corrected 10.1.1 regression gate, PHPForge QA/analysis/benchmarks, clean install, and Swoole/OpenSwoole PHP 8.4/8.5 are green. |
-| 2 | P2 + P3 — builder/definitions and runtime/scope contract | **In progress — P2 runtime configuration closure** | Builder-side B1/B2/B7 work and migration are implemented and current QA is nearly green. Final P2 contract audit found that runtime `Container` still exposes public registration/configuration and manager mutation surfaces; those are P2 blockers because B1 makes `ContainerBuilder` the sole configuration owner. P3 has not started. |
+| 2 | P2 + P3 — builder/definitions and runtime/scope contract | **In progress — P2 runtime configuration closure** | Builder-side B1/B2/B7 work is implemented. Runtime configuration mutators, manager navigation, and write-capable ArrayAccess/proxy paths have been removed from the public `Container` surface; legacy internal tests/benchmarks are being migrated to the internal configuration host. Remaining P2 blockers are the production-fallback bridge still calling protected configuration methods, the mutable repository escape, residual legacy fixtures, formatting/analysis fallout, and one exact all-green gate. P3 has not started. |
 | 3 | P4 + P5 — compiled graph and provider boundaries | Pending | P4: B6 generated/fallback graph. P5: CacheLayer 4.0 / Runwire 2.1 optional provider boundaries. Run focused QA after each package, then full batch QA. |
 | 4 | P6 + P7 + P8 — migration, measured acceptance and release candidate | Pending | P6: docs/consumer migration. P7: benchmarks/soak/host acceptance. P8: exact-SHA CI, packaging and RC evidence. P8 remains the final gate inside this batch. |
 
@@ -929,9 +929,10 @@ focused QA and tracker evidence are complete.
 
 Current stage: **P2 contract cleanup + focused QA**.
 
-Latest fully inspected working revision before this tracker update: `614c5740ce4977747d773db0849bf76a2b124d30`.
-Fresh closure evidence is still pending for that revision; it is not treated as
-closed until the complete workflow matrix is green.
+Latest fully inspected working revision before this tracker update: `355c8628a040429cbe365d33c9d37ca9db59f52e`.
+This revision is **not** P2 closure evidence: the current workflow is red while
+runtime-configuration fallout is being migrated. P2 remains open until one exact
+revision passes the complete workflow matrix.
 P3 has **not** started. P2 closes only when the B1/B2/B7 contract, focused tests,
 PHPForge QA/analysis, release regression, clean install and runtime-extension lanes
 are all green on one exact revision.
@@ -976,10 +977,12 @@ are all green on one exact revision.
   surfaces belong to P3;
 - [x] static planning recognizes explicit `AutowireDefinition` and carries its
   constructor/property metadata into generated-runtime planning;
-- [ ] remove runtime `Container` registration/configuration mutation surfaces required by B1:
-  direct bind/lifetime/factory/value/alias/unbind operations, manager navigation,
-  contextual/environment/attribute/lifecycle mutation, mutable runtime compilation,
-  and write-capable proxy/ArrayAccess paths;
+- [ ] remove runtime `Container` registration/configuration mutation surfaces required by B1 — **mostly implemented**:
+  public direct bind/lifetime/factory/value/alias/unbind operations, manager navigation,
+  contextual/environment/attribute/lifecycle mutation, and write-capable proxy/ArrayAccess
+  paths are no longer public; remaining work is to move internal production-fallback
+  mutation off protected runtime methods, internalize the mutable repository accessor,
+  and finish residual fixture migration;
 - [ ] focused P2 QA green on one exact revision;
 - [ ] update this tracker with the exact P2 closure SHA and evidence.
 
@@ -990,24 +993,33 @@ configuration escape hatches are P2 blockers.
 
 #### Latest P2 QA state
 
-Full contract cross-check after the builder migration found an additional B1 gap:
-the runtime `Container` still exposes configuration mutation and manager navigation.
-That surface must be removed before P2 closure; a green workflow alone is not
-sufficient evidence while the public contract is still wrong.
+Latest inspected revision: `355c8628a040429cbe365d33c9d37ca9db59f52e`.
 
-Most recent completed workflow before `614c5740` showed:
+Green on that revision:
 
-- release regression green on PHP 8.4 and PHP 8.5;
-- PHPForge analysis green on PHP 8.4 and PHP 8.5;
-- clean production install green;
-- Swoole/OpenSwoole scope compatibility green;
-- normal QA reduced to one obsolete provider-runtime expectation;
-- PHPBench still failed because `IntermixBench::setUpContainer()` imported a
-  provider through the runtime container.
+- Swoole/OpenSwoole scope compatibility on PHP 8.4/8.5;
+- clean production install;
+- syntax/reference, duplicate-code, comment-policy, PHPCS, Deptrac and Rector in the
+  inspected QA lane before Pest halted the job.
 
-Those two known blockers are fixed by `bf17b385` and `614c5740`.
-The only remaining P2 closure item is a **fresh all-green workflow on one exact
-revision**, followed by recording that revision below.
+Current blockers are migration fallout from intentionally removing runtime
+configuration APIs, not relaxed standards:
+
+- `ProductionContainer::installFallbackBridges()` still calls protected
+  `Container::bindFactory()`; this must move to an internal bridge/configuration path;
+- residual regression/internal fixtures still call protected manager/configuration
+  methods or assume DI ArrayAccess writes; 314 tests pass and 115 fail at the current
+  migration checkpoint;
+- Pint reports two style issues in `Container.php` and `InvocationManager.php`;
+- analysis, benchmark, and release-regression lanes are red while those source/test
+  migrations remain unresolved;
+- `getRepository()` still exposes mutable repository state and remains a B1 cleanup
+  item before P2 closure.
+
+The previous pre-refactor workflow had release regression, PHPForge analysis,
+benchmarks, clean install, and Swoole/OpenSwoole green. Those results remain useful
+diagnostic evidence but are **not** closure evidence for the post-refactor head.
+
 
 No PHPForge threshold, skip policy, or benchmark budget has been weakened.
 The release-regression Fiber failure seen on earlier P2 revisions is resolved by
