@@ -162,5 +162,13 @@ final class ConfigurationContainer extends Container
     public function when(string $consumer): ContextualBindingBuilder
     {
         return parent::when($consumer);
+    }    public function forkConfigurationRuntime(bool $locked = true): self
+    {
+        $runtime = new self($this->instanceAlias);
+        $this->copyConfigurationInto($runtime, $locked);
+
+        return $runtime;
     }
+
+
 }

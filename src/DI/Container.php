@@ -16,12 +16,12 @@ use Infocyph\InterMix\DI\Managers\RegistrationManager;
 use Infocyph\InterMix\DI\Resolver\ConcurrentRepository;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\DI\Support\CompiledResolverGenerator;
-use Infocyph\InterMix\DI\Support\RuntimeContainerProxy;
 use Infocyph\InterMix\DI\Support\ContextualBindingBuilder;
 use Infocyph\InterMix\DI\Support\DebugTracer;
 use Infocyph\InterMix\DI\Support\DirectFactory;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\DI\Support\PendingFactoryBinding;
+use Infocyph\InterMix\DI\Support\RuntimeContainerProxy;
 use Infocyph\InterMix\DI\Support\TaggedPipeline;
 use Infocyph\InterMix\DI\Support\TraceLevelEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
@@ -64,7 +64,7 @@ class Container implements ContainerInterface
     /** @var class-string<InjectedCall|GenericCall> */
     private string $resolverClass = InjectedCall::class;
 
-    public function __construct(private readonly string $instanceAlias = self::DEFAULT_ALIAS)
+    public function __construct(protected readonly string $instanceAlias = self::DEFAULT_ALIAS)
     {
         $this->repository = new ConcurrentRepository($this, $this->instanceAlias);
         $this->resolver = $this->resolverFactory();
@@ -214,16 +214,10 @@ class Container implements ContainerInterface
      *
      * @internal
      */
-    public function forkRuntime(bool $locked = true): static
+    public function forkRuntime(bool $locked = true): self
     {
-        $runtime = new static($this->instanceAlias);
-        $this->repository->copyConfigurationTo($runtime->repository);
-        $runtime->resolverClass = $this->resolverClass;
-        $runtime->resolver = $runtime->resolverFactory();
-
-        if ($locked) {
-            $runtime->repository->lock();
-        }
+        $runtime = new self($this->instanceAlias);
+        $this->copyConfigurationInto($runtime, $locked);
 
         return $runtime;
     }
@@ -543,6 +537,17 @@ class Container implements ContainerInterface
             return $callback($this);
         } finally {
             $this->leaveScope();
+        }
+    }
+
+    protected function copyConfigurationInto(self $runtime, bool $locked): void
+    {
+        $this->repository->copyConfigurationTo($runtime->repository);
+        $runtime->resolverClass = $this->resolverClass;
+        $runtime->resolver = $runtime->resolverFactory();
+
+        if ($locked) {
+            $runtime->repository->lock();
         }
     }
 

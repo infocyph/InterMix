@@ -315,7 +315,7 @@ final class ContainerBuilder
     public function production(string $path): ProductionContainer
     {
         $this->finalizeGraph();
-        $fallback = $this->configuration->forkRuntime(false);
+        $fallback = $this->configuration->forkConfigurationRuntime(false);
 
         try {
             return new StaticRuntimeGenerator()->load($path, $fallback);
@@ -327,7 +327,7 @@ final class ContainerBuilder
     public function productionPrevalidated(string $path, string $digest): ProductionContainer
     {
         $this->finalizeGraph();
-        $fallback = $this->configuration->forkRuntime(false);
+        $fallback = $this->configuration->forkConfigurationRuntime(false);
 
         try {
             return new StaticRuntimeGenerator()->loadPrevalidated(

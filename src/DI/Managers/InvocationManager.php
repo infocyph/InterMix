@@ -50,7 +50,6 @@ class InvocationManager implements ArrayAccess
         return $this->callClass($classOrClosure, $method);
     }
 
-
     /**
      * Cached singleton and scoped entries are returned before broad resolvability
      * checks. Definition mutation invalidates those indexes, so a hot lookup does
@@ -145,8 +144,6 @@ class InvocationManager implements ArrayAccess
 
         return $fresh->methodInvoked ? $fresh->returned : $fresh->instance;
     }
-
-
 
     /** @throws ContainerException|ReflectionException */
     protected function resolveDefinition(string $id): mixed

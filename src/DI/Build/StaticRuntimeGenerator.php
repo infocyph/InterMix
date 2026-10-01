@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Build;
 
-use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\DI\ProductionContainer;
 use Infocyph\InterMix\Exceptions\ContainerException;
