@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\DI\Internal\ExecutionContext;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
@@ -81,7 +82,7 @@ it('preserves compiled and fallback scoped identity after builder finalization',
 });
 
 it('rejects dynamic configuration mutation from a foreign carrier while its scope is active', function () {
-    $container = new Container(uniqid('runtime_alignment_dynamic_mutation_'));
+    $container = new ConfigurationContainer(uniqid('runtime_alignment_dynamic_mutation_'));
     $container->value('stable', 'baseline');
 
     $fiber = new Fiber(static function () use ($container): void {
