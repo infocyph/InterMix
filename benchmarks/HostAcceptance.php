@@ -70,86 +70,76 @@ final class HostAcceptance
         fwrite(STDOUT, $encoded);
     }
 
-    private static function runtime(): object
+    private static function cancellationProbe(array $calls, int $sequence): int
     {
-        $builder = ContainerBuilder::create('__host_acceptance_' . bin2hex(random_bytes(6)));
-
-        if (method_exists($builder, 'autowire')) {
-            $builder
-                ->autowire(HostAcceptanceLeaf::class, HostAcceptanceLeaf::class)
-                ->input(HostAcceptanceRequest::class)
-                ->autowire(
-                    HostAcceptanceHandler::class,
-                    HostAcceptanceHandler::class,
-                    lifetime: LifetimeEnum::Scoped,
+        $request = new HostAcceptanceRequest('cancel-' . $sequence);
+        $fiber = new Fiber(
+            static function () use ($calls, $request): mixed {
+                return ($calls['scope'])(
+                    'request',
+                    static function () use ($calls): never {
+                        ($calls['get'])(HostAcceptanceHandler::class);
+                        Fiber::suspend();
+                        throw new RuntimeException('Cancellation probe resumed unexpectedly.');
+                    },
+                    [HostAcceptanceRequest::class => $request],
                 );
+            },
+        );
 
-            return $builder->build();
+        $fiber->start();
+
+        try {
+            $fiber->throw(new HostExpectedCancellation('expected cancellation'));
+        } catch (HostExpectedCancellation) {
+            return 1;
         }
 
-        self::invokeSetup($builder, 'singleton', [HostAcceptanceLeaf::class]);
-        self::invokeSetup($builder, 'scoped', [HostAcceptanceHandler::class]);
-
-        $runtime = self::invokeSetup($builder, 'development');
-        if (!is_object($runtime)) {
-            throw new RuntimeException('InterMix 10.1 builder did not return a runtime.');
-        }
-
-        return $runtime;
+        throw new RuntimeException('Expected cancellation probe did not cancel.');
     }
 
-    /**
-     * @return array{
-     *   scope: \Closure,
-     *   get: \Closure,
-     *   dispatch: \Closure,
-     *   api: string
-     * }
-     */
-    private static function runtimeCalls(object $runtime): array
+    private static function failureProbe(array $calls, int $sequence): int
     {
-        $scope = new ReflectionMethod($runtime, 'withinScope')->getClosure($runtime);
-        $get = new ReflectionMethod($runtime, 'get')->getClosure($runtime);
+        $request = new HostAcceptanceRequest('failure-' . $sequence);
 
-        $dispatchName = 'call';
-        if (method_exists($runtime, 'invoke')) {
-            $candidate = new ReflectionMethod($runtime, 'invoke');
-            if ($candidate->isPublic()) {
-                $dispatchName = 'invoke';
-            }
+        try {
+            ($calls['scope'])(
+                'request',
+                static function () use ($calls): never {
+                    ($calls['get'])(HostAcceptanceHandler::class);
+                    throw new HostExpectedFailure('expected host failure');
+                },
+                [HostAcceptanceRequest::class => $request],
+            );
+        } catch (HostExpectedFailure) {
+            return 1;
         }
-        $dispatch = new ReflectionMethod($runtime, $dispatchName)->getClosure($runtime);
 
-        if (!$scope instanceof \Closure || !$get instanceof \Closure || !$dispatch instanceof \Closure) {
-            throw new RuntimeException('Unable to bind runtime acceptance adapters.');
-        }
-
-        return [
-            'scope' => $scope,
-            'get' => $get,
-            'dispatch' => $dispatch,
-            'api' => $dispatchName === 'invoke' ? '11.0' : '10.1.1',
-        ];
+        throw new RuntimeException('Expected failure probe did not fail.');
     }
 
-    /**
-     * @param array{scope: \Closure, get: \Closure, dispatch: \Closure, api: string} $calls
-     */
-    private static function warm(array $calls, int $concurrency): void
+    private static function floatOption(array $arguments, string $name, float $default): float
     {
-        $sequence = 0;
-        $batches = max(1, intdiv(self::WARMUP_REQUESTS + $concurrency - 1, $concurrency));
-        for ($batch = 0; $batch < $batches; ++$batch) {
-            $result = self::runBatch($calls, $concurrency, $sequence);
-            if ($result['unexpected'] !== 0 || $result['wrong'] !== 0) {
-                throw new RuntimeException('Host acceptance warmup failed correctness validation.');
-            }
-        }
+        $value = self::option($arguments, $name);
 
-        gc_collect_cycles();
-        if (function_exists('memory_reset_peak_usage')) {
-            memory_reset_peak_usage();
-        }
+        return $value === null ? $default : (float) $value;
+    }
+
+    private static function hasFlag(array $arguments, string $name): bool
+    {
+        return in_array('--' . $name, $arguments, true);
+    }
+
+    private static function intOption(array $arguments, string $name, int $default): int
+    {
+        $value = self::option($arguments, $name);
+
+        return $value === null ? $default : (int) $value;
+    }
+
+    private static function invokeSetup(object $target, string $method, array $arguments = []): mixed
+    {
+        return new ReflectionMethod($target, $method)->invokeArgs($target, $arguments);
     }
 
     /**
@@ -252,6 +242,56 @@ final class HostAcceptance
         ];
     }
 
+    private static function option(array $arguments, string $name): ?string
+    {
+        $prefix = '--' . $name . '=';
+        foreach ($arguments as $argument) {
+            if (str_starts_with($argument, $prefix)) {
+                return substr($argument, strlen($prefix));
+            }
+        }
+
+        return null;
+    }
+
+    private static function percentile(array $values, float $quantile): float
+    {
+        if ($values === []) {
+            return 0.0;
+        }
+
+        return $values[(int) floor((count($values) - 1) * $quantile)];
+    }
+
+    private static function requiredOption(array $arguments, string $name): string
+    {
+        $value = self::option($arguments, $name);
+        if ($value === null || $value === '') {
+            throw new RuntimeException("--{$name} is required.");
+        }
+
+        return $value;
+    }
+
+    private static function resourceUsage(): array
+    {
+        $usage = getrusage();
+
+        return is_array($usage) ? $usage : [];
+    }
+
+    private static function rssBytes(): int
+    {
+        $contents = is_readable('/proc/self/status') ? file_get_contents('/proc/self/status') : false;
+        if (is_string($contents)
+            && preg_match('/^VmRSS:\s+(\d+)\s+kB$/m', $contents, $matches) === 1
+        ) {
+            return (int) $matches[1] * 1024;
+        }
+
+        return memory_get_usage(true);
+    }
+
     /**
      * @param array{scope: \Closure, get: \Closure, dispatch: \Closure, api: string} $calls
      * @return array{successful: int, unexpected: int, wrong: int}
@@ -315,143 +355,92 @@ final class HostAcceptance
         ];
     }
 
-    /** @param array{scope: \Closure, get: \Closure, dispatch: \Closure, api: string} $calls */
-    private static function failureProbe(array $calls, int $sequence): int
+    private static function runtime(): object
     {
-        $request = new HostAcceptanceRequest('failure-' . $sequence);
+        $builder = ContainerBuilder::create('__host_acceptance_' . bin2hex(random_bytes(6)));
 
-        try {
-            ($calls['scope'])(
-                'request',
-                static function () use ($calls): never {
-                    ($calls['get'])(HostAcceptanceHandler::class);
-                    throw new HostExpectedFailure('expected host failure');
-                },
-                [HostAcceptanceRequest::class => $request],
-            );
-        } catch (HostExpectedFailure) {
-            return 1;
-        }
-
-        throw new RuntimeException('Expected failure probe did not fail.');
-    }
-
-    /** @param array{scope: \Closure, get: \Closure, dispatch: \Closure, api: string} $calls */
-    private static function cancellationProbe(array $calls, int $sequence): int
-    {
-        $request = new HostAcceptanceRequest('cancel-' . $sequence);
-        $fiber = new Fiber(
-            static function () use ($calls, $request): mixed {
-                return ($calls['scope'])(
-                    'request',
-                    static function () use ($calls): never {
-                        ($calls['get'])(HostAcceptanceHandler::class);
-                        Fiber::suspend();
-                        throw new RuntimeException('Cancellation probe resumed unexpectedly.');
-                    },
-                    [HostAcceptanceRequest::class => $request],
+        if (method_exists($builder, 'autowire')) {
+            $builder
+                ->autowire(HostAcceptanceLeaf::class, HostAcceptanceLeaf::class)
+                ->input(HostAcceptanceRequest::class)
+                ->autowire(
+                    HostAcceptanceHandler::class,
+                    HostAcceptanceHandler::class,
+                    lifetime: LifetimeEnum::Scoped,
                 );
-            },
-        );
 
-        $fiber->start();
-
-        try {
-            $fiber->throw(new HostExpectedCancellation('expected cancellation'));
-        } catch (HostExpectedCancellation) {
-            return 1;
+            return $builder->build();
         }
 
-        throw new RuntimeException('Expected cancellation probe did not cancel.');
-    }
+        self::invokeSetup($builder, 'singleton', [HostAcceptanceLeaf::class]);
+        self::invokeSetup($builder, 'scoped', [HostAcceptanceHandler::class]);
 
-    /** @param list<mixed> $arguments */
-    private static function invokeSetup(object $target, string $method, array $arguments = []): mixed
-    {
-        return new ReflectionMethod($target, $method)->invokeArgs($target, $arguments);
-    }
-
-    /** @param list<float> $values */
-    private static function percentile(array $values, float $quantile): float
-    {
-        if ($values === []) {
-            return 0.0;
+        $runtime = self::invokeSetup($builder, 'development');
+        if (!is_object($runtime)) {
+            throw new RuntimeException('InterMix 10.1 builder did not return a runtime.');
         }
 
-        return $values[(int) floor((count($values) - 1) * $quantile)];
+        return $runtime;
     }
 
-    /** @return array<string, int> */
-    private static function resourceUsage(): array
+    /**
+     * @return array{
+     *   scope: \Closure,
+     *   get: \Closure,
+     *   dispatch: \Closure,
+     *   api: string
+     * }
+     */
+    private static function runtimeCalls(object $runtime): array
     {
-        $usage = getrusage();
+        $scope = new ReflectionMethod($runtime, 'withinScope')->getClosure($runtime);
+        $get = new ReflectionMethod($runtime, 'get')->getClosure($runtime);
 
-        return is_array($usage) ? $usage : [];
+        $dispatchName = 'call';
+        if (method_exists($runtime, 'invoke')) {
+            $candidate = new ReflectionMethod($runtime, 'invoke');
+            if ($candidate->isPublic()) {
+                $dispatchName = 'invoke';
+            }
+        }
+        $dispatch = new ReflectionMethod($runtime, $dispatchName)->getClosure($runtime);
+
+        if (!$scope instanceof \Closure || !$get instanceof \Closure || !$dispatch instanceof \Closure) {
+            throw new RuntimeException('Unable to bind runtime acceptance adapters.');
+        }
+
+        return [
+            'scope' => $scope,
+            'get' => $get,
+            'dispatch' => $dispatch,
+            'api' => $dispatchName === 'invoke' ? '11.0' : '10.1.1',
+        ];
     }
 
-    /** @param array<string, int> $usage */
     private static function usageSeconds(array $usage): float
     {
         return (($usage['ru_utime.tv_sec'] ?? 0) + ($usage['ru_stime.tv_sec'] ?? 0))
             + (($usage['ru_utime.tv_usec'] ?? 0) + ($usage['ru_stime.tv_usec'] ?? 0)) / 1_000_000;
     }
 
-    private static function rssBytes(): int
+    /**
+     * @param array{scope: \Closure, get: \Closure, dispatch: \Closure, api: string} $calls
+     */
+    private static function warm(array $calls, int $concurrency): void
     {
-        $contents = @file_get_contents('/proc/self/status');
-        if (is_string($contents)
-            && preg_match('/^VmRSS:\s+(\d+)\s+kB$/m', $contents, $matches) === 1
-        ) {
-            return (int) $matches[1] * 1024;
-        }
-
-        return memory_get_usage(true);
-    }
-
-    /** @param list<string> $arguments */
-    private static function requiredOption(array $arguments, string $name): string
-    {
-        $value = self::option($arguments, $name);
-        if ($value === null || $value === '') {
-            throw new RuntimeException("--{$name} is required.");
-        }
-
-        return $value;
-    }
-
-    /** @param list<string> $arguments */
-    private static function floatOption(array $arguments, string $name, float $default): float
-    {
-        $value = self::option($arguments, $name);
-
-        return $value === null ? $default : (float) $value;
-    }
-
-    /** @param list<string> $arguments */
-    private static function intOption(array $arguments, string $name, int $default): int
-    {
-        $value = self::option($arguments, $name);
-
-        return $value === null ? $default : (int) $value;
-    }
-
-    /** @param list<string> $arguments */
-    private static function hasFlag(array $arguments, string $name): bool
-    {
-        return in_array('--' . $name, $arguments, true);
-    }
-
-    /** @param list<string> $arguments */
-    private static function option(array $arguments, string $name): ?string
-    {
-        $prefix = '--' . $name . '=';
-        foreach ($arguments as $argument) {
-            if (str_starts_with($argument, $prefix)) {
-                return substr($argument, strlen($prefix));
+        $sequence = 0;
+        $batches = max(1, intdiv(self::WARMUP_REQUESTS + $concurrency - 1, $concurrency));
+        for ($batch = 0; $batch < $batches; ++$batch) {
+            $result = self::runBatch($calls, $concurrency, $sequence);
+            if ($result['unexpected'] !== 0 || $result['wrong'] !== 0) {
+                throw new RuntimeException('Host acceptance warmup failed correctness validation.');
             }
         }
 
-        return null;
+        gc_collect_cycles();
+        if (function_exists('memory_reset_peak_usage')) {
+            memory_reset_peak_usage();
+        }
     }
 }
 

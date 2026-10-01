@@ -81,6 +81,47 @@ final class HostAcceptanceCompare
     }
 
     /** @param array<string, mixed> $result */
+    /**
+     * @param list<array<string, mixed>> $baseline
+     * @param list<array<string, mixed>> $current
+     * @param array<string, mixed> $baselineLong
+     * @param array<string, mixed> $currentLong
+     */
+    private static function assertComparable(
+        array $baseline,
+        array $current,
+        array $baselineLong,
+        array $currentLong,
+    ): void {
+        if (count($baseline) < 5 || count($current) < 5) {
+            throw new RuntimeException('At least five baseline/candidate samples are required.');
+        }
+
+        $php = $baselineLong['php'] ?? null;
+        $concurrency = $baselineLong['concurrency'] ?? null;
+        foreach ([...$baseline, ...$current, $currentLong] as $result) {
+            if (($result['php'] ?? null) !== $php
+                || ($result['concurrency'] ?? null) !== $concurrency
+            ) {
+                throw new RuntimeException('Host acceptance results must use the same PHP version and concurrency.');
+            }
+        }
+    }
+
+    private static function assertCorrect(array $results): void
+    {
+        foreach ($results as $result) {
+            if ((int) ($result['unexpected_failures'] ?? 1) !== 0
+                || (int) ($result['wrong_outputs'] ?? 1) !== 0
+            ) {
+                throw new RuntimeException('Host workload produced unexpected failures or wrong outputs.');
+            }
+            if ((int) ($result['successful'] ?? 0) < 1) {
+                throw new RuntimeException('Host workload produced no successful requests.');
+            }
+        }
+    }
+
     private static function assertSoak(array $result, float $maxRssGrowthMb, float $maxPhpGrowthMb): void
     {
         self::assertCorrect([$result]);
@@ -124,60 +165,33 @@ final class HostAcceptanceCompare
         }
     }
 
-    /** @param list<array<string, mixed>> $results */
-    private static function assertCorrect(array $results): void
+    private static function floatOption(array $arguments, string $name, float $default): float
     {
-        foreach ($results as $result) {
-            if ((int) ($result['unexpected_failures'] ?? 1) !== 0
-                || (int) ($result['wrong_outputs'] ?? 1) !== 0
-            ) {
-                throw new RuntimeException('Host workload produced unexpected failures or wrong outputs.');
-            }
-            if ((int) ($result['successful'] ?? 0) < 1) {
-                throw new RuntimeException('Host workload produced no successful requests.');
-            }
-        }
+        $value = self::option($arguments, $name);
+
+        return $value === null ? $default : (float) $value;
     }
 
-    /**
-     * @param list<array<string, mixed>> $baseline
-     * @param list<array<string, mixed>> $current
-     * @param array<string, mixed> $baselineLong
-     * @param array<string, mixed> $currentLong
-     */
-    private static function assertComparable(
-        array $baseline,
-        array $current,
-        array $baselineLong,
-        array $currentLong,
-    ): void {
-        if (count($baseline) < 5 || count($current) < 5) {
-            throw new RuntimeException('At least five baseline/candidate samples are required.');
-        }
-
-        $php = $baselineLong['php'] ?? null;
-        $concurrency = $baselineLong['concurrency'] ?? null;
-        foreach ([...$baseline, ...$current, $currentLong] as $result) {
-            if (($result['php'] ?? null) !== $php
-                || ($result['concurrency'] ?? null) !== $concurrency
-            ) {
-                throw new RuntimeException('Host acceptance results must use the same PHP version and concurrency.');
-            }
-        }
-    }
-
-    /** @return list<array<string, mixed>> */
-    private static function readMany(string $paths): array
+    private static function median(array $values): float
     {
-        $results = [];
-        foreach (array_filter(array_map('trim', explode(',', $paths))) as $path) {
-            $results[] = self::read($path);
-        }
+        $normalized = array_map(static fn(float|int $value): float => (float) $value, $values);
+        sort($normalized, SORT_NUMERIC);
 
-        return $results;
+        return $normalized[intdiv(count($normalized), 2)];
     }
 
-    /** @return array<string, mixed> */
+    private static function option(array $arguments, string $name): ?string
+    {
+        $prefix = '--' . $name . '=';
+        foreach ($arguments as $argument) {
+            if (str_starts_with($argument, $prefix)) {
+                return substr($argument, strlen($prefix));
+            }
+        }
+
+        return null;
+    }
+
     private static function read(string $path): array
     {
         $contents = file_get_contents($path);
@@ -210,16 +224,16 @@ final class HostAcceptanceCompare
         return $decoded;
     }
 
-    /** @param list<float|int> $values */
-    private static function median(array $values): float
+    private static function readMany(string $paths): array
     {
-        $normalized = array_map(static fn(float|int $value): float => (float) $value, $values);
-        sort($normalized, SORT_NUMERIC);
+        $results = [];
+        foreach (array_filter(array_map('trim', explode(',', $paths))) as $path) {
+            $results[] = self::read($path);
+        }
 
-        return $normalized[intdiv(count($normalized), 2)];
+        return $results;
     }
 
-    /** @param list<string> $arguments */
     private static function requiredOption(array $arguments, string $name): string
     {
         $value = self::option($arguments, $name);
@@ -228,27 +242,6 @@ final class HostAcceptanceCompare
         }
 
         return $value;
-    }
-
-    /** @param list<string> $arguments */
-    private static function floatOption(array $arguments, string $name, float $default): float
-    {
-        $value = self::option($arguments, $name);
-
-        return $value === null ? $default : (float) $value;
-    }
-
-    /** @param list<string> $arguments */
-    private static function option(array $arguments, string $name): ?string
-    {
-        $prefix = '--' . $name . '=';
-        foreach ($arguments as $argument) {
-            if (str_starts_with($argument, $prefix)) {
-                return substr($argument, strlen($prefix));
-            }
-        }
-
-        return null;
     }
 }
 
