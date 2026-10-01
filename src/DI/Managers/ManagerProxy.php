@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Managers;
 
 use BadMethodCallException;
-use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\DI\Internal\ServiceId;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\InvalidArgumentException;
@@ -17,9 +17,9 @@ use Psr\Cache\InvalidArgumentException;
  *  container instance while maintaining a fluent interface. It's designed to be used by manager
  *  classes that need to expose container functionality with a clean, object-oriented API.
  *
- * @property-read Container $container The underlying container instance
+ * @property-read ConfigurationContainer $container The underlying container instance
  *
- * Every class that ➊ declares `protected Container $container`
+ * Every class that ➊ declares `protected ConfigurationContainer $container`
  * and ➋ `use`s this trait instantly gets:
  *
  *  •  `$mgr('id')`                      –– same as `$mgr->get('id')`
@@ -102,7 +102,7 @@ trait ManagerProxy
     }
 
     /** Return to the owning Container. */
-    public function end(): Container
+    public function end(): ConfigurationContainer
     {
         return $this->container;
     }
