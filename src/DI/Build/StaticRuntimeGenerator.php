@@ -56,6 +56,7 @@ final class StaticRuntimeGenerator
         $graphIdentity = $this->graphIdentity($graph, $plans, $planned['skipped']);
         $fallbackMetadata = $this->fallbackMetadata(
             $graph,
+            $plans,
             $planned['skipped'],
             $releaseIdentity,
         );
@@ -439,13 +440,30 @@ final class StaticRuntimeGenerator
 
     /**
      * @param array<string, string> $skipped
-     * @return array{required: bool, ids: list<string>, release_identity: ?string}
+     * @return array{
+     *   required: bool,
+     *   identity_required: bool,
+     *   ids: list<string>,
+     *   release_identity: ?string
+     * }
+     */
+    /**
+     * @param array<string, array<string, mixed>> $plans
+     * @param array<string, string> $skipped
+     * @return array{
+     *   required: bool,
+     *   identity_required: bool,
+     *   ids: list<string>,
+     *   release_identity: ?string
+     * }
      */
     private function fallbackMetadata(
         DefinitionGraph $graph,
+        array $plans,
         array $skipped,
         ?string $releaseIdentity,
     ): array {
+        $reasons = new StaticRuntimeRequirements()->fallbackReasons($graph, $plans, $skipped);
         $defined = array_fill_keys(
             array_map(
                 static fn(int|string $id): string => (string) $id,
@@ -454,31 +472,18 @@ final class StaticRuntimeGenerator
             true,
         );
         $ids = [];
-        foreach ([
-            ...array_keys($skipped),
-            ...$graph->dynamicServiceIds(),
-            ...$graph->resolvingHookIds(),
-            ...$graph->resolvedHookIds(),
-        ] as $rawId) {
+        foreach (array_keys($reasons) as $rawId) {
             $id = (string) $rawId;
             if (isset($defined[$id])) {
-                $ids[$id] = true;
+                $ids[] = $id;
             }
         }
-        $ids = array_keys($ids);
         sort($ids, SORT_STRING);
 
-        $fallbackRequired = $skipped !== []
-            || $graph->closureResources() !== []
-            || $graph->classResources() !== []
-            || $graph->registeredAttributeResolvers() !== []
-            || $graph->resolvingHookIds() !== []
-            || $graph->resolvedHookIds() !== []
-            || $graph->scopeLeaveHookScopes() !== [];
         $identityRequired = $graph->requiresReleaseIdentity();
 
         return [
-            'required' => $fallbackRequired,
+            'required' => $reasons !== [],
             'identity_required' => $identityRequired,
             'ids' => $ids,
             'release_identity' => !$identityRequired
@@ -519,13 +524,18 @@ final class StaticRuntimeGenerator
         $scopeHooks = $graph->scopeLeaveHookScopes();
         sort($scopeHooks, SORT_STRING);
 
+        $environmentBindings = $graph->environmentBindings();
+        ksort($environmentBindings, SORT_STRING);
+
         $identity = [
             'environment' => $graph->environment(),
+            'environment_bindings' => $environmentBindings,
             'plans' => $plans,
             'skipped' => $skipped,
+            'definitions' => $this->identityValue($graph->definitions()),
             'definition_meta' => $definitionMeta,
-            'contextual_shape' => $graph->contextualBindingShape(),
-            'attribute_types' => $attributes,
+            'contextual_bindings' => $this->identityValue($graph->contextualBindings()),
+            'attribute_resolvers' => $attributes,
             'dynamic_ids' => $dynamicIds,
             'resolved_hooks' => $resolvedHooks,
             'resolving_hooks' => $resolvingHooks,
@@ -546,6 +556,51 @@ final class StaticRuntimeGenerator
         }
 
         return hash('xxh128', $encoded);
+    }
+
+    private function identityValue(mixed $value): mixed
+    {
+        if ($value instanceof \Infocyph\InterMix\DI\Support\FactoryDefinition) {
+            return ['factory' => $value->signature()];
+        }
+        if ($value instanceof \Infocyph\InterMix\DI\Support\ServiceReference) {
+            return ['service' => $value->id];
+        }
+        if ($value instanceof \Infocyph\InterMix\DI\Support\AliasDefinition) {
+            return ['alias' => $value->target];
+        }
+        if ($value instanceof \Infocyph\InterMix\DI\Support\InputDefinition) {
+            return ['input' => true];
+        }
+        if ($value instanceof \Infocyph\InterMix\DI\Support\ValueDefinition) {
+            return ['value' => $this->identityValue($value->value)];
+        }
+        if ($value instanceof \Infocyph\InterMix\DI\Support\AutowireDefinition) {
+            return [
+                'autowire' => $value->class,
+                'arguments' => $this->identityValue($value->arguments),
+                'properties' => $this->identityValue($value->properties),
+            ];
+        }
+        if ($value instanceof \Infocyph\InterMix\DI\Support\RuntimeFactoryDefinition) {
+            return ['opaque' => 'runtime-factory'];
+        }
+        if ($value instanceof \Infocyph\InterMix\DI\Container) {
+            return ['runtime' => 'container'];
+        }
+        if (is_scalar($value) || $value === null) {
+            return $value;
+        }
+        if (!is_array($value)) {
+            return ['opaque' => is_object($value) ? $value::class : get_debug_type($value)];
+        }
+
+        $mapped = [];
+        foreach ($value as $key => $entry) {
+            $mapped[$key] = $this->identityValue($entry);
+        }
+
+        return $mapped;
     }
 
     private function loadRuntime(string $artifactPath): ProductionContainer
