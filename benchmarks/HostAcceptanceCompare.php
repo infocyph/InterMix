@@ -34,7 +34,16 @@ final class HostAcceptanceCompare
 
         $baselineRps = self::median(array_column($baseline, 'rps'));
         $currentRps = self::median(array_column($current, 'rps'));
-        $regression = (($baselineRps / max($currentRps, 0.000001)) - 1.0) * 100.0;
+        $pairRegressions = [];
+        foreach ($baseline as $index => $baselineResult) {
+            $baselinePairRps = (float) $baselineResult['rps'];
+            $currentPairRps = (float) $current[$index]['rps'];
+            $pairRegressions[] = (($baselinePairRps / max($currentPairRps, 0.000001)) - 1.0) * 100.0;
+        }
+        $regression = self::median($pairRegressions);
+        $longRegression = (
+            ((float) $baselineLong['rps'] / max((float) $currentLong['rps'], 0.000001)) - 1.0
+        ) * 100.0;
         $maxRegression = self::floatOption($arguments, 'max-rpm-regression', 2.0);
 
         $p99Ceiling = max(0.001, (float) $baselineLong['p99_ms'] * 1.15);
@@ -45,7 +54,8 @@ final class HostAcceptanceCompare
 
         printf(
             "PHP %s host acceptance, concurrency %d\n"
-            . "median successful RPM: %.2f -> %.2f (%+.2f%% regression, max %.2f%%)\n"
+            . "median successful RPM: %.2f -> %.2f (paired median %+.2f%% regression, max %.2f%%)\n"
+            . "five-minute successful RPM: %.2f -> %.2f (%+.2f%% regression, max %.2f%%)\n"
             . "long-run p99: %.6f ms -> %.6f ms (candidate ceiling %.6f ms)\n"
             . "long-run peak RSS: %d -> %d bytes (candidate ceiling %d)\n"
             . "long-run PHP peak: %d -> %d bytes (candidate ceiling %d)\n",
@@ -54,6 +64,10 @@ final class HostAcceptanceCompare
             $baselineRps * 60,
             $currentRps * 60,
             $regression,
+            $maxRegression,
+            (float) $baselineLong['rpm'],
+            (float) $currentLong['rpm'],
+            $longRegression,
             $maxRegression,
             (float) $baselineLong['p99_ms'],
             (float) $currentLong['p99_ms'],
@@ -67,7 +81,10 @@ final class HostAcceptanceCompare
         );
 
         if ($regression > $maxRegression) {
-            throw new RuntimeException('Representative host RPM regression budget exceeded.');
+            throw new RuntimeException('Representative host paired RPM regression budget exceeded.');
+        }
+        if ($longRegression > $maxRegression) {
+            throw new RuntimeException('Representative host five-minute RPM regression budget exceeded.');
         }
         if ((float) $currentLong['p99_ms'] > $p99Ceiling) {
             throw new RuntimeException('Representative host p99 latency ceiling exceeded.');
@@ -94,6 +111,9 @@ final class HostAcceptanceCompare
     ): void {
         if (count($baseline) < 5 || count($current) < 5) {
             throw new RuntimeException('At least five baseline/candidate samples are required.');
+        }
+        if (count($baseline) !== count($current)) {
+            throw new RuntimeException('Baseline and candidate host samples must form complete pairs.');
         }
 
         $php = $baselineLong['php'] ?? null;
