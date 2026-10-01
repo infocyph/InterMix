@@ -361,8 +361,10 @@ final readonly class DefinitionGraph
     {
         return array_any(
             $this->definitions,
-            fn(mixed $definition, int|string $rawId): bool =>
-                $this->definitionIsOpaque((string) $rawId, $definition),
+            fn(mixed $definition, int|string $rawId): bool => $this->definitionIsOpaque(
+                (string) $rawId,
+                $definition,
+            ),
         );
     }
 
