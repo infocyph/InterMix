@@ -340,6 +340,7 @@ final class HostAcceptance
 
         $unexpected = 0;
         foreach ($fibers as $fiber) {
+
             try {
                 $fiber->start();
             } catch (Throwable) {

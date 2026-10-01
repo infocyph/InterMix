@@ -18,15 +18,15 @@ use Infocyph\InterMix\DI\Resolver\Repository;
  */
 final class ContainerAccess extends Container
 {
-    public static function fork(Container $container, bool $locked = true): Container
-    {
-        return $container->forkRuntime($locked);
-    }
-
     /** @internal */
     public static function assertScopedDependencyAllowed(Container $container, string $id): void
     {
         $container->invocation()->assertScopedDependencyAllowed($id);
+    }
+
+    public static function fork(Container $container, bool $locked = true): Container
+    {
+        return $container->forkRuntime($locked);
     }
 
     /** @return array<string, mixed> */

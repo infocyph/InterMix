@@ -34,6 +34,12 @@ class InvocationManager
         protected Container $container,
     ) {}
 
+    /** @internal */
+    public function assertScopedDependencyAllowed(string $id): void
+    {
+        $this->assertScopedResolutionAllowed($id);
+    }
+
     /** @throws ContainerException|ReflectionException|InvalidArgumentException */
     public function call(string|Closure|callable $classOrClosure, string|bool|null $method = null): mixed
     {
@@ -50,12 +56,6 @@ class InvocationManager
         }
 
         return $this->callClass($classOrClosure, $method);
-    }
-
-    /** @internal */
-    public function assertScopedDependencyAllowed(string $id): void
-    {
-        $this->assertScopedResolutionAllowed($id);
     }
 
     /** @throws ContainerException|InvalidArgumentException|ReflectionException */
