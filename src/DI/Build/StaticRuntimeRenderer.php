@@ -39,8 +39,9 @@ final class StaticRuntimeRenderer
         $source .= $returnRenderer->renderProperties($plans);
         $source .= $lifecycleRenderer->renderValueSingletonProperties($graph, $plans);
         $source .= $this->renderSingletonProperties($plans, $slots);
-        $source .= $this->renderGet($plans, $slots);
-        $source .= $this->renderHas($plans);
+        $dispatchRenderer = new StaticRuntimeDispatchRenderer();
+        $source .= $dispatchRenderer->renderGet($plans, $slots);
+        $source .= $dispatchRenderer->renderHas($plans);
         $source .= $this->renderSlotMap($slots);
         $source .= $this->renderCompiledIds($plans);
         $source .= $this->renderCompiledLifetimes($plans);
@@ -471,46 +472,6 @@ final class StaticRuntimeRenderer
         }
 
         return $source;
-    }
-
-    /**
-     * @param array<string, ServicePlan> $plans
-     * @param array<string, int> $slots
-     */
-    private function renderGet(array $plans, array $slots): string
-    {
-        $source = "    public function get(string \$id): mixed\n    {\n";
-        $source .= "        if (\$this->isDeoptimized()) {\n            return \$this->fallbackGet(\$id);\n        }\n\n";
-        $source .= "        return match (\$id) {\n";
-        foreach ($plans as $rawId => $plan) {
-            $id = (string) $rawId;
-            $call = '$this->s' . $slots[$id] . '()';
-            if ($plan['lifetime'] === LifetimeEnum::Singleton) {
-                $call = '$this->resolveCompiledSingleton(fn(): mixed => ' . $call . ')';
-            }
-            $source .= '            ' . var_export($id, true) . ' => ' . $call . ",\n";
-        }
-        $source .= "            default => \$this->fallbackGet(\$id),\n";
-
-        return $source . "        };\n    }\n\n";
-    }
-
-    /** @param array<string, ServicePlan> $plans */
-    private function renderHas(array $plans): string
-    {
-        $source = "    public function has(string \$id): bool\n    {\n";
-        $source .= "        if (\$this->isDeoptimized()) {\n            return \$this->fallbackHas(\$id);\n        }\n\n";
-        $source .= "        return match (\$id) {\n";
-        if ($plans !== []) {
-            $ids = implode(', ', array_map(
-                static fn(int|string $id): string => var_export((string) $id, true),
-                array_keys($plans),
-            ));
-            $source .= "            {$ids} => true,\n";
-        }
-        $source .= "            default => \$this->fallbackHas(\$id),\n";
-
-        return $source . "        };\n    }\n\n";
     }
 
     private function renderScopeGuard(LifetimeEnum $lifetime, string $id): string
