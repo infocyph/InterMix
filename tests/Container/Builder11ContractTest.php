@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Infocyph\CacheLayer\Cache\Cache;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\ContainerBuilder;
+use Infocyph\InterMix\DI\Internal\ContainerAccess;
 use Infocyph\InterMix\DI\Support\FactoryDefinition;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\DI\Support\ServiceProviderInterface;
@@ -241,7 +242,7 @@ it('uses explicit cache eligibility with an InterMix 11 namespace key', function
     $first = $builder->build();
     expect($first->get('cached'))->toBe(1)
         ->and($first->get('uncached'))->toBe(1)
-        ->and(str_starts_with($first->getRepository()->makeDefinitionCacheKey('cached'), 'imx11.'))
+        ->and(str_starts_with(ContainerAccess::repository($first)->makeDefinitionCacheKey('cached'), 'imx11.'))
         ->toBeTrue();
 
     $second = $builder->build();
@@ -425,9 +426,9 @@ it('separates definition-cache keys by explicit namespace and generation', funct
         ->cacheDefinition('cached')
         ->build();
 
-    $firstKey = $first->getRepository()->makeDefinitionCacheKey('cached');
-    $secondKey = $second->getRepository()->makeDefinitionCacheKey('cached');
-    $thirdKey = $third->getRepository()->makeDefinitionCacheKey('cached');
+    $firstKey = ContainerAccess::repository($first)->makeDefinitionCacheKey('cached');
+    $secondKey = ContainerAccess::repository($second)->makeDefinitionCacheKey('cached');
+    $thirdKey = ContainerAccess::repository($third)->makeDefinitionCacheKey('cached');
 
     $equivalent = ContainerBuilder::create(uniqid('builder11_key_equivalent_'))
         ->factory('other', static fn(): int => 2)
@@ -435,7 +436,7 @@ it('separates definition-cache keys by explicit namespace and generation', funct
         ->factory('cached', static fn(): int => 1)
         ->cacheDefinition('cached')
         ->build();
-    $equivalentKey = $equivalent->getRepository()->makeDefinitionCacheKey('cached');
+    $equivalentKey = ContainerAccess::repository($equivalent)->makeDefinitionCacheKey('cached');
 
     expect($firstKey)->not->toBe($secondKey)
         ->and($firstKey)->not->toBe($thirdKey)
