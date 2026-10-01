@@ -30,7 +30,7 @@ final class StaticRuntimeArtifactMetadata
 
     public const string RUNTIME_NAME = 'runtime.php';
 
-    /** @param array<string, mixed> $manifest */
+/** @param array<string, mixed> $manifest */
     public function encode(array $manifest): string
     {
         try {
@@ -43,7 +43,52 @@ final class StaticRuntimeArtifactMetadata
         }
     }
 
-    /**
+/**
+     * @param array<string, mixed> $plans
+     * @param array<string, string> $skipped
+     * @return array{
+     *   required: bool,
+     *   identity_required: bool,
+     *   ids: list<string>,
+     *   release_identity: ?string
+     * }
+     */
+    public function fallbackMetadata(
+        DefinitionGraph $graph,
+        array $plans,
+        array $skipped,
+        ?string $releaseIdentity,
+    ): array {
+        /** @var array<string, array{kind: string, properties: list<array{declaring: class-string, property: string, static: bool, argument: array{kind: 'service', id: string}|array{kind: 'value', code: string}|null, runtime?: 'assign'|'attribute'}>, postMethod?: array{method: string, arguments: list<array{kind: 'service', id: string}|array{kind: 'value', code: string}>, dependencies: list<string>, parameterNames?: list<string>, static?: bool, bound?: bool, runtime?: bool}|null, invocation?: array{method: string, arguments: list<array{kind: 'service', id: string}|array{kind: 'value', code: string}>, dependencies: list<string>, parameterNames?: list<string>, static?: bool, bound?: bool, runtime?: bool}}> $plans */
+        $reasons = new StaticRuntimeRequirements()->fallbackReasons($graph, $plans, $skipped);
+        $defined = array_fill_keys(
+            array_map(
+                static fn(int|string $id): string => (string) $id,
+                array_keys($graph->definitions()),
+            ),
+            true,
+        );
+        $ids = array_values(array_filter(
+            array_keys($reasons),
+            static fn(string $id): bool => isset($defined[$id]),
+        ));
+        sort($ids, SORT_STRING);
+
+        $identityRequired = $graph->requiresReleaseIdentity();
+
+        return [
+            'required' => $reasons !== [],
+            'identity_required' => $identityRequired,
+            'ids' => $ids,
+            'release_identity' => !$identityRequired
+                || $releaseIdentity === null
+                || $releaseIdentity === ''
+                ? null
+                : hash('xxh128', $releaseIdentity),
+        ];
+    }
+
+/**
      * @param array<string, array<string, mixed>> $plans
      * @param array<string, string> $skipped
      */
@@ -95,18 +140,7 @@ final class StaticRuntimeArtifactMetadata
         ]);
     }
 
-    /**
-     * @param array<string, mixed> $manifest
-     * @return array<string, mixed>
-     */
-    public function withBuildIdentity(array $manifest): array
-    {
-        $manifest['build'] = $this->hashIdentity($manifest);
-
-        return $manifest;
-    }
-
-    /**
+/**
      * @return array{
      *   abi: int,
      *   intermix_major: int,
@@ -129,7 +163,7 @@ final class StaticRuntimeArtifactMetadata
         return $manifest;
     }
 
-    /**
+/**
      * @return array{
      *   abi: int,
      *   intermix_major: int,
@@ -155,52 +189,18 @@ final class StaticRuntimeArtifactMetadata
         return $manifest;
     }
 
-    /**
-     * @param array<string, mixed> $plans
-     * @param array<string, string> $skipped
-     * @return array{
-     *   required: bool,
-     *   identity_required: bool,
-     *   ids: list<string>,
-     *   release_identity: ?string
-     * }
+/**
+     * @param array<string, mixed> $manifest
+     * @return array<string, mixed>
      */
-    public function fallbackMetadata(
-        DefinitionGraph $graph,
-        array $plans,
-        array $skipped,
-        ?string $releaseIdentity,
-    ): array {
-        /** @var array<string, array{kind: string, properties: list<array{declaring: class-string, property: string, static: bool, argument: array{kind: 'service', id: string}|array{kind: 'value', code: string}|null, runtime?: 'assign'|'attribute'}>, postMethod?: array{method: string, arguments: list<array{kind: 'service', id: string}|array{kind: 'value', code: string}>, dependencies: list<string>, parameterNames?: list<string>, static?: bool, bound?: bool, runtime?: bool}|null, invocation?: array{method: string, arguments: list<array{kind: 'service', id: string}|array{kind: 'value', code: string}>, dependencies: list<string>, parameterNames?: list<string>, static?: bool, bound?: bool, runtime?: bool}}> $plans */
-        $reasons = new StaticRuntimeRequirements()->fallbackReasons($graph, $plans, $skipped);
-        $defined = array_fill_keys(
-            array_map(
-                static fn(int|string $id): string => (string) $id,
-                array_keys($graph->definitions()),
-            ),
-            true,
-        );
-        $ids = array_values(array_filter(
-            array_keys($reasons),
-            static fn(string $id): bool => isset($defined[$id]),
-        ));
-        sort($ids, SORT_STRING);
+    public function withBuildIdentity(array $manifest): array
+    {
+        $manifest['build'] = $this->hashIdentity($manifest);
 
-        $identityRequired = $graph->requiresReleaseIdentity();
-
-        return [
-            'required' => $reasons !== [],
-            'identity_required' => $identityRequired,
-            'ids' => $ids,
-            'release_identity' => !$identityRequired
-                || $releaseIdentity === null
-                || $releaseIdentity === ''
-                ? null
-                : hash('xxh128', $releaseIdentity),
-        ];
+        return $manifest;
     }
 
-    /** @param array<string, mixed> $manifest */
+/** @param array<string, mixed> $manifest */
     private function assertCompatibility(array $manifest, string $artifactPath): void
     {
         if ($manifest['abi'] !== self::ABI) {
@@ -224,7 +224,7 @@ final class StaticRuntimeArtifactMetadata
         }
     }
 
-    /** @param array<string, mixed> $manifest */
+/** @param array<string, mixed> $manifest */
     private function assertEntries(array $manifest): void
     {
         foreach ($manifest['compiled'] as $id) {
@@ -244,7 +244,7 @@ final class StaticRuntimeArtifactMetadata
         }
     }
 
-    /** @param array<string, mixed> $manifest */
+/** @param array<string, mixed> $manifest */
     private function assertShape(array $manifest): void
     {
         if (!isset(
@@ -266,7 +266,7 @@ final class StaticRuntimeArtifactMetadata
         }
     }
 
-    private function canonicalize(mixed $value): mixed
+private function canonicalize(mixed $value): mixed
     {
         if ($value instanceof \UnitEnum) {
             return $value->name;
@@ -286,7 +286,7 @@ final class StaticRuntimeArtifactMetadata
         return $value;
     }
 
-    /** @param array<string, mixed> $manifest */
+/** @param array<string, mixed> $manifest */
     private function hasFallbackShape(array $manifest): bool
     {
         $fallback = $manifest['fallback'];
@@ -303,7 +303,22 @@ final class StaticRuntimeArtifactMetadata
             && (is_string($fallback['release_identity']) || $fallback['release_identity'] === null);
     }
 
-    /** @param array<string, mixed> $manifest */
+/** @param array<string, mixed> $value */
+    private function hashIdentity(array $value): string
+    {
+        try {
+            $encoded = json_encode(
+                $this->canonicalize($value),
+                JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+            );
+        } catch (JsonException $exception) {
+            throw new ContainerException('Unable to encode static runtime identity.', previous: $exception);
+        }
+
+        return hash('xxh128', $encoded);
+    }
+
+/** @param array<string, mixed> $manifest */
     private function hasScalarShape(array $manifest): bool
     {
         return is_int($manifest['abi'])
@@ -321,7 +336,7 @@ final class StaticRuntimeArtifactMetadata
             && preg_match('/^[a-f0-9]{32}$/D', $manifest['build']) === 1;
     }
 
-    /** @param array<string, mixed> $value */
+/** @param array<string, mixed> $value */
     private function identityArray(array $value): array
     {
         $mapped = [];
@@ -332,7 +347,7 @@ final class StaticRuntimeArtifactMetadata
         return $mapped;
     }
 
-    private function identityObject(object $value): array
+private function identityObject(object $value): array
     {
         return match (true) {
             $value instanceof FactoryDefinition => ['factory' => $value->signature()],
@@ -351,7 +366,7 @@ final class StaticRuntimeArtifactMetadata
         };
     }
 
-    private function identityValue(mixed $value): mixed
+private function identityValue(mixed $value): mixed
     {
         if (is_scalar($value) || $value === null) {
             return $value;
@@ -366,22 +381,7 @@ final class StaticRuntimeArtifactMetadata
         return ['opaque' => get_debug_type($value)];
     }
 
-    /** @param array<string, mixed> $value */
-    private function hashIdentity(array $value): string
-    {
-        try {
-            $encoded = json_encode(
-                $this->canonicalize($value),
-                JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
-            );
-        } catch (JsonException $exception) {
-            throw new ContainerException('Unable to encode static runtime identity.', previous: $exception);
-        }
-
-        return hash('xxh128', $encoded);
-    }
-
-    /**
+/**
      * @return array{
      *   abi: int,
      *   intermix_major: int,
