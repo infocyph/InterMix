@@ -330,6 +330,7 @@ final class StaticRuntimeGenerator
             if ($entry === '.' || $entry === '..') {
                 continue;
             }
+
             $path = $directory . DIRECTORY_SEPARATOR . $entry;
             if (is_dir($path) && !is_link($path)) {
                 $this->cleanupDirectory($path);
@@ -338,20 +339,6 @@ final class StaticRuntimeGenerator
             }
         }
         rmdir($directory);
-    }
-
-    private function loadRuntime(string $artifactPath): ProductionContainer
-    {
-        if (!is_file($artifactPath) || !is_readable($artifactPath)) {
-            throw new ContainerException("Static runtime artifact is not readable: '$artifactPath'.");
-        }
-
-        $runtime = require $artifactPath;
-        if (!$runtime instanceof ProductionContainer) {
-            throw new ContainerException('Static runtime artifact must return a production container.');
-        }
-
-        return $runtime;
     }
 
     private function createStagingDirectory(string $root): string
