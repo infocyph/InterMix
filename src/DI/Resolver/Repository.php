@@ -103,7 +103,7 @@ class Repository
     /** @var array<string, mixed> */
     private array $resolvedSingleton = [];
 
-    /** @var array<string, true> */
+    /** @var array<string, bool> */
     private array $scopeSeedAllowedIds = [];
 
     /** @var array<string, array<string, mixed>> */
