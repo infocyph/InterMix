@@ -65,78 +65,31 @@ class Container implements ContainerInterface
     /** @var class-string<InjectedCall|GenericCall> */
     private string $resolverClass = InjectedCall::class;
 
-    public function __construct(protected readonly string $instanceAlias = self::DEFAULT_ALIAS)
+public function __construct(protected readonly string $instanceAlias = self::DEFAULT_ALIAS)
     {
         $this->repository = new ConcurrentRepository($this, $this->instanceAlias);
         $this->resolver = $this->resolverFactory();
         $this->invocationManager = new InvocationManager($this->repository, $this);
     }
 
-    public static function instance(string $instanceAlias = self::DEFAULT_ALIAS): self
+public static function instance(string $instanceAlias = self::DEFAULT_ALIAS): self
     {
         return self::$instances[$instanceAlias] ??= new self($instanceAlias);
     }
 
-    protected function alias(string $id, string $target, LifetimeEnum $lifetime = LifetimeEnum::Singleton): self
-    {
-        $this->definitions()->bind($id, $target, $lifetime);
-
-        return $this;
-    }
-
-    protected function attributeRegistry(): AttributeRegistry
-    {
-        return $this->repository->attributeRegistry();
-    }
-
-    /** @param array<int, string> $tags */
-    protected function bind(
-        string $id,
-        mixed $definition,
-        LifetimeEnum $lifetime = LifetimeEnum::Singleton,
-        array $tags = [],
-    ): self {
-        $this->definitions()->bind($id, $definition, $lifetime, $tags);
-
-        return $this;
-    }
-
-    /** @param array<int, string> $tags */
-    protected function bindFactory(
-        string $id,
-        Closure $factory,
-        LifetimeEnum $lifetime = LifetimeEnum::Singleton,
-        array $tags = [],
-    ): self {
-        return $this->bind($id, new DirectFactory($factory, $this), $lifetime, $tags);
-    }
-
-    /** @throws ContainerException|ReflectionException|\Psr\Cache\InvalidArgumentException */
+/** @throws ContainerException|ReflectionException|\Psr\Cache\InvalidArgumentException */
     public function call(string|Closure|callable $classOrClosure, string|bool|null $method = null): mixed
     {
         return $this->invocationManager->call($classOrClosure, $method);
     }
 
-    /** @return null|array{path: string, fingerprint: string, compiled: array<int, string>, skipped: array<string, string>} */
+/** @return null|array{path: string, fingerprint: string, compiled: array<int, string>, skipped: array<string, string>} */
     public function compilationReport(): ?array
     {
         return $this->compilationReport;
     }
 
-    /** @throws ContainerException|ReflectionException */
-    protected function compileTo(string $path, bool $load = false): self
-    {
-        $compiled = new CompiledResolverGenerator()->generate($this, $path);
-        $this->compilationReport = $compiled['report'];
-        if ($load) {
-            $this->repository->setCompiledResolver($compiled['resolver'], $compiled['ids']);
-            $this->activateCompiledResolver();
-        }
-
-        return $this;
-    }
-
-    /** @return array<int|string, mixed> */
+/** @return array<int|string, mixed> */
     public function debug(string $id): array
     {
         $tracer = $this->repository->tracer();
@@ -156,21 +109,7 @@ class Container implements ContainerInterface
         return $tracer->toArray();
     }
 
-    protected function definitions(): DefinitionManager
-    {
-        $host = $this->configurationHost();
-
-        return $this->definitionManager ??= new DefinitionManager($this->repository, $host);
-    }
-
-    protected function enableLazyLoading(bool $lazy = true): self
-    {
-        $this->repository->enableLazyLoading($lazy);
-
-        return $this;
-    }
-
-    /** @param array<string, mixed> $instances */
+/** @param array<string, mixed> $instances */
     public function enterScope(string $scope, array $instances = []): self
     {
         $this->repository->enterScope($scope, $instances);
@@ -178,7 +117,7 @@ class Container implements ContainerInterface
         return $this;
     }
 
-    /** @return array<string, mixed> */
+/** @return array<string, mixed> */
     public function exportGraph(?string $warmFromId = null, bool $clear = false): array
     {
         if ($warmFromId !== null) {
@@ -188,12 +127,7 @@ class Container implements ContainerInterface
         return $this->repository->tracer()->dependencyGraph($clear);
     }
 
-    protected function factory(string $id, Closure $factory): PendingFactoryBinding
-    {
-        return new PendingFactoryBinding($this->configurationHost(), $id, $factory);
-    }
-
-    /** @return array<string, mixed> */
+/** @return array<string, mixed> */
     public function findByTag(string $tag): array
     {
         $matches = [];
@@ -204,7 +138,7 @@ class Container implements ContainerInterface
         return $matches;
     }
 
-    /** @return iterable<string, callable(): mixed> */
+/** @return iterable<string, callable(): mixed> */
     public function findByTagLazy(string $tag): iterable
     {
         foreach ($this->repository->getIdsByTag($tag) as $id) {
@@ -212,7 +146,7 @@ class Container implements ContainerInterface
         }
     }
 
-    /**
+/**
      * Create an isolated runtime from this container's finalized configuration.
      *
      * @internal
@@ -225,7 +159,7 @@ class Container implements ContainerInterface
         return $runtime;
     }
 
-    /** @throws \Exception|\Psr\Cache\InvalidArgumentException */
+/** @throws \Exception|\Psr\Cache\InvalidArgumentException */
     public function get(string $id): mixed
     {
         try {
@@ -244,7 +178,7 @@ class Container implements ContainerInterface
         }
     }
 
-    /** @internal */
+/** @internal */
     public function getCurrentResolver(): CompiledCall|InjectedCall|GenericCall
     {
         if ($this->resolver instanceof Closure) {
@@ -268,90 +202,49 @@ class Container implements ContainerInterface
         return $this->resolver;
     }
 
-    /** @internal */
-    protected function getRepository(): Repository
-    {
-        return $this->repository;
-    }
-
-    /** @throws ContainerException|ReflectionException|\Psr\Cache\InvalidArgumentException */
+/** @throws ContainerException|ReflectionException|\Psr\Cache\InvalidArgumentException */
     public function getReturn(string $id): mixed
     {
         return $this->invocationManager->getReturn($id);
     }
 
-    /** @phpstan-impure */
+/** @phpstan-impure */
     public function has(string $id): bool
     {
         return $this->invocationManager->has($id);
     }
 
-    public function invocation(): InvocationManager
+public function invocation(): InvocationManager
     {
         return $this->invocationManager;
     }
 
-    public function isResolved(string $id): bool
+public function isResolved(string $id): bool
     {
         return $this->repository->isResolved($id);
     }
 
-    public function leaveScope(): self
+public function leaveScope(): self
     {
         $this->repository->leaveScope();
 
         return $this;
     }
 
-    public function lock(): self
+public function lock(): self
     {
         $this->repository->lock();
 
         return $this;
     }
 
-    /** @throws ContainerException|ReflectionException */
+/** @throws ContainerException|ReflectionException */
     public function make(string $class, string|bool $method = false): mixed
     {
         return $this->invocationManager->make($class, $method);
     }
 
-    protected function onMissing(callable $callback): self
-    {
-        $this->repository->onMissing($callback);
-
-        return $this;
-    }
-
-    protected function onResolved(string $id, callable $callback): self
-    {
-        $this->repository->onResolved($id, $callback);
-
-        return $this;
-    }
-
-    protected function onResolving(string $id, callable $callback): self
-    {
-        $this->repository->onResolving($id, $callback);
-
-        return $this;
-    }
-
-    protected function onScopeLeave(string $scope, callable $callback): self
-    {
-        $this->repository->onScopeLeave($scope, $callback);
-
-        return $this;
-    }
-
-    protected function options(): OptionsManager
-    {
-        $host = $this->configurationHost();
-
-        return $this->optionsManager ??= new OptionsManager($this->repository, $host);
-    }
-
-    /**
+/**
      * @param string|array<array-key, mixed>|Closure|callable $spec
      * @return array{kind:'closure',closure:callable}|array{kind:'class',class:string}|array{kind:'method',class:string,method:string}|array{kind:'function',function:string}
      */
@@ -388,19 +281,12 @@ class Container implements ContainerInterface
         return $descriptor;
     }
 
-    public function pipeline(string $tag): TaggedPipeline
+public function pipeline(string $tag): TaggedPipeline
     {
         return new TaggedPipeline($this, $tag);
     }
 
-    protected function registration(): RegistrationManager
-    {
-        $host = $this->configurationHost();
-
-        return $this->registrationManager ??= new RegistrationManager($this->repository, $host);
-    }
-
-    /**
+/**
      * @param string|array<array-key, mixed>|Closure|callable|null $spec
      * @param array<int|string, mixed> $parameters
      */
@@ -420,7 +306,176 @@ class Container implements ContainerInterface
         };
     }
 
-    /** @param array<int, string> $tags */
+/** @return iterable<string, callable(): mixed> */
+    public function tagged(string $tag): iterable
+    {
+        return $this->findByTagLazy($tag);
+    }
+
+public function tracer(): DebugTracer
+    {
+        return $this->repository->tracer();
+    }
+
+public function unset(): void
+    {
+        if ((self::$instances[$this->instanceAlias] ?? null) === $this) {
+            unset(self::$instances[$this->instanceAlias]);
+        }
+    }
+
+/** @return array<int, string> */
+    public function validate(bool $strict = false, bool $resolveFactories = false): array
+    {
+        $issues = $this->validateDefinitionTargets();
+        if ($resolveFactories) {
+            $issues = array_merge($issues, $this->validateResolvableDefinitions());
+        }
+        if ($strict && $issues !== []) {
+            throw new ContainerException("Container validation failed:\n- " . implode("\n- ", $issues));
+        }
+
+        return $issues;
+    }
+
+/** @param array<string, mixed> $instances */
+    public function withinScope(string $scope, callable $callback, array $instances = []): mixed
+    {
+        $this->enterScope($scope, $instances);
+
+        try {
+            return $callback($this);
+        } finally {
+            $this->leaveScope();
+        }
+    }
+
+protected function alias(string $id, string $target, LifetimeEnum $lifetime = LifetimeEnum::Singleton): self
+    {
+        $this->definitions()->bind($id, $target, $lifetime);
+
+        return $this;
+    }
+
+protected function attributeRegistry(): AttributeRegistry
+    {
+        return $this->repository->attributeRegistry();
+    }
+
+/** @param array<int, string> $tags */
+    protected function bind(
+        string $id,
+        mixed $definition,
+        LifetimeEnum $lifetime = LifetimeEnum::Singleton,
+        array $tags = [],
+    ): self {
+        $this->definitions()->bind($id, $definition, $lifetime, $tags);
+
+        return $this;
+    }
+
+/** @param array<int, string> $tags */
+    protected function bindFactory(
+        string $id,
+        Closure $factory,
+        LifetimeEnum $lifetime = LifetimeEnum::Singleton,
+        array $tags = [],
+    ): self {
+        return $this->bind($id, new DirectFactory($factory, $this), $lifetime, $tags);
+    }
+
+/** @throws ContainerException|ReflectionException */
+    protected function compileTo(string $path, bool $load = false): self
+    {
+        $compiled = new CompiledResolverGenerator()->generate($this, $path);
+        $this->compilationReport = $compiled['report'];
+        if ($load) {
+            $this->repository->setCompiledResolver($compiled['resolver'], $compiled['ids']);
+            $this->activateCompiledResolver();
+        }
+
+        return $this;
+    }
+
+protected function copyConfigurationInto(self $runtime, bool $locked): void
+    {
+        $this->repository->copyConfigurationTo($runtime->repository);
+        $runtime->resolverClass = $this->resolverClass;
+        $runtime->resolver = $runtime->resolverFactory();
+
+        if ($locked) {
+            $runtime->repository->lock();
+        }
+    }
+
+protected function definitions(): DefinitionManager
+    {
+        $host = $this->configurationHost();
+
+        return $this->definitionManager ??= new DefinitionManager($this->repository, $host);
+    }
+
+protected function enableLazyLoading(bool $lazy = true): self
+    {
+        $this->repository->enableLazyLoading($lazy);
+
+        return $this;
+    }
+
+protected function factory(string $id, Closure $factory): PendingFactoryBinding
+    {
+        return new PendingFactoryBinding($this->configurationHost(), $id, $factory);
+    }
+
+/** @internal */
+    protected function getRepository(): Repository
+    {
+        return $this->repository;
+    }
+
+protected function onMissing(callable $callback): self
+    {
+        $this->repository->onMissing($callback);
+
+        return $this;
+    }
+
+protected function onResolved(string $id, callable $callback): self
+    {
+        $this->repository->onResolved($id, $callback);
+
+        return $this;
+    }
+
+protected function onResolving(string $id, callable $callback): self
+    {
+        $this->repository->onResolving($id, $callback);
+
+        return $this;
+    }
+
+protected function onScopeLeave(string $scope, callable $callback): self
+    {
+        $this->repository->onScopeLeave($scope, $callback);
+
+        return $this;
+    }
+
+protected function options(): OptionsManager
+    {
+        $host = $this->configurationHost();
+
+        return $this->optionsManager ??= new OptionsManager($this->repository, $host);
+    }
+
+protected function registration(): RegistrationManager
+    {
+        $host = $this->configurationHost();
+
+        return $this->registrationManager ??= new RegistrationManager($this->repository, $host);
+    }
+
+/** @param array<int, string> $tags */
     protected function scoped(string $id, mixed $definition = null, array $tags = []): self
     {
         $this->definitions()->bind($id, $definition ?? $id, LifetimeEnum::Scoped, $tags);
@@ -428,14 +483,14 @@ class Container implements ContainerInterface
         return $this;
     }
 
-    protected function setEnvironment(string $env): self
+protected function setEnvironment(string $env): self
     {
         $this->repository->setEnvironment($env);
 
         return $this;
     }
 
-    /**
+/**
      * @param class-string<InjectedCall|GenericCall> $resolverClass
      * @internal
      */
@@ -450,7 +505,7 @@ class Container implements ContainerInterface
         $this->resolver = $this->resolverFactory();
     }
 
-    /** @param array<int, string> $tags */
+/** @param array<int, string> $tags */
     protected function singleton(string $id, mixed $definition = null, array $tags = []): self
     {
         $this->definitions()->bind($id, $definition ?? $id, LifetimeEnum::Singleton, $tags);
@@ -458,18 +513,7 @@ class Container implements ContainerInterface
         return $this;
     }
 
-    /** @return iterable<string, callable(): mixed> */
-    public function tagged(string $tag): iterable
-    {
-        return $this->findByTagLazy($tag);
-    }
-
-    public function tracer(): DebugTracer
-    {
-        return $this->repository->tracer();
-    }
-
-    /** @param array<int, string> $tags */
+/** @param array<int, string> $tags */
     protected function transient(string $id, mixed $definition = null, array $tags = []): self
     {
         $this->definitions()->bind($id, $definition ?? $id, LifetimeEnum::Transient, $tags);
@@ -477,21 +521,14 @@ class Container implements ContainerInterface
         return $this;
     }
 
-    protected function unbind(string $id): self
+protected function unbind(string $id): self
     {
         $this->definitions()->unbind($id);
 
         return $this;
     }
 
-    public function unset(): void
-    {
-        if ((self::$instances[$this->instanceAlias] ?? null) === $this) {
-            unset(self::$instances[$this->instanceAlias]);
-        }
-    }
-
-    protected function useCompiled(string $path): self
+protected function useCompiled(string $path): self
     {
         $compiled = new CompiledResolverGenerator()->load($this, $path);
         $this->repository->setCompiledResolver($compiled['resolver'], $compiled['ids']);
@@ -500,7 +537,7 @@ class Container implements ContainerInterface
         return $this;
     }
 
-    protected function usePrevalidated(string $path, string $fingerprint): self
+protected function usePrevalidated(string $path, string $fingerprint): self
     {
         $compiled = new CompiledResolverGenerator()->loadPrevalidated($path, $fingerprint);
         $this->repository->setCompiledResolver($compiled['resolver'], $compiled['ids']);
@@ -509,45 +546,26 @@ class Container implements ContainerInterface
         return $this;
     }
 
-    /** @return array<int, string> */
-    public function validate(bool $strict = false, bool $resolveFactories = false): array
-    {
-        $issues = $this->validateDefinitionTargets();
-        if ($resolveFactories) {
-            $issues = array_merge($issues, $this->validateResolvableDefinitions());
-        }
-        if ($strict && $issues !== []) {
-            throw new ContainerException("Container validation failed:\n- " . implode("\n- ", $issues));
-        }
-
-        return $issues;
-    }
-
-    protected function value(string $id, mixed $value): self
+protected function value(string $id, mixed $value): self
     {
         $this->definitions()->bind($id, $value, LifetimeEnum::Singleton);
 
         return $this;
     }
 
-    protected function when(string $consumer): ContextualBindingBuilder
+protected function when(string $consumer): ContextualBindingBuilder
     {
         return new ContextualBindingBuilder($this, $this->repository, $consumer);
     }
 
-    /** @param array<string, mixed> $instances */
-    public function withinScope(string $scope, callable $callback, array $instances = []): mixed
+private function activateCompiledResolver(): void
     {
-        $this->enterScope($scope, $instances);
-
-        try {
-            return $callback($this);
-        } finally {
-            $this->leaveScope();
+        if ($this->resolverClass !== GenericCall::class) {
+            $this->resolver = new CompiledCall($this->repository);
         }
     }
 
-    private function configurationHost(): ConfigurationContainer
+private function configurationHost(): ConfigurationContainer
     {
         if (!$this instanceof ConfigurationContainer) {
             throw new ContainerException(
@@ -558,25 +576,7 @@ class Container implements ContainerInterface
         return $this;
     }
 
-    protected function copyConfigurationInto(self $runtime, bool $locked): void
-    {
-        $this->repository->copyConfigurationTo($runtime->repository);
-        $runtime->resolverClass = $this->resolverClass;
-        $runtime->resolver = $runtime->resolverFactory();
-
-        if ($locked) {
-            $runtime->repository->lock();
-        }
-    }
-
-    private function activateCompiledResolver(): void
-    {
-        if ($this->resolverClass !== GenericCall::class) {
-            $this->resolver = new CompiledCall($this->repository);
-        }
-    }
-
-    /**
+/**
      * @param array<array-key, mixed> $spec
      * @return array{kind:'method',class:string,method:string}
      */
@@ -592,7 +592,7 @@ class Container implements ContainerInterface
         return $this->parseClassMethodParts($class, $method, '[class, method]');
     }
 
-    /**
+/**
      * @param string|array<array-key, mixed>|Closure|callable $spec
      * @return array{kind:'closure',closure:callable}|array{kind:'class',class:string}|array{kind:'method',class:string,method:string}|array{kind:'function',function:string}
      */
@@ -624,7 +624,7 @@ class Container implements ContainerInterface
         };
     }
 
-    /** @return array{kind:'method',class:string,method:string} */
+/** @return array{kind:'method',class:string,method:string} */
     private function parseClassMethodParts(
         string $class,
         string $method,
@@ -671,7 +671,7 @@ class Container implements ContainerInterface
         return ['kind' => 'method', 'class' => $class, 'method' => $method];
     }
 
-    /**
+/**
      * @param non-empty-string $separator
      * @return array{kind:'method',class:string,method:string}
      */
@@ -682,7 +682,7 @@ class Container implements ContainerInterface
         return $this->parseClassMethodParts($class, $method, $spec, $separator);
     }
 
-    /**
+/**
      * @param array{kind:'class',class:string}|array{kind:'method',class:string,method:string} $desc
      * @param array<int|string, mixed> $parameters
      */
@@ -706,7 +706,7 @@ class Container implements ContainerInterface
         )->instance;
     }
 
-    /**
+/**
      * @param array{kind:'closure',closure:callable}|array{kind:'function',function:string} $desc
      * @param array<int|string, mixed> $parameters
      */
@@ -724,7 +724,7 @@ class Container implements ContainerInterface
         return $this->getCurrentResolver()->closureSettler($callback, $parameters);
     }
 
-    private function resolverFactory(): Closure
+private function resolverFactory(): Closure
     {
         return function (): CompiledCall|InjectedCall|GenericCall {
             if ($this->resolverClass === GenericCall::class) {
@@ -738,7 +738,7 @@ class Container implements ContainerInterface
         };
     }
 
-    /** @return array<int, string> */
+/** @return array<int, string> */
     private function validateDefinitionTargets(): array
     {
         $issues = [];
@@ -767,7 +767,7 @@ class Container implements ContainerInterface
         return $issues;
     }
 
-    /** @return array<int, string> */
+/** @return array<int, string> */
     private function validateResolvableDefinitions(): array
     {
         $issues = [];
