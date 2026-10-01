@@ -7,6 +7,7 @@ namespace Infocyph\InterMix\Benchmarks;
 use Infocyph\InterMix\DI\Build\DefinitionGraph;
 use Infocyph\InterMix\DI\Build\StaticRuntimeGenerator;
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\DI\ProductionContainer;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use PhpBench\Attributes\Iterations;
@@ -132,7 +133,7 @@ final class CompiledRuntimeBench
 
     private function registeredGraph(string $purpose, LifetimeEnum $lifetime): Container
     {
-        $container = new Container($this->alias($purpose));
+        $container = new ConfigurationContainer($this->alias($purpose));
         $container->bind(CompiledBenchLeaf::class, CompiledBenchLeaf::class, $lifetime);
         $container->bind(CompiledBenchMiddle::class, CompiledBenchMiddle::class, $lifetime);
         $container->bind('root', CompiledBenchRoot::class, $lifetime);
