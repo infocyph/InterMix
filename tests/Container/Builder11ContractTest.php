@@ -213,7 +213,10 @@ it('stays frozen when artifact publication fails after graph finalization', func
         . bin2hex(random_bytes(8))
         . '/runtime.php';
 
-    expect(fn() => $builder->compile($path))->toThrow(RuntimeException::class)
+    expect(fn() => $builder->compile($path))->toThrow(
+        ContainerException::class,
+        'Output directory does not exist',
+    )
         ->and(fn() => $builder->value('late', true))
         ->toThrow(ContainerException::class, 'ContainerBuilder is finalized');
 });
