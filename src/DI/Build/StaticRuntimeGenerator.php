@@ -148,6 +148,7 @@ final class StaticRuntimeGenerator
         unlink($temporaryLink);
 
         $target = $buildDirectory . DIRECTORY_SEPARATOR . StaticRuntimeArtifactMetadata::RUNTIME_NAME;
+
         try {
             if (!symlink($target, $temporaryLink)) {
                 throw new ContainerException("Unable to stage activation pointer for '$filePath'.");
@@ -423,6 +424,7 @@ final class StaticRuntimeGenerator
         }
 
         $staging = $this->createStagingDirectory($root);
+
         try {
             $this->writeStagedBuild($staging, $source, $manifest);
             $this->publishStagedBuild($staging, $buildDirectory, $build);
