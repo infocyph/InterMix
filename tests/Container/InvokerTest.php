@@ -6,6 +6,7 @@ declare(strict_types=1);
  */
 
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\DI\Invoker;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Serializer\ClosureSerializer;
@@ -71,7 +72,7 @@ class StaticController
  |  Shared test setup
  |-----------------------------------------------------------------*/
 beforeEach(function () {
-    $this->c = Container::instance(uniqid('invoker_'));
+    $this->c = new ConfigurationContainer(uniqid('invoker_'));
     $this->c->definitions()
         ->bind(DateTimeZone::class, fn() => new DateTimeZone('UTC'));
     $this->inv = Invoker::with($this->c);
@@ -253,10 +254,10 @@ it('invokes a closure and autowires a Request instance', function () {
 });
 
 it('isolates callableFor cache per container', function () {
-    $c1 = Container::instance(uniqid('invoker_cache_a_'));
+    $c1 = new ConfigurationContainer(uniqid('invoker_cache_a_'));
     $c1->definitions()->bind(DateTimeZone::class, fn() => new DateTimeZone('UTC'));
 
-    $c2 = Container::instance(uniqid('invoker_cache_b_'));
+    $c2 = new ConfigurationContainer(uniqid('invoker_cache_b_'));
     $c2->definitions()->bind(DateTimeZone::class, fn() => new DateTimeZone('Asia/Dhaka'));
 
     $inv1 = Invoker::with($c1);
@@ -270,7 +271,7 @@ it('isolates callableFor cache per container', function () {
 });
 
 it('does not pin a concrete invokable service in callableFor', function () {
-    $container = Container::instance(uniqid('invoker_cache_lifecycle_'));
+    $container = new ConfigurationContainer(uniqid('invoker_cache_lifecycle_'));
     $container->definitions()->bind(DateTimeZone::class, fn() => new DateTimeZone('UTC'));
     $invoker = Invoker::with($container);
     $callable = $invoker->callableFor(CachedCallableService::class);
