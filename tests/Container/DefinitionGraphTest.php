@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Infocyph\InterMix\DI\Build\DefinitionGraph;
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 
 final class DefinitionGraphDependency {}
@@ -14,7 +15,7 @@ final readonly class DefinitionGraphConsumer
 }
 
 it('captures an immutable effective build-time definition snapshot', function () {
-    $container = Container::instance(uniqid('definition_graph_'));
+    $container = new ConfigurationContainer(uniqid('definition_graph_'));
     $contextual = new DefinitionGraphDependency();
 
     $container->bind('service', DefinitionGraphDependency::class, tags: ['base']);
