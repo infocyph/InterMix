@@ -129,29 +129,18 @@ abstract class ProductionContainer implements RuntimeContainerInterface
     final public function withinScope(string $scope, callable $callback, array $instances = []): mixed
     {
         $this->enterScope($scope, $instances);
-        $failure = null;
 
         try {
-            return $callback($this);
+            $result = $callback($this);
         } catch (Throwable $throwable) {
-            $failure = $throwable;
+            $this->leaveScopeAfter($throwable);
 
             throw $throwable;
-        } finally {
-            try {
-                $this->leaveScope();
-            } catch (ScopeCleanupException $cleanupFailure) {
-                if ($failure === null) {
-                    throw $cleanupFailure;
-                }
-
-                throw new ScopeCleanupException(
-                    $cleanupFailure->cleanupFailures,
-                    $cleanupFailure->cleanupFailureCount,
-                    $failure,
-                );
-            }
         }
+
+        $this->leaveScope();
+
+        return $result;
     }
 
     final public function withinScopeContext(ScopeContext $scopeContext, callable $callback): mixed
@@ -576,6 +565,19 @@ abstract class ProductionContainer implements RuntimeContainerInterface
                 $id,
                 fn(): mixed => $this->get($id),
                 LifetimeEnum::Transient,
+            );
+        }
+    }
+
+    private function leaveScopeAfter(Throwable $workFailure): void
+    {
+        try {
+            $this->leaveScope();
+        } catch (ScopeCleanupException $cleanupFailure) {
+            throw new ScopeCleanupException(
+                $cleanupFailure->cleanupFailures,
+                $cleanupFailure->cleanupFailureCount,
+                $workFailure,
             );
         }
     }
