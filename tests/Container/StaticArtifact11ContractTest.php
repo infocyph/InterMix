@@ -128,6 +128,7 @@ it('rejects an old ABI manifest before requiring its runtime file', function () 
                 'skipped' => [],
                 'fallback' => [
                     'required' => false,
+                    'identity_required' => false,
                     'ids' => [],
                     'release_identity' => null,
                 ],
