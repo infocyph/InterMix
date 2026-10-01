@@ -7,9 +7,12 @@ namespace Infocyph\InterMix\DI\Internal;
 use Closure;
 use Infocyph\InterMix\DI\Attribute\AttributeRegistry;
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Invoker\GenericCall;
+use Infocyph\InterMix\DI\Invoker\InjectedCall;
 use Infocyph\InterMix\DI\Managers\DefinitionManager;
 use Infocyph\InterMix\DI\Managers\OptionsManager;
 use Infocyph\InterMix\DI\Managers\RegistrationManager;
+use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\DI\Support\ContextualBindingBuilder;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\DI\Support\PendingFactoryBinding;
@@ -60,6 +63,13 @@ final class ConfigurationContainer extends Container
         return $this;
     }
 
+    public function compileTo(string $path, bool $load = false): self
+    {
+        parent::compileTo($path, $load);
+
+        return $this;
+    }
+
     public function definitions(): DefinitionManager
     {
         return parent::definitions();
@@ -75,6 +85,19 @@ final class ConfigurationContainer extends Container
     public function factory(string $id, Closure $factory): PendingFactoryBinding
     {
         return parent::factory($id, $factory);
+    }
+
+    public function forkConfigurationRuntime(bool $locked = true): self
+    {
+        $runtime = new self($this->instanceAlias);
+        $this->copyConfigurationInto($runtime, $locked);
+
+        return $runtime;
+    }
+
+    public function getRepository(): Repository
+    {
+        return parent::getRepository();
     }
 
     public function onMissing(callable $callback): self
@@ -130,7 +153,7 @@ final class ConfigurationContainer extends Container
         return $this;
     }
 
-    /** @param class-string<\Infocyph\InterMix\DI\Invoker\InjectedCall|\Infocyph\InterMix\DI\Invoker\GenericCall> $resolverClass */
+    /** @param class-string<InjectedCall|GenericCall> $resolverClass */
     public function setResolverClass(string $resolverClass): void
     {
         parent::setResolverClass($resolverClass);
@@ -159,38 +182,6 @@ final class ConfigurationContainer extends Container
         return $this;
     }
 
-    public function value(string $id, mixed $value): self
-    {
-        parent::value($id, $value);
-
-        return $this;
-    }
-
-    public function when(string $consumer): ContextualBindingBuilder
-    {
-        return parent::when($consumer);
-    }
-
-    public function forkConfigurationRuntime(bool $locked = true): self
-    {
-        $runtime = new self($this->instanceAlias);
-        $this->copyConfigurationInto($runtime, $locked);
-
-        return $runtime;
-    }
-
-    public function compileTo(string $path, bool $load = false): self
-    {
-        parent::compileTo($path, $load);
-
-        return $this;
-    }
-
-    public function getRepository(): \Infocyph\InterMix\DI\Resolver\Repository
-    {
-        return parent::getRepository();
-    }
-
     public function useCompiled(string $path): self
     {
         parent::useCompiled($path);
@@ -203,5 +194,17 @@ final class ConfigurationContainer extends Container
         parent::usePrevalidated($path, $fingerprint);
 
         return $this;
+    }
+
+    public function value(string $id, mixed $value): self
+    {
+        parent::value($id, $value);
+
+        return $this;
+    }
+
+    public function when(string $consumer): ContextualBindingBuilder
+    {
+        return parent::when($consumer);
     }
 }
