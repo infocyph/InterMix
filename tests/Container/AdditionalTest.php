@@ -492,7 +492,7 @@ it('resolves findByTag() eagerly and tagged() lazily', function () {
 it('lets me wire and use services in one-liners', function () {
     $c = new ConfigurationContainer(uniqid('e2e_'));
 
-    $c->logger = fn() => new DummyLogger();
+    $c->definitions()->bind('logger', fn() => new DummyLogger());
     $c->definitions()->bind('now', fn() => new DateTimeImmutable());
 
     // the manager can re-use them transparently
