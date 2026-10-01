@@ -5,6 +5,7 @@ on:
     branches: [ "main", "master", "develop", "development" ]
   push:
     branches: [ "main", "master" ]
+  workflow_call:
 
 concurrency:
   group: intermix-scope-compatibility-${{ github.event.pull_request.number || github.ref }}

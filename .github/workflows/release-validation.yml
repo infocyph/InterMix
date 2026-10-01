@@ -1,0 +1,23 @@
+name: "Release Validation"
+
+on:
+  workflow_call:
+
+jobs:
+  acceptance:
+    name: Performance and soak acceptance
+    uses: ./.github/workflows/release-acceptance.yml
+    permissions:
+      contents: read
+
+  candidate:
+    name: Package and consumer validation
+    uses: ./.github/workflows/release-candidate.yml
+    permissions:
+      contents: read
+
+  scope:
+    name: Swoole/OpenSwoole validation
+    uses: ./.github/workflows/swoole-scope-compatibility.yml
+    permissions:
+      contents: read
