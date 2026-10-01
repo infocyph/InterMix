@@ -30,7 +30,7 @@ final class StaticRuntimeArtifactMetadata
 
     public const string RUNTIME_NAME = 'runtime.php';
 
-/** @param array<string, mixed> $manifest */
+    /** @param array<string, mixed> $manifest */
     public function encode(array $manifest): string
     {
         try {
@@ -39,11 +39,14 @@ final class StaticRuntimeArtifactMetadata
                 JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
             ) . "\n";
         } catch (JsonException $exception) {
-            throw new ContainerException('Unable to encode static runtime manifest.', previous: $exception);
+            throw new ContainerException(
+                'Unable to encode static runtime manifest.',
+                previous: $exception,
+            );
         }
     }
 
-/**
+    /**
      * @param array<string, mixed> $plans
      * @param array<string, string> $skipped
      * @return array{
@@ -88,7 +91,7 @@ final class StaticRuntimeArtifactMetadata
         ];
     }
 
-/**
+    /**
      * @param array<string, array<string, mixed>> $plans
      * @param array<string, string> $skipped
      */
@@ -140,7 +143,7 @@ final class StaticRuntimeArtifactMetadata
         ]);
     }
 
-/**
+    /**
      * @return array{
      *   abi: int,
      *   intermix_major: int,
@@ -150,7 +153,12 @@ final class StaticRuntimeArtifactMetadata
      *   environment: ?string,
      *   compiled: list<string>,
      *   skipped: array<string, string>,
-     *   fallback: array{required: bool, identity_required: bool, ids: list<string>, release_identity: ?string},
+     *   fallback: array{
+     *     required: bool,
+     *     identity_required: bool,
+     *     ids: list<string>,
+     *     release_identity: ?string
+     *   },
      *   artifact: string,
      *   build: string
      * }
@@ -163,7 +171,7 @@ final class StaticRuntimeArtifactMetadata
         return $manifest;
     }
 
-/**
+    /**
      * @return array{
      *   abi: int,
      *   intermix_major: int,
@@ -173,7 +181,12 @@ final class StaticRuntimeArtifactMetadata
      *   environment: ?string,
      *   compiled: list<string>,
      *   skipped: array<string, string>,
-     *   fallback: array{required: bool, identity_required: bool, ids: list<string>, release_identity: ?string},
+     *   fallback: array{
+     *     required: bool,
+     *     identity_required: bool,
+     *     ids: list<string>,
+     *     release_identity: ?string
+     *   },
      *   artifact: string,
      *   build: string
      * }
@@ -189,9 +202,42 @@ final class StaticRuntimeArtifactMetadata
         return $manifest;
     }
 
-/**
-     * @param array<string, mixed> $manifest
-     * @return array<string, mixed>
+    /**
+     * @param array{
+     *   abi: int,
+     *   intermix_major: int,
+     *   php: string,
+     *   digest: string,
+     *   graph: string,
+     *   environment: ?string,
+     *   compiled: list<string>,
+     *   skipped: array<string, string>,
+     *   fallback: array{
+     *     required: bool,
+     *     identity_required: bool,
+     *     ids: list<string>,
+     *     release_identity: ?string
+     *   },
+     *   artifact: string
+     * } $manifest
+     * @return array{
+     *   abi: int,
+     *   intermix_major: int,
+     *   php: string,
+     *   digest: string,
+     *   graph: string,
+     *   environment: ?string,
+     *   compiled: list<string>,
+     *   skipped: array<string, string>,
+     *   fallback: array{
+     *     required: bool,
+     *     identity_required: bool,
+     *     ids: list<string>,
+     *     release_identity: ?string
+     *   },
+     *   artifact: string,
+     *   build: string
+     * }
      */
     public function withBuildIdentity(array $manifest): array
     {
@@ -200,7 +246,26 @@ final class StaticRuntimeArtifactMetadata
         return $manifest;
     }
 
-/** @param array<string, mixed> $manifest */
+    /**
+     * @param array{
+     *   abi: int,
+     *   intermix_major: int,
+     *   php: string,
+     *   digest: string,
+     *   graph: string,
+     *   environment: ?string,
+     *   compiled: list<string>,
+     *   skipped: array<string, string>,
+     *   fallback: array{
+     *     required: bool,
+     *     identity_required: bool,
+     *     ids: list<string>,
+     *     release_identity: ?string
+     *   },
+     *   artifact: string,
+     *   build: string
+     * } $manifest
+     */
     private function assertCompatibility(array $manifest, string $artifactPath): void
     {
         if ($manifest['abi'] !== self::ABI) {
@@ -224,27 +289,38 @@ final class StaticRuntimeArtifactMetadata
         }
     }
 
-/** @param array<string, mixed> $manifest */
+    /** @param array<array-key, mixed> $manifest */
     private function assertEntries(array $manifest): void
     {
-        foreach ($manifest['compiled'] as $id) {
+        $compiled = $manifest['compiled'] ?? null;
+        $skipped = $manifest['skipped'] ?? null;
+        $fallback = $manifest['fallback'] ?? null;
+        $fallbackIds = is_array($fallback) ? ($fallback['ids'] ?? null) : null;
+        if (!is_array($compiled)
+            || !is_array($skipped)
+            || !is_array($fallbackIds)
+        ) {
+            throw new ContainerException('Static runtime manifest has invalid entry collections.');
+        }
+
+        foreach ($compiled as $id) {
             if (!is_string($id)) {
                 throw new ContainerException('Static runtime manifest has invalid compiled IDs.');
             }
         }
-        foreach ($manifest['skipped'] as $id => $reason) {
+        foreach ($skipped as $id => $reason) {
             if (!is_string($id) || !is_string($reason)) {
                 throw new ContainerException('Static runtime manifest has invalid skipped entries.');
             }
         }
-        foreach ($manifest['fallback']['ids'] as $id) {
+        foreach ($fallbackIds as $id) {
             if (!is_string($id)) {
                 throw new ContainerException('Static runtime manifest has invalid fallback IDs.');
             }
         }
     }
 
-/** @param array<string, mixed> $manifest */
+    /** @param array<array-key, mixed> $manifest */
     private function assertShape(array $manifest): void
     {
         if (!isset(
@@ -266,7 +342,7 @@ final class StaticRuntimeArtifactMetadata
         }
     }
 
-private function canonicalize(mixed $value): mixed
+    private function canonicalize(mixed $value): mixed
     {
         if ($value instanceof \UnitEnum) {
             return $value->name;
@@ -286,10 +362,10 @@ private function canonicalize(mixed $value): mixed
         return $value;
     }
 
-/** @param array<string, mixed> $manifest */
+    /** @param array<array-key, mixed> $manifest */
     private function hasFallbackShape(array $manifest): bool
     {
-        $fallback = $manifest['fallback'];
+        $fallback = $manifest['fallback'] ?? null;
         if (!is_array($fallback)
             || !isset($fallback['required'], $fallback['identity_required'], $fallback['ids'])
             || !array_key_exists('release_identity', $fallback)
@@ -303,7 +379,7 @@ private function canonicalize(mixed $value): mixed
             && (is_string($fallback['release_identity']) || $fallback['release_identity'] === null);
     }
 
-/** @param array<string, mixed> $value */
+    /** @param array<string, mixed> $value */
     private function hashIdentity(array $value): string
     {
         try {
@@ -318,25 +394,28 @@ private function canonicalize(mixed $value): mixed
         return hash('xxh128', $encoded);
     }
 
-/** @param array<string, mixed> $manifest */
+    /** @param array<array-key, mixed> $manifest */
     private function hasScalarShape(array $manifest): bool
     {
-        return is_int($manifest['abi'])
-            && is_int($manifest['intermix_major'])
-            && is_string($manifest['php'])
-            && is_string($manifest['digest'])
+        return is_int($manifest['abi'] ?? null)
+            && is_int($manifest['intermix_major'] ?? null)
+            && is_string($manifest['php'] ?? null)
+            && is_string($manifest['digest'] ?? null)
             && preg_match('/^[a-f0-9]{32}$/D', $manifest['digest']) === 1
-            && is_string($manifest['graph'])
+            && is_string($manifest['graph'] ?? null)
             && preg_match('/^[a-f0-9]{32}$/D', $manifest['graph']) === 1
-            && (is_string($manifest['environment']) || $manifest['environment'] === null)
-            && is_array($manifest['compiled'])
-            && is_array($manifest['skipped'])
-            && is_string($manifest['artifact'])
-            && is_string($manifest['build'])
+            && (is_string($manifest['environment'] ?? null) || ($manifest['environment'] ?? null) === null)
+            && is_array($manifest['compiled'] ?? null)
+            && is_array($manifest['skipped'] ?? null)
+            && is_string($manifest['artifact'] ?? null)
+            && is_string($manifest['build'] ?? null)
             && preg_match('/^[a-f0-9]{32}$/D', $manifest['build']) === 1;
     }
 
-/** @param array<string, mixed> $value */
+    /**
+     * @param array<array-key, mixed> $value
+     * @return array<array-key, mixed>
+     */
     private function identityArray(array $value): array
     {
         $mapped = [];
@@ -347,7 +426,8 @@ private function canonicalize(mixed $value): mixed
         return $mapped;
     }
 
-private function identityObject(object $value): array
+    /** @return array<string, mixed> */
+    private function identityObject(object $value): array
     {
         return match (true) {
             $value instanceof FactoryDefinition => ['factory' => $value->signature()],
@@ -366,7 +446,7 @@ private function identityObject(object $value): array
         };
     }
 
-private function identityValue(mixed $value): mixed
+    private function identityValue(mixed $value): mixed
     {
         if (is_scalar($value) || $value === null) {
             return $value;
@@ -381,7 +461,7 @@ private function identityValue(mixed $value): mixed
         return ['opaque' => get_debug_type($value)];
     }
 
-/**
+    /**
      * @return array{
      *   abi: int,
      *   intermix_major: int,
@@ -391,7 +471,12 @@ private function identityValue(mixed $value): mixed
      *   environment: ?string,
      *   compiled: list<string>,
      *   skipped: array<string, string>,
-     *   fallback: array{required: bool, identity_required: bool, ids: list<string>, release_identity: ?string},
+     *   fallback: array{
+     *     required: bool,
+     *     identity_required: bool,
+     *     ids: list<string>,
+     *     release_identity: ?string
+     *   },
      *   artifact: string,
      *   build: string
      * }
@@ -429,7 +514,12 @@ private function identityValue(mixed $value): mixed
          *   environment: ?string,
          *   compiled: list<string>,
          *   skipped: array<string, string>,
-         *   fallback: array{required: bool, identity_required: bool, ids: list<string>, release_identity: ?string},
+         *   fallback: array{
+         *     required: bool,
+         *     identity_required: bool,
+         *     ids: list<string>,
+         *     release_identity: ?string
+         *   },
          *   artifact: string,
          *   build: string
          * } $manifest
