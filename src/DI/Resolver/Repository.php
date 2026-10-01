@@ -704,16 +704,9 @@ class Repository
     /** @internal */
     public function isScopeSeedAllowed(string $id): bool
     {
-        if ($this->isLocked) {
-            return isset($this->scopeSeedAllowedIds[$id]);
-        }
-        if (!array_key_exists($id, $this->functionReference)
-            || $this->functionReference[$id] instanceof AliasDefinition
-        ) {
-            return false;
-        }
-
-        return $this->getDirectDefinitionLifetime($id) === LifetimeEnum::Scoped;
+        return $this->scopeSeedAllowedIds[$id] ??= array_key_exists($id, $this->functionReference)
+            && !$this->functionReference[$id] instanceof AliasDefinition
+            && $this->getDirectDefinitionLifetime($id) === LifetimeEnum::Scoped;
     }
 
     public function isTracingEnabled(): bool
@@ -738,15 +731,6 @@ class Repository
 
     public function lock(): void
     {
-        $this->scopeSeedAllowedIds = [];
-        foreach ($this->functionReference as $id => $definition) {
-            if (!$definition instanceof AliasDefinition
-                && $this->getDirectDefinitionLifetime((string) $id) === LifetimeEnum::Scoped
-            ) {
-                $this->scopeSeedAllowedIds[(string) $id] = true;
-            }
-        }
-
         $this->isLocked = true;
     }
 
