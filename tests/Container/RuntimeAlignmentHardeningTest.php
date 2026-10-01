@@ -46,7 +46,8 @@ it('keeps live Fiber carrier identities distinct', function () {
 });
 
 it('preserves compiled and fallback scoped identity after builder finalization', function () {
-    $builder = ContainerBuilder::create(uniqid('runtime_alignment_fallback_'));
+    $builder = ContainerBuilder::create(uniqid('runtime_alignment_fallback_'))
+        ->releaseIdentity('intermix-test');
     $builder->autowire('compiled', RuntimeAlignmentCompiledLeaf::class, lifetime: LifetimeEnum::Scoped)
         ->factory('dynamic', static fn(): stdClass => new stdClass(), LifetimeEnum::Scoped);
 
@@ -105,7 +106,8 @@ it('rejects dynamic configuration mutation from a foreign carrier while its scop
 });
 
 it('keeps a finalized compiled graph immutable while a propagated child is attached', function () {
-    $builder = ContainerBuilder::create(uniqid('runtime_alignment_compiled_mutation_'));
+    $builder = ContainerBuilder::create(uniqid('runtime_alignment_compiled_mutation_'))
+        ->releaseIdentity('intermix-test');
     $builder->autowire('compiled', RuntimeAlignmentCompiledLeaf::class, lifetime: LifetimeEnum::Scoped);
     $path = runtimeAlignmentArtifactPath();
     try {
