@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Managers;
 
 use ArrayAccess;
-use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\DI\Invoker\GenericCall;
 use Infocyph\InterMix\DI\Invoker\InjectedCall;
 use Infocyph\InterMix\DI\Resolver\Repository;
@@ -28,11 +28,11 @@ class OptionsManager implements ArrayAccess
      * Constructs an OptionsManager.
      *
      * @param Repository $repository The repository instance for managing definitions and instances.
-     * @param Container $container The container this manager is associated with.
+     * @param ConfigurationContainer $container The container this manager is associated with.
      */
     public function __construct(
         protected Repository $repository,
-        protected Container  $container,
+        protected ConfigurationContainer $container,
     ) {}
 
     /**
