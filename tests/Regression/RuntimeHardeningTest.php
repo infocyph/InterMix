@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Fiber;
 use Infocyph\CacheLayer\Cache\Cache;
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\DI\Internal\BoundedValueInspector;
 use Infocyph\InterMix\DI\Internal\ExecutionContext;
 use Infocyph\InterMix\DI\Support\FactoryDefinition;
@@ -23,7 +24,7 @@ final class RuntimeHardeningSuspendingDependency
 }
 
 it('isolates definition and class construction ancestry between independent fibers', function (): void {
-    $container = new Container('p1.concurrent');
+    $container = new ConfigurationContainer('p1.concurrent');
     $container->bind(
         'service',
         static fn(RuntimeHardeningSuspendingDependency $dependency): RuntimeHardeningSuspendingDependency
@@ -47,7 +48,7 @@ it('isolates definition and class construction ancestry between independent fibe
 });
 
 it('still rejects a real same-carrier definition cycle', function (): void {
-    $container = new Container('p1.cycle');
+    $container = new ConfigurationContainer('p1.cycle');
     $container->bind(
         'cycle',
         static fn() => $container->get('cycle'),
@@ -59,7 +60,7 @@ it('still rejects a real same-carrier definition cycle', function (): void {
 });
 
 it('fails fast when another carrier is constructing the same singleton', function (): void {
-    $container = new Container('p1.singleton');
+    $container = new ConfigurationContainer('p1.singleton');
     $container->bindFactory(
         'singleton',
         static function (): object {
@@ -109,7 +110,7 @@ it('does not retain the final completed fiber through the carrier fast path', fu
 
 it('rejects cyclic cache values without changing the in-process result', function (): void {
     $cache = Cache::memory('p1.cyclic.' . bin2hex(random_bytes(4)));
-    $container = new Container('p1.cyclic');
+    $container = new ConfigurationContainer('p1.cyclic');
     $container->definitions()->enableDefinitionCache($cache, 'p1-cyclic');
     $container->bind('value', static function (): array {
         $value = [];
