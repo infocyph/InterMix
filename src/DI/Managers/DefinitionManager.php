@@ -6,7 +6,7 @@ namespace Infocyph\InterMix\DI\Managers;
 
 use ArrayAccess;
 use Closure;
-use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\DI\Internal\ServiceId;
 use Infocyph\InterMix\DI\Invoker\CompiledCall;
 use Infocyph\InterMix\DI\Invoker\GenericCall;
@@ -30,7 +30,7 @@ class DefinitionManager implements ArrayAccess
 
     public function __construct(
         protected Repository $repository,
-        protected Container $container,
+        protected ConfigurationContainer $container,
     ) {}
 
     /** @param array<string, mixed> $definitions */
