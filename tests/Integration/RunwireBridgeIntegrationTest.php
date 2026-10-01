@@ -181,3 +181,21 @@ it('rejects a downstream CacheLayer binding owned by another Runwire runtime', f
         CacheLayerRunwireIntegration::release($other);
     }
 });
+
+
+it('allows identical Runwire binding and rejects a different live runtime', function (): void {
+    $runtime = runwireBridgeContext();
+    $other = runwireBridgeContext();
+    $bridge = new RunwireIntegration(runwireBridgeContainer());
+
+    $bridge->bind($runtime);
+    $bridge->bind($runtime);
+
+    try {
+        expect($bridge->runtime())->toBe($runtime)
+            ->and(fn() => $bridge->bind($other))
+            ->toThrow(LogicException::class, 'already bound to a different Runwire runtime');
+    } finally {
+        $bridge->release($runtime);
+    }
+});
