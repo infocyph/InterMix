@@ -501,11 +501,13 @@ final class HostAcceptance
                 );
 
             if ($mode === 'hybrid') {
-                $builder->factory(
-                    HostAcceptanceDynamicMarker::class,
-                    static fn(): HostAcceptanceDynamicMarker => new HostAcceptanceDynamicMarker(),
-                    LifetimeEnum::Scoped,
-                );
+                $builder
+                    ->releaseIdentity('host-acceptance')
+                    ->factory(
+                        HostAcceptanceDynamicMarker::class,
+                        static fn(): HostAcceptanceDynamicMarker => new HostAcceptanceDynamicMarker(),
+                        LifetimeEnum::Scoped,
+                    );
             }
 
             if ($mode === 'dynamic') {
