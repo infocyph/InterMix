@@ -18,6 +18,7 @@ Contents
     start
     backstory
     container
+    integrations
     fence
     serializer
     remix
