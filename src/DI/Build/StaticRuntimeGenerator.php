@@ -338,6 +338,7 @@ final class StaticRuntimeGenerator
                 unlink($path);
             }
         }
+
         rmdir($directory);
     }
 
