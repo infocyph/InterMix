@@ -14,14 +14,6 @@ use JsonException;
 /** @internal */
 final class StaticRuntimeGenerator
 {
-    private const int ARTIFACT_ABI = 2;
-
-    private const int INTERMIX_MAJOR = 11;
-
-    private const string MANIFEST_NAME = 'manifest.json';
-
-    private const string RUNTIME_NAME = 'runtime.php';
-
     /**
      * @return array{
      *   runtime: ProductionContainer,
@@ -53,28 +45,27 @@ final class StaticRuntimeGenerator
         $source = new StaticRuntimeRenderer()->render($graph, $plans, $slots);
         $source = new StaticScopedConstructionGuard()->apply($source, $plans, $slots);
         $digest = hash('xxh128', $source);
-        $graphIdentity = $this->graphIdentity($graph, $plans, $planned['skipped']);
-        $fallbackMetadata = $this->fallbackMetadata(
-            $graph,
-            $plans,
-            $planned['skipped'],
-            $releaseIdentity,
-        );
-        $manifest = [
-            'abi' => self::ARTIFACT_ABI,
-            'intermix_major' => self::INTERMIX_MAJOR,
+        $metadata = new StaticRuntimeArtifactMetadata();
+        $graphIdentity = $metadata->graphIdentity($graph, $plans, $planned['skipped']);
+        $manifest = $metadata->withBuildIdentity([
+            'abi' => StaticRuntimeArtifactMetadata::ABI,
+            'intermix_major' => StaticRuntimeArtifactMetadata::INTERMIX_MAJOR,
             'php' => PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION,
             'digest' => $digest,
             'graph' => $graphIdentity,
             'environment' => $graph->environment(),
             'compiled' => $compiled,
             'skipped' => $planned['skipped'],
-            'fallback' => $fallbackMetadata,
-            'artifact' => self::RUNTIME_NAME,
-        ];
-        $build = $this->buildId($manifest);
-        $manifest['build'] = $build;
-        $manifestJson = $this->encodeManifest($manifest);
+            'fallback' => $metadata->fallbackMetadata(
+                $graph,
+                $plans,
+                $planned['skipped'],
+                $releaseIdentity,
+            ),
+            'artifact' => StaticRuntimeArtifactMetadata::RUNTIME_NAME,
+        ]);
+        $build = $manifest['build'];
+        $manifestJson = $metadata->encode($manifest);
 
         $buildDirectory = $this->stageBuild($filePath, $source, $manifestJson, $build);
         $this->activateBuild($filePath, $buildDirectory);
@@ -107,7 +98,7 @@ final class StaticRuntimeGenerator
         ?string $releaseIdentity = null,
     ): ProductionContainer {
         $artifactPath = $this->artifactPath($filePath);
-        $manifest = $this->validateManifest($artifactPath);
+        $manifest = new StaticRuntimeArtifactMetadata()->validate($artifactPath);
         $this->assertEnvironmentMatches($manifest, $fallback);
         $this->assertGraphMatches($manifest, $graph);
         $this->assertFallbackMatches($manifest, $fallback, $releaseIdentity);
@@ -130,8 +121,7 @@ final class StaticRuntimeGenerator
     ): ProductionContainer {
         $this->assertDigest($expectedDigest);
         $artifactPath = $this->artifactPath($filePath);
-        $manifest = $this->readManifest($artifactPath);
-        $this->assertManifestCompatibility($manifest, $artifactPath);
+        $manifest = new StaticRuntimeArtifactMetadata()->readCompatible($artifactPath);
         if (!hash_equals($manifest['digest'], $expectedDigest)) {
             throw new ContainerException(
                 'Prevalidated static runtime does not match the active deployment digest.',
@@ -157,7 +147,7 @@ final class StaticRuntimeGenerator
         }
         unlink($temporaryLink);
 
-        $target = $buildDirectory . DIRECTORY_SEPARATOR . self::RUNTIME_NAME;
+        $target = $buildDirectory . DIRECTORY_SEPARATOR . StaticRuntimeArtifactMetadata::RUNTIME_NAME;
         try {
             if (!symlink($target, $temporaryLink)) {
                 throw new ContainerException("Unable to stage activation pointer for '$filePath'.");
@@ -302,7 +292,11 @@ final class StaticRuntimeGenerator
         }
 
         $planned = new StaticRuntimePlanner()->plan($graph);
-        $identity = $this->graphIdentity($graph, $planned['plans'], $planned['skipped']);
+        $identity = new StaticRuntimeArtifactMetadata()->graphIdentity(
+            $graph,
+            $planned['plans'],
+            $planned['skipped'],
+        );
         if (!hash_equals($manifest['graph'], $identity)) {
             throw new ContainerException(
                 'Static runtime graph identity does not match the configured frozen graph.',
@@ -363,44 +357,9 @@ final class StaticRuntimeGenerator
         return $runtime;
     }
 
-    /** @param array<string, mixed> $manifest */
-    private function buildId(array $manifest): string
-    {
-        try {
-            $encoded = json_encode(
-                $this->canonicalize($manifest),
-                JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
-            );
-        } catch (JsonException $exception) {
-            throw new ContainerException('Unable to encode static runtime build identity.', previous: $exception);
-        }
-
-        return hash('xxh128', $encoded);
-    }
-
     private function buildRoot(string $filePath): string
     {
         return $filePath . '.builds';
-    }
-
-    private function canonicalize(mixed $value): mixed
-    {
-        if ($value instanceof \UnitEnum) {
-            return $value->name;
-        }
-        if (!is_array($value)) {
-            return $value;
-        }
-        if (array_is_list($value)) {
-            return array_map($this->canonicalize(...), $value);
-        }
-
-        ksort($value, SORT_STRING);
-        foreach ($value as $key => $entry) {
-            $value[$key] = $this->canonicalize($entry);
-        }
-
-        return $value;
     }
 
     private function cleanupDirectory(string $directory): void
@@ -423,186 +382,6 @@ final class StaticRuntimeGenerator
         rmdir($directory);
     }
 
-    /**
-     * @param array<string, mixed> $manifest
-     */
-    private function encodeManifest(array $manifest): string
-    {
-        try {
-            return json_encode(
-                $manifest,
-                JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
-            ) . "\n";
-        } catch (JsonException $exception) {
-            throw new ContainerException('Unable to encode static runtime manifest.', previous: $exception);
-        }
-    }
-
-    /**
-     * @param array<string, string> $skipped
-     * @return array{
-     *   required: bool,
-     *   identity_required: bool,
-     *   ids: list<string>,
-     *   release_identity: ?string
-     * }
-     */
-    /**
-     * @param array<string, array<string, mixed>> $plans
-     * @param array<string, string> $skipped
-     * @return array{
-     *   required: bool,
-     *   identity_required: bool,
-     *   ids: list<string>,
-     *   release_identity: ?string
-     * }
-     */
-    private function fallbackMetadata(
-        DefinitionGraph $graph,
-        array $plans,
-        array $skipped,
-        ?string $releaseIdentity,
-    ): array {
-        $reasons = new StaticRuntimeRequirements()->fallbackReasons($graph, $plans, $skipped);
-        $defined = array_fill_keys(
-            array_map(
-                static fn(int|string $id): string => (string) $id,
-                array_keys($graph->definitions()),
-            ),
-            true,
-        );
-        $ids = [];
-        foreach (array_keys($reasons) as $rawId) {
-            $id = (string) $rawId;
-            if (isset($defined[$id])) {
-                $ids[] = $id;
-            }
-        }
-        sort($ids, SORT_STRING);
-
-        $identityRequired = $graph->requiresReleaseIdentity();
-
-        return [
-            'required' => $reasons !== [],
-            'identity_required' => $identityRequired,
-            'ids' => $ids,
-            'release_identity' => !$identityRequired
-                || $releaseIdentity === null
-                || $releaseIdentity === ''
-                ? null
-                : hash('xxh128', $releaseIdentity),
-        ];
-    }
-
-    /**
-     * @param array<string, array<string, mixed>> $plans
-     * @param array<string, string> $skipped
-     */
-    private function graphIdentity(
-        DefinitionGraph $graph,
-        array $plans,
-        array $skipped,
-    ): string {
-        $definitionMeta = $graph->definitionMeta();
-        foreach ($definitionMeta as &$meta) {
-            sort($meta['tags'], SORT_STRING);
-            $meta['lifetime'] = $meta['lifetime']->name;
-        }
-        unset($meta);
-        ksort($definitionMeta, SORT_STRING);
-        ksort($plans, SORT_STRING);
-        ksort($skipped, SORT_STRING);
-
-        $attributes = $graph->registeredAttributeResolvers();
-        ksort($attributes, SORT_STRING);
-        $dynamicIds = $graph->dynamicServiceIds();
-        sort($dynamicIds, SORT_STRING);
-        $resolvedHooks = $graph->resolvedHookIds();
-        sort($resolvedHooks, SORT_STRING);
-        $resolvingHooks = $graph->resolvingHookIds();
-        sort($resolvingHooks, SORT_STRING);
-        $scopeHooks = $graph->scopeLeaveHookScopes();
-        sort($scopeHooks, SORT_STRING);
-
-        $environmentBindings = $graph->environmentBindings();
-        ksort($environmentBindings, SORT_STRING);
-
-        $identity = [
-            'environment' => $graph->environment(),
-            'environment_bindings' => $environmentBindings,
-            'plans' => $plans,
-            'skipped' => $skipped,
-            'definitions' => $this->identityValue($graph->definitions()),
-            'definition_meta' => $definitionMeta,
-            'contextual_bindings' => $this->identityValue($graph->contextualBindings()),
-            'attribute_resolvers' => $attributes,
-            'dynamic_ids' => $dynamicIds,
-            'resolved_hooks' => $resolvedHooks,
-            'resolving_hooks' => $resolvingHooks,
-            'scope_hooks' => $scopeHooks,
-            'injection' => $graph->injectionEnabled(),
-            'method_attributes' => $graph->methodAttributesEnabled(),
-            'property_attributes' => $graph->propertyAttributesEnabled(),
-            'default_method' => $graph->defaultMethod(),
-        ];
-
-        try {
-            $encoded = json_encode(
-                $this->canonicalize($identity),
-                JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
-            );
-        } catch (JsonException $exception) {
-            throw new ContainerException('Unable to encode static runtime graph identity.', previous: $exception);
-        }
-
-        return hash('xxh128', $encoded);
-    }
-
-    private function identityValue(mixed $value): mixed
-    {
-        if ($value instanceof \Infocyph\InterMix\DI\Support\FactoryDefinition) {
-            return ['factory' => $value->signature()];
-        }
-        if ($value instanceof \Infocyph\InterMix\DI\Support\ServiceReference) {
-            return ['service' => $value->id];
-        }
-        if ($value instanceof \Infocyph\InterMix\DI\Support\AliasDefinition) {
-            return ['alias' => $value->target];
-        }
-        if ($value instanceof \Infocyph\InterMix\DI\Support\InputDefinition) {
-            return ['input' => true];
-        }
-        if ($value instanceof \Infocyph\InterMix\DI\Support\ValueDefinition) {
-            return ['value' => $this->identityValue($value->value)];
-        }
-        if ($value instanceof \Infocyph\InterMix\DI\Support\AutowireDefinition) {
-            return [
-                'autowire' => $value->class,
-                'arguments' => $this->identityValue($value->arguments),
-                'properties' => $this->identityValue($value->properties),
-            ];
-        }
-        if ($value instanceof \Infocyph\InterMix\DI\Support\RuntimeFactoryDefinition) {
-            return ['opaque' => 'runtime-factory'];
-        }
-        if ($value instanceof \Infocyph\InterMix\DI\Container) {
-            return ['runtime' => 'container'];
-        }
-        if (is_scalar($value) || $value === null) {
-            return $value;
-        }
-        if (!is_array($value)) {
-            return ['opaque' => is_object($value) ? $value::class : get_debug_type($value)];
-        }
-
-        $mapped = [];
-        foreach ($value as $key => $entry) {
-            $mapped[$key] = $this->identityValue($entry);
-        }
-
-        return $mapped;
-    }
-
     private function loadRuntime(string $artifactPath): ProductionContainer
     {
         if (!is_file($artifactPath) || !is_readable($artifactPath)) {
@@ -615,115 +394,6 @@ final class StaticRuntimeGenerator
         }
 
         return $runtime;
-    }
-
-    /**
-     * @return array{
-     *   abi: int,
-     *   intermix_major: int,
-     *   php: string,
-     *   digest: string,
-     *   graph: string,
-     *   environment: ?string,
-     *   compiled: list<string>,
-     *   skipped: array<string, string>,
-     *   fallback: array{required: bool, identity_required: bool, ids: list<string>, release_identity: ?string},
-     *   artifact: string,
-     *   build: string
-     * }
-     */
-    private function readManifest(string $artifactPath): array
-    {
-        $manifestPath = dirname($artifactPath) . DIRECTORY_SEPARATOR . self::MANIFEST_NAME;
-        if (!is_file($manifestPath) || !is_readable($manifestPath)) {
-            throw new ContainerException("Static runtime manifest is not readable: '$manifestPath'.");
-        }
-
-        $contents = file_get_contents($manifestPath);
-        if (!is_string($contents)) {
-            throw new ContainerException("Unable to read static runtime manifest: '$manifestPath'.");
-        }
-
-        try {
-            $manifest = json_decode($contents, true, flags: JSON_THROW_ON_ERROR);
-        } catch (JsonException $exception) {
-            throw new ContainerException('Static runtime manifest is invalid JSON.', previous: $exception);
-        }
-
-        if (!is_array($manifest)
-            || !isset(
-                $manifest['abi'],
-                $manifest['intermix_major'],
-                $manifest['php'],
-                $manifest['digest'],
-                $manifest['graph'],
-                $manifest['compiled'],
-                $manifest['skipped'],
-                $manifest['fallback'],
-                $manifest['artifact'],
-                $manifest['build'],
-            )
-            || !array_key_exists('environment', $manifest)
-            || !is_int($manifest['abi'])
-            || !is_int($manifest['intermix_major'])
-            || !is_string($manifest['php'])
-            || !is_string($manifest['digest'])
-            || preg_match('/^[a-f0-9]{32}$/D', $manifest['digest']) !== 1
-            || !is_string($manifest['graph'])
-            || preg_match('/^[a-f0-9]{32}$/D', $manifest['graph']) !== 1
-            || (!is_string($manifest['environment']) && $manifest['environment'] !== null)
-            || !is_array($manifest['compiled'])
-            || !is_array($manifest['skipped'])
-            || !is_array($manifest['fallback'])
-            || !isset(
-                $manifest['fallback']['required'],
-                $manifest['fallback']['identity_required'],
-                $manifest['fallback']['ids'],
-            )
-            || !array_key_exists('release_identity', $manifest['fallback'])
-            || !is_bool($manifest['fallback']['required'])
-            || !is_bool($manifest['fallback']['identity_required'])
-            || !is_array($manifest['fallback']['ids'])
-            || (!is_string($manifest['fallback']['release_identity'])
-                && $manifest['fallback']['release_identity'] !== null)
-            || !is_string($manifest['artifact'])
-            || !is_string($manifest['build'])
-            || preg_match('/^[a-f0-9]{32}$/D', $manifest['build']) !== 1
-        ) {
-            throw new ContainerException('Static runtime manifest has an invalid shape.');
-        }
-
-        foreach ($manifest['compiled'] as $id) {
-            if (!is_string($id)) {
-                throw new ContainerException('Static runtime manifest has invalid compiled IDs.');
-            }
-        }
-        foreach ($manifest['skipped'] as $id => $reason) {
-            if (!is_string($id) || !is_string($reason)) {
-                throw new ContainerException('Static runtime manifest has invalid skipped entries.');
-            }
-        }
-        foreach ($manifest['fallback']['ids'] as $id) {
-            if (!is_string($id)) {
-                throw new ContainerException('Static runtime manifest has invalid fallback IDs.');
-            }
-        }
-
-        /** @var array{
-         *   abi: int,
-         *   intermix_major: int,
-         *   php: string,
-         *   digest: string,
-         *   graph: string,
-         *   environment: ?string,
-         *   compiled: list<string>,
-         *   skipped: array<string, string>,
-         *   fallback: array{required: bool, identity_required: bool, ids: list<string>, release_identity: ?string},
-         *   artifact: string,
-         *   build: string
-         * } $manifest
-         */
-        return $manifest;
     }
 
     private function stageBuild(
@@ -739,8 +409,8 @@ final class StaticRuntimeGenerator
 
         $buildDirectory = $root . DIRECTORY_SEPARATOR . $build;
         if (is_dir($buildDirectory)) {
-            $runtimePath = $buildDirectory . DIRECTORY_SEPARATOR . self::RUNTIME_NAME;
-            $manifestPath = $buildDirectory . DIRECTORY_SEPARATOR . self::MANIFEST_NAME;
+            $runtimePath = $buildDirectory . DIRECTORY_SEPARATOR . StaticRuntimeArtifactMetadata::RUNTIME_NAME;
+            $manifestPath = $buildDirectory . DIRECTORY_SEPARATOR . StaticRuntimeArtifactMetadata::MANIFEST_NAME;
             if (!is_file($runtimePath) || !is_file($manifestPath)) {
                 throw new ContainerException(
                     "Static runtime build '$build' exists but is incomplete.",
@@ -757,14 +427,14 @@ final class StaticRuntimeGenerator
 
         try {
             AtomicFileWriter::write(
-                $staging . DIRECTORY_SEPARATOR . self::RUNTIME_NAME,
+                $staging . DIRECTORY_SEPARATOR . StaticRuntimeArtifactMetadata::RUNTIME_NAME,
                 $source,
                 function (string $temporaryPath): void {
                     $this->loadRuntime($temporaryPath);
                 },
             );
             AtomicFileWriter::write(
-                $staging . DIRECTORY_SEPARATOR . self::MANIFEST_NAME,
+                $staging . DIRECTORY_SEPARATOR . StaticRuntimeArtifactMetadata::MANIFEST_NAME,
                 $manifest,
                 static function (string $temporaryPath): void {
                     $contents = file_get_contents($temporaryPath);
@@ -797,31 +467,5 @@ final class StaticRuntimeGenerator
         return $buildDirectory;
     }
 
-    /**
-     * @return array{
-     *   abi: int,
-     *   intermix_major: int,
-     *   php: string,
-     *   digest: string,
-     *   graph: string,
-     *   environment: ?string,
-     *   compiled: list<string>,
-     *   skipped: array<string, string>,
-     *   fallback: array{required: bool, identity_required: bool, ids: list<string>, release_identity: ?string},
-     *   artifact: string,
-     *   build: string
-     * }
-     */
-    private function validateManifest(string $artifactPath): array
-    {
-        $manifest = $this->readManifest($artifactPath);
-        $this->assertManifestCompatibility($manifest, $artifactPath);
 
-        $hash = hash_file('xxh128', $artifactPath);
-        if (!is_string($hash) || !hash_equals($manifest['digest'], $hash)) {
-            throw new ContainerException('Static runtime artifact hash does not match its manifest.');
-        }
-
-        return $manifest;
-    }
 }
