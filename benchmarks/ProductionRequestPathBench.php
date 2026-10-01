@@ -68,25 +68,25 @@ final class ProductionRequestPathBench
     public function benchCompiledScopedGraph(): void
     {
         static $runtime;
-        if (!$runtime instanceof ProductionContainer) {
-            $runtime = $this->threeNodeRuntime(LifetimeEnum::Scoped, 'scoped');
-            $runtime->enterScope('request');
-            $runtime->get('root');
-        }
-        $this->sink = $runtime->get('root');
+        $runtime ??= $this->threeNodeRuntime(LifetimeEnum::Scoped, 'scoped');
+        $this->sink = $runtime->withinScope(
+            'request',
+            static fn(ProductionContainer $active): object => $active->get('root'),
+        );
     }
 
     #[Revs(1000)]
     public function benchCompiledScopedSeed(): void
     {
         static $runtime;
-        if (!$runtime instanceof ProductionContainer) {
-            $runtime = $this->threeNodeRuntime(LifetimeEnum::Scoped, 'scoped-seed');
-            $runtime->enterScope('request', ['root' => new ProductionRequestRoot(
+        $runtime ??= $this->threeNodeRuntime(LifetimeEnum::Scoped, 'scoped-seed');
+        $this->sink = $runtime->withinScope(
+            'request',
+            static fn(ProductionContainer $active): object => $active->get('root'),
+            ['root' => new ProductionRequestRoot(
                 new ProductionRequestMiddle(new ProductionRequestLeaf()),
-            )]);
-        }
-        $this->sink = $runtime->get('root');
+            )],
+        );
     }
 
     #[Revs(500)]
@@ -94,9 +94,10 @@ final class ProductionRequestPathBench
     {
         static $runtime;
         $runtime ??= $this->threeNodeRuntime(LifetimeEnum::Scoped, 'scope-cycle');
-        $runtime->enterScope('request');
-        $this->sink = $runtime->get('root');
-        $runtime->leaveScope();
+        $this->sink = $runtime->withinScope(
+            'request',
+            static fn(ProductionContainer $active): object => $active->get('root'),
+        );
     }
 
     #[Revs(500)]
@@ -162,12 +163,14 @@ final class ProductionRequestPathBench
             $container = ContainerBuilder::create($this->alias('dynamic-fiber'))
                 ->autowire('root', ProductionRequestRoot::class, lifetime: LifetimeEnum::Scoped)
                 ->build();
-            $fiber = new Fiber(static function () use ($container): never {
-                $container->enterScope('request');
-                while (true) {
-                    Fiber::suspend($container->get('root'));
-                }
-            });
+            $fiber = new Fiber(static fn(): never => $container->withinScope(
+                'request',
+                static function (Container $active): never {
+                    while (true) {
+                        Fiber::suspend($active->get('root'));
+                    }
+                },
+            ));
             $this->sink = $fiber->start();
 
             return;
@@ -185,9 +188,10 @@ final class ProductionRequestPathBench
                 ->autowire('root', ProductionRequestRoot::class, lifetime: LifetimeEnum::Scoped)
                 ->build();
         }
-        $container->enterScope('request');
-        $this->sink = $container->get('root');
-        $container->leaveScope();
+        $this->sink = $container->withinScope(
+            'request',
+            static fn(Container $active): object => $active->get('root'),
+        );
     }
 
     #[Revs(500)]
@@ -237,12 +241,14 @@ final class ProductionRequestPathBench
         static $fiber;
         if (!$fiber instanceof Fiber) {
             $runtime = $this->threeNodeRuntime(LifetimeEnum::Scoped, 'production-fiber');
-            $fiber = new Fiber(static function () use ($runtime): never {
-                $runtime->enterScope('request');
-                while (true) {
-                    Fiber::suspend($runtime->get('root'));
-                }
-            });
+            $fiber = new Fiber(static fn(): never => $runtime->withinScope(
+                'request',
+                static function (ProductionContainer $active): never {
+                    while (true) {
+                        Fiber::suspend($active->get('root'));
+                    }
+                },
+            ));
             $this->sink = $fiber->start();
 
             return;

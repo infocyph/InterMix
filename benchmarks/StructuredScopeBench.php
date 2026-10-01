@@ -23,52 +23,78 @@ final class StructuredScopeBench
     #[Revs(100)]
     public function benchCompiledAttachedResolved(): void
     {
-        [$container, $context] = $this->compiledAttachmentFixture();
-        $fiber = new Fiber(static fn(): object => $container->withinScopeContext(
-            $context,
-            static fn(ProductionContainer $active): object => $active->get('leaf'),
-        ));
-        $fiber->start();
-        $this->sink = $fiber->getReturn();
+        static $container;
+        $container ??= $this->newCompiled('attached');
+        $this->sink = $container->withinScope(
+            'request',
+            static function (ProductionContainer $owner): object {
+                $owner->get('leaf');
+                $context = $owner->captureScopeContext();
+                $fiber = new Fiber(static fn(): object => $owner->withinScopeContext(
+                    $context,
+                    static fn(ProductionContainer $active): object => $active->get('leaf'),
+                ));
+                $fiber->start();
+
+                return $fiber->getReturn();
+            },
+        );
     }
 
     #[Revs(100)]
     public function benchDynamicAttachedNestedRoundTrip(): void
     {
-        [$container, $context] = $this->dynamicAttachmentFixture();
-        $fiber = new Fiber(static fn(): object => $container->withinScopeContext(
-            $context,
-            static function (Container $active): object {
-                $active->enterScope('nested');
+        static $container;
+        $container ??= $this->newDynamic('attached-nested');
+        $this->sink = $container->withinScope(
+            'request',
+            static function (Container $owner): object {
+                $owner->get('leaf');
+                $context = $owner->captureScopeContext();
+                $fiber = new Fiber(static fn(): object => $owner->withinScopeContext(
+                    $context,
+                    static fn(Container $active): object => $active->withinScope(
+                        'nested',
+                        static fn(Container $nested): object => $nested->get('leaf'),
+                    ),
+                ));
+                $fiber->start();
 
-                try {
-                    return $active->get('leaf');
-                } finally {
-                    $active->leaveScope();
-                }
+                return $fiber->getReturn();
             },
-        ));
-        $fiber->start();
-        $this->sink = $fiber->getReturn();
+        );
     }
 
     #[Revs(100)]
     public function benchDynamicAttachedResolved(): void
     {
-        [$container, $context] = $this->dynamicAttachmentFixture();
-        $fiber = new Fiber(static fn(): object => $container->withinScopeContext(
-            $context,
-            static fn(Container $active): object => $active->get('leaf'),
-        ));
-        $fiber->start();
-        $this->sink = $fiber->getReturn();
+        static $container;
+        $container ??= $this->newDynamic('attached');
+        $this->sink = $container->withinScope(
+            'request',
+            static function (Container $owner): object {
+                $owner->get('leaf');
+                $context = $owner->captureScopeContext();
+                $fiber = new Fiber(static fn(): object => $owner->withinScopeContext(
+                    $context,
+                    static fn(Container $active): object => $active->get('leaf'),
+                ));
+                $fiber->start();
+
+                return $fiber->getReturn();
+            },
+        );
     }
 
     #[Revs(200)]
     public function benchDynamicCaptureContext(): void
     {
-        [, $context] = $this->dynamicAttachmentFixture();
-        $this->sink = $context;
+        static $container;
+        $container ??= $this->newDynamic('capture');
+        $this->sink = $container->withinScope(
+            'request',
+            static fn(Container $active): ScopeContext => $active->captureScopeContext(),
+        );
     }
 
     #[Revs(100)]
@@ -77,15 +103,12 @@ final class StructuredScopeBench
         static $container;
         $container ??= $this->newDynamic('fiber-isolated');
 
-        $fiber = new Fiber(static function () use ($container): object {
-            $container->enterScope('request');
-
-            try {
-                return $container->get('leaf');
-            } finally {
-                $container->leaveScope();
-            }
-        });
+        $fiber = new Fiber(
+            static fn(): object => $container->withinScope(
+                'request',
+                static fn(Container $active): object => $active->get('leaf'),
+            ),
+        );
         $fiber->start();
         $this->sink = $fiber->getReturn();
     }
@@ -93,41 +116,19 @@ final class StructuredScopeBench
     #[Revs(1000)]
     public function benchSequentialCompiledResolved(): void
     {
-        $this->sink = $this->sequentialCompiled()->get('leaf');
+        $this->sink = $this->sequentialCompiled()->withinScope(
+            'request',
+            static fn(ProductionContainer $active): object => $active->get('leaf'),
+        );
     }
 
     #[Revs(1000)]
     public function benchSequentialDynamicResolved(): void
     {
-        $this->sink = $this->sequentialDynamic()->get('leaf');
-    }
-
-    /** @return array{ProductionContainer, ScopeContext} */
-    private function compiledAttachmentFixture(): array
-    {
-        static $fixture;
-        if (!is_array($fixture)) {
-            $container = $this->newCompiled('attached');
-            $container->enterScope('request');
-            $container->get('leaf');
-            $fixture = [$container, $container->captureScopeContext()];
-        }
-
-        return $fixture;
-    }
-
-    /** @return array{Container, ScopeContext} */
-    private function dynamicAttachmentFixture(): array
-    {
-        static $fixture;
-        if (!is_array($fixture)) {
-            $container = $this->newDynamic('attached');
-            $container->enterScope('request');
-            $container->get('leaf');
-            $fixture = [$container, $container->captureScopeContext()];
-        }
-
-        return $fixture;
+        $this->sink = $this->sequentialDynamic()->withinScope(
+            'request',
+            static fn(Container $active): object => $active->get('leaf'),
+        );
     }
 
     private function newCompiled(string $purpose): ProductionContainer
@@ -161,8 +162,6 @@ final class StructuredScopeBench
         static $container;
         if (!$container instanceof ProductionContainer) {
             $container = $this->newCompiled('sequential');
-            $container->enterScope('request');
-            $container->get('leaf');
         }
 
         return $container;
@@ -173,8 +172,6 @@ final class StructuredScopeBench
         static $container;
         if (!$container instanceof Container) {
             $container = $this->newDynamic('sequential');
-            $container->enterScope('request');
-            $container->get('leaf');
         }
 
         return $container;

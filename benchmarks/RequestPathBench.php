@@ -72,9 +72,10 @@ final class RequestPathBench
             $this->alias('first-scope'),
             LifetimeEnum::Scoped,
         )->build();
-        $container->enterScope('request');
-        $this->sink = $container->get('root');
-        $container->leaveScope();
+        $this->sink = $container->withinScope(
+            'request',
+            static fn(Container $active): object => $active->get('root'),
+        );
     }
 
     #[Revs(100)]
@@ -108,10 +109,15 @@ final class RequestPathBench
                 $this->alias('hot-scope'),
                 LifetimeEnum::Scoped,
             )->build();
-            $container->enterScope('request');
-            $container->get('root');
+            $container->withinScope(
+                'request',
+                static fn(Container $active): object => $active->get('root'),
+            );
         }
-        $this->sink = $container->get('root');
+        $this->sink = $container->withinScope(
+            'request',
+            static fn(Container $active): object => $active->get('root'),
+        );
     }
 
     #[Revs(1000)]
