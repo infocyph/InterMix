@@ -27,6 +27,8 @@ class InvocationManager
     /** @var array<int|string, list<LifetimeEnum>> */
     private array $lifetimeStacks = [];
 
+    private bool $singletonResolutionActive = false;
+
     public function __construct(
         protected Repository $repository,
         protected Container $container,
@@ -218,6 +220,10 @@ class InvocationManager
 
     private function assertScopedResolutionAllowed(string $id): void
     {
+        if (!$this->singletonResolutionActive) {
+            return;
+        }
+
         $stack = $this->lifetimeStacks[$this->resolutionOwner()] ?? [];
         if (in_array(LifetimeEnum::Singleton, $stack, true)) {
             throw new ContainerException(
@@ -296,12 +302,14 @@ class InvocationManager
         if ($this->lifetimeStacks[$owner] === []) {
             unset($this->lifetimeStacks[$owner]);
         }
+        $this->singletonResolutionActive = $this->lifetimeStacks !== [];
     }
 
     private function pushLifetime(LifetimeEnum $lifetime): void
     {
         $owner = $this->resolutionOwner();
         $this->lifetimeStacks[$owner][] = $lifetime;
+        $this->singletonResolutionActive = true;
     }
 
     private function resolutionOwner(): string
