@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\DI\Internal\ClassResolution;
 use Infocyph\InterMix\DI\Support\DebugTracer;
@@ -207,7 +208,7 @@ class SpyCachePool implements CacheItemPoolInterface
 }
 
 it('collects a readable trace', function () {
-    $c = Container::instance('intermix')->options()->enableDebugTracing();
+    $c = new ConfigurationContainer('intermix')->options()->enableDebugTracing();
     $c->definitions()->bind(FooService::class, fn() => new FooService());
 
     $trace = $c->end()->debug(FooService::class);
@@ -217,7 +218,7 @@ it('collects a readable trace', function () {
 });
 
 it('switches concrete by environment', function () {
-    $c = Container::instance('intermix')
+    $c = new ConfigurationContainer('intermix')
         ->options()->setEnvironment('prod')
         ->registration()->end();
 
@@ -232,7 +233,7 @@ it('switches concrete by environment', function () {
 
 it('defers initialisation when lazy-loading is enabled', function () {
     $flag = false;
-    $c = Container::instance('intermix')->options()->enableLazyLoading();
+    $c = new ConfigurationContainer('intermix')->options()->enableLazyLoading();
 
     $c->definitions()->bind('heavy', function () use (&$flag) {
         $flag = true;
@@ -246,7 +247,7 @@ it('defers initialisation when lazy-loading is enabled', function () {
 });
 
 it('honours singleton vs transient vs scoped lifetimes', function () {
-    $c = Container::instance('intermix');
+    $c = new ConfigurationContainer('intermix');
 
     // singleton
     $c->definitions()->bind('uniq', fn() => new stdClass(), LifetimeEnum::Singleton);
@@ -267,7 +268,7 @@ it('honours singleton vs transient vs scoped lifetimes', function () {
 });
 
 it('stores resolved entries only through lifetime-aware keys', function () {
-    $c = Container::instance(uniqid('lifetime_keys_'));
+    $c = new ConfigurationContainer(uniqid('lifetime_keys_'));
     $repo = $c->getRepository();
 
     $c->definitions()->bind('svc.singleton', fn() => new stdClass(), LifetimeEnum::Singleton);
@@ -289,7 +290,7 @@ it('stores resolved entries only through lifetime-aware keys', function () {
 });
 
 it('honours transient and scoped lifetimes for class-string definitions', function () {
-    $c = Container::instance(uniqid('class_string_lifetimes_'));
+    $c = new ConfigurationContainer(uniqid('class_string_lifetimes_'));
     $c->definitions()->bind('class.transient', stdClass::class, LifetimeEnum::Transient);
     $c->definitions()->bind('class.scoped', stdClass::class, LifetimeEnum::Scoped);
 
@@ -306,7 +307,7 @@ it('honours transient and scoped lifetimes for class-string definitions', functi
 });
 
 it('reads scoped getReturn values from the current scope key', function () {
-    $c = Container::instance(uniqid('scope_return_'));
+    $c = new ConfigurationContainer(uniqid('scope_return_'));
     $repo = $c->getRepository();
     $c->definitions()->bind('scope.return', fn() => new stdClass(), LifetimeEnum::Scoped);
     $repo->setResolved('scope.return', ['instance' => new stdClass(), 'returned' => 'stale-base']);
@@ -324,7 +325,7 @@ it('reads scoped getReturn values from the current scope key', function () {
 });
 
 it('routes call() definition IDs through lifetime-aware get()', function () {
-    $c = Container::instance(uniqid('call_lifetime_'));
+    $c = new ConfigurationContainer(uniqid('call_lifetime_'));
     $c->definitions()->bind('svc.scoped', fn() => new stdClass(), LifetimeEnum::Scoped);
     $c->definitions()->bind('svc.transient', fn() => new stdClass(), LifetimeEnum::Transient);
 
@@ -341,7 +342,7 @@ it('routes call() definition IDs through lifetime-aware get()', function () {
 });
 
 it('factory binding is deferred until lifetime selection', function () {
-    $c = Container::instance(uniqid('factory_deferred_'));
+    $c = new ConfigurationContainer(uniqid('factory_deferred_'));
     $repo = $c->getRepository();
 
     $pending = $c->factory(
@@ -358,7 +359,7 @@ it('factory binding is deferred until lifetime selection', function () {
 });
 
 it('offers the same sugar directly on DefinitionManager', function () {
-    $c = Container::instance(uniqid('mp_'));
+    $c = new ConfigurationContainer(uniqid('mp_'));
     $def = $c->definitions();
 
     // (1) property assignment on the manager
@@ -390,7 +391,7 @@ it('offers the same sugar directly on DefinitionManager', function () {
 });
 
 it('generates a preload list', function () {
-    $c = Container::instance('intermix');
+    $c = new ConfigurationContainer('intermix');
     $file = sys_get_temp_dir() . '/_preload.php';
     (new PreloadGenerator())->generate($c, $file);
 
@@ -401,7 +402,7 @@ it('generates a preload list', function () {
 });
 
 it('fails safely when a generated file directory does not exist', function () {
-    $c = Container::instance(uniqid('missing_generated_directory_'));
+    $c = new ConfigurationContainer(uniqid('missing_generated_directory_'));
     $directory = sys_get_temp_dir() . '/intermix-missing-' . uniqid();
 
     expect(fn() => $c->compileTo($directory . '/compiled.php'))
@@ -411,7 +412,7 @@ it('fails safely when a generated file directory does not exist', function () {
 });
 
 it('isolates resolved instances per scope', function () {
-    $c = Container::instance('intermix');
+    $c = new ConfigurationContainer('intermix');
     $c->definitions()->bind('obj', fn() => new stdClass(), lifetime: Infocyph\InterMix\DI\Support\LifetimeEnum::Scoped);
 
     $a = $c->get('obj');
@@ -431,7 +432,7 @@ it('imports a supplied service provider through the builder', function () {
 
 it('supports property / array / callable sugar on the container', function () {
     /** fresh alias so each run is isolated */
-    $c = Container::instance(uniqid('cs_'));
+    $c = new ConfigurationContainer(uniqid('cs_'));
 
     // (1) property assignment → definition
     $c->logger = fn() => new DummyLogger();
@@ -455,7 +456,7 @@ it('supports property / array / callable sugar on the container', function () {
 });
 
 it('resolves findByTag() eagerly and tagged() lazily', function () {
-    $c = Container::instance(uniqid('tag_modes_'));
+    $c = new ConfigurationContainer(uniqid('tag_modes_'));
     $eagerBuilt = 0;
     $lazyBuilt = 0;
     $event = new TagEvent();
@@ -489,7 +490,7 @@ it('resolves findByTag() eagerly and tagged() lazily', function () {
 });
 
 it('lets me wire and use services in one-liners', function () {
-    $c = Container::instance(uniqid('e2e_'));
+    $c = new ConfigurationContainer(uniqid('e2e_'));
 
     $c->logger = fn() => new DummyLogger();
     $c['now'] = fn() => new DateTimeImmutable();
@@ -510,7 +511,7 @@ it('lets me wire and use services in one-liners', function () {
 });
 
 it('applies environment-scoped lifetime/tag overrides', function () {
-    $c = Container::instance(uniqid('env_meta_'));
+    $c = new ConfigurationContainer(uniqid('env_meta_'));
 
     $c->definitions()->bind('svc', fn() => new stdClass(), LifetimeEnum::Singleton, ['base']);
     $c->options()
@@ -527,7 +528,7 @@ it('applies environment-scoped lifetime/tag overrides', function () {
 });
 
 it('supports first-class scope lifecycle API', function () {
-    $c = Container::instance(uniqid('scope_api_'));
+    $c = new ConfigurationContainer(uniqid('scope_api_'));
     $c->definitions()->bind('scoped_obj', fn() => new stdClass(), LifetimeEnum::Scoped);
 
     $first = $c->enterScope('req-1')->get('scoped_obj');
@@ -541,7 +542,7 @@ it('supports first-class scope lifecycle API', function () {
 });
 
 it('restores parent scope after nested withinScope', function () {
-    $c = Container::instance(uniqid('nested_scope_'));
+    $c = new ConfigurationContainer(uniqid('nested_scope_'));
     $c->definitions()->bind('scoped_obj', fn() => new stdClass(), LifetimeEnum::Scoped);
 
     $outerFirst = $c->enterScope('outer')->get('scoped_obj');
@@ -553,7 +554,7 @@ it('restores parent scope after nested withinScope', function () {
 });
 
 it('exposes seeded instances only inside their scope', function () {
-    $c = Container::instance(uniqid('seeded_scope_'));
+    $c = new ConfigurationContainer(uniqid('seeded_scope_'));
     $global = new stdClass();
     $scoped = new stdClass();
     $c->definitions()->bind('runtime.value', $global);
@@ -569,7 +570,7 @@ it('exposes seeded instances only inside their scope', function () {
 });
 
 it('injects seeded instances by type without registering definitions', function () {
-    $c = Container::instance(uniqid('seeded_injection_'));
+    $c = new ConfigurationContainer(uniqid('seeded_injection_'));
     $seeded = new ScopeSeedDependency();
 
     $resolved = $c->withinScope(
@@ -588,7 +589,7 @@ it('injects seeded instances by type without registering definitions', function 
 });
 
 it('supports null scope seeds and restores outer seeds after nesting', function () {
-    $c = Container::instance(uniqid('nested_seeded_scope_'));
+    $c = new ConfigurationContainer(uniqid('nested_seeded_scope_'));
     $outer = new stdClass();
     $inner = new stdClass();
 
@@ -607,7 +608,7 @@ it('supports null scope seeds and restores outer seeds after nesting', function 
 });
 
 it('isolates singleton definition resolution cache per environment', function () {
-    $c = Container::instance(uniqid('env_isolation_'));
+    $c = new ConfigurationContainer(uniqid('env_isolation_'));
 
     $c->options()
         ->bindInterfaceForEnv('prod', PaymentGateway::class, StripeGateway::class)
@@ -636,7 +637,7 @@ it('isolates singleton definition resolution cache per environment', function ()
 });
 
 it('exports a dependency graph from tracer instrumentation', function () {
-    $c = Container::instance(uniqid('graph_'));
+    $c = new ConfigurationContainer(uniqid('graph_'));
     $c->options()->enableDebugTracing(true, TraceLevelEnum::Verbose)->end();
 
     $c->definitions()->bind('dep', fn() => new stdClass());
@@ -659,7 +660,7 @@ it('exports a dependency graph from tracer instrumentation', function () {
 });
 
 it('accumulates dependency edge counts and clears graph state', function () {
-    $c = Container::instance(uniqid('graph_counts_'));
+    $c = new ConfigurationContainer(uniqid('graph_counts_'));
     $c->options()->enableDebugTracing(true, TraceLevelEnum::Verbose)->end();
 
     $c->definitions()->bind('dep', fn() => new stdClass(), LifetimeEnum::Transient);
@@ -687,7 +688,7 @@ it('accumulates dependency edge counts and clears graph state', function () {
 });
 
 it('restores tracer configuration after debug inspection', function () {
-    $c = Container::instance(uniqid('debug_restore_'));
+    $c = new ConfigurationContainer(uniqid('debug_restore_'));
     $tracer = $c->tracer();
     $tracer->setLevel(TraceLevelEnum::Off);
     $tracer->setCaptureLocation(false);
@@ -699,7 +700,7 @@ it('restores tracer configuration after debug inspection', function () {
 });
 
 it('keeps the repository tracing gate synchronized with direct tracer changes', function () {
-    $c = Container::instance(uniqid('tracing_gate_'));
+    $c = new ConfigurationContainer(uniqid('tracing_gate_'));
     $repository = $c->getRepository();
     $tracer = $c->tracer();
 
@@ -713,7 +714,7 @@ it('keeps the repository tracing gate synchronized with direct tracer changes', 
 });
 
 it('does not leak resolved-resource state when make() fails', function () {
-    $c = Container::instance(uniqid('make_leak_'));
+    $c = new ConfigurationContainer(uniqid('make_leak_'));
 
     expect(fn() => $c->make(FailingMakeTarget::class, 'required'))
         ->toThrow(ContainerException::class);
@@ -725,7 +726,7 @@ it('does not leak resolved-resource state when make() fails', function () {
 });
 
 it('allows class-string self binding and rejects scalar self aliases', function () {
-    $c = Container::instance(uniqid('self_bind_'));
+    $c = new ConfigurationContainer(uniqid('self_bind_'));
     $c->definitions()->bind(CompiledDep::class, CompiledDep::class);
 
     expect($c->get(CompiledDep::class))->toBeInstanceOf(CompiledDep::class);
@@ -736,7 +737,7 @@ it('allows class-string self binding and rejects scalar self aliases', function 
 
 it('does not persist runtime objects to PSR-6 definition cache by default', function () {
     $pool = new SpyCachePool();
-    $c = Container::instance(uniqid('cache_safe_'));
+    $c = new ConfigurationContainer(uniqid('cache_safe_'));
     $c->definitions()->enableDefinitionCache($pool);
     $c->definitions()->bind('unsafe.obj', fn() => new stdClass());
     $c->definitions()->bind('safe.cfg', ['a' => 1, 'b' => ['c' => 2]]);
@@ -749,7 +750,7 @@ it('does not persist runtime objects to PSR-6 definition cache by default', func
 });
 
 it('validates callable parsing for malformed method strings', function () {
-    $c = Container::instance(uniqid('callable_parse_'));
+    $c = new ConfigurationContainer(uniqid('callable_parse_'));
 
     expect(fn() => $c->parseCallable('Foo@'))->toThrow(ContainerException::class);
     expect(fn() => $c->parseCallable('@bar'))->toThrow(ContainerException::class);
@@ -758,7 +759,7 @@ it('validates callable parsing for malformed method strings', function () {
 });
 
 it('validates class and method existence in callable parsing', function () {
-    $c = Container::instance(uniqid('callable_exists_'));
+    $c = new ConfigurationContainer(uniqid('callable_exists_'));
 
     expect(fn() => $c->parseCallable('Missing\\CallableClass@handle'))
         ->toThrow(ContainerException::class, 'does not exist');
@@ -768,7 +769,7 @@ it('validates class and method existence in callable parsing', function () {
 });
 
 it('supports contextual binding per consumer', function () {
-    $c = Container::instance(uniqid('contextual_'));
+    $c = new ConfigurationContainer(uniqid('contextual_'));
     $c->when(OrderService::class)->needs(ContextLogger::class)->give(OrderLogger::class);
     $c->when(BillingService::class)->needs(ContextLogger::class)->give(BillingLogger::class);
 
@@ -780,7 +781,7 @@ it('supports contextual binding per consumer', function () {
 });
 
 it('runs lifecycle hooks for resolving and resolved services', function () {
-    $c = Container::instance(uniqid('hooks_'));
+    $c = new ConfigurationContainer(uniqid('hooks_'));
     $events = [];
 
     $c->onResolving('hook.svc', function (string $id) use (&$events): void {
@@ -797,7 +798,7 @@ it('runs lifecycle hooks for resolving and resolved services', function () {
 });
 
 it('runs scope-leave lifecycle hooks', function () {
-    $c = Container::instance(uniqid('hook_scope_'));
+    $c = new ConfigurationContainer(uniqid('hook_scope_'));
     $events = [];
 
     $c->onScopeLeave('request', function (string $scope) use (&$events): void {
@@ -811,7 +812,7 @@ it('runs scope-leave lifecycle hooks', function () {
 });
 
 it('returns lazy tagged resolvers without eager instantiation', function () {
-    $c = Container::instance(uniqid('tag_lazy_'));
+    $c = new ConfigurationContainer(uniqid('tag_lazy_'));
     $built = 0;
     $c->definitions()->bind('lazy.a', function () use (&$built) {
         $built++;
@@ -833,7 +834,7 @@ it('returns lazy tagged resolvers without eager instantiation', function () {
 it('can generate and load compiled resolver maps', function () {
     $path = sys_get_temp_dir() . '/intermix_compiled_' . uniqid() . '.php';
 
-    $source = Container::instance(uniqid('compiled_src_'));
+    $source = new ConfigurationContainer(uniqid('compiled_src_'));
     $source->definitions()->bind('compiled.dep', CompiledDep::class);
     $source->definitions()->bind('compiled.svc', CompiledSvc::class);
     $source->compileTo($path);
@@ -842,7 +843,7 @@ it('can generate and load compiled resolver maps', function () {
     $source->compileTo($path, load: true);
     expect($source->getRepository()->getCompiledResolver('compiled.svc'))->toBeCallable();
 
-    $target = Container::instance(uniqid('compiled_tgt_'));
+    $target = new ConfigurationContainer(uniqid('compiled_tgt_'));
     $target->definitions()->bind('compiled.dep', CompiledDep::class);
     $target->definitions()->bind('compiled.svc', CompiledSvc::class);
     $target->useCompiled($path);
@@ -866,7 +867,7 @@ it('supports bounded reflection cache controls', function () {
 });
 
 it('provides explicit container validation output', function () {
-    $c = Container::instance(uniqid('validate_'));
+    $c = new ConfigurationContainer(uniqid('validate_'));
     $c->definitions()->bind('broken.target', 'Missing\\NotFoundClass');
 
     $issues = $c->validate();
