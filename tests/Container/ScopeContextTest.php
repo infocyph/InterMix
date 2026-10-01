@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 use Fiber;
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\DI\ScopeContext;
 use Infocyph\InterMix\Exceptions\ContainerException;
 
 it('distinguishes physical carrier isolation from explicit logical scope sharing', function () {
-    $container = new Container(uniqid('scope_context_identity_'));
+    $container = new ConfigurationContainer(uniqid('scope_context_identity_'));
     $container->scoped('leaf', stdClass::class);
     $container->enterScope('request');
 
@@ -37,7 +38,7 @@ it('distinguishes physical carrier isolation from explicit logical scope sharing
 });
 
 it('captures an opaque scope context only from an active logical scope', function () {
-    $container = new Container(uniqid('scope_context_capture_'));
+    $container = new ConfigurationContainer(uniqid('scope_context_capture_'));
 
     expect(fn() => $container->captureScopeContext())
         ->toThrow(ContainerException::class, 'without an active scope');
@@ -51,7 +52,7 @@ it('captures an opaque scope context only from an active logical scope', functio
 });
 
 it('preserves materialized scoped identity and seeds when sequential state is promoted', function () {
-    $container = new Container(uniqid('scope_context_promotion_'));
+    $container = new ConfigurationContainer(uniqid('scope_context_promotion_'));
     $container->scoped('leaf', stdClass::class)
         ->scoped('nullable', stdClass::class);
     $container->enterScope('request', ['nullable' => null]);
@@ -78,7 +79,7 @@ it('preserves materialized scoped identity and seeds when sequential state is pr
 });
 
 it('shares one logical scope across sibling execution carriers only when explicitly attached', function () {
-    $container = new Container(uniqid('scope_context_siblings_'));
+    $container = new ConfigurationContainer(uniqid('scope_context_siblings_'));
     $container->scoped('leaf', stdClass::class);
     $container->enterScope('request');
     $context = $container->captureScopeContext();
@@ -102,7 +103,7 @@ it('shares one logical scope across sibling execution carriers only when explici
 });
 
 it('keeps overlapping sibling attachments on the same logical scope', function () {
-    $container = new Container(uniqid('scope_context_overlapping_siblings_'));
+    $container = new ConfigurationContainer(uniqid('scope_context_overlapping_siblings_'));
     $container->scoped('leaf', stdClass::class);
     $container->enterScope('request');
     $parent = $container->get('leaf');
@@ -145,7 +146,7 @@ it('keeps overlapping sibling attachments on the same logical scope', function (
 });
 
 it('does not fire the owning scope leave hook when children attach or detach', function () {
-    $container = new Container(uniqid('scope_context_owner_hook_'));
+    $container = new ConfigurationContainer(uniqid('scope_context_owner_hook_'));
     $calls = [];
     $container->onScopeLeave(
         'request',
@@ -175,7 +176,7 @@ it('does not fire the owning scope leave hook when children attach or detach', f
 });
 
 it('propagates a logical scope captured from a parent Fiber to a child Fiber', function () {
-    $container = new Container(uniqid('scope_context_fiber_parent_'));
+    $container = new ConfigurationContainer(uniqid('scope_context_fiber_parent_'));
     $container->scoped('leaf', stdClass::class);
 
     $parentFiber = new Fiber(static function () use ($container): array {
@@ -201,8 +202,8 @@ it('propagates a logical scope captured from a parent Fiber to a child Fiber', f
 });
 
 it('rejects a scope context owned by another container', function () {
-    $owner = new Container(uniqid('scope_context_owner_'));
-    $foreign = new Container(uniqid('scope_context_foreign_'));
+    $owner = new ConfigurationContainer(uniqid('scope_context_owner_'));
+    $foreign = new ConfigurationContainer(uniqid('scope_context_foreign_'));
     $owner->enterScope('request');
     $context = $owner->captureScopeContext();
 
@@ -218,7 +219,7 @@ it('rejects a scope context owned by another container', function () {
 });
 
 it('rejects forged scope-context implementations', function () {
-    $container = new Container(uniqid('scope_context_forged_'));
+    $container = new ConfigurationContainer(uniqid('scope_context_forged_'));
     $forged = new class implements ScopeContext {};
     $fiber = new Fiber(static fn(): mixed => $container->withinScopeContext(
         $forged,
@@ -230,7 +231,7 @@ it('rejects forged scope-context implementations', function () {
 });
 
 it('rejects a captured context after its owning scope closes', function () {
-    $container = new Container(uniqid('scope_context_stale_'));
+    $container = new ConfigurationContainer(uniqid('scope_context_stale_'));
     $container->enterScope('request');
     $context = $container->captureScopeContext();
     $container->leaveScope();
@@ -245,7 +246,7 @@ it('rejects a captured context after its owning scope closes', function () {
 });
 
 it('does not allow scope contexts to be serialized', function () {
-    $container = new Container(uniqid('scope_context_serialize_'));
+    $container = new ConfigurationContainer(uniqid('scope_context_serialize_'));
     $container->enterScope('request');
     $context = $container->captureScopeContext();
 
@@ -256,7 +257,7 @@ it('does not allow scope contexts to be serialized', function () {
 });
 
 it('detaches an attached scope context when the child callback throws', function () {
-    $container = new Container(uniqid('scope_context_throw_'));
+    $container = new ConfigurationContainer(uniqid('scope_context_throw_'));
     $container->scoped('leaf', stdClass::class);
     $container->enterScope('request');
     $parent = $container->get('leaf');
@@ -292,7 +293,7 @@ it('detaches an attached scope context when the child callback throws', function
 });
 
 it('unwinds nested child scopes before detaching an attached context after failure', function () {
-    $container = new Container(uniqid('scope_context_nested_throw_'));
+    $container = new ConfigurationContainer(uniqid('scope_context_nested_throw_'));
     $container->scoped('leaf', stdClass::class);
     $nestedLeaves = [];
     $container->onScopeLeave(
@@ -337,7 +338,7 @@ it('unwinds nested child scopes before detaching an attached context after failu
 });
 
 it('rejects attachment when the target carrier already owns a scope', function () {
-    $container = new Container(uniqid('scope_context_busy_'));
+    $container = new ConfigurationContainer(uniqid('scope_context_busy_'));
     $container->enterScope('request');
     $context = $container->captureScopeContext();
 
@@ -358,7 +359,7 @@ it('rejects attachment when the target carrier already owns a scope', function (
 });
 
 it('rejects direct scope replacement after logical scope propagation starts', function () {
-    $container = new Container(uniqid('scope_context_direct_replacement_'));
+    $container = new ConfigurationContainer(uniqid('scope_context_direct_replacement_'));
     $container->enterScope('request');
     $context = $container->captureScopeContext();
 
