@@ -430,7 +430,7 @@ it('imports a supplied service provider through the builder', function () {
     expect($runtime->get(FooService::class))->toBeInstanceOf(FooService::class);
 });
 
-it('supports property / array / callable sugar on the container', function () {
+it('supports retained read sugar with explicit internal registration', function () {
     /** fresh alias so each run is isolated */
     $c = new ConfigurationContainer(uniqid('cs_'));
 
@@ -438,20 +438,20 @@ it('supports property / array / callable sugar on the container', function () {
     $c->logger = fn() => new DummyLogger();
 
     // (2) array assignment → definition
-    $c['cfg'] = fn() => ['debug' => true, 'dsn' => 'mysql://dummy'];
+    $c->definitions()->bind('cfg', fn() => ['debug' => true, 'dsn' => 'mysql://dummy']);
 
     // ---------- retrieval paths ----------
     $viaCallObject = $c('logger');   // __invoke
     $viaMagicGet = $c->logger;     // __get
-    $viaArrayGet = $c['logger'];   // ArrayAccess
+    $viaExplicitGet = $c->get('logger');
 
     expect($viaCallObject)
         ->toBeInstanceOf(DummyLogger::class)
         ->and($viaMagicGet)->toBe($viaCallObject)
-        ->and($viaArrayGet)->toBe($viaCallObject)
+        ->and($viaExplicitGet)->toBe($viaCallObject)
         ->and($c('cfg'))
         ->toHaveKey('debug', true)
-        ->and($c['cfg'])->toBe($c('cfg'))
+        ->and($c->get('cfg'))->toBe($c('cfg'))
         ->and($c->cfg)->toBe($c('cfg'));
 });
 
@@ -493,7 +493,7 @@ it('lets me wire and use services in one-liners', function () {
     $c = new ConfigurationContainer(uniqid('e2e_'));
 
     $c->logger = fn() => new DummyLogger();
-    $c['now'] = fn() => new DateTimeImmutable();
+    $c->definitions()->bind('now', fn() => new DateTimeImmutable());
 
     // the manager can re-use them transparently
     $def = $c->definitions();
