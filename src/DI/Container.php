@@ -294,8 +294,7 @@ class Container implements ContainerInterface
     public function resolveNow(
         string|Closure|callable|array|null $spec,
         array $parameters = [],
-    ): mixed
-    {
+    ): mixed {
         if ($spec === null) {
             return $this;
         }
@@ -370,8 +369,7 @@ class Container implements ContainerInterface
         mixed $definition,
         LifetimeEnum $lifetime = LifetimeEnum::Singleton,
         array $tags = [],
-    ): self
-    {
+    ): self {
         $this->definitions()->bind($id, $definition, $lifetime, $tags);
 
         return $this;
@@ -383,8 +381,7 @@ class Container implements ContainerInterface
         Closure $factory,
         LifetimeEnum $lifetime = LifetimeEnum::Singleton,
         array $tags = [],
-    ): self
-    {
+    ): self {
         return $this->bind($id, new DirectFactory($factory, $this), $lifetime, $tags);
     }
 
@@ -634,8 +631,7 @@ class Container implements ContainerInterface
         string $method,
         string $spec,
         ?string $separator = null,
-    ): array
-    {
+    ): array {
         $class = trim($class);
         $method = trim($method);
         if ($class === '' || $method === '') {
