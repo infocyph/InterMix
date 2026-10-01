@@ -46,7 +46,8 @@ function removeStaticBatchArtifact(string $path): void
 }
 
 it('keeps lifecycle-hooked services compiled without affecting unhooked neighbors', function () {
-    $builder = ContainerBuilder::create(uniqid('static_batch_hooks_'));
+    $builder = ContainerBuilder::create(uniqid('static_batch_hooks_'))
+        ->releaseIdentity('intermix-test');
     $resolved = 0;
     $builder->autowire('stable', StaticBatchStableService::class)
         ->autowire('hooked', StaticBatchDynamicService::class)
@@ -73,7 +74,8 @@ it('keeps lifecycle-hooked services compiled without affecting unhooked neighbor
 });
 
 it('compiles deterministic property attributes when property attributes are enabled', function () {
-    $builder = ContainerBuilder::create(uniqid('static_batch_property_'));
+    $builder = ContainerBuilder::create(uniqid('static_batch_property_'))
+        ->releaseIdentity('intermix-test');
     $builder->autowire(StaticBatchStableService::class, StaticBatchStableService::class)
         ->autowire('attributed', StaticBatchAttributedPropertyService::class);
     $builder->enablePropertyAttributes();
@@ -94,7 +96,8 @@ it('compiles deterministic property attributes when property attributes are enab
 });
 
 it('uses the compiled service for calls to known definition ids', function () {
-    $builder = ContainerBuilder::create(uniqid('static_batch_call_'));
+    $builder = ContainerBuilder::create(uniqid('static_batch_call_'))
+        ->releaseIdentity('intermix-test');
     $builder->autowire('callable', StaticBatchCallableService::class);
 
     $path = staticBatchArtifactPath();
@@ -111,7 +114,8 @@ it('uses the compiled service for calls to known definition ids', function () {
 });
 
 it('keeps explicit runtime factories as isolated dynamic services', function () {
-    $builder = ContainerBuilder::create(uniqid('static_batch_dynamic_defs_'));
+    $builder = ContainerBuilder::create(uniqid('static_batch_dynamic_defs_'))
+        ->releaseIdentity('intermix-test');
     $builder->autowire(StaticBatchStableService::class, StaticBatchStableService::class)
         ->factory(
             'factory',
@@ -147,7 +151,8 @@ it('keeps explicit runtime factories as isolated dynamic services', function () 
 });
 
 it('falls back for arbitrary autowireable classes without replacing compiled state', function () {
-    $builder = ContainerBuilder::create(uniqid('static_batch_arbitrary_'));
+    $builder = ContainerBuilder::create(uniqid('static_batch_arbitrary_'))
+        ->releaseIdentity('intermix-test');
     $builder->autowire(StaticBatchStableService::class, StaticBatchStableService::class);
 
     $path = staticBatchArtifactPath();
@@ -167,6 +172,7 @@ it('falls back for arbitrary autowireable classes without replacing compiled sta
 
 it('validates the generated runtime against its metadata sidecar before loading', function () {
     $builder = ContainerBuilder::create(uniqid('static_batch_manifest_'))
+        ->releaseIdentity('intermix-test')
         ->autowire('stable', StaticBatchStableService::class);
 
     $path = staticBatchArtifactPath();
