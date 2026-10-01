@@ -26,7 +26,7 @@ final class StaticRuntimeRenderer
      */
     public function render(DefinitionGraph $graph, array $plans, array $slots): string
     {
-        $guardCaptive = $this->hasSingletonPlan($plans);
+        $guardCaptive = new StaticScopeAccessRenderer()->requiresCaptiveGuard($plans);
         $invocationRenderer = new StaticInvocationRenderer();
         $lifecycleRenderer = new StaticLifecycleHookRenderer();
         $returnRenderer = new StaticReturnRenderer();
@@ -137,18 +137,6 @@ final class StaticRuntimeRenderer
         }
 
         return $class . '::' . $plan['method'] . '(' . implode(', ', $arguments) . ')';
-    }
-
-    /** @param array<string, ServicePlan> $plans */
-    private function hasSingletonPlan(array $plans): bool
-    {
-        foreach ($plans as $plan) {
-            if ($plan['lifetime'] === LifetimeEnum::Singleton && $plan['kind'] !== 'value') {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /**
