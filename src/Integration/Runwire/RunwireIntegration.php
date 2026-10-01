@@ -24,11 +24,11 @@ use LogicException;
  */
 final class RunwireIntegration
 {
+    private readonly TaskLocal $scopeContextLocal;
+
     private int $activeBoundaries = 0;
 
     private ?RuntimeContext $runtimeContext = null;
-
-    private readonly TaskLocal $scopeContextLocal;
 
     public function __construct(
         private readonly RuntimeContainerInterface $container,
@@ -114,19 +114,13 @@ final class RunwireIntegration
         try {
             return $this->container->withinScope(
                 'runwire.request',
-                function (RuntimeContainerInterface $container) use (
+                fn(RuntimeContainerInterface $container): mixed => $this->shareBoundary(
+                    $container->captureScopeContext(),
                     $request,
                     $scope,
                     $callback,
-                ): mixed {
-                    return $this->shareBoundary(
-                        $container->captureScopeContext(),
-                        $request,
-                        $scope,
-                        $callback,
-                        $container,
-                    );
-                },
+                    $container,
+                ),
                 $seeds,
             );
         } finally {
@@ -222,12 +216,6 @@ final class RunwireIntegration
         return CacheLayerRunwireIntegration::share($request, $scope, $callback);
     }
 
-    private function requireRuntime(): RuntimeContext
-    {
-        return $this->runtimeContext
-            ?? throw new LogicException('InterMix Runwire integration is not bound to a runtime.');
-    }
-
     /**
      * @param array<string, mixed> $instances
      * @return array<string, mixed>
@@ -254,6 +242,13 @@ final class RunwireIntegration
         return $seeds;
     }
 
+
+    private function requireRuntime(): RuntimeContext
+    {
+        return $this->runtimeContext
+            ?? throw new LogicException('InterMix Runwire integration is not bound to a runtime.');
+    }
+
     /**
      * @param callable(RuntimeContainerInterface): mixed $callback
      */
@@ -266,7 +261,7 @@ final class RunwireIntegration
     ): mixed {
         $runtime = $this->requireRuntime();
         $hadLocal = $scope?->hasLocal($this->scopeContextLocal) ?? false;
-        $previous = $hadLocal ? $scope?->local($this->scopeContextLocal) : null;
+        $previous = $hadLocal ? $scope->local($this->scopeContextLocal) : null;
         $scope?->setLocal($this->scopeContextLocal, $context);
 
         try {
