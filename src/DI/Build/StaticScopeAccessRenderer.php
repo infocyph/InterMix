@@ -9,20 +9,38 @@ use Infocyph\InterMix\DI\Support\LifetimeEnum;
 /** @internal */
 final class StaticScopeAccessRenderer
 {
-    public function seedGuard(int $slot, LifetimeEnum $lifetime, ?string $id = null): string
+    public function constructionGuard(LifetimeEnum $lifetime, ?string $id = null): string
     {
-        if ($lifetime === LifetimeEnum::Scoped) {
-            $serviceId = var_export($id ?? '', true);
+        if ($lifetime !== LifetimeEnum::Scoped) {
+            return '';
+        }
 
-            return "        \$scope = \$this->contextScopesActive ? \$this->compiledScope() : \$this->scope;\n"
-                . "        if (\$this->compiledSingletonResolutionActive) {\n"
-                . "            \$this->assertCompiledScopedResolution({$serviceId});\n"
-                . "        }\n"
-                . "        if (\$scope->name === 'root') {\n"
-                . "            throw new \\Infocyph\\InterMix\\Exceptions\\ContainerException("
-                . var_export("Scoped entry '" . ($id ?? '') . "' requires an active scope.", true)
-                . ");\n"
-                . "        }\n"
+        $message = var_export(
+            'Scoped entry \'' . ($id ?? '') . '\' requires an active scope.',
+            true,
+        );
+
+        return "        if (\$scope->name === 'root') {\n"
+            . "            throw new \\Infocyph\\InterMix\\Exceptions\\ContainerException({$message});\n"
+            . "        }\n\n";
+    }
+
+    public function seedGuard(
+        int $slot,
+        LifetimeEnum $lifetime,
+        ?string $id = null,
+        bool $guardCaptive = true,
+    ): string {
+        if ($lifetime === LifetimeEnum::Scoped) {
+            $source = "        \$scope = \$this->contextScopesActive ? \$this->compiledScope() : \$this->scope;\n";
+            if ($guardCaptive) {
+                $serviceId = var_export($id ?? '', true);
+                $source .= "        if (\$this->compiledSingletonResolutionActive) {\n"
+                    . "            \$this->assertCompiledScopedResolution({$serviceId});\n"
+                    . "        }\n";
+            }
+
+            return $source
                 . "        if (\$scope->hasSeeds && array_key_exists({$slot}, \$scope->seeds)) {\n"
                 . "            return \$scope->seeds[{$slot}];\n"
                 . "        }\n\n";
