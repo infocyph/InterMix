@@ -3,11 +3,10 @@ name: "Release Candidate Validation"
 on:
   pull_request:
     branches: [ "main", "master", "develop", "development" ]
-  push:
-    tags: [ "v*", "[0-9]*" ]
+  workflow_call:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: intermix-release-candidate-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:

@@ -10,7 +10,7 @@ on:
     branches: [ "main", "master", "develop", "development" ]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: intermix-security-standards-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -115,8 +115,27 @@ jobs:
             tests/Container/SwooleScopeCompatibilityTest.php \
             tests/Container/StructuredScopeRuntimeTest.php
 
+  tag-release-acceptance:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    uses: ./.github/workflows/release-acceptance.yml
+    permissions:
+      contents: read
+
+  tag-release-candidate:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    uses: ./.github/workflows/release-candidate.yml
+    permissions:
+      contents: read
+
   release:
-    needs: [phpforge, documentation, release-regression, tag-package, tag-scope]
+    needs:
+      - phpforge
+      - documentation
+      - release-regression
+      - tag-package
+      - tag-scope
+      - tag-release-acceptance
+      - tag-release-candidate
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && success()
     uses: infocyph/phpforge/.github/workflows/release.yml@main
     permissions:
