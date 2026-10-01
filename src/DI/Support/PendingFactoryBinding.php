@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Support;
 
 use Closure;
-use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\Exceptions\ContainerException;
 
 final readonly class PendingFactoryBinding
 {
     public function __construct(
-        private Container $container,
+        private ConfigurationContainer $container,
         private string $id,
         private Closure $factory,
     ) {}
