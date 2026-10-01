@@ -419,24 +419,13 @@ it('rejects runtime provider reconfiguration without constructing provider class
         );
 });
 
-it('normalizes service IDs and makes offset unset remove definitions', function () {
-    $container = releaseContainer('service-ids');
-    $stringable = new class implements Stringable {
-        public function __toString(): string
-        {
-            return 'stringable';
-        }
-    };
+it('does not expose ArrayAccess registration on built runtimes', function () {
+    $runtime = ContainerBuilder::create(uniqid('release-service-ids-'))
+        ->value('7', 'integer')
+        ->build();
 
-    $container[7] = 'integer';
-    $container[$stringable] = 'object';
-    $container['remove-me'] = 'value';
-    unset($container['remove-me']);
-
-    expect($container->get('7'))->toBe('integer')
-        ->and($container->get('stringable'))->toBe('object')
-        ->and(fn() => $container->get('remove-me'))->toThrow(NotFoundException::class)
-        ->and(fn() => $container[false] = 'invalid')->toThrow(InvalidArgumentException::class);
+    expect($runtime)->not->toBeInstanceOf(ArrayAccess::class)
+        ->and($runtime->get('7'))->toBe('integer');
 });
 
 it('resolves all property injection forms across inheritance', function () {

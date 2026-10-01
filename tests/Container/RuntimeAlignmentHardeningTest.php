@@ -129,7 +129,7 @@ it('keeps a finalized compiled graph immutable while a propagated child is attac
         expect(fn() => $builder->value('late.value', 'blocked'))
             ->toThrow(ContainerException::class, 'ContainerBuilder is finalized')
             ->and($builder->compilationReport())->toBe($report)
-            ->and($builder->build()->getRepository()->hasFunctionReference('late.value'))->toBeFalse();
+            ->and($builder->build()->has('late.value'))->toBeFalse();
 
         $child->resume();
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Fiber;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\ContainerBuilder;
+use Infocyph\InterMix\DI\Internal\ContainerAccess;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
 
@@ -196,10 +197,10 @@ it('resets only the current owned execution carrier in LIFO hook order and is id
         $container->resetCurrentExecutionScope();
 
         $container->enterScope('fresh');
-        $scope = $container->getRepository()->getScope();
+        $scope = ContainerAccess::repository($container)->getScope();
         $container->leaveScope();
 
-        return [$scope, $container->getRepository()->getScope()];
+        return [$scope, ContainerAccess::repository($container)->getScope()];
     });
     $fiber->start();
 

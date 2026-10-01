@@ -77,6 +77,13 @@ final class ConfigurationContainer extends Container
         return parent::factory($id, $factory);
     }
 
+    public function onMissing(callable $callback): self
+    {
+        parent::onMissing($callback);
+
+        return $this;
+    }
+
     public function onResolved(string $id, callable $callback): self
     {
         parent::onResolved($id, $callback);
@@ -162,7 +169,9 @@ final class ConfigurationContainer extends Container
     public function when(string $consumer): ContextualBindingBuilder
     {
         return parent::when($consumer);
-    }    public function forkConfigurationRuntime(bool $locked = true): self
+    }
+
+    public function forkConfigurationRuntime(bool $locked = true): self
     {
         $runtime = new self($this->instanceAlias);
         $this->copyConfigurationInto($runtime, $locked);
@@ -195,6 +204,4 @@ final class ConfigurationContainer extends Container
 
         return $this;
     }
-
-
 }

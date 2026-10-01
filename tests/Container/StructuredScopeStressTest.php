@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\ContainerBuilder;
+use Infocyph\InterMix\DI\Internal\ContainerAccess;
 use Infocyph\InterMix\DI\ProductionContainer;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 
@@ -92,7 +93,7 @@ function exerciseMeasuredStructuredScopeChurn(Container $container, int $iterati
 
 function structuredStressExecutionStore(Container $container): mixed
 {
-    $repository = $container->getRepository();
+    $repository = ContainerAccess::repository($container);
     $property = new ReflectionProperty($repository, 'executionScopes');
 
     return $property->getValue($repository);
