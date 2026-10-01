@@ -52,6 +52,12 @@ class InvocationManager
         return $this->callClass($classOrClosure, $method);
     }
 
+    /** @internal */
+    public function assertScopedDependencyAllowed(string $id): void
+    {
+        $this->assertScopedResolutionAllowed($id);
+    }
+
     /** @throws ContainerException|InvalidArgumentException|ReflectionException */
     public function get(string $id): mixed
     {
