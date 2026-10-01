@@ -1,299 +1,179 @@
 # InterMix
 
-[![Security & Standards](https://github.com/infocyph/InterMix/actions/workflows/security-standards.yml/badge.svg)](https://github.com/infocyph/InterMix/actions/workflows/security-standards.yml)
-![Packagist Downloads](https://img.shields.io/packagist/dt/infocyph/intermix?color=green&link=https%3A%2F%2Fpackagist.org%2Fpackages%2Finfocyph%2Fintermix)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
-![Packagist Version](https://img.shields.io/packagist/v/infocyph/intermix)
-![Packagist PHP Version](https://img.shields.io/packagist/dependency-v/infocyph/intermix/php)
-![GitHub Code Size](https://img.shields.io/github/languages/code-size/infocyph/intermix)
-[![Documentation](https://img.shields.io/badge/Documentation-InterMix-blue?logo=readthedocs&logoColor=white)](https://docs.infocyph.com/projects/intermix/)
+InterMix is a PHP 8.4+ dependency-injection and runtime utility library focused on explicit configuration, immutable runtime wiring, scoped execution, compiled resolution, and low host overhead.
 
-`InterMix` is a lightweight, high-performance PHP dependency injection and runtime utility toolkit. Dependency injection and invocation are the primary capabilities, supported by compiled resolution, Closure serialization, Fence, and fluent Remix utilities.
+InterMix 11 separates configuration from execution:
 
-> Global helper functions are optional: core APIs are namespaced and helper loading is opt-in.
-
-## Key Features
-
-- **Dependency Injection (DI)** — PSR-11 compliant container with:
-  - attribute-based injection
-  - scoped lifetimes
-  - explicit logical-scope propagation across structured Fibers/coroutines
-  - persistent-worker-safe carrier-local cleanup
-  - lazy loading
-  - environment-specific overrides
-  - debug tracing & definition-cache integration via assignable PSR-6 pool
-- **Closure Serialization** — Versioned unsigned and explicitly signed Closure payloads
-- **Fence** — Enforce singleton-style class safety
-- **Remix** — Fluent traits, proxies, and global helper functions
-- **MacroMix** — Dynamically extend objects or classes with macros
-- **Global Utilities** — Like `pipe()`, `retry()`, `measure()` and more
+- ContainerBuilder owns definitions and configuration.
+- Container and ProductionContainer execute a finalized graph.
+- RuntimeContainerInterface is the common runtime contract.
+- Scoped work uses structured scope callbacks instead of manual enter/leave pairs.
+- Optional Runwire and CacheLayer integration remains host-owned.
 
 ## Installation
 
-```bash
+~~~bash
 composer require infocyph/intermix
-```
+~~~
 
-Optional global helpers:
+Optional integrations:
 
-```php
-require_once __DIR__ . '/vendor/infocyph/intermix/src/functions.php';
-```
+~~~bash
+composer require infocyph/cachelayer:^4.0
+composer require infocyph/runwire:^2.1
+composer require opis/closure:^4.5
+~~~
 
-Current InterMix releases require PHP 8.4 or newer, as declared by `composer.json`.
+## Quick start
 
-## Quick Examples
+~~~php
+<?php
 
-### Dependency Injection
+declare(strict_types=1);
 
-```php
-use function Infocyph\InterMix\container;
-
-$c = container();
-$c->definitions()->bind('now', fn () => new DateTimeImmutable());
-
-echo $c->get('now')->format('c');
-```
-
-Enable autowiring with attributes:
-
-```php
-$c->options()->setOptions(
-    injection: true,
-    methodAttributes: true,
-    propertyAttributes: true
-);
-```
-
-Tag-based resolution:
-
-```php
-$c->definitions()->bind('a', A::class, tags: ['service']);
-$c->definitions()->bind('b', B::class, tags: ['service']);
-
-foreach ($c->findByTag('service') as $svc) {
-    $svc->handle();
-}
-```
-
-Reflection-free factories:
-
-```php
-use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 
-$c->bindFactory(
-    Database::class,
-    static fn (Container $container): Database => new Database(
-        $container->get(DatabaseConfig::class),
-    ),
-    LifetimeEnum::Singleton,
-    tags: ['infrastructure'],
-);
+final class Clock {}
 
-// Equivalent fluent lifetime selection:
-$c->factory(
-    RequestContext::class,
-    static fn (Container $container): RequestContext => new RequestContext(
-        $container->get('request.id'),
-    ),
-)->scoped();
-```
-
-Use a regular closure definition when its parameters should be autowired. Use
-`bindFactory()` or `factory()` when dependencies are explicit and request-time
-reflection should be avoided. Direct factories behave identically whether
-container injection is enabled or disabled.
-
-See full container guide at: [https://docs.infocyph.com/projects/intermix/di/overview.html](https://docs.infocyph.com/projects/intermix/di/overview.html)
-
-For consuming applications, the [development and production workflow](https://docs.infocyph.com/projects/intermix/di/development-production.html)
-explains which runtime to select, when to compile, and how to deploy the
-generated artifact safely.
-
-### Structured Request/Job Scopes
-
-InterMix keeps independent Fibers/coroutines isolated by default. When structured
-child work intentionally belongs to the same request/job scope, capture the
-opaque logical scope context and attach it around the child callback:
-
-```php
-use Infocyph\InterMix\DI\Container;
-
-$container->enterScope('request', [Request::class => $request]);
-
-try {
-    $scope = $container->captureScopeContext();
-
-    $fiber = new Fiber(static fn () => $container->withinScopeContext(
-        $scope,
-        static fn (Container $active) => $active->get(RequestService::class),
-    ));
-
-    $fiber->start();
-    $result = $fiber->getReturn();
-} finally {
-    $container->leaveScope();
-    $container->resetCurrentExecutionScope();
+final class RequestContext
+{
+    public function __construct(public string $requestId) {}
 }
-```
 
-`ScopeContext` is container-bound, process-local and non-serializable. Attached
-children share the owning logical scope's scoped instances and seeds while
-retaining carrier-local nested scopes. `resetCurrentExecutionScope()` is an
-idempotent framework/persistent-worker cleanup primitive for the current carrier.
-These semantics are identical in dynamic and generated `ProductionContainer`
-runtimes; Runwire, Swoole/OpenSwoole, PCNTL and POSIX are not production
-requirements.
+final class Handler
+{
+    public function __construct(
+        public Clock $clock,
+        public RequestContext $request,
+    ) {}
+}
 
-See the [scope guide](https://docs.infocyph.com/projects/intermix/di/scopes.html)
+$builder = ContainerBuilder::create('app')
+    ->autowire(Clock::class, Clock::class)
+    ->input(RequestContext::class)
+    ->autowire(
+        Handler::class,
+        Handler::class,
+        lifetime: LifetimeEnum::Scoped,
+        tags: ['request-handler'],
+    );
 
-### Dynamic Macros
+$runtime = $builder->build();
 
-```php
-MacroTest::mix(new class {
-    public function hello($name) {
-        return "Hey, $name!";
-    }
-});
+$result = $runtime->withinScope(
+    'request-123',
+    static fn ($active) => $active->get(Handler::class),
+    [RequestContext::class => new RequestContext('request-123')],
+);
+~~~
 
-echo (new MacroTest)->hello('Ali'); // Hey, Ali!
-```
+## Explicit definition kinds
 
-### Definition Cache (PSR-6)
+Use one builder operation per intent:
 
-```php
-use Infocyph\CacheLayer\Cache\Cache;
+~~~php
+$builder
+    ->value('app.name', 'InterMix')
+    ->autowire(Logger::class, JsonLogger::class)
+    ->factory('token', static fn () => bin2hex(random_bytes(16)))
+    ->alias(Psr\Log\LoggerInterface::class, Logger::class)
+    ->input(RequestContext::class);
+~~~
 
-$pool = Cache::memory('intermix.definitions'); // or any PSR-6 pool
-$c->definitions()->enableDefinitionCache($pool, generation: 'deployment-2026-08');
-$report = $c->definitions()->warmDefinitionCache();
-```
+A value is always returned literally. A factory is always executed as a factory. Class construction is declared with autowire.
 
-Only null, scalar, and recursively safe array values are persisted. Runtime
-service objects remain in the container's in-memory lifetime store. CacheLayer
-3.2 is recommended and integration-tested, but remains optional; any PSR-6 pool
-is supported. Cache failures fail open by default, and the optional generation
-isolates deployments without clearing the caller-owned pool.
+For compilation-safe construction recipes use FactoryDefinition:
 
-### InterMix 10 Production Runtime
-
-Use `ContainerBuilder` when production should execute a finalized generated
-container instead of the dynamic resolver graph:
-
-```php
-use Infocyph\InterMix\DI\ContainerBuilder;
-
-$builder = ContainerBuilder::create()
-    ->setEnvironment('production')
-    ->singleton(Logger::class, JsonLogger::class)
-    ->singleton(Mailer::class);
-
-// Build/release stage.
-$path = __DIR__ . '/var/intermix.production.php';
-$report = $builder->compile($path);
-
-// Runtime stage. The xxh128 digest comes from trusted deployment metadata.
-$container = $builder->productionPrevalidated($path, $report['digest']);
-$mailer = $container->get(Mailer::class);
-```
-
-Known dependency edges use generated direct calls. Closures and other genuinely
-runtime-dependent behavior stay in narrow fallback islands. The manifest binds
-the artifact to its compiled environment; a mismatch fails before the PHP
-artifact is loaded. If builder configuration changes after compilation, compile
-again before loading production. Use separate builders for simultaneously active
-production runtimes.
-
-### Dynamic Container Compiled Resolvers
-
-```php
+~~~php
 use Infocyph\InterMix\DI\Support\FactoryDefinition;
 use Infocyph\InterMix\DI\Support\ServiceReference;
 
-$path = __DIR__ . '/var/intermix.compiled.php';
+$builder->factory(
+    Mailer::class,
+    FactoryDefinition::construct(Mailer::class, [
+        new ServiceReference(MailerConfig::class),
+    ]),
+);
+~~~
 
-// Explicit recipes can be executed dynamically and compiled safely.
-$c->bind('mailer', FactoryDefinition::construct(Mailer::class, [
-    new ServiceReference(Logger::class),
-    'transactional',
-]));
+## Runtime operations
 
-// Build time, after every definition and option is registered.
-$c->compileTo($path);
-$report = $c->compilationReport();
+The runtime contract is intentionally small:
 
-// Runtime, after performing the same registration.
-$c->useCompiled($path);
-```
+~~~php
+$service = $runtime->get(Service::class);
+$fresh = $runtime->make(Job::class, ['name' => 'daily']);
+$result = $runtime->invoke([$service, 'handle'], ['payload' => $payload]);
 
-Artifacts include PHP, InterMix, environment, definition, resolution
-configuration, lifetime, tag, and compiled-recipe fingerprints. Incompatible
-artifacts fail closed. Automatic class recipes pass conservative cache-time
-eligibility checks; contextual, attributed, resource-configured, implicit-method,
-and otherwise dynamic definitions remain on the normal resolver with an exact
-reason in the compilation report. A later container configuration mutation
-disables the active map until it is rebuilt. Ordinary closures and
-`bindFactory()` definitions deliberately remain dynamic.
+foreach ($runtime->tagged('listener') as $id => $listener) {
+    $listener->handle($event);
+}
+~~~
 
-See the [compiled resolver guide](https://docs.infocyph.com/projects/InterMix/en/latest/di/compiled-resolvers.html).
+## Scopes
 
-### Closure Serialization
+Declare request/job supplied values before finalization, then seed them when a scope begins:
 
-Install the optional adapter first with `composer require opis/closure`.
+~~~php
+$builder
+    ->input(RequestContext::class)
+    ->autowire(
+        RequestService::class,
+        RequestService::class,
+        lifetime: LifetimeEnum::Scoped,
+    );
 
-```php
-use Infocyph\InterMix\Serializer\ClosureSerializer;
+$runtime = $builder->build();
 
-$payload = ClosureSerializer::serialize(static fn (int $value): int => $value * 2);
-$closure = ClosureSerializer::unserialize($payload);
+$response = $runtime->withinScope(
+    'request-42',
+    static fn ($active) => $active->get(RequestService::class),
+    [RequestContext::class => $context],
+);
+~~~
 
-$signed = ClosureSerializer::signed($_ENV['APP_KEY']);
-$signedPayload = $signed->serialize(static fn (): string => 'queued work');
-$signedClosure = $signed->unserialize($signedPayload);
-```
+For child work, capture the active ScopeContext and reattach it with withinScopeContext. The borrower attaches and detaches only; the owner closes the scope.
 
-Ordinary PHP values use native PHP facilities. Resources remain the application's
-responsibility. Signed Closure envelopes use HMAC-SHA3-256; signing is instance-scoped
-and adds no work to normal invocation.
+## Compiled production runtime
 
-## Testing
+~~~php
+$builder = ContainerBuilder::create('app')
+    ->releaseIdentity('2026-10-01')
+    ->autowire(Logger::class, JsonLogger::class)
+    ->autowire(Mailer::class, Mailer::class);
 
-```bash
-composer install
-composer ic:tests
-```
+$report = $builder->compile(__DIR__ . '/var/intermix.php', strict: true);
+$runtime = $builder->production(__DIR__ . '/var/intermix.php');
+~~~
 
+The generated artifact is validated against the finalized graph, InterMix ABI, PHP runtime, environment identity, release identity, and fallback requirements before activation.
 
-## Security
+## Definition cache
 
-Do not disclose suspected vulnerabilities in a public issue, discussion or pull request. Follow [SECURITY.md](SECURITY.md) and use [GitHub private vulnerability reporting](https://github.com/infocyph/Intermix/security/advisories/new).
+Definition caching is explicit, PSR-6 based, and opt-in per eligible factory definition:
 
-Intermix is protected by [PHPForge](https://github.com/infocyph/PHPForge), which provides automated tests, static and taint analysis, dependency auditing, architecture checks and release-readiness gates. Automated controls do not replace responsible disclosure or manual review.
+~~~php
+$builder
+    ->definitionCache($pool, namespace: 'app', generation: '2026-10-01')
+    ->factory('settings', SettingsFactory::definition())
+    ->cacheDefinition('settings');
 
+$report = $builder->warmDefinitionCache();
+~~~
 
----
+Cache failures can remain fail-open when configured, but unsupported or over-budget values are never forced into external persistence.
 
-<div align="center">
-  <sub><strong>Made with ❤️ for the PHP community</strong></sub><br />
-  <sub><a href="LICENSE">MIT Licensed</a></sub><br />
-  <a href="https://docs.infocyph.com/projects/Intermix/">Documentation</a> •
-  <a href="SECURITY.md">Security</a> •
-  <a href="CODE_OF_CONDUCT.md">Code of Conduct</a> •
-  <a href="CONTRIBUTING.md">Contributing</a><br />
-  <span title="Issue templates" aria-label="Issue templates">🗂️</span>
-  <a href="https://github.com/infocyph/Intermix/issues/new?template=bug_report.yml">Bug</a> •
-  <a href="https://github.com/infocyph/Intermix/issues/new?template=feature_request.yml">Feature</a> •
-  <a href="https://github.com/infocyph/Intermix/issues/new?template=docs_improvement.yml">Documentation</a> •
-  <a href="https://github.com/infocyph/Intermix/issues/new?template=question.yml">Question</a> •
-  <a href="https://github.com/infocyph/Intermix/issues/new?template=ci_failure.yml">CI failure</a><br />
-  <span title="Pull request templates" aria-label="Pull request templates">🔀</span>
-  <a href="https://github.com/infocyph/Intermix/compare/main...HEAD?quick_pull=1&amp;template=PULL_REQUEST_TEMPLATE.md">General</a> •
-  <a href="https://github.com/infocyph/Intermix/compare/main...HEAD?quick_pull=1&amp;template=bug_fix.md">Bug fix</a> •
-  <a href="https://github.com/infocyph/Intermix/compare/main...HEAD?quick_pull=1&amp;template=feature.md">Feature</a> •
-  <a href="https://github.com/infocyph/Intermix/compare/main...HEAD?quick_pull=1&amp;template=refactor.md">Refactor</a> •
-  <a href="https://github.com/infocyph/Intermix/compare/main...HEAD?quick_pull=1&amp;template=performance.md">Performance</a> •
-  <a href="https://github.com/infocyph/Intermix/compare/main...HEAD?quick_pull=1&amp;template=security_reliability.md">Security &amp; reliability</a> •
-  <a href="https://github.com/infocyph/Intermix/compare/main...HEAD?quick_pull=1&amp;template=documentation.md">Documentation</a> •
-  <a href="https://github.com/infocyph/Intermix/compare/main...HEAD?quick_pull=1&amp;template=maintenance.md">Maintenance</a>
-</div>
+## Runwire integration
+
+InterMix does not create or own a Runwire runtime. The host supplies its existing runtime/request/coroutine context through Infocyph\InterMix\Integration\Runwire\RunwireIntegration. See docs/integrations.rst.
+
+## Upgrade from 10.1
+
+InterMix 11 intentionally removes mutable runtime configuration, manager proxies, process-global container lookup, descriptor-style invocation, and manual scope lifecycle APIs. See docs/upgrade-11.0.rst for the migration table.
+
+## Quality and performance
+
+The release gates use PHPForge QA/analysis, PHP 8.4 and 8.5, stable/lowest dependency lanes, clean production install, Swoole/OpenSwoole scope-carrier checks, component regression measurements, and representative persistent-host acceptance.
+
+License: MIT.

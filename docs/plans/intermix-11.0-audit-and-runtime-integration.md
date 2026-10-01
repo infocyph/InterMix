@@ -907,7 +907,7 @@ batch is closed.
 | 1 | P0 + P1 — baseline and runtime hardening | **Complete** | Closed on `f55be8b`: P0 contract/baseline frozen; P1 F1–F3 fixed. Corrected 10.1.1 regression gate, PHPForge QA/analysis/benchmarks, clean install, and Swoole/OpenSwoole PHP 8.4/8.5 are green. |
 | 2 | P2 + P3 - builder/definitions and runtime/scope contract | **Complete** | Closed on `de8bdb18`: B1-B5 and B7 builder/runtime contracts implemented; legacy execution/global ownership removed; strict scopes, captive guards, tagged-scope liveness, cleanup aggregation, and dynamic/compiled parity covered. Exact-head release regression, PHPForge QA/analysis/benchmarks, clean install, and Swoole/OpenSwoole PHP 8.4/8.5 are green. |
 | 3 | P4 + P5 — compiled graph and provider boundaries | **Complete** | Closed on `d3ad3278`: P4/B6 frozen artifact/ABI/publication contract and P5 provider boundaries are implemented. CacheLayer `^4.0` / Runwire `^2.1` integration, host-owned Runwire bridge, provider ownership docs, exact-head PHPForge QA/analysis/benchmarks, clean install, unchanged release regression, and Swoole/OpenSwoole PHP 8.4/8.5 are green. |
-| 4 | P6 + P7 + P8 — migration, measured acceptance and release candidate | Pending | P6: docs/consumer migration. P7: benchmarks/soak/host acceptance. P8: exact-SHA CI, packaging and RC evidence. P8 remains the final gate inside this batch. |
+| 4 | P6 + P7 + P8 — migration, measured acceptance and release candidate | **In progress — P6 implementation complete; QA pending** | P6 live docs are migrated to the 11.0 builder/runtime contract, an executable migration regression protects the new public surface, and the 10.1→11.0 upgrade guide is published. P7/P8 remain gated on P6 QA. |
 
 ### Batch 1 closure evidence
 
@@ -1089,6 +1089,32 @@ remain the primary final major-release acceptance evidence.
 **Batch 3 is closed. Batch 4 / P6 + P7 + P8 may now begin from this exact
 P4/P5 acceptance revision.**
 
+
+### Batch 4 / P6 live tracker
+
+P6 implementation now covers the public migration surface:
+
+- [x] README and live Sphinx DI pages use ContainerBuilder for configuration and
+  RuntimeContainerInterface semantics for execution;
+- [x] a dedicated 10.1 -> 11.0 upgrade guide maps removed mutable/runtime APIs to
+  explicit 11.0 operations;
+- [x] provider examples use ServiceProviderInterface::register(ContainerBuilder);
+- [x] scope examples use withinScope()/captureScopeContext()/withinScopeContext()
+  and declared input() seeds;
+- [x] invocation examples use make()/invoke() with real PHP callables;
+- [x] compiled-runtime documentation uses compile()/production()/
+  productionPrevalidated() on the finalized builder;
+- [x] CacheLayer/definition-cache documentation uses explicit PSR-6
+  definitionCache()/cacheDefinition() policy;
+- [x] Migration11ContractTest executes a representative builder/runtime/scope
+  migration and prevents removed 10.x APIs from reappearing in current live docs;
+- [ ] exact-head PHPForge QA/analysis/benchmarks, release regression, clean install,
+  documentation build and Swoole/OpenSwoole lanes pass after the P6 documentation
+  and migration-test changes.
+
+P7 does not begin until the final P6 QA checkbox above is closed.
+
+
 ### Batch 1 superseded tuning evidence
 
 Earlier P1 tuning revisions temporarily failed the release-regression budget while
@@ -1199,7 +1225,7 @@ batch; Batch 1 closes only after P1 implementation and QA are complete.
 
 ## Work packages, dependencies, and completion criteria
 
-All implementation work is pending. The source files named here are existing
+P0–P5 are complete. P6 implementation is present on the active branch and awaits its exact-head QA gate; P7 and P8 remain pending. The source files named here are existing
 owners to inspect/change, not a requirement to preserve their current class count.
 Avoid unrelated cleanup and new abstraction families.
 
