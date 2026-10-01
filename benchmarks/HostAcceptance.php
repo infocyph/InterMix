@@ -11,19 +11,9 @@ use ReflectionMethod;
 use RuntimeException;
 use Throwable;
 
-final class HostAcceptanceLeaf
+final class HostAcceptanceDynamicMarker
 {
-    public string $marker = 'leaf';
-}
-
-final class HostAcceptanceRequest
-{
-    public readonly string $id;
-
-    public function __construct(string $id)
-    {
-        $this->id = $id;
-    }
+    public string $marker = 'dynamic';
 }
 
 final class HostAcceptanceHandler
@@ -41,6 +31,16 @@ final class HostAcceptanceHandler
     }
 }
 
+final class HostAcceptanceLeaf
+{
+    public string $marker = 'leaf';
+}
+
+final class HostAcceptanceRequest
+{
+    public string $id = '';
+}
+
 final class HostAcceptance
 {
     private const int LATENCY_SAMPLE_LIMIT = 20_000;
@@ -54,33 +54,47 @@ final class HostAcceptance
         $output = self::requiredOption($arguments, 'output');
         $duration = self::floatOption($arguments, 'duration', 30.0);
         $concurrency = self::intOption($arguments, 'concurrency', 1);
+        $mode = self::stringOption($arguments, 'mode', 'dynamic');
         $soak = self::hasFlag($arguments, 'soak');
 
         if ($duration <= 0.0 || $concurrency < 1) {
             throw new RuntimeException('Duration and concurrency must be positive.');
         }
+        if (!in_array($mode, ['dynamic', 'production', 'hybrid'], true)) {
+            throw new RuntimeException('Mode must be dynamic, production, or hybrid.');
+        }
         if (!is_file($autoload)) {
-            throw new RuntimeException("Autoload file is not readable: {$autoload}");
+            throw new RuntimeException('Autoload file is not readable: ' . $autoload);
         }
 
         require $autoload;
 
-        $runtime = self::runtime();
-        $calls = self::runtimeCalls($runtime);
+        $runtime = self::runtime($mode);
+        $calls = self::runtimeCalls($runtime, $mode);
         self::warm($calls, $concurrency);
 
         $result = self::measure($calls, $duration, $concurrency, $soak);
         $encoded = json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n";
         if (file_put_contents($output, $encoded) === false) {
-            throw new RuntimeException("Unable to write host acceptance output: {$output}");
+            throw new RuntimeException('Unable to write host acceptance output: ' . $output);
         }
 
         fwrite(STDOUT, $encoded);
     }
 
+    private static function artifactPath(string $mode): string
+    {
+        return sys_get_temp_dir()
+            . '/intermix-host-' . $mode . '-' . getmypid() . '-' . bin2hex(random_bytes(6)) . '.php';
+    }
+
+    /**
+     * @param array{scope: \Closure, get: \Closure, dispatch: \Closure, api: string, mode: string, hybrid: bool} $calls
+     */
     private static function cancellationProbe(array $calls, int $sequence): int
     {
-        $request = new HostAcceptanceRequest('cancel-' . $sequence);
+        $request = new HostAcceptanceRequest();
+        $request->id = 'cancel-' . $sequence;
         $fiber = new Fiber(
             static function () use ($calls, $request): mixed {
                 return ($calls['scope'])(
@@ -111,9 +125,28 @@ final class HostAcceptance
         throw new RuntimeException('Expected cancellation probe did not cancel.');
     }
 
+    /** @param list<float> $samples
+     *  @return list<float>
+     */
+    private static function compactSamples(array $samples): array
+    {
+        $compacted = [];
+        foreach ($samples as $index => $sample) {
+            if (($index % 2) === 0) {
+                $compacted[] = $sample;
+            }
+        }
+
+        return $compacted;
+    }
+
+    /**
+     * @param array{scope: \Closure, get: \Closure, dispatch: \Closure, api: string, mode: string, hybrid: bool} $calls
+     */
     private static function failureProbe(array $calls, int $sequence): int
     {
-        $request = new HostAcceptanceRequest('failure-' . $sequence);
+        $request = new HostAcceptanceRequest();
+        $request->id = 'failure-' . $sequence;
 
         try {
             ($calls['scope'])(
@@ -136,6 +169,7 @@ final class HostAcceptance
         throw new RuntimeException('Expected failure probe did not fail.');
     }
 
+    /** @param list<string> $arguments */
     private static function floatOption(array $arguments, string $name, float $default): float
     {
         $value = self::option($arguments, $name);
@@ -143,11 +177,13 @@ final class HostAcceptance
         return $value === null ? $default : (float) $value;
     }
 
+    /** @param list<string> $arguments */
     private static function hasFlag(array $arguments, string $name): bool
     {
         return in_array('--' . $name, $arguments, true);
     }
 
+    /** @param list<string> $arguments */
     private static function intOption(array $arguments, string $name, int $default): int
     {
         $value = self::option($arguments, $name);
@@ -155,13 +191,14 @@ final class HostAcceptance
         return $value === null ? $default : (int) $value;
     }
 
+    /** @param list<mixed> $arguments */
     private static function invokeSetup(object $target, string $method, array $arguments = []): mixed
     {
         return new ReflectionMethod($target, $method)->invokeArgs($target, $arguments);
     }
 
     /**
-     * @param array{scope: \Closure, get: \Closure, dispatch: \Closure, api: string} $calls
+     * @param array{scope: \Closure, get: \Closure, dispatch: \Closure, api: string, mode: string, hybrid: bool} $calls
      * @return array<string, int|float|string|bool|list<int>>
      */
     private static function measure(array $calls, float $duration, int $concurrency, bool $soak): array
@@ -179,11 +216,15 @@ final class HostAcceptance
         $expectedFailures = 0;
         $expectedCancellations = 0;
         $idleWindows = 0;
-        $latencies = [];
+        $requestLatencies = [];
+        $requestLatencyObservations = 0;
+        $requestLatencyStride = 1;
+        $batchLatencies = [];
+        $batchLatencyObservations = 0;
+        $batchLatencyStride = 1;
         $rssSamples = [$rssStart];
         $lastRssSample = $started;
         $lastSoakProbe = $started;
-        $batch = 0;
 
         while (hrtime(true) < $deadline) {
             $batchStarted = hrtime(true);
@@ -194,9 +235,20 @@ final class HostAcceptance
             $unexpected += $result['unexpected'];
             $wrong += $result['wrong'];
 
-            if (($batch % 32) === 0 && count($latencies) < self::LATENCY_SAMPLE_LIMIT) {
-                $latencies[] = (($batchEnded - $batchStarted) / 1_000_000) / $concurrency;
+            foreach ($result['latencies_ms'] as $latency) {
+                self::recordSample(
+                    $requestLatencies,
+                    $requestLatencyObservations,
+                    $requestLatencyStride,
+                    $latency,
+                );
             }
+            self::recordSample(
+                $batchLatencies,
+                $batchLatencyObservations,
+                $batchLatencyStride,
+                ($batchEnded - $batchStarted) / 1_000_000,
+            );
 
             if (($batchEnded - $lastRssSample) >= 5_000_000_000) {
                 $rssSamples[] = self::rssBytes();
@@ -211,8 +263,6 @@ final class HostAcceptance
                 ++$idleWindows;
                 $lastSoakProbe = hrtime(true);
             }
-
-            ++$batch;
         }
 
         gc_collect_cycles();
@@ -226,14 +276,19 @@ final class HostAcceptance
         $rps = $successful / $elapsed;
         $cpuSeconds = self::usageSeconds($usageEnd) - self::usageSeconds($usageStart);
 
-        sort($latencies, SORT_NUMERIC);
+        sort($requestLatencies, SORT_NUMERIC);
+        sort($batchLatencies, SORT_NUMERIC);
 
         return [
             'php' => PHP_VERSION,
             'api' => $calls['api'],
+            'mode' => $calls['mode'],
+            'host_model' => 'closed-loop-fiber',
+            'queue_model' => 'none',
             'soak' => $soak,
             'duration_seconds' => $elapsed,
             'concurrency' => $concurrency,
+            'max_inflight_requests' => $concurrency,
             'successful' => $successful,
             'unexpected_failures' => $unexpected,
             'wrong_outputs' => $wrong,
@@ -241,9 +296,12 @@ final class HostAcceptance
             'expected_cancellations' => $expectedCancellations,
             'rps' => $rps,
             'rpm' => $rps * 60,
-            'p50_ms' => self::percentile($latencies, 0.50),
-            'p95_ms' => self::percentile($latencies, 0.95),
-            'p99_ms' => self::percentile($latencies, 0.99),
+            'p50_ms' => self::percentile($requestLatencies, 0.50),
+            'p95_ms' => self::percentile($requestLatencies, 0.95),
+            'p99_ms' => self::percentile($requestLatencies, 0.99),
+            'batch_p50_ms' => self::percentile($batchLatencies, 0.50),
+            'batch_p95_ms' => self::percentile($batchLatencies, 0.95),
+            'batch_p99_ms' => self::percentile($batchLatencies, 0.99),
             'cpu_percent' => $elapsed > 0.0 ? ($cpuSeconds / $elapsed) * 100 : 0.0,
             'rss_start_bytes' => $rssStart,
             'rss_end_bytes' => $rssEnd,
@@ -254,12 +312,17 @@ final class HostAcceptance
             'php_memory_peak_bytes' => memory_get_peak_usage(true),
             'php_memory_growth_bytes' => $phpEnd - $phpStart,
             'idle_windows' => $idleWindows,
-            'max_queue_depth' => 0,
-            'latency_samples' => count($latencies),
+            'request_latency_observations' => $requestLatencyObservations,
+            'latency_samples' => count($requestLatencies),
+            'latency_sample_stride' => $requestLatencyStride,
+            'batch_latency_observations' => $batchLatencyObservations,
+            'batch_latency_samples' => count($batchLatencies),
+            'batch_latency_sample_stride' => $batchLatencyStride,
             'rss_samples_bytes' => $rssSamples,
         ];
     }
 
+    /** @param list<string> $arguments */
     private static function option(array $arguments, string $name): ?string
     {
         $prefix = '--' . $name . '=';
@@ -272,6 +335,7 @@ final class HostAcceptance
         return null;
     }
 
+    /** @param list<float> $values */
     private static function percentile(array $values, float $quantile): float
     {
         if ($values === []) {
@@ -281,16 +345,41 @@ final class HostAcceptance
         return $values[(int) floor((count($values) - 1) * $quantile)];
     }
 
+    /**
+     * @param list<float> $samples
+     */
+    private static function recordSample(
+        array &$samples,
+        int &$observations,
+        int &$stride,
+        float $value,
+    ): void {
+        ++$observations;
+        if ((($observations - 1) % $stride) !== 0) {
+            return;
+        }
+
+        $samples[] = $value;
+        if (count($samples) < self::LATENCY_SAMPLE_LIMIT) {
+            return;
+        }
+
+        $samples = self::compactSamples($samples);
+        $stride *= 2;
+    }
+
+    /** @param list<string> $arguments */
     private static function requiredOption(array $arguments, string $name): string
     {
         $value = self::option($arguments, $name);
         if ($value === null || $value === '') {
-            throw new RuntimeException("--{$name} is required.");
+            throw new RuntimeException('--' . $name . ' is required.');
         }
 
         return $value;
     }
 
+    /** @return array<string, int> */
     private static function resourceUsage(): array
     {
         $usage = getrusage();
@@ -311,16 +400,18 @@ final class HostAcceptance
     }
 
     /**
-     * @param array{scope: \Closure, get: \Closure, dispatch: \Closure, api: string} $calls
-     * @return array{successful: int, unexpected: int, wrong: int}
+     * @param array{scope: \Closure, get: \Closure, dispatch: \Closure, api: string, mode: string, hybrid: bool} $calls
+     * @return array{successful: int, unexpected: int, wrong: int, latencies_ms: list<float>}
      */
     private static function runBatch(array $calls, int $concurrency, int &$sequence): array
     {
         $fibers = [];
         $expected = [];
+        $startedAt = [];
 
         for ($index = 0; $index < $concurrency; ++$index) {
-            $request = new HostAcceptanceRequest('request-' . ++$sequence);
+            $request = new HostAcceptanceRequest();
+            $request->id = 'request-' . ++$sequence;
             $expected[$index] = $request->id . ':leaf';
             $fibers[$index] = new Fiber(
                 static function () use ($calls, $request): mixed {
@@ -328,6 +419,14 @@ final class HostAcceptance
                         'request',
                         static function () use ($calls): mixed {
                             $handler = ($calls['get'])(HostAcceptanceHandler::class);
+                            if ($calls['hybrid']) {
+                                $dynamic = ($calls['get'])(HostAcceptanceDynamicMarker::class);
+                                if (!$dynamic instanceof HostAcceptanceDynamicMarker
+                                    || $dynamic->marker !== 'dynamic'
+                                ) {
+                                    throw new RuntimeException('Hybrid fallback returned an invalid marker.');
+                                }
+                            }
                             Fiber::suspend();
 
                             return ($calls['dispatch'])([$handler, 'handle']);
@@ -339,7 +438,8 @@ final class HostAcceptance
         }
 
         $unexpected = 0;
-        foreach ($fibers as $fiber) {
+        foreach ($fibers as $index => $fiber) {
+            $startedAt[$index] = hrtime(true);
 
             try {
                 $fiber->start();
@@ -350,6 +450,7 @@ final class HostAcceptance
 
         $successful = 0;
         $wrong = 0;
+        $latencies = [];
         foreach ($fibers as $index => $fiber) {
             if ($fiber->isTerminated()) {
                 continue;
@@ -357,11 +458,14 @@ final class HostAcceptance
 
             try {
                 $fiber->resume();
+                $endedAt = hrtime(true);
                 if ($fiber->getReturn() !== $expected[$index]) {
                     ++$wrong;
 
                     continue;
                 }
+
+                $latencies[] = ($endedAt - $startedAt[$index]) / 1_000_000;
                 ++$successful;
             } catch (Throwable) {
                 ++$unexpected;
@@ -372,32 +476,77 @@ final class HostAcceptance
             'successful' => $successful,
             'unexpected' => $unexpected,
             'wrong' => $wrong,
+            'latencies_ms' => $latencies,
         ];
     }
 
-    private static function runtime(): object
+    private static function runtime(string $mode): object
     {
         $builder = ContainerBuilder::create('__host_acceptance_' . bin2hex(random_bytes(6)));
+        $newApi = method_exists($builder, 'autowire');
 
-        if (method_exists($builder, 'autowire')) {
+        if ($newApi) {
             $builder
                 ->autowire(HostAcceptanceLeaf::class, HostAcceptanceLeaf::class)
-                ->input(HostAcceptanceRequest::class)
+                ->autowire(
+                    HostAcceptanceRequest::class,
+                    HostAcceptanceRequest::class,
+                    lifetime: LifetimeEnum::Scoped,
+                )
                 ->autowire(
                     HostAcceptanceHandler::class,
                     HostAcceptanceHandler::class,
                     lifetime: LifetimeEnum::Scoped,
                 );
 
-            return $builder->build();
+            if ($mode === 'hybrid') {
+                $builder->factory(
+                    HostAcceptanceDynamicMarker::class,
+                    static fn(): HostAcceptanceDynamicMarker => new HostAcceptanceDynamicMarker(),
+                    LifetimeEnum::Scoped,
+                );
+            }
+
+            if ($mode === 'dynamic') {
+                return $builder->build();
+            }
+
+            $path = self::artifactPath($mode);
+            $builder->compile($path, strict: $mode === 'production');
+
+            return $builder->production($path);
         }
 
-        self::invokeSetup($builder, 'singleton', [HostAcceptanceLeaf::class]);
-        self::invokeSetup($builder, 'scoped', [HostAcceptanceHandler::class]);
+        self::invokeSetup($builder, 'singleton', [HostAcceptanceLeaf::class, HostAcceptanceLeaf::class]);
+        self::invokeSetup($builder, 'scoped', [HostAcceptanceRequest::class, HostAcceptanceRequest::class]);
+        self::invokeSetup($builder, 'scoped', [HostAcceptanceHandler::class, HostAcceptanceHandler::class]);
 
-        $runtime = self::invokeSetup($builder, 'development');
+        if ($mode === 'hybrid') {
+            self::invokeSetup(
+                $builder,
+                'bindFactory',
+                [
+                    HostAcceptanceDynamicMarker::class,
+                    static fn(): HostAcceptanceDynamicMarker => new HostAcceptanceDynamicMarker(),
+                    LifetimeEnum::Scoped,
+                ],
+            );
+        }
+
+        if ($mode === 'dynamic') {
+            $runtime = self::invokeSetup($builder, 'development');
+            if (!is_object($runtime)) {
+                throw new RuntimeException('InterMix 10.1 builder did not return a runtime.');
+            }
+
+            return $runtime;
+        }
+
+        $path = self::artifactPath($mode);
+        self::invokeSetup($builder, 'compile', [$path]);
+        $runtime = self::invokeSetup($builder, 'production', [$path]);
         if (!is_object($runtime)) {
-            throw new RuntimeException('InterMix 10.1 builder did not return a runtime.');
+            throw new RuntimeException('InterMix 10.1 builder did not return a production runtime.');
         }
 
         return $runtime;
@@ -408,10 +557,12 @@ final class HostAcceptance
      *   scope: \Closure,
      *   get: \Closure,
      *   dispatch: \Closure,
-     *   api: string
+     *   api: string,
+     *   mode: string,
+     *   hybrid: bool
      * }
      */
-    private static function runtimeCalls(object $runtime): array
+    private static function runtimeCalls(object $runtime, string $mode): array
     {
         $scope = new ReflectionMethod($runtime, 'withinScope')->getClosure($runtime);
         $get = new ReflectionMethod($runtime, 'get')->getClosure($runtime);
@@ -434,9 +585,18 @@ final class HostAcceptance
             'get' => $get,
             'dispatch' => $dispatch,
             'api' => $dispatchName === 'invoke' ? '11.0' : '10.1.1',
+            'mode' => $mode,
+            'hybrid' => $mode === 'hybrid',
         ];
     }
 
+    /** @param list<string> $arguments */
+    private static function stringOption(array $arguments, string $name, string $default): string
+    {
+        return self::option($arguments, $name) ?? $default;
+    }
+
+    /** @param array<string, int> $usage */
     private static function usageSeconds(array $usage): float
     {
         return (($usage['ru_utime.tv_sec'] ?? 0) + ($usage['ru_stime.tv_sec'] ?? 0))
@@ -444,7 +604,7 @@ final class HostAcceptance
     }
 
     /**
-     * @param array{scope: \Closure, get: \Closure, dispatch: \Closure, api: string} $calls
+     * @param array{scope: \Closure, get: \Closure, dispatch: \Closure, api: string, mode: string, hybrid: bool} $calls
      */
     private static function warm(array $calls, int $concurrency): void
     {

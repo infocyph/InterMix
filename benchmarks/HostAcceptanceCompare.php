@@ -53,13 +53,14 @@ final class HostAcceptanceCompare
             + max(4 * 1024 * 1024, (int) ((int) $baselineLong['php_memory_peak_bytes'] * 0.15));
 
         printf(
-            "PHP %s host acceptance, concurrency %d\n"
+            "PHP %s host acceptance [%s], concurrency %d\n"
             . "median successful RPM: %.2f -> %.2f (paired median %+.2f%% regression, max %.2f%%)\n"
             . "five-minute successful RPM: %.2f -> %.2f (%+.2f%% regression, max %.2f%%)\n"
             . "long-run p99: %.6f ms -> %.6f ms (candidate ceiling %.6f ms)\n"
             . "long-run peak RSS: %d -> %d bytes (candidate ceiling %d)\n"
             . "long-run PHP peak: %d -> %d bytes (candidate ceiling %d)\n",
             (string) $currentLong['php'],
+            (string) $currentLong['mode'],
             (int) $currentLong['concurrency'],
             $baselineRps * 60,
             $currentRps * 60,
@@ -118,9 +119,11 @@ final class HostAcceptanceCompare
 
         $php = $baselineLong['php'] ?? null;
         $concurrency = $baselineLong['concurrency'] ?? null;
+        $mode = $baselineLong['mode'] ?? null;
         foreach ([...$baseline, ...$current, $currentLong] as $result) {
             if (($result['php'] ?? null) !== $php
                 || ($result['concurrency'] ?? null) !== $concurrency
+                || ($result['mode'] ?? null) !== $mode
             ) {
                 throw new RuntimeException('Host acceptance results must use the same PHP version and concurrency.');
             }
@@ -225,6 +228,7 @@ final class HostAcceptanceCompare
 
         foreach ([
             'php',
+            'mode',
             'concurrency',
             'successful',
             'unexpected_failures',

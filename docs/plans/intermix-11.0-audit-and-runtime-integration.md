@@ -907,7 +907,7 @@ batch is closed.
 | 1 | P0 + P1 — baseline and runtime hardening | **Complete** | Closed on `f55be8b`: P0 contract/baseline frozen; P1 F1–F3 fixed. Corrected 10.1.1 regression gate, PHPForge QA/analysis/benchmarks, clean install, and Swoole/OpenSwoole PHP 8.4/8.5 are green. |
 | 2 | P2 + P3 - builder/definitions and runtime/scope contract | **Complete** | Closed on `de8bdb18`: B1-B5 and B7 builder/runtime contracts implemented; legacy execution/global ownership removed; strict scopes, captive guards, tagged-scope liveness, cleanup aggregation, and dynamic/compiled parity covered. Exact-head release regression, PHPForge QA/analysis/benchmarks, clean install, and Swoole/OpenSwoole PHP 8.4/8.5 are green. |
 | 3 | P4 + P5 — compiled graph and provider boundaries | **Complete** | Closed on `d3ad3278`: P4/B6 frozen artifact/ABI/publication contract and P5 provider boundaries are implemented. CacheLayer `^4.0` / Runwire `^2.1` integration, host-owned Runwire bridge, provider ownership docs, exact-head PHPForge QA/analysis/benchmarks, clean install, unchanged release regression, and Swoole/OpenSwoole PHP 8.4/8.5 are green. |
-| 4 | P6 + P7 + P8 — migration, measured acceptance and release candidate | **In progress — P6 complete; P7/P8 implementation** | P6 closed on `1bc33c0a`: live docs, upgrade guide, migration regression and warnings-as-errors docs gate are green with PHPForge/release-regression/Swoole matrices. P7 host/soak and P8 release-candidate gates are next. |
+| 4 | P6 + P7 + P8 — migration, measured acceptance and release candidate | **In progress — candidate readiness remediation** | P6 is closed. The 2026-10-01 candidate review reopened B3/B4/P7 acceptance with R1–R5. R1–R4 runtime fixes are implemented and PHPForge-green on `89d2baab`; R5 host evidence has been rebuilt for actual request latency, dynamic/production/hybrid modes and provider coverage. Exact-head P7/P8 evidence remains required before closure. |
 
 ### Batch 1 closure evidence
 
@@ -1120,6 +1120,52 @@ and **+3.77% Fiber**. No threshold, baseline, skip, suppression, or exclusion ch
 
 **P6 is closed. P7/P8 may proceed.**
 
+
+
+### 2026-10-01 candidate-readiness remediation
+
+The final candidate review reopened release acceptance despite the earlier green
+branch checks. Those checks remain useful supporting evidence but do not override
+demonstrated contract gaps.
+
+- [x] **R1 — recovery aggregation:** current-carrier recovery continues through
+  every safely closable owned frame, retains at most 32 cleanup errors, and throws
+  one aggregate after recovery; structural live-child ownership failures still stop
+  unsafe teardown.
+- [x] **R2 — closed-handle retention:** logical/production scope close releases
+  request seeds, resolved entries, construction claims and unnecessary parent
+  references while the closed handle remains capable of rejecting stale use.
+- [x] **R3 — method attribute parity:** explicit ReflectionMethod invocation now
+  uses method-attribute parameter policy, with dynamic/production coverage for
+  instance arrays, static arrays, invokable objects, first-class callables and
+  explicit supplied-argument precedence.
+- [x] **R4 — draining owner state:** a failed owner close with live children marks
+  the frame draining; new attachments are rejected while existing children can
+  detach, after which deterministic owner recovery may close the frame.
+- [x] **R1–R4 focused QA:** exact revision `89d2baaba65e349005508b1810bf4eb1c992906a`
+  passes Pest, PHPStan/Psalm and the existing release/package gates after the
+  recovery regressions were added.
+- [x] **R5 harness implementation:** request p50/p95/p99 is measured from each
+  request's actual Fiber start through completion, with bounded compaction that
+  continues sampling across the full interval; batch scheduling latency is recorded
+  separately; the closed-loop workload declares that no external queue exists
+  rather than reporting a synthetic queue-depth zero.
+- [x] **R5 execution modes:** equivalent 10.1.1/11.0 adapters cover dynamic mode
+  across c1/c8/c32/c64 and generated production plus hybrid-fallback modes at c32
+  on PHP 8.4/8.5. Setup/compilation remains outside measured loops.
+- [x] **R5 provider cell:** Release Acceptance explicitly runs real Runwire 2.1 and
+  CacheLayer 4 boundary/integration fixtures on PHP 8.4/8.5.
+- [ ] corrected exact-head Release Acceptance passes the unchanged 2% paired and
+  five-minute throughput budgets, baseline-derived p99/RSS/PHP-memory ceilings,
+  and 30-minute PHP 8.4/8.5 persistent-host soaks;
+- [ ] corrected exact-head PHPForge, release regression, documentation,
+  Swoole/OpenSwoole, release package and clean consumer/provider matrices are green;
+- [ ] final R1–R5 evidence and exact revision/run IDs are recorded and Batch 4/P8
+  is closed before tagging.
+
+No threshold, skip, suppression, exclusion, or baseline is weakened by this
+remediation. Earlier P7 results are superseded as final latency evidence because
+they measured average batch cost rather than request-latency distribution.
 
 ### Batch 1 superseded tuning evidence
 

@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   host-acceptance:
-    name: "Host acceptance - PHP ${{ matrix.php-version }} - c${{ matrix.concurrency }}"
+    name: "Host acceptance - PHP ${{ matrix.php-version }} - ${{ matrix.mode }} - c${{ matrix.concurrency }}"
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
@@ -26,7 +26,21 @@ jobs:
       fail-fast: false
       matrix:
         php-version: ["8.4", "8.5"]
+        mode: ["dynamic"]
         concurrency: [1, 8, 32, 64]
+        include:
+          - php-version: "8.4"
+            mode: "production"
+            concurrency: 32
+          - php-version: "8.5"
+            mode: "production"
+            concurrency: 32
+          - php-version: "8.4"
+            mode: "hybrid"
+            concurrency: 32
+          - php-version: "8.5"
+            mode: "hybrid"
+            concurrency: 32
     steps:
       - name: Checkout InterMix 11.0 candidate
         uses: actions/checkout@v7
@@ -57,6 +71,7 @@ jobs:
         shell: bash
         env:
           CONCURRENCY: ${{ matrix.concurrency }}
+          MODE: ${{ matrix.mode }}
         run: |
           baseline_files=()
           current_files=()
@@ -66,6 +81,7 @@ jobs:
               --autoload="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" \
               --duration=30 \
               --concurrency="$CONCURRENCY" \
+              --mode="$MODE" \
               --output="$1"
           }
 
@@ -74,12 +90,13 @@ jobs:
               --autoload="$GITHUB_WORKSPACE/current/vendor/autoload.php" \
               --duration=30 \
               --concurrency="$CONCURRENCY" \
+              --mode="$MODE" \
               --output="$1"
           }
 
           for iteration in 1 2 3 4 5; do
-            baseline_file="$RUNNER_TEMP/host-baseline-${{ matrix.php-version }}-$CONCURRENCY-$iteration.json"
-            current_file="$RUNNER_TEMP/host-current-${{ matrix.php-version }}-$CONCURRENCY-$iteration.json"
+            baseline_file="$RUNNER_TEMP/host-baseline-${{ matrix.php-version }}-$MODE-$CONCURRENCY-$iteration.json"
+            current_file="$RUNNER_TEMP/host-current-${{ matrix.php-version }}-$MODE-$CONCURRENCY-$iteration.json"
             baseline_files+=("$baseline_file")
             current_files+=("$current_file")
 
@@ -99,20 +116,23 @@ jobs:
         shell: bash
         env:
           CONCURRENCY: ${{ matrix.concurrency }}
+          MODE: ${{ matrix.mode }}
         run: |
-          baseline_long="$RUNNER_TEMP/host-baseline-long-${{ matrix.php-version }}-$CONCURRENCY.json"
-          current_long="$RUNNER_TEMP/host-current-long-${{ matrix.php-version }}-$CONCURRENCY.json"
+          baseline_long="$RUNNER_TEMP/host-baseline-long-${{ matrix.php-version }}-$MODE-$CONCURRENCY.json"
+          current_long="$RUNNER_TEMP/host-current-long-${{ matrix.php-version }}-$MODE-$CONCURRENCY.json"
 
           php current/benchmarks/HostAcceptance.php \
             --autoload="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" \
             --duration=300 \
             --concurrency="$CONCURRENCY" \
+            --mode="$MODE" \
             --output="$baseline_long"
 
           php current/benchmarks/HostAcceptance.php \
             --autoload="$GITHUB_WORKSPACE/current/vendor/autoload.php" \
             --duration=300 \
             --concurrency="$CONCURRENCY" \
+            --mode="$MODE" \
             --output="$current_long"
 
           echo "HOST_BASELINE_LONG=$baseline_long" >> "$GITHUB_ENV"
@@ -131,7 +151,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: host-acceptance-php-${{ matrix.php-version }}-c${{ matrix.concurrency }}
+          name: host-acceptance-php-${{ matrix.php-version }}-${{ matrix.mode }}-c${{ matrix.concurrency }}
           path: ${{ runner.temp }}/host-*.json
           retention-days: 61
 
@@ -165,6 +185,7 @@ jobs:
             --autoload="$GITHUB_WORKSPACE/vendor/autoload.php" \
             --duration=1800 \
             --concurrency=32 \
+            --mode=dynamic \
             --soak \
             --output="$RUNNER_TEMP/host-soak-${{ matrix.php-version }}.json"
 
@@ -182,6 +203,49 @@ jobs:
           name: host-soak-php-${{ matrix.php-version }}
           path: ${{ runner.temp }}/host-soak-${{ matrix.php-version }}.json
           retention-days: 61
+
+
+  provider-acceptance:
+    name: "Provider acceptance - PHP ${{ matrix.php-version }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ["8.4", "8.5"]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          extensions: apcu, pdo_sqlite
+          ini-values: apc.enable_cli=1
+          tools: composer:v2
+          coverage: none
+
+      - name: Install provider test dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress --classmap-authoritative
+
+      - name: Assert advertised providers are installed
+        run: |
+          php -r 'require "vendor/autoload.php"; exit(
+            class_exists(\Infocyph\Runwire\RuntimeContext::class)
+            && class_exists(\Infocyph\CacheLayer\Cache\Cache::class)
+            ? 0 : 1
+          );'
+
+      - name: Exercise Runwire and CacheLayer host boundaries
+        run: |
+          vendor/bin/pest \
+            --configuration=vendor/infocyph/phpforge/resources/pest.xml \
+            tests/Integration/RunwireBridgeIntegrationTest.php \
+            tests/Integration/CacheLayerIntegrationTest.php \
+            tests/Container/RunwireScopeIntegrationTest.php
 
   source-inventory:
     name: Release source inventory
