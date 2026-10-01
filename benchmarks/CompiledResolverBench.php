@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\Benchmarks;
 
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use PhpBench\Attributes\AfterMethods;
 use PhpBench\Attributes\BeforeMethods;
@@ -105,7 +106,7 @@ final class CompiledResolverBench
     #[Revs(100)]
     public function benchContainerConstruction(): void
     {
-        $container = new Container('__compiled_bench_construction_' . (++$this->containerCounter));
+        $container = new ConfigurationContainer('__compiled_bench_construction_' . (++$this->containerCounter));
         $container->unset();
         $this->sink = $container;
     }
@@ -178,7 +179,7 @@ final class CompiledResolverBench
 
     private function container(string $purpose, int $roots): Container
     {
-        $container = new Container(
+        $container = new ConfigurationContainer(
             '__compiled_bench_' . $purpose . '_' . (++$this->containerCounter),
         );
         $container->bind(CompiledBenchLeaf::class, CompiledBenchLeaf::class);
