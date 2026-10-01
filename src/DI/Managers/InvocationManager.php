@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Managers;
 
-use ArrayAccess;
 use Closure;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Internal\ClassResolution;
@@ -20,10 +19,8 @@ use ReflectionException;
 
 /**
  * Handles get(), has(), getReturn(), call(), make().
- *
- * @implements ArrayAccess<string, mixed>
  */
-class InvocationManager implements ArrayAccess
+class InvocationManager
 {
     public function __construct(
         protected Repository $repository,
