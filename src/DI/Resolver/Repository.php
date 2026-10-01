@@ -509,6 +509,15 @@ class Repository
     }
 
     /**
+     * @return array<class-string, class-string<\Infocyph\InterMix\DI\Attribute\AttributeResolverInterface>>
+     * @internal
+     */
+    public function getRegisteredAttributeResolvers(): array
+    {
+        return $this->attributeRegistry?->registrations() ?? [];
+    }
+
+    /**
      * @return array<int, class-string>
      * @internal
      */
