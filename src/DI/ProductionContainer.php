@@ -14,6 +14,7 @@ use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Exceptions\ScopeCleanupException;
 use Infocyph\InterMix\Internal\ReflectionResource;
+use Psr\Container\ContainerInterface;
 use Throwable;
 
 abstract class ProductionContainer implements RuntimeContainerInterface
@@ -432,6 +433,22 @@ abstract class ProductionContainer implements RuntimeContainerInterface
             }
             $this->compiledSingletonResolutionActive = $this->compiledSingletonResolutionOwners !== [];
         }
+    }
+
+    final protected function runtimeSelfOrFallback(string $id): mixed
+    {
+        if ($id === ContainerInterface::class || $id === RuntimeContainerInterface::class) {
+            return $this;
+        }
+
+        return $this->fallbackGet($id);
+    }
+
+    final protected function runtimeSelfOrFallbackHas(string $id): bool
+    {
+        return $id === ContainerInterface::class
+            || $id === RuntimeContainerInterface::class
+            || $this->fallbackHas($id);
     }
 
     /** @return array<int, string> */
