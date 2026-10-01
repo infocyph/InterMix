@@ -55,6 +55,18 @@ class InvocationManager
     /** @throws ContainerException|InvalidArgumentException|ReflectionException */
     public function get(string $id): mixed
     {
+        $seed = null;
+        if ($this->repository->findScopeSeed($id, $seed)) {
+            $this->assertScopedResolutionAllowed($id);
+
+            return $seed;
+        }
+
+        $resolved = $this->repository->getResolvedSingletonEntry($id);
+        if ($resolved !== null || $this->repository->hasResolvedSingleton($id)) {
+            return $resolved;
+        }
+
         if (!$this->has($id)) {
             throw new NotFoundException("No entry found for '$id'.");
         }
@@ -68,23 +80,6 @@ class InvocationManager
                 throw new ContainerException("Scoped entry '$id' requires an active scope.");
             }
 
-            $seed = null;
-            if ($this->repository->findScopeSeed($id, $seed)) {
-                return $seed;
-            }
-        }
-
-        $definition = $this->repository->getFunctionDefinition($id);
-        if ($definition instanceof AliasDefinition) {
-            return $this->resolveAlias($id, $definition);
-        }
-
-        $resolved = $this->repository->getResolvedSingletonEntry($id);
-        if ($resolved !== null || $this->repository->hasResolvedSingleton($id)) {
-            return $resolved;
-        }
-
-        if ($lifetime === LifetimeEnum::Scoped) {
             $resolved = null;
             $found = $this->repository instanceof ConcurrentRepository
                 ? $this->repository->findCurrentResolvedScoped($id, $scope, $resolved)
@@ -92,6 +87,11 @@ class InvocationManager
             if ($found) {
                 return $this->repository->fetchInstanceOrValue($resolved);
             }
+        }
+
+        $definition = $this->repository->getFunctionDefinition($id);
+        if ($definition instanceof AliasDefinition) {
+            return $this->resolveAlias($id, $definition);
         }
 
         if ($this->repository->isTracingEnabled()) {

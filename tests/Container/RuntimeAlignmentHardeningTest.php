@@ -11,6 +11,13 @@ use Infocyph\InterMix\Exceptions\ContainerException;
 
 final class RuntimeAlignmentCompiledLeaf {}
 
+final class RuntimeAlignmentScopedInput {}
+
+final class RuntimeAlignmentCaptiveSingleton
+{
+    public function __construct(public RuntimeAlignmentScopedInput $input) {}
+}
+
 function runtimeAlignmentArtifactPath(): string
 {
     return sys_get_temp_dir() . '/intermix-runtime-alignment-' . bin2hex(random_bytes(8)) . '.php';
@@ -143,4 +150,22 @@ it('keeps a finalized compiled graph immutable while a propagated child is attac
     } finally {
         removeRuntimeAlignmentArtifact($path);
     }
+});
+
+it('keeps seeded inputs behind the singleton captive-dependency guard', function () {
+    $builder = ContainerBuilder::create(uniqid('runtime_alignment_seed_guard_'))
+        ->input(RuntimeAlignmentScopedInput::class)
+        ->autowire(
+            RuntimeAlignmentCaptiveSingleton::class,
+            RuntimeAlignmentCaptiveSingleton::class,
+            lifetime: LifetimeEnum::Singleton,
+        );
+
+    $runtime = $builder->build();
+
+    expect(fn() => $runtime->withinScope(
+        'request',
+        static fn($active) => $active->get(RuntimeAlignmentCaptiveSingleton::class),
+        [RuntimeAlignmentScopedInput::class => new RuntimeAlignmentScopedInput()],
+    ))->toThrow(ContainerException::class, 'cannot capture scoped entry');
 });
