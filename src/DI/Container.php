@@ -514,10 +514,7 @@ class Container implements RuntimeContainerInterface
     protected function validateScopeSeeds(array $instances): void
     {
         foreach (array_keys($instances) as $id) {
-            if (!$this->repository->hasFunctionReference($id)
-                || $this->repository->getFunctionDefinition($id) instanceof \Infocyph\InterMix\DI\Support\AliasDefinition
-                || $this->repository->getDefinitionLifetime($id) !== LifetimeEnum::Scoped
-            ) {
+            if (!$this->repository->isScopeSeedAllowed($id)) {
                 throw new ContainerException(
                     "Scope seed '$id' must identify a declared scoped entry or input.",
                 );

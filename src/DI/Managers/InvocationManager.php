@@ -75,15 +75,14 @@ class InvocationManager
         $scope = null;
         if ($lifetime === LifetimeEnum::Scoped) {
             $this->assertScopedResolutionAllowed($id);
-            $scope = $this->repository->getScope();
-            if ($scope === 'root') {
-                throw new ContainerException("Scoped entry '$id' requires an active scope.");
-            }
-
             $resolved = null;
+            $scope = 'root';
             $found = $this->repository instanceof ConcurrentRepository
                 ? $this->repository->findCurrentResolvedScoped($id, $scope, $resolved)
                 : $this->findResolvedScoped($id, $scope, $resolved);
+            if ($scope === 'root') {
+                throw new ContainerException("Scoped entry '$id' requires an active scope.");
+            }
             if ($found) {
                 return $this->repository->fetchInstanceOrValue($resolved);
             }

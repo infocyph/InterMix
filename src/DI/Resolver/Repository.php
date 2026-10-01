@@ -698,6 +698,18 @@ class Repository
         return isset($this->resolvedIds[$id]);
     }
 
+    /** @internal */
+    public function isScopeSeedAllowed(string $id): bool
+    {
+        if (!array_key_exists($id, $this->functionReference)
+            || $this->functionReference[$id] instanceof AliasDefinition
+        ) {
+            return false;
+        }
+
+        return $this->getDirectDefinitionLifetime($id) === LifetimeEnum::Scoped;
+    }
+
     public function isTracingEnabled(): bool
     {
         return $this->tracingEnabled;
