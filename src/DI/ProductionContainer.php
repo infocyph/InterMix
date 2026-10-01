@@ -100,6 +100,7 @@ abstract class ProductionContainer implements RuntimeContainerInterface
             $failures,
             $failureCount,
         );
+
         try {
             $this->fallback?->resetCurrentExecutionScope();
         } catch (ScopeCleanupException $failure) {
@@ -592,6 +593,7 @@ abstract class ProductionContainer implements RuntimeContainerInterface
 
         $closing = $this->scope;
         $parent = $closing->parent ?? new ScopeState('root');
+
         try {
             $this->beforeScopeClose($closing, $synchronizeFallback);
         } finally {
