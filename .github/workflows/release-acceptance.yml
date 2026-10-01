@@ -29,6 +29,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           path: current
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Checkout InterMix 10.1.1 baseline
         uses: actions/checkout@v7
@@ -143,6 +144,8 @@ jobs:
         php-version: ["8.4", "8.5"]
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - uses: shivammathur/setup-php@v2
         with:
@@ -186,6 +189,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           path: current
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - uses: actions/checkout@v7
         with:
