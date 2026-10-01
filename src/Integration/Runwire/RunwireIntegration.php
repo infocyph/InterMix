@@ -242,7 +242,6 @@ final class RunwireIntegration
         return $seeds;
     }
 
-
     private function requireRuntime(): RuntimeContext
     {
         return $this->runtimeContext
