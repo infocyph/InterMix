@@ -907,7 +907,7 @@ batch is closed.
 | 1 | P0 + P1 — baseline and runtime hardening | **Complete** | Closed on `f55be8b`: P0 contract/baseline frozen; P1 F1–F3 fixed. Corrected 10.1.1 regression gate, PHPForge QA/analysis/benchmarks, clean install, and Swoole/OpenSwoole PHP 8.4/8.5 are green. |
 | 2 | P2 + P3 - builder/definitions and runtime/scope contract | **Complete** | Closed on `de8bdb18`: B1-B5 and B7 builder/runtime contracts implemented; legacy execution/global ownership removed; strict scopes, captive guards, tagged-scope liveness, cleanup aggregation, and dynamic/compiled parity covered. Exact-head release regression, PHPForge QA/analysis/benchmarks, clean install, and Swoole/OpenSwoole PHP 8.4/8.5 are green. |
 | 3 | P4 + P5 — compiled graph and provider boundaries | **Complete** | Closed on `d3ad3278`: P4/B6 frozen artifact/ABI/publication contract and P5 provider boundaries are implemented. CacheLayer `^4.0` / Runwire `^2.1` integration, host-owned Runwire bridge, provider ownership docs, exact-head PHPForge QA/analysis/benchmarks, clean install, unchanged release regression, and Swoole/OpenSwoole PHP 8.4/8.5 are green. |
-| 4 | P6 + P7 + P8 — migration, measured acceptance and release candidate | **In progress — P6 implementation complete; QA pending** | P6 live docs are migrated to the 11.0 builder/runtime contract, an executable migration regression protects the new public surface, and the 10.1→11.0 upgrade guide is published. P7/P8 remain gated on P6 QA. |
+| 4 | P6 + P7 + P8 — migration, measured acceptance and release candidate | **In progress — P6 complete; P7/P8 implementation** | P6 closed on `1bc33c0a`: live docs, upgrade guide, migration regression and warnings-as-errors docs gate are green with PHPForge/release-regression/Swoole matrices. P7 host/soak and P8 release-candidate gates are next. |
 
 ### Batch 1 closure evidence
 
@@ -1108,11 +1108,17 @@ P6 implementation now covers the public migration surface:
   definitionCache()/cacheDefinition() policy;
 - [x] Migration11ContractTest executes a representative builder/runtime/scope
   migration and prevents removed 10.x APIs from reappearing in current live docs;
-- [ ] exact-head PHPForge QA/analysis/benchmarks, release regression, clean install,
+- [x] exact-head PHPForge QA/analysis/benchmarks, release regression, clean install,
   documentation build and Swoole/OpenSwoole lanes pass after the P6 documentation
   and migration-test changes.
 
-P7 does not begin until the final P6 QA checkbox above is closed.
+P6 acceptance revision: `1bc33c0a1d2a83f9de7b72e6ec41d9894dc91058`.
+Security & Standards run `36817684182` and Swoole/OpenSwoole run `36817683787`
+completed green. PHP 8.4 release regression was rerun once after a docs-only
+variance spike (+6.25% Fiber) and passed unchanged budgets at **-4.24% sequential**
+and **+3.77% Fiber**. No threshold, baseline, skip, suppression, or exclusion changed.
+
+**P6 is closed. P7/P8 may proceed.**
 
 
 ### Batch 1 superseded tuning evidence
@@ -1225,7 +1231,7 @@ batch; Batch 1 closes only after P1 implementation and QA are complete.
 
 ## Work packages, dependencies, and completion criteria
 
-P0–P5 are complete. P6 implementation is present on the active branch and awaits its exact-head QA gate; P7 and P8 remain pending. The source files named here are existing
+P0–P6 are complete. P7 and P8 remain active. The source files named here are existing
 owners to inspect/change, not a requirement to preserve their current class count.
 Avoid unrelated cleanup and new abstraction families.
 
