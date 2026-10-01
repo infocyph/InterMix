@@ -18,6 +18,8 @@ final class ScopeState
 
     public bool $draining = false;
 
+    public bool $retained = false;
+
     /** @var array<int, mixed> */
     public array $resolved = [];
 
@@ -41,6 +43,10 @@ final class ScopeState
     {
         $this->closed = true;
         $this->constructing = [];
+        if (!$this->retained) {
+            return;
+        }
+
         $this->draining = false;
         $this->parent = null;
         $this->rawSeeds = [];
