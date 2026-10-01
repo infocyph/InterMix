@@ -360,6 +360,10 @@ final class StaticRuntimeGenerator
         string $manifest,
         string $build,
     ): string {
+        if (!is_dir(dirname($filePath))) {
+            throw new ContainerException("Output directory does not exist for '$filePath'.");
+        }
+
         $root = $this->buildRoot($filePath);
         if (!is_dir($root) && !mkdir($root, 0755, true) && !is_dir($root)) {
             throw new ContainerException("Unable to create static runtime build root '$root'.");
