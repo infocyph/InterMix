@@ -6,6 +6,7 @@ namespace Infocyph\InterMix\DI\Internal;
 
 use Infocyph\InterMix\DI\ScopeContext;
 use Infocyph\InterMix\Exceptions\ContainerException;
+use Infocyph\InterMix\Exceptions\ScopeCleanupException;
 
 /** @internal */
 final class ExecutionScopeStore
@@ -382,6 +383,39 @@ final class ExecutionScopeStore
         }
     }
 
+    /**
+     * @param callable(): void $leaveScope
+     * @return array{failures: list<\Throwable>, count: int}
+     */
+    public function resetContext(string $context, callable $leaveScope): array
+    {
+        $failures = [];
+        $failureCount = 0;
+
+        if ($this->isAttached($context)) {
+            while ($this->hasNestedScope($context)) {
+                try {
+                    $leaveScope();
+                } catch (ScopeCleanupException $failure) {
+                    $this->appendCleanupFailure($failure, $failures, $failureCount);
+                }
+            }
+            $this->detachCurrentScopeContext($context);
+
+            return ['failures' => $failures, 'count' => $failureCount];
+        }
+
+        while ($this->hasState($context)) {
+            try {
+                $leaveScope();
+            } catch (ScopeCleanupException $failure) {
+                $this->appendCleanupFailure($failure, $failures, $failureCount);
+            }
+        }
+
+        return ['failures' => $failures, 'count' => $failureCount];
+    }
+
     public function resetScope(string $context): void
     {
         $state = $this->states[$context] ?? null;
@@ -430,6 +464,23 @@ final class ExecutionScopeStore
             && $state->resolvedScoped === []
         ) {
             unset($this->states[$context]);
+        }
+    }
+
+    /**
+     * @param list<\Throwable> $failures
+     */
+    private function appendCleanupFailure(
+        ScopeCleanupException $failure,
+        array &$failures,
+        int &$failureCount,
+    ): void {
+        $failureCount += $failure->cleanupFailureCount;
+        foreach ($failure->cleanupFailures as $cleanupFailure) {
+            if (count($failures) >= 32) {
+                break;
+            }
+            $failures[] = $cleanupFailure;
         }
     }
 

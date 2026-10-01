@@ -312,11 +312,11 @@ final class ProductionScopeStore
 
         $this->assertNoAttachments($current);
 
+        $parent = $current->parent;
         try {
             $beforeClose($current);
         } finally {
             $this->close($current);
-            $parent = $current->parent;
             if ($parent instanceof ScopeState && $parent->name !== 'root') {
                 $state->current = $parent;
             } else {
@@ -335,13 +335,14 @@ final class ProductionScopeStore
 
         $this->assertNoAttachments($scope);
 
+        $parent = $scope->parent ?? new ScopeState('root');
         try {
             $beforeClose($scope);
         } finally {
             $this->close($scope);
         }
 
-        return $scope->parent ?? new ScopeState('root');
+        return $parent;
     }
 
     private function finishContext(string $context): void
@@ -373,6 +374,7 @@ final class ProductionScopeStore
             } catch (ScopeCleanupException $failure) {
                 $this->appendCleanupFailure($failure, $failures, $failureCount);
             }
+
             $state = $this->states[$context];
         }
 
@@ -404,6 +406,7 @@ final class ProductionScopeStore
             } catch (ScopeCleanupException $failure) {
                 $this->appendCleanupFailure($failure, $failures, $failureCount);
             }
+
             if (!isset($this->states[$context])) {
                 return;
             }

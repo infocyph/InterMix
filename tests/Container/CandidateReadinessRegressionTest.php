@@ -120,18 +120,25 @@ function candidateReadinessAssertDrainingAdmission(bool $production): void
         $context = null;
         $child = null;
 
-        expect(fn() => $runtime->withinScope('owner', static function ($active) use (&$context, &$child): void {
-            $context = $active->captureScopeContext();
-            $child = new Fiber(static fn() => $active->withinScopeContext(
-                $context,
-                static function (): void {
-                    Fiber::suspend();
-                },
-            ));
-            $child->start();
-        }))->toThrow(ContainerException::class, 'child execution carriers are still attached');
+        $ownerFailure = null;
+        try {
+            $runtime->withinScope('owner', static function ($active) use (&$context, &$child): void {
+                $context = $active->captureScopeContext();
+                $child = new Fiber(static fn() => $active->withinScopeContext(
+                    $context,
+                    static function (): void {
+                        Fiber::suspend();
+                    },
+                ));
+                $child->start();
+            });
+        } catch (ContainerException $exception) {
+            $ownerFailure = $exception;
+        }
 
-        expect($context)->not->toBeNull()
+        expect($ownerFailure)->toBeInstanceOf(ContainerException::class)
+            ->and($ownerFailure->getMessage())->toContain('child execution carriers are still attached')
+            ->and($context)->not->toBeNull()
             ->and($child)->toBeInstanceOf(Fiber::class);
 
         $late = new Fiber(static fn() => $runtime->withinScopeContext(
