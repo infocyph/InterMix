@@ -107,8 +107,8 @@ final class StaticRuntimeGenerator
     ): ProductionContainer {
         $artifactPath = $this->artifactPath($filePath);
         $manifest = $this->validateManifest($artifactPath);
-        $this->assertGraphMatches($manifest, $graph);
         $this->assertEnvironmentMatches($manifest, $fallback);
+        $this->assertGraphMatches($manifest, $graph);
         $this->assertFallbackMatches($manifest, $fallback, $releaseIdentity);
 
         return $this->attachFallback($this->loadRuntime($artifactPath), $fallback);
@@ -136,8 +136,8 @@ final class StaticRuntimeGenerator
                 'Prevalidated static runtime does not match the active deployment digest.',
             );
         }
-        $this->assertGraphMatches($manifest, $graph);
         $this->assertEnvironmentMatches($manifest, $fallback);
+        $this->assertGraphMatches($manifest, $graph);
         $this->assertFallbackMatches($manifest, $fallback, $releaseIdentity);
 
         return $this->attachFallback($this->loadRuntime($artifactPath), $fallback);
@@ -206,7 +206,7 @@ final class StaticRuntimeGenerator
      *   environment: ?string,
      *   compiled: list<string>,
      *   skipped: array<string, string>,
-     *   fallback: array{required: bool, ids: list<string>, release_identity: ?string},
+     *   fallback: array{required: bool, identity_required: bool, ids: list<string>, release_identity: ?string},
      *   artifact: string,
      *   build: string
      * } $manifest
@@ -237,7 +237,7 @@ final class StaticRuntimeGenerator
      *   environment: ?string,
      *   compiled: list<string>,
      *   skipped: array<string, string>,
-     *   fallback: array{required: bool, ids: list<string>, release_identity: ?string},
+     *   fallback: array{required: bool, identity_required: bool, ids: list<string>, release_identity: ?string},
      *   artifact: string,
      *   build: string
      * } $manifest
@@ -256,16 +256,18 @@ final class StaticRuntimeGenerator
             );
         }
 
-        $expectedIdentity = $manifest['fallback']['release_identity'];
-        if (!is_string($expectedIdentity) || $releaseIdentity === null || $releaseIdentity === '') {
-            throw new ContainerException(
-                'Static runtime fallback requires an explicit matching release identity.',
-            );
-        }
-        if (!hash_equals($expectedIdentity, hash('xxh128', $releaseIdentity))) {
-            throw new ContainerException(
-                'Static runtime fallback release identity does not match the artifact.',
-            );
+        if ($manifest['fallback']['identity_required']) {
+            $expectedIdentity = $manifest['fallback']['release_identity'];
+            if (!is_string($expectedIdentity) || $releaseIdentity === null || $releaseIdentity === '') {
+                throw new ContainerException(
+                    'Static runtime fallback requires an explicit matching release identity.',
+                );
+            }
+            if (!hash_equals($expectedIdentity, hash('xxh128', $releaseIdentity))) {
+                throw new ContainerException(
+                    'Static runtime fallback release identity does not match the artifact.',
+                );
+            }
         }
 
         foreach ($manifest['fallback']['ids'] as $id) {
@@ -287,7 +289,7 @@ final class StaticRuntimeGenerator
      *   environment: ?string,
      *   compiled: list<string>,
      *   skipped: array<string, string>,
-     *   fallback: array{required: bool, ids: list<string>, release_identity: ?string},
+     *   fallback: array{required: bool, identity_required: bool, ids: list<string>, release_identity: ?string},
      *   artifact: string,
      *   build: string
      * } $manifest
@@ -317,7 +319,7 @@ final class StaticRuntimeGenerator
      *   environment: ?string,
      *   compiled: list<string>,
      *   skipped: array<string, string>,
-     *   fallback: array{required: bool, ids: list<string>, release_identity: ?string},
+     *   fallback: array{required: bool, identity_required: bool, ids: list<string>, release_identity: ?string},
      *   artifact: string,
      *   build: string
      * } $manifest
@@ -389,7 +391,7 @@ final class StaticRuntimeGenerator
             return $value;
         }
         if (array_is_list($value)) {
-            return array_map(fn(mixed $entry): mixed => $this->canonicalize($entry), $value);
+            return array_map($this->canonicalize(...), $value);
         }
 
         ksort($value, SORT_STRING);
@@ -466,12 +468,22 @@ final class StaticRuntimeGenerator
         $ids = array_keys($ids);
         sort($ids, SORT_STRING);
 
-        $required = $skipped !== [] || $graph->requiresReleaseIdentity();
+        $fallbackRequired = $skipped !== []
+            || $graph->closureResources() !== []
+            || $graph->classResources() !== []
+            || $graph->registeredAttributeResolvers() !== []
+            || $graph->resolvingHookIds() !== []
+            || $graph->resolvedHookIds() !== []
+            || $graph->scopeLeaveHookScopes() !== [];
+        $identityRequired = $graph->requiresReleaseIdentity();
 
         return [
-            'required' => $required,
+            'required' => $fallbackRequired,
+            'identity_required' => $identityRequired,
             'ids' => $ids,
-            'release_identity' => $releaseIdentity === null || $releaseIdentity === ''
+            'release_identity' => !$identityRequired
+                || $releaseIdentity === null
+                || $releaseIdentity === ''
                 ? null
                 : hash('xxh128', $releaseIdentity),
         ];
@@ -496,8 +508,8 @@ final class StaticRuntimeGenerator
         ksort($plans, SORT_STRING);
         ksort($skipped, SORT_STRING);
 
-        $attributes = $graph->registeredAttributeTypes();
-        sort($attributes, SORT_STRING);
+        $attributes = $graph->registeredAttributeResolvers();
+        ksort($attributes, SORT_STRING);
         $dynamicIds = $graph->dynamicServiceIds();
         sort($dynamicIds, SORT_STRING);
         $resolvedHooks = $graph->resolvedHookIds();
@@ -560,7 +572,7 @@ final class StaticRuntimeGenerator
      *   environment: ?string,
      *   compiled: list<string>,
      *   skipped: array<string, string>,
-     *   fallback: array{required: bool, ids: list<string>, release_identity: ?string},
+     *   fallback: array{required: bool, identity_required: bool, ids: list<string>, release_identity: ?string},
      *   artifact: string,
      *   build: string
      * }
@@ -608,9 +620,14 @@ final class StaticRuntimeGenerator
             || !is_array($manifest['compiled'])
             || !is_array($manifest['skipped'])
             || !is_array($manifest['fallback'])
-            || !isset($manifest['fallback']['required'], $manifest['fallback']['ids'])
+            || !isset(
+                $manifest['fallback']['required'],
+                $manifest['fallback']['identity_required'],
+                $manifest['fallback']['ids'],
+            )
             || !array_key_exists('release_identity', $manifest['fallback'])
             || !is_bool($manifest['fallback']['required'])
+            || !is_bool($manifest['fallback']['identity_required'])
             || !is_array($manifest['fallback']['ids'])
             || (!is_string($manifest['fallback']['release_identity'])
                 && $manifest['fallback']['release_identity'] !== null)
@@ -646,7 +663,7 @@ final class StaticRuntimeGenerator
          *   environment: ?string,
          *   compiled: list<string>,
          *   skipped: array<string, string>,
-         *   fallback: array{required: bool, ids: list<string>, release_identity: ?string},
+         *   fallback: array{required: bool, identity_required: bool, ids: list<string>, release_identity: ?string},
          *   artifact: string,
          *   build: string
          * } $manifest
@@ -735,7 +752,7 @@ final class StaticRuntimeGenerator
      *   environment: ?string,
      *   compiled: list<string>,
      *   skipped: array<string, string>,
-     *   fallback: array{required: bool, ids: list<string>, release_identity: ?string},
+     *   fallback: array{required: bool, identity_required: bool, ids: list<string>, release_identity: ?string},
      *   artifact: string,
      *   build: string
      * }
