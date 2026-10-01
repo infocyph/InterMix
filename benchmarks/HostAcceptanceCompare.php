@@ -80,7 +80,6 @@ final class HostAcceptanceCompare
         }
     }
 
-    /** @param array<string, mixed> $result */
     /**
      * @param list<array<string, mixed>> $baseline
      * @param list<array<string, mixed>> $current

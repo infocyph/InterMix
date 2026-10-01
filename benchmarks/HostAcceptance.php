@@ -32,11 +32,13 @@ final class HostAcceptanceHandler
 }
 
 final class HostExpectedFailure extends RuntimeException {}
+
 final class HostExpectedCancellation extends RuntimeException {}
 
 final class HostAcceptance
 {
     private const int LATENCY_SAMPLE_LIMIT = 20_000;
+
     private const int WARMUP_REQUESTS = 2_000;
 
     /** @param list<string> $arguments */
