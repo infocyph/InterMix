@@ -152,7 +152,7 @@ it('keeps a finalized compiled graph immutable while a propagated child is attac
     }
 });
 
-it('keeps seeded inputs behind the singleton captive-dependency guard', function () {
+it('rejects singleton autowiring that captures a scoped input during graph finalization', function () {
     $builder = ContainerBuilder::create(uniqid('runtime_alignment_seed_guard_'))
         ->input(RuntimeAlignmentScopedInput::class)
         ->autowire(
@@ -161,11 +161,24 @@ it('keeps seeded inputs behind the singleton captive-dependency guard', function
             lifetime: LifetimeEnum::Singleton,
         );
 
+    expect(fn() => $builder->build())
+        ->toThrow(ContainerException::class, 'depends on scoped entry');
+});
+
+it('keeps dynamic singleton factories behind the runtime captive-dependency guard', function () {
+    $builder = ContainerBuilder::create(uniqid('runtime_alignment_dynamic_seed_guard_'))
+        ->input(RuntimeAlignmentScopedInput::class)
+        ->factory(
+            'dynamic.singleton',
+            static fn($container) => $container->get(RuntimeAlignmentScopedInput::class),
+            LifetimeEnum::Singleton,
+        );
+
     $runtime = $builder->build();
 
     expect(fn() => $runtime->withinScope(
         'request',
-        static fn($active) => $active->get(RuntimeAlignmentCaptiveSingleton::class),
+        static fn($active) => $active->get('dynamic.singleton'),
         [RuntimeAlignmentScopedInput::class => new RuntimeAlignmentScopedInput()],
     ))->toThrow(ContainerException::class, 'cannot capture scoped entry');
 });

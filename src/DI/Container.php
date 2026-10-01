@@ -513,8 +513,8 @@ class Container implements RuntimeContainerInterface
     /** @param array<string, mixed> $instances */
     protected function validateScopeSeeds(array $instances): void
     {
-        foreach (array_keys($instances) as $id) {
-            if (!$this->repository->isScopeSeedAllowed($id)) {
+        foreach ($instances as $id => $_instance) {
+            if (!$this->repository->isScopeSeedAllowed((string) $id)) {
                 throw new ContainerException(
                     "Scope seed '$id' must identify a declared scoped entry or input.",
                 );

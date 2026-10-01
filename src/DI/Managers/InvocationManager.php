@@ -34,12 +34,6 @@ class InvocationManager
         protected Container $container,
     ) {}
 
-    /** @internal */
-    public function assertScopedDependencyAllowed(string $id): void
-    {
-        $this->assertScopedResolutionAllowed($id);
-    }
-
     /** @throws ContainerException|ReflectionException|InvalidArgumentException */
     public function call(string|Closure|callable $classOrClosure, string|bool|null $method = null): mixed
     {
@@ -63,7 +57,9 @@ class InvocationManager
     {
         $seed = null;
         if ($this->repository->findScopeSeed($id, $seed)) {
-            $this->assertScopedResolutionAllowed($id);
+            if ($this->singletonResolutionActive) {
+                $this->assertScopedResolutionAllowed($id);
+            }
 
             return $seed;
         }
@@ -80,7 +76,9 @@ class InvocationManager
         $lifetime = $this->repository->getDefinitionLifetime($id);
         $scope = null;
         if ($lifetime === LifetimeEnum::Scoped) {
-            $this->assertScopedResolutionAllowed($id);
+            if ($this->singletonResolutionActive) {
+                $this->assertScopedResolutionAllowed($id);
+            }
             $resolved = null;
             $scope = 'root';
             $found = $this->repository instanceof ConcurrentRepository
@@ -225,10 +223,6 @@ class InvocationManager
 
     private function assertScopedResolutionAllowed(string $id): void
     {
-        if (!$this->singletonResolutionActive) {
-            return;
-        }
-
         $stack = $this->lifetimeStacks[$this->resolutionOwner()] ?? [];
         if (in_array(LifetimeEnum::Singleton, $stack, true)) {
             throw new ContainerException(

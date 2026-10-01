@@ -103,6 +103,9 @@ class Repository
     /** @var array<string, mixed> */
     private array $resolvedSingleton = [];
 
+    /** @var array<string, true> */
+    private array $scopeSeedAllowedIds = [];
+
     /** @var array<string, array<string, mixed>> */
     private array $scopeSeeds = [];
 
@@ -701,6 +704,9 @@ class Repository
     /** @internal */
     public function isScopeSeedAllowed(string $id): bool
     {
+        if ($this->isLocked) {
+            return isset($this->scopeSeedAllowedIds[$id]);
+        }
         if (!array_key_exists($id, $this->functionReference)
             || $this->functionReference[$id] instanceof AliasDefinition
         ) {
@@ -732,6 +738,15 @@ class Repository
 
     public function lock(): void
     {
+        $this->scopeSeedAllowedIds = [];
+        foreach ($this->functionReference as $id => $definition) {
+            if (!$definition instanceof AliasDefinition
+                && $this->getDirectDefinitionLifetime((string) $id) === LifetimeEnum::Scoped
+            ) {
+                $this->scopeSeedAllowedIds[(string) $id] = true;
+            }
+        }
+
         $this->isLocked = true;
     }
 

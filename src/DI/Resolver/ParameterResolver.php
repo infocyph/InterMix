@@ -6,7 +6,6 @@ namespace Infocyph\InterMix\DI\Resolver;
 
 use Infocyph\InterMix\DI\Attribute\AttributeResolution;
 use Infocyph\InterMix\DI\Attribute\Inject;
-use Infocyph\InterMix\DI\Internal\ContainerAccess;
 use Infocyph\InterMix\DI\Resolver\Concerns\ResolvesAssociativeParameters;
 use Infocyph\InterMix\DI\Resolver\Concerns\ResolvesNumericAndVariadicParameters;
 use Infocyph\InterMix\DI\Resolver\Concerns\ResolvesParameterAttributes;
@@ -117,8 +116,6 @@ class ParameterResolver
         $hasScopeSeeds = $this->repository->hasScopeSeeds();
         $seeded = null;
         if ($hasScopeSeeds && $this->repository->findScopeSeed($name, $seeded)) {
-            ContainerAccess::assertScopedDependencyAllowed($this->repository->container(), $name);
-
             return $seeded;
         }
 
@@ -477,8 +474,6 @@ class ParameterResolver
     private function resolveNamedDefinitionType(string $name, bool $hasScopeSeeds, mixed &$seeded): mixed
     {
         if ($hasScopeSeeds && $this->repository->findScopeSeed($name, $seeded)) {
-            ContainerAccess::assertScopedDependencyAllowed($this->repository->container(), $name);
-
             return $seeded;
         }
 

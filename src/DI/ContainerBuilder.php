@@ -583,7 +583,7 @@ final class ContainerBuilder
     /** @return list<string> */
     private function captiveDependencyIssues(DefinitionGraph $graph): array
     {
-        $plans = new StaticRuntimePlanner()->plan($graph)['plans'];
+        $plans = new StaticRuntimePlanner()->dependencyPlans($graph);
         $issues = [];
         foreach ($plans as $id => $plan) {
             if ($plan['lifetime'] !== LifetimeEnum::Singleton) {
@@ -597,6 +597,15 @@ final class ContainerBuilder
                     continue;
                 }
                 $seen[$dependency] = true;
+
+                if ($graph->hasDefinition($dependency)
+                    && $graph->definitionMetaFor($dependency)['lifetime'] === LifetimeEnum::Scoped
+                ) {
+                    $issues[] = "Singleton '{$id}' depends on scoped entry '{$dependency}'.";
+
+                    break;
+                }
+
                 $dependencyPlan = $plans[$dependency] ?? null;
                 if (!is_array($dependencyPlan)) {
                     continue;

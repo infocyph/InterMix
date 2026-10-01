@@ -30,6 +30,14 @@ use ReflectionClass;
  */
 final class StaticRuntimePlanner
 {
+    /** @return array<string, ServicePlan> */
+    public function dependencyPlans(DefinitionGraph $graph): array
+    {
+        [$plans, $skipped] = $this->buildPlans($graph);
+
+        return $this->expandImplicitClasses($graph, $plans, $skipped);
+    }
+
     /** @return array{plans: array<string, ServicePlan>, skipped: array<string, string>} */
     public function plan(DefinitionGraph $graph): array
     {
