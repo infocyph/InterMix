@@ -91,7 +91,7 @@ final class RuntimeFeaturesBench
     #[BeforeMethods('setUp')]
     public function benchInvokerClassDynamic(): void
     {
-        $this->container->invoke(RuntimeInvokable::class);
+        $this->container->invoke($this->container->make(RuntimeInvokable::class));
     }
 
     #[BeforeMethods('setUp')]

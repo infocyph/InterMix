@@ -967,6 +967,8 @@ Batch 2 validation on 2026-10-01, PHP 8.5.4 / Composer 2.10.3:
 
 - focused and full code suite: **395 passed, 2,089 assertions**;
 - `composer ic:process`: Composer Normalize, Rector, Pint, and PHPCBF completed;
+- `composer ic:bench:quick`: **122 subjects, 0 failures, 0 errors** after migrating
+  every benchmark from retired v10 APIs to the canonical runtime contract;
 - final `composer ic:ci`: all configured gates passed - syntax, reference
   integrity, duplicate code, comment policy, Pest, Pint, PHPCS, Deptrac, PHPStan,
   Psalm, and Rector;

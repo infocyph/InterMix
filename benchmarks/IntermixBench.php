@@ -30,7 +30,7 @@ final class IntermixBench
     #[BeforeMethods('setUpContainer')]
     public function benchClosureCallWithDi(): void
     {
-        $this->container->call($this->diHandler);
+        $this->container->invoke($this->diHandler);
     }
 
     #[BeforeMethods('setUpContainer')]
@@ -54,7 +54,8 @@ final class IntermixBench
     #[BeforeMethods('setUpContainer')]
     public function benchInvokerMethodInvoke(): void
     {
-        $this->container->invoke([BenchMethodConsumer::class, 'handle'], ['value' => 1]);
+        $target = $this->container->make(BenchMethodConsumer::class);
+        $this->container->invoke([$target, 'handle'], ['value' => 1]);
     }
 
     #[BeforeMethods('setUpContainer')]
@@ -77,13 +78,14 @@ final class IntermixBench
     #[BeforeMethods('setUpContainer')]
     public function benchMethodWiringViaRegisterMethod(): void
     {
-        $this->container->make(BenchMethodConsumer::class, 'handle');
+        $target = $this->container->make(BenchMethodConsumer::class);
+        $this->container->invoke([$target, 'handle'], ['value' => 1]);
     }
 
     #[BeforeMethods('setUpContainer')]
     public function benchPropertyWiringViaRegisterProperty(): void
     {
-        $this->container->make(BenchPropertyConsumer::class)->value();
+        $this->container->get(BenchPropertyConsumer::class)->value();
     }
 
     #[BeforeMethods('setUpContainer')]
@@ -95,26 +97,24 @@ final class IntermixBench
     #[BeforeMethods('setUpContainer')]
     public function benchResolveNowClass(): void
     {
-        $this->container->resolveNow(BenchService::class);
+        $this->container->make(BenchService::class);
     }
 
     #[BeforeMethods('setUpContainer')]
     public function benchResolveNowMethod(): void
     {
-        $this->container->resolveNow(
-            [BenchMethodConsumer::class, 'handle'],
-            ['value' => 1],
-        );
+        $target = $this->container->make(BenchMethodConsumer::class);
+        $this->container->invoke([$target, 'handle'], ['value' => 1]);
     }
 
     #[BeforeMethods('setUpContainer')]
     public function benchScopedLifetimeWithinScope(): void
     {
         $scope = 'scope-' . (++$this->scopeCounter);
-        $this->container->enterScope($scope);
-        $this->container->get('bench.scoped');
-        $this->container->get('bench.scoped');
-        $this->container->leaveScope();
+        $this->container->withinScope($scope, static function (Container $active): void {
+            $active->get('bench.scoped');
+            $active->get('bench.scoped');
+        });
     }
 
     #[BeforeMethods('setUpContainer')]
@@ -124,8 +124,8 @@ final class IntermixBench
         $seeded = new BenchScopedToken();
         $this->container->withinScope(
             $scope,
-            static fn(Container $container): BenchScopedToken => $container->get(BenchScopedToken::class),
-            [BenchScopedToken::class => $seeded],
+            static fn(Container $container): BenchScopedToken => $container->get('bench.scoped'),
+            ['bench.scoped' => $seeded],
         );
     }
 
@@ -144,14 +144,14 @@ final class IntermixBench
     #[BeforeMethods('setUpContainer')]
     public function benchTaggedLookupFindByTag(): void
     {
-        $this->container->findByTag('bench.pipeline.pre');
+        iterator_to_array($this->container->tagged('bench.pipeline.pre'));
     }
 
     #[BeforeMethods('setUpContainer')]
     public function benchTaggedLookupLazy(): void
     {
-        foreach ($this->container->tagged('bench.pipeline.pre') as $factory) {
-            $factory();
+        foreach ($this->container->tagged('bench.pipeline.pre') as $service) {
+            $service::class;
 
             break;
         }
@@ -166,8 +166,7 @@ final class IntermixBench
     public function setUpContainer(): void
     {
         $builder = ContainerBuilder::create('__intermix_phpbench__' . spl_object_id($this));
-        $builder->enableInjection()
-            ->autowire('bench.config', BenchConfig::class)
+        $builder->autowire('bench.config', BenchConfig::class)
             ->factory(
                 'bench.factory.direct',
                 static fn(Container $runtime): BenchFactoryProduct => new BenchFactoryProduct($runtime),
@@ -193,14 +192,11 @@ final class IntermixBench
                 BenchPipelineB::class,
                 tags: ['bench.pipeline.pre'],
             )
-            ->registerMethod(
-                BenchMethodConsumer::class,
-                'handle',
-                ['value' => 1],
-            )
-            ->registerProperty(
+            ->autowire(BenchMethodConsumer::class, BenchMethodConsumer::class)
+            ->autowire(
                 BenchPropertyConsumer::class,
-                ['seed' => 41],
+                BenchPropertyConsumer::class,
+                properties: ['seed' => 41],
             )
             ->import(new BenchServiceProvider())
             ->bindInterfaceForEnv(
@@ -219,10 +215,11 @@ final class IntermixBench
         $this->container->get('bench.factory.direct');
         $this->container->get('bench.factory.reflected');
         $this->container->make(BenchService::class);
-        $this->container->call($this->diHandler);
-        $this->container->make(BenchMethodConsumer::class, 'handle');
-        $this->container->make(BenchPropertyConsumer::class)->value();
-        $this->container->findByTag('bench.pipeline.pre');
+        $this->container->invoke($this->diHandler);
+        $target = $this->container->make(BenchMethodConsumer::class);
+        $this->container->invoke([$target, 'handle'], ['value' => 1]);
+        $this->container->get(BenchPropertyConsumer::class)->value();
+        iterator_to_array($this->container->tagged('bench.pipeline.pre'));
         $this->container->get('bench.provider.service');
         $this->container->make(BenchEnvConsumer::class)->tick();
     }

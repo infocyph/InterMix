@@ -34,7 +34,7 @@ final class ProductionRequestPathBench
     {
         static $runtime;
         $runtime ??= $this->controllerRuntime();
-        $this->sink = $runtime->resolveNow([ProductionRequestController::class, 'handle']);
+        $this->sink = $runtime->invoke([$runtime->make(ProductionRequestController::class), 'handle']);
     }
 
     #[Revs(500)]
@@ -42,8 +42,8 @@ final class ProductionRequestPathBench
     {
         static $runtime;
         $runtime ??= $this->controllerRuntime();
-        $this->sink = $runtime->resolveNow(
-            [ProductionRequestController::class, 'handle'],
+        $this->sink = $runtime->invoke(
+            [$runtime->make(ProductionRequestController::class), 'handle'],
             ['routeId' => 7],
         );
     }
@@ -105,7 +105,7 @@ final class ProductionRequestPathBench
     {
         static $runtime;
         $runtime ??= $this->staticMethodRuntime();
-        $this->sink = $runtime->get(ProductionRequestStaticMethod::class);
+        $this->sink = $runtime->invoke([ProductionRequestStaticMethod::class, 'boot']);
     }
 
     #[Revs(1000)]
@@ -114,8 +114,8 @@ final class ProductionRequestPathBench
         static $runtime;
         $runtime ??= $this->taggedRuntime();
         $resolved = [];
-        foreach ($runtime->findByTagLazy('middleware') as $id => $resolver) {
-            $resolved[$id] = $resolver();
+        foreach ($runtime->tagged('middleware') as $id => $service) {
+            $resolved[$id] = $service;
         }
         $this->sink = $resolved;
     }
@@ -125,7 +125,7 @@ final class ProductionRequestPathBench
     {
         static $runtime;
         $runtime ??= $this->taggedRuntime();
-        $this->sink = $runtime->findByTag('middleware');
+        $this->sink = iterator_to_array($runtime->tagged('middleware'));
     }
 
     #[Revs(1000)]
@@ -305,7 +305,6 @@ final class ProductionRequestPathBench
             ->autowire(ProductionRequestMiddle::class, ProductionRequestMiddle::class)
             ->autowire(ProductionRequestRoot::class, ProductionRequestRoot::class)
             ->autowire(ProductionRequestController::class, ProductionRequestController::class, lifetime: LifetimeEnum::Transient);
-        $builder->registerMethod(ProductionRequestController::class, 'handle');
 
         return $this->production($builder);
     }
@@ -362,7 +361,6 @@ final class ProductionRequestPathBench
         $builder = ContainerBuilder::create($this->alias('static-method'))
             ->autowire(ProductionRequestLeaf::class, ProductionRequestLeaf::class)
             ->autowire(ProductionRequestStaticMethod::class, ProductionRequestStaticMethod::class, lifetime: LifetimeEnum::Transient);
-        $builder->registerMethod(ProductionRequestStaticMethod::class, 'boot');
 
         return $this->production($builder);
     }

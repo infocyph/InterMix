@@ -55,14 +55,15 @@ final class RequestPathBench
     {
         $container = $this->graphBuilder($this->alias('first-closure'))->build();
         $handler = static fn(RequestBenchRoot $root): int => $root->handle();
-        $this->sink = $container->call($handler);
+        $this->sink = $container->invoke($handler);
     }
 
     #[Revs(100)]
     public function benchFirstMethodInvocation(): void
     {
         $container = $this->graphBuilder($this->alias('first-method'), includeController: true)->build();
-        $this->sink = $container->call(RequestBenchController::class, 'handle');
+        $controller = $container->get(RequestBenchController::class);
+        $this->sink = $container->invoke([$controller, 'handle']);
     }
 
     #[Revs(100)]
@@ -95,9 +96,9 @@ final class RequestPathBench
         if (!$container instanceof Container) {
             $container = $this->hotContainer();
             $handler = static fn(RequestBenchLeaf $leaf): int => $leaf->value();
-            $container->call($handler);
+            $container->invoke($handler);
         }
-        $this->sink = $container->call($handler);
+        $this->sink = $container->invoke($handler);
     }
 
     #[Revs(1000)]
