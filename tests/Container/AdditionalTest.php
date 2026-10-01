@@ -435,7 +435,7 @@ it('supports retained read sugar with explicit internal registration', function 
     $c = new ConfigurationContainer(uniqid('cs_'));
 
     // (1) property assignment → definition
-    $c->logger = fn() => new DummyLogger();
+    $c->definitions()->bind('logger', fn() => new DummyLogger());
 
     // (2) array assignment → definition
     $c->definitions()->bind('cfg', fn() => ['debug' => true, 'dsn' => 'mysql://dummy']);
@@ -497,11 +497,11 @@ it('lets me wire and use services in one-liners', function () {
 
     // the manager can re-use them transparently
     $def = $c->definitions();
-    $def->greeter = function () use ($c) {
+    $def->bind('greeter', function () use ($c) {
         $c->logger->log('greeted');
 
         return 'Hello @ ' . $c->now->format('c');
-    };
+    });
 
     $msg = $c->greeter;
 
