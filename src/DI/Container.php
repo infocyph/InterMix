@@ -6,6 +6,7 @@ namespace Infocyph\InterMix\DI;
 
 use Closure;
 use Infocyph\InterMix\DI\Attribute\AttributeRegistry;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\DI\Invoker\CompiledCall;
 use Infocyph\InterMix\DI\Invoker\GenericCall;
 use Infocyph\InterMix\DI\Invoker\InjectedCall;
@@ -157,7 +158,9 @@ class Container implements ContainerInterface
 
     protected function definitions(): DefinitionManager
     {
-        return $this->definitionManager ??= new DefinitionManager($this->repository, $this);
+        $host = $this->configurationHost();
+
+        return $this->definitionManager ??= new DefinitionManager($this->repository, $host);
     }
 
     protected function enableLazyLoading(bool $lazy = true): self
@@ -187,7 +190,7 @@ class Container implements ContainerInterface
 
     protected function factory(string $id, Closure $factory): PendingFactoryBinding
     {
-        return new PendingFactoryBinding($this, $id, $factory);
+        return new PendingFactoryBinding($this->configurationHost(), $id, $factory);
     }
 
     /** @return array<string, mixed> */
@@ -343,7 +346,9 @@ class Container implements ContainerInterface
 
     protected function options(): OptionsManager
     {
-        return $this->optionsManager ??= new OptionsManager($this->repository, $this);
+        $host = $this->configurationHost();
+
+        return $this->optionsManager ??= new OptionsManager($this->repository, $host);
     }
 
     /**
@@ -390,7 +395,9 @@ class Container implements ContainerInterface
 
     protected function registration(): RegistrationManager
     {
-        return $this->registrationManager ??= new RegistrationManager($this->repository, $this);
+        $host = $this->configurationHost();
+
+        return $this->registrationManager ??= new RegistrationManager($this->repository, $host);
     }
 
     /**
@@ -538,6 +545,17 @@ class Container implements ContainerInterface
         } finally {
             $this->leaveScope();
         }
+    }
+
+    private function configurationHost(): ConfigurationContainer
+    {
+        if (!$this instanceof ConfigurationContainer) {
+            throw new ContainerException(
+                'Runtime containers do not expose mutable configuration managers.',
+            );
+        }
+
+        return $this;
     }
 
     protected function copyConfigurationInto(self $runtime, bool $locked): void
