@@ -5,6 +5,7 @@ on:
     branches: [ "main", "master", "develop", "development" ]
   push:
     branches: [ "main", "master" ]
+    tags: [ "v*", "[0-9]*" ]
 
 jobs:
   swoole-family:
