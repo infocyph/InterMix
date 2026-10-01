@@ -28,13 +28,11 @@ final class StaticScopeAccessRenderer
     /** @param array<string, array{kind: string, lifetime: LifetimeEnum}> $plans */
     public function requiresCaptiveGuard(array $plans): bool
     {
-        foreach ($plans as $plan) {
-            if ($plan['lifetime'] === LifetimeEnum::Singleton && $plan['kind'] !== 'value') {
-                return true;
-            }
-        }
-
-        return false;
+        return array_any(
+            $plans,
+            fn(array $plan): bool => $plan['lifetime'] === LifetimeEnum::Singleton
+                && $plan['kind'] !== 'value',
+        );
     }
 
     public function seedGuard(
