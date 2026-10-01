@@ -42,8 +42,77 @@ jobs:
       - name: Build documentation with warnings as errors
         run: python -m sphinx -W --keep-going -b html docs docs/_build/html
 
+
+  tag-package:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    name: Tagged release package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          tools: composer:v2
+          coverage: none
+      - name: Validate exact tagged archive
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git archive --format=tar.gz --output="$RUNNER_TEMP/intermix-release.tar.gz" "$GITHUB_SHA"
+          mkdir "$RUNNER_TEMP/release"
+          tar -xzf "$RUNNER_TEMP/intermix-release.tar.gz" -C "$RUNNER_TEMP/release"
+          for excluded in .github benchmarks docs tests vendor composer.lock; do
+            test ! -e "$RUNNER_TEMP/release/$excluded"
+          done
+          composer install \
+            --working-dir="$RUNNER_TEMP/release" \
+            --no-dev --no-interaction --prefer-dist --no-progress --classmap-authoritative
+          php -r '
+            require getenv("RUNNER_TEMP") . "/release/vendor/autoload.php";
+            $runtime = \Infocyph\InterMix\DI\ContainerBuilder::create("tag.archive")
+                ->value("answer", 42)
+                ->build();
+            if ($runtime->get("answer") !== 42) {
+                throw new RuntimeException("Tagged archive smoke failed.");
+            }
+          '
+
+  tag-scope:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    name: "Tagged ${{ matrix.extension }} - PHP ${{ matrix.php-version }}"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ["8.4", "8.5"]
+        extension: ["openswoole", "swoole"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          extensions: ${{ matrix.extension }}
+          coverage: none
+          tools: composer:v2
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Run exact-tag carrier tests
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          cp vendor/infocyph/phpforge/resources/pest.xml .phpforge-pest.xml
+          trap 'rm -f .phpforge-pest.xml' EXIT
+          vendor/bin/pest \
+            --configuration=.phpforge-pest.xml \
+            tests/Container/SwooleScopeCompatibilityTest.php \
+            tests/Container/StructuredScopeRuntimeTest.php
+
   release:
-    needs: [phpforge, documentation, release-regression]
+    needs: [phpforge, documentation, release-regression, tag-package, tag-scope]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && success()
     uses: infocyph/phpforge/.github/workflows/release.yml@main
     permissions:
