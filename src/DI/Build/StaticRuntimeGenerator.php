@@ -304,48 +304,6 @@ final class StaticRuntimeGenerator
         }
     }
 
-    /**
-     * @param array{
-     *   abi: int,
-     *   intermix_major: int,
-     *   php: string,
-     *   digest: string,
-     *   graph: string,
-     *   environment: ?string,
-     *   compiled: list<string>,
-     *   skipped: array<string, string>,
-     *   fallback: array{required: bool, identity_required: bool, ids: list<string>, release_identity: ?string},
-     *   artifact: string,
-     *   build: string
-     * } $manifest
-     */
-    private function assertManifestCompatibility(array $manifest, string $artifactPath): void
-    {
-        if ($manifest['abi'] !== self::ARTIFACT_ABI) {
-            throw new ContainerException(
-                "Unsupported static runtime ABI '{$manifest['abi']}'.",
-            );
-        }
-        if ($manifest['intermix_major'] !== self::INTERMIX_MAJOR) {
-            throw new ContainerException(
-                'Static runtime was generated for a different InterMix major.',
-            );
-        }
-
-        $php = PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;
-        if ($manifest['php'] !== $php) {
-            throw new ContainerException(
-                "Static runtime targets PHP {$manifest['php']}; active runtime is PHP {$php}.",
-            );
-        }
-        if ($manifest['artifact'] !== basename($artifactPath)) {
-            throw new ContainerException('Static runtime manifest does not identify the active artifact.');
-        }
-        if ($manifest['build'] !== basename(dirname($artifactPath))) {
-            throw new ContainerException('Static runtime activation pointer does not match its build manifest.');
-        }
-    }
-
     private function attachFallback(
         ProductionContainer $runtime,
         ?ConfigurationContainer $fallback,
@@ -466,6 +424,4 @@ final class StaticRuntimeGenerator
 
         return $buildDirectory;
     }
-
-
 }
