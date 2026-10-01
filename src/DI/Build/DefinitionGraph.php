@@ -20,7 +20,7 @@ use Infocyph\InterMix\DI\Support\ServiceReference;
 use Infocyph\InterMix\DI\Support\ValueDefinition;
 use Psr\Container\ContainerInterface;
 
-/**
+    /**
  * Immutable build-time snapshot of resolution-affecting container state.
  *
  * The graph deliberately owns copies of mutable repository metadata so future
@@ -30,8 +30,7 @@ use Psr\Container\ContainerInterface;
  */
 final readonly class DefinitionGraph
 {
-
-/**
+    /**
      * @param array<string, mixed> $definitions
      * @param array<string, array{lifetime: LifetimeEnum, tags: array<int, string>}> $definitionMeta
      * @param array<string, array<string, mixed>> $classResources
@@ -61,9 +60,10 @@ final readonly class DefinitionGraph
         private bool $injectionEnabled,
         private bool $methodAttributes,
         private bool $propertyAttributes,
-    ) {}
+    )
+    {}
 
-/**
+    /**
      * @param array<int, string> $dynamicServiceIds
      * @param array<int, string> $resolvingHookIds
      * @param array<int, string> $resolvedHookIds
@@ -126,36 +126,36 @@ final readonly class DefinitionGraph
         );
     }
 
-/** @return array<string, array<string, mixed>> */
+    /** @return array<string, array<string, mixed>> */
     public function classResources(): array
     {
         return $this->classResources;
     }
 
-/** @return array<string, mixed> */
+    /** @return array<string, mixed> */
     public function classResourcesFor(string $class): array
     {
         return $this->classResources[$class] ?? [];
     }
 
-/** @return array<string, array{on: callable, params: array<int|string, mixed>}> */
+    /** @return array<string, array{on: callable, params: array<int|string, mixed>}> */
     public function closureResources(): array
     {
         return $this->closureResources;
     }
 
-public function contextualBinding(string $consumer, string $dependency): mixed
+    public function contextualBinding(string $consumer, string $dependency): mixed
     {
         return $this->contextualBindings[$consumer][$dependency] ?? null;
     }
 
-/** @return array<string, array<string, mixed>> */
+    /** @return array<string, array<string, mixed>> */
     public function contextualBindings(): array
     {
         return $this->contextualBindings;
     }
 
-/** @return array<string, array<int, string>> */
+    /** @return array<string, array<int, string>> */
     public function contextualBindingShape(): array
     {
         $shape = [];
@@ -169,114 +169,114 @@ public function contextualBinding(string $consumer, string $dependency): mixed
         return $shape;
     }
 
-public function defaultMethod(): ?string
+    public function defaultMethod(): ?string
     {
         return $this->defaultMethod;
     }
 
-/** @return array<string, array{lifetime: LifetimeEnum, tags: array<int, string>}> */
+    /** @return array<string, array{lifetime: LifetimeEnum, tags: array<int, string>}> */
     public function definitionMeta(): array
     {
         return $this->definitionMeta;
     }
 
-/** @return array{lifetime: LifetimeEnum, tags: array<int, string>} */
+    /** @return array{lifetime: LifetimeEnum, tags: array<int, string>} */
     public function definitionMetaFor(string $id): array
     {
         return $this->definitionMeta[$id] ?? ['lifetime' => LifetimeEnum::Singleton, 'tags' => []];
     }
 
-/** @return array<string, mixed> */
+    /** @return array<string, mixed> */
     public function definitions(): array
     {
         return $this->definitions;
     }
 
-/** @return array<int, string> */
+    /** @return array<int, string> */
     public function dynamicServiceIds(): array
     {
         return array_keys($this->dynamicServiceIds);
     }
 
-public function environment(): ?string
+    public function environment(): ?string
     {
         return $this->environment;
     }
 
-/** @return array<string, string> */
+    /** @return array<string, string> */
     public function environmentBindings(): array
     {
         return $this->environmentBindings;
     }
 
-public function environmentConcrete(string $type): ?string
+    public function environmentConcrete(string $type): ?string
     {
         return $this->environmentBindings[$type] ?? null;
     }
 
-public function hasAttributeType(string $type): bool
+    public function hasAttributeType(string $type): bool
     {
         return isset($this->attributeResolvers[$type]);
     }
 
-public function hasContextualBinding(string $consumer, string $dependency): bool
+    public function hasContextualBinding(string $consumer, string $dependency): bool
     {
         return array_key_exists($dependency, $this->contextualBindings[$consumer] ?? []);
     }
 
-public function hasDefinition(string $id): bool
+    public function hasDefinition(string $id): bool
     {
         return isset($this->definitions[$id]) || array_key_exists($id, $this->definitions);
     }
 
-public function hasResolvedHook(string $id): bool
+    public function hasResolvedHook(string $id): bool
     {
         return isset($this->resolvedHookIds[$id]);
     }
 
-public function hasResolvingHook(string $id): bool
+    public function hasResolvingHook(string $id): bool
     {
         return isset($this->resolvingHookIds[$id]);
     }
 
-public function hasScopeLeaveHook(string $scope): bool
+    public function hasScopeLeaveHook(string $scope): bool
     {
         return isset($this->scopeLeaveHookScopes[$scope]);
     }
 
-public function injectionEnabled(): bool
+    public function injectionEnabled(): bool
     {
         return $this->injectionEnabled;
     }
 
-public function methodAttributesEnabled(): bool
+    public function methodAttributesEnabled(): bool
     {
         return $this->methodAttributes;
     }
 
-public function propertyAttributesEnabled(): bool
+    public function propertyAttributesEnabled(): bool
     {
         return $this->propertyAttributes;
     }
 
-/** @return array<class-string, class-string> */
+    /** @return array<class-string, class-string> */
     public function registeredAttributeResolvers(): array
     {
         return $this->attributeResolvers;
     }
 
-/** @return array<int, string> */
+    /** @return array<int, string> */
     public function registeredAttributeTypes(): array
     {
         return array_keys($this->attributeResolvers);
     }
 
-public function requiresDynamicService(string $id): bool
+    public function requiresDynamicService(string $id): bool
     {
         return isset($this->dynamicServiceIds[$id]);
     }
 
-public function requiresReleaseIdentity(): bool
+    public function requiresReleaseIdentity(): bool
     {
         return $this->hasOpaqueCallbacks()
             || $this->hasOpaqueDefinitions()
@@ -284,25 +284,25 @@ public function requiresReleaseIdentity(): bool
             || $this->hasOpaqueClassResources();
     }
 
-/** @return array<int, string> */
+    /** @return array<int, string> */
     public function resolvedHookIds(): array
     {
         return array_keys($this->resolvedHookIds);
     }
 
-/** @return array<int, string> */
+    /** @return array<int, string> */
     public function resolvingHookIds(): array
     {
         return array_keys($this->resolvingHookIds);
     }
 
-/** @return array<int, string> */
+    /** @return array<int, string> */
     public function scopeLeaveHookScopes(): array
     {
         return array_keys($this->scopeLeaveHookScopes);
     }
 
-private function definitionIsOpaque(string $id, mixed $definition): bool
+    private function definitionIsOpaque(string $id, mixed $definition): bool
     {
         if (($id === ContainerInterface::class || $id === RuntimeContainerInterface::class)
             && $definition instanceof Container
@@ -329,7 +329,7 @@ private function definitionIsOpaque(string $id, mixed $definition): bool
         return !$this->isPortableMetadata($definition);
     }
 
-private function hasOpaqueCallbacks(): bool
+    private function hasOpaqueCallbacks(): bool
     {
         return $this->closureResources !== []
             || $this->resolvingHookIds !== []
@@ -337,7 +337,7 @@ private function hasOpaqueCallbacks(): bool
             || $this->scopeLeaveHookScopes !== [];
     }
 
-private function hasOpaqueClassResources(): bool
+    private function hasOpaqueClassResources(): bool
     {
         foreach ($this->classResources as $resources) {
             if (!$this->isPortableMetadata($resources)) {
@@ -348,7 +348,7 @@ private function hasOpaqueClassResources(): bool
         return false;
     }
 
-private function hasOpaqueContextualBindings(): bool
+    private function hasOpaqueContextualBindings(): bool
     {
         foreach ($this->contextualBindings as $bindings) {
             foreach ($bindings as $binding) {
@@ -361,7 +361,7 @@ private function hasOpaqueContextualBindings(): bool
         return false;
     }
 
-private function hasOpaqueDefinitions(): bool
+    private function hasOpaqueDefinitions(): bool
     {
         foreach ($this->definitions as $rawId => $definition) {
             if ($this->definitionIsOpaque((string) $rawId, $definition)) {
@@ -372,7 +372,7 @@ private function hasOpaqueDefinitions(): bool
         return false;
     }
 
-private function isPortableMetadata(mixed $value): bool
+    private function isPortableMetadata(mixed $value): bool
     {
         if ($value instanceof FactoryDefinition || $value instanceof ServiceReference) {
             return true;
