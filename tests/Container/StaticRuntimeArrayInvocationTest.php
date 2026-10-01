@@ -76,7 +76,8 @@ function removeArrayInvocationArtifact(string $path): void
 
 it('compiles class-array definitions with constructor property and method recipes', function () {
     ArrayInvocationHandler::$calls = 0;
-    $builder = ContainerBuilder::create(uniqid('array_invocation_'));
+    $builder = ContainerBuilder::create(uniqid('array_invocation_'))
+        ->releaseIdentity('intermix-test');
     $builder->autowire(ArrayInvocationDependency::class, ArrayInvocationDependency::class)
         ->factory('handler', static function (Container $runtime): string {
             $handler = new ArrayInvocationHandler($runtime->get(ArrayInvocationDependency::class));
@@ -101,7 +102,8 @@ it('compiles class-array definitions with constructor property and method recipe
 
 it('caches null class-array invocation results for singleton definitions', function () {
     ArrayInvocationNullHandler::$calls = 0;
-    $builder = ContainerBuilder::create(uniqid('array_invocation_null_'));
+    $builder = ContainerBuilder::create(uniqid('array_invocation_null_'))
+        ->releaseIdentity('intermix-test');
     $builder->factory('nullable.handler', static function (): mixed {
         return (new ArrayInvocationNullHandler())->handle();
     });
@@ -122,7 +124,8 @@ it('caches null class-array invocation results for singleton definitions', funct
 
 it('specializes scoped class-array invocation result caching', function () {
     ArrayInvocationScopedHandler::$calls = 0;
-    $builder = ContainerBuilder::create(uniqid('array_invocation_scope_'));
+    $builder = ContainerBuilder::create(uniqid('array_invocation_scope_'))
+        ->releaseIdentity('intermix-test');
     $builder->factory(
         'scoped.handler',
         static fn(): object => (new ArrayInvocationScopedHandler())->handle(),
@@ -154,7 +157,8 @@ it('specializes scoped class-array invocation result caching', function () {
 
 it('compiles class-only arrays while preserving implicit method side effects', function () {
     ArrayInvocationObjectHandler::$calls = 0;
-    $builder = ContainerBuilder::create(uniqid('array_invocation_object_'));
+    $builder = ContainerBuilder::create(uniqid('array_invocation_object_'))
+        ->releaseIdentity('intermix-test');
     $builder->autowire('object.handler', ArrayInvocationObjectHandler::class);
 
     $path = arrayInvocationArtifactPath();
