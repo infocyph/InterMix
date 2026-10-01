@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 
 it('resolves direct factories consistently in every DI mode and lifetime', function (
@@ -10,7 +11,7 @@ it('resolves direct factories consistently in every DI mode and lifetime', funct
     string $api,
     LifetimeEnum $lifetime,
 ) {
-    $container = Container::instance(uniqid('direct_factory_', true));
+    $container = new ConfigurationContainer(uniqid('direct_factory_', true));
     $container->options()->setOptions(injection: $injection)->end();
     $calls = 0;
 
@@ -73,7 +74,7 @@ it('resolves direct factories consistently in every DI mode and lifetime', funct
 });
 
 it('resolves tagged direct factories without autowiring their closures', function () {
-    $container = Container::instance(uniqid('tagged_direct_factory_', true));
+    $container = new ConfigurationContainer(uniqid('tagged_direct_factory_', true));
 
     $container->bindFactory(
         'direct.tagged',
@@ -94,7 +95,7 @@ it('resolves tagged direct factories without autowiring their closures', functio
 });
 
 it('keeps the pending factory API reflection free', function () {
-    $container = Container::instance(uniqid('pending_direct_factory_', true));
+    $container = new ConfigurationContainer(uniqid('pending_direct_factory_', true));
     $calls = 0;
 
     $container->factory(
