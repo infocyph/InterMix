@@ -16,6 +16,8 @@ final class LogicalScopeState
 
     public bool $draining = false;
 
+    public bool $retained = false;
+
     /**
      * @param array<string, mixed> $seeds
      * @param array<string, mixed> $resolvedScoped
@@ -31,6 +33,10 @@ final class LogicalScopeState
     {
         $this->closed = true;
         $this->constructing = [];
+        if (!$this->retained) {
+            return;
+        }
+
         $this->draining = false;
         $this->parent = null;
         $this->resolvedScoped = [];
