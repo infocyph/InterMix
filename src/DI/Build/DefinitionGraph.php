@@ -283,33 +283,10 @@ final readonly class DefinitionGraph
 
     public function requiresReleaseIdentity(): bool
     {
-        if ($this->closureResources !== []
-            || $this->resolvingHookIds !== []
-            || $this->resolvedHookIds !== []
-            || $this->scopeLeaveHookScopes !== []
-        ) {
-            return true;
-        }
-
-        foreach ($this->definitions as $rawId => $definition) {
-            if ($this->definitionIsOpaque((string) $rawId, $definition)) {
-                return true;
-            }
-        }
-        foreach ($this->contextualBindings as $bindings) {
-            foreach ($bindings as $binding) {
-                if (!$this->isPortableMetadata($binding)) {
-                    return true;
-                }
-            }
-        }
-        foreach ($this->classResources as $resources) {
-            if (!$this->isPortableMetadata($resources)) {
-                return true;
-            }
-        }
-
-        return false;
+        return $this->hasOpaqueCallbacks()
+            || $this->hasOpaqueDefinitions()
+            || $this->hasOpaqueContextualBindings()
+            || $this->hasOpaqueClassResources();
     }
 
     /** @return array<int, string> */
@@ -322,6 +299,49 @@ final readonly class DefinitionGraph
     public function scopeLeaveHookScopes(): array
     {
         return array_keys($this->scopeLeaveHookScopes);
+    }
+
+    private function hasOpaqueCallbacks(): bool
+    {
+        return $this->closureResources !== []
+            || $this->resolvingHookIds !== []
+            || $this->resolvedHookIds !== []
+            || $this->scopeLeaveHookScopes !== [];
+    }
+
+    private function hasOpaqueClassResources(): bool
+    {
+        foreach ($this->classResources as $resources) {
+            if (!$this->isPortableMetadata($resources)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function hasOpaqueContextualBindings(): bool
+    {
+        foreach ($this->contextualBindings as $bindings) {
+            foreach ($bindings as $binding) {
+                if (!$this->isPortableMetadata($binding)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private function hasOpaqueDefinitions(): bool
+    {
+        foreach ($this->definitions as $rawId => $definition) {
+            if ($this->definitionIsOpaque((string) $rawId, $definition)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function definitionIsOpaque(string $id, mixed $definition): bool
