@@ -28,6 +28,11 @@ final class ExecutionContext
 
     private static bool $coroutineResolverInitialized = false;
 
+    private static ?string $lastFiberCarrierId = null;
+
+    /** @var WeakReference<Fiber<mixed, mixed, mixed, mixed>>|null */
+    private static ?WeakReference $lastFiberReference = null;
+
     private static ?string $lastObjectCarrierId = null;
 
     /** @var WeakReference<object>|null */
@@ -79,10 +84,16 @@ final class ExecutionContext
     /** @param Fiber<mixed, mixed, mixed, mixed> $fiber */
     private static function fiberCarrierId(Fiber $fiber): string
     {
-        // A live Fiber's object id is stable and unique among live objects.
-        // Scope/construction state is released with the carrier lifecycle, so no
-        // strong or weak Fiber registry is needed on this hot path.
-        return 'fiber:' . spl_object_id($fiber);
+        $lastFiber = self::$lastFiberReference?->get();
+        if ($lastFiber === $fiber && self::$lastFiberCarrierId !== null) {
+            return self::$lastFiberCarrierId;
+        }
+
+        $id = 'fiber:' . spl_object_id($fiber);
+        self::$lastFiberReference = WeakReference::create($fiber);
+        self::$lastFiberCarrierId = $id;
+
+        return $id;
     }
 
     private static function initializeCoroutineResolver(): void
