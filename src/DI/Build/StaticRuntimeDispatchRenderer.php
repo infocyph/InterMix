@@ -18,7 +18,6 @@ final class StaticRuntimeDispatchRenderer
     public function renderGet(array $plans, array $slots): string
     {
         $source = "    public function get(string \$id): mixed\n    {\n";
-        $source .= "        if (\$this->isDeoptimized()) {\n            return \$this->runtimeSelfOrFallback(\$id);\n        }\n\n";
         $source .= "        return match (\$id) {\n";
         foreach ($plans as $rawId => $plan) {
             $id = (string) $rawId;
@@ -41,7 +40,6 @@ final class StaticRuntimeDispatchRenderer
     public function renderHas(array $plans): string
     {
         $source = "    public function has(string \$id): bool\n    {\n";
-        $source .= "        if (\$this->isDeoptimized()) {\n            return \$this->runtimeSelfOrFallbackHas(\$id);\n        }\n\n";
         $source .= "        return match (\$id) {\n";
 
         $ids = [];
