@@ -105,6 +105,7 @@ function exerciseStructuredScopeParity(object $container): void
 
 it('keeps structured scope semantics identical in the dynamic container', function (): void {
     $container = ContainerBuilder::create(uniqid('structured_parity_dynamic_'))
+        ->releaseIdentity('intermix-test')
         ->input('request.seed')
         ->autowire('leaf', StructuredParityScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
         ->factory('island', static fn(): stdClass => new stdClass(), lifetime: LifetimeEnum::Scoped)
@@ -114,7 +115,8 @@ it('keeps structured scope semantics identical in the dynamic container', functi
 });
 
 it('keeps structured scope semantics identical across compiled runtime islands', function (): void {
-    $builder = ContainerBuilder::create(uniqid('structured_parity_compiled_'));
+    $builder = ContainerBuilder::create(uniqid('structured_parity_compiled_'))
+        ->releaseIdentity('intermix-test');
     $builder->input('request.seed')
         ->autowire('leaf', StructuredParityScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
         ->factory('island', static fn(): stdClass => new stdClass(), lifetime: LifetimeEnum::Scoped);
@@ -130,7 +132,8 @@ it('keeps structured scope semantics identical across compiled runtime islands',
 });
 
 it('keeps structured scope semantics identical across independent frozen production runtimes', function (): void {
-    $builder = ContainerBuilder::create(uniqid('structured_parity_frozen_'));
+    $builder = ContainerBuilder::create(uniqid('structured_parity_frozen_'))
+        ->releaseIdentity('intermix-test');
     $builder->input('request.seed')
         ->autowire('leaf', StructuredParityScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
         ->factory('island', static fn(): stdClass => new stdClass(), lifetime: LifetimeEnum::Scoped);
