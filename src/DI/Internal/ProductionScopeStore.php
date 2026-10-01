@@ -108,6 +108,8 @@ final class ProductionScopeStore
             throw new ContainerException('Cannot capture a scope context without an active scope.');
         }
 
+        $scope->retained = true;
+
         return [
             new ProductionCapturedScopeContext($this->owner(), $scope, $fallbackContext),
             $sequentialScope,
@@ -291,7 +293,18 @@ final class ProductionScopeStore
 
     private function close(ScopeState $scope): void
     {
-        $scope->close();
+        $scope->closed = true;
+        $scope->constructing = [];
+        if (!$scope->retained) {
+            return;
+        }
+
+        $scope->draining = false;
+        $scope->parent = null;
+        $scope->rawSeeds = [];
+        $scope->resolved = [];
+        $scope->returned = [];
+        $scope->seeds = [];
     }
 
     /** @param callable(ScopeState): void $beforeClose */
