@@ -18,10 +18,10 @@ final class ScopeState
 
     public bool $draining = false;
 
-    public bool $retained = false;
-
     /** @var array<int, mixed> */
     public array $resolved = [];
+
+    public bool $retained = false;
 
     /** @var array<int, mixed> */
     public array $returned = [];
