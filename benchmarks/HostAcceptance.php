@@ -88,6 +88,7 @@ final class HostAcceptance
                     static function () use ($calls): never {
                         ($calls['get'])(HostAcceptanceHandler::class);
                         Fiber::suspend();
+
                         throw new RuntimeException('Cancellation probe resumed unexpectedly.');
                     },
                     [HostAcceptanceRequest::class => $request],
@@ -119,6 +120,7 @@ final class HostAcceptance
                 'request',
                 static function () use ($calls): never {
                     ($calls['get'])(HostAcceptanceHandler::class);
+
                     throw new RuntimeException('host-expected-failure');
                 },
                 [HostAcceptanceRequest::class => $request],

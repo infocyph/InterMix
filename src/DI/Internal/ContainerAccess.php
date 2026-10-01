@@ -23,6 +23,12 @@ final class ContainerAccess extends Container
         return $container->forkRuntime($locked);
     }
 
+    /** @internal */
+    public static function assertScopedDependencyAllowed(Container $container, string $id): void
+    {
+        $container->invocation()->assertScopedDependencyAllowed($id);
+    }
+
     /** @return array<string, mixed> */
     public static function graph(Container $container, ?string $warmFromId = null, bool $clear = false): array
     {
