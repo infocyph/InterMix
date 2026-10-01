@@ -148,6 +148,12 @@ final readonly class DefinitionGraph
         return $this->contextualBindings[$consumer][$dependency] ?? null;
     }
 
+    /** @return array<string, array<string, mixed>> */
+    public function contextualBindings(): array
+    {
+        return $this->contextualBindings;
+    }
+
     /** @return array<string, array<int, string>> */
     public function contextualBindingShape(): array
     {
@@ -194,6 +200,12 @@ final readonly class DefinitionGraph
     public function environment(): ?string
     {
         return $this->environment;
+    }
+
+    /** @return array<string, string> */
+    public function environmentBindings(): array
+    {
+        return $this->environmentBindings;
     }
 
     public function environmentConcrete(string $type): ?string
