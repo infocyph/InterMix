@@ -330,6 +330,7 @@ final class ProductionRequestPathBench
     private function production(ContainerBuilder $builder): ProductionContainer
     {
         $path = $this->artifactPath();
+        $builder->releaseIdentity('phpbench-production-request');
         $builder->compile($path);
         $runtime = $builder->production($path);
         $this->removeArtifact($path);
