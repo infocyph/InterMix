@@ -358,17 +358,17 @@ class InvocationManager
         $this->repository->dispatchResolvingHooks($id);
 
         if ($this->repository->hasFunctionReference($id)) {
-                $resolved = $this->resolveDefinition($id);
-            } else {
-                $resolution = ContainerAccess::resolver($this->container)->classSettler($id);
-                $resolved = $this->repository->fetchInstanceOrValue($resolution);
-                if ($cacheable) {
-                    $this->storeResolvedByLifetime($id, $resolution, $scope);
-                }
-                $this->repository->dispatchResolvedHooks($id, $resolved);
-
-                return $resolved;
+            $resolved = $this->resolveDefinition($id);
+        } else {
+            $resolution = ContainerAccess::resolver($this->container)->classSettler($id);
+            $resolved = $this->repository->fetchInstanceOrValue($resolution);
+            if ($cacheable) {
+                $this->storeResolvedByLifetime($id, $resolution, $scope);
             }
+            $this->repository->dispatchResolvedHooks($id, $resolved);
+
+            return $resolved;
+        }
 
         if ($cacheable) {
             $this->storeResolvedByLifetime($id, $resolved, $scope);
