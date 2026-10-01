@@ -240,11 +240,7 @@ jobs:
           );'
 
       - name: Exercise Runwire and CacheLayer host boundaries
-        run: |
-          vendor/bin/pest \
-            tests/Integration/RunwireBridgeIntegrationTest.php \
-            tests/Integration/CacheLayerIntegrationTest.php \
-            tests/Container/RunwireScopeIntegrationTest.php
+        run: composer ic:test:code
 
   source-inventory:
     name: Release source inventory
