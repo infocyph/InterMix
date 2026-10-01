@@ -25,8 +25,6 @@ use ReflectionException;
  */
 class InvocationManager implements ArrayAccess
 {
-    use ManagerProxy;
-
     public function __construct(
         protected Repository $repository,
         protected Container $container,
