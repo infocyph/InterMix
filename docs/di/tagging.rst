@@ -1,8 +1,8 @@
 .. _di.tagging:
 
-================
+================================================
 Tags and pipelines
-================
+================================================
 
 Tags are assigned while configuring autowired or factory definitions.
 

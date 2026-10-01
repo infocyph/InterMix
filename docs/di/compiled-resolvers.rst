@@ -1,8 +1,8 @@
 .. _di.compiled-resolvers:
 
-================
+================================================
 Compiled runtimes
-================
+================================================
 
 Compilation consumes the same finalized DefinitionGraph used by dynamic build().
 

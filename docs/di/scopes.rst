@@ -1,8 +1,8 @@
 .. _di.scopes:
 
-================
+================================================
 Structured scopes
-================
+================================================
 
 Scopes are owned with callbacks so cleanup cannot be skipped accidentally.
 

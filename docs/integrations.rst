@@ -1,6 +1,6 @@
-===========================
+================================================
 Runwire and Cache Integration
-===========================
+================================================
 
 InterMix 11 keeps runtime and cache providers optional. Normal PHP execution does
 not require Runwire or CacheLayer.

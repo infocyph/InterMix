@@ -1,8 +1,8 @@
 .. _di.environment:
 
-================
+================================================
 Environment configuration
-================
+================================================
 
 Environment selection belongs to ContainerBuilder and happens before graph finalization.
 

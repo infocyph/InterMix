@@ -1,8 +1,8 @@
 .. _di.invocation:
 
-================
+================================================
 Runtime invocation
-================
+================================================
 
 Runtime invocation is explicit in InterMix 11.
 

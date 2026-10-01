@@ -1,8 +1,8 @@
 .. _di.cache:
 
-================
+================================================
 Definition caching
-================
+================================================
 
 InterMix accepts a host-supplied PSR-6 pool. CacheLayer 4 is a supported optional implementation.
 

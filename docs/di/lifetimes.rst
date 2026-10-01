@@ -1,8 +1,8 @@
 .. _di.lifetimes:
 
-================
+================================================
 Service lifetimes
-================
+================================================
 
 InterMix supports Singleton, Scoped, and Transient lifetimes.
 

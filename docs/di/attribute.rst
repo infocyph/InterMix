@@ -1,8 +1,8 @@
 .. _di.attribute:
 
-================
+================================================
 Attribute injection
-================
+================================================
 
 Property and method attribute processing is enabled on ContainerBuilder.
 

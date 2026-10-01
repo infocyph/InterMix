@@ -1,8 +1,8 @@
 .. _container:
 
-===========================
+================================================
 Dependency injection runtime
-===========================
+================================================
 
 InterMix 11 has two phases:
 
@@ -16,6 +16,7 @@ Runtime objects do not expose public mutation managers.
    :caption: DI guide
 
    di/overview
+   di/best_practices
    di/quickstart
    di/definitions
    di/registration
@@ -29,6 +30,7 @@ Runtime objects do not expose public mutation managers.
    di/lazy_loading
    di/cache
    di/compiled-resolvers
+   di/preload
    di/development-production
    di/debug_tracing
    di/cheat_sheet
