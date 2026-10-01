@@ -37,13 +37,15 @@ final class ContainerBuilder
     /** @var array<string, true> */
     private array $cacheDefinitionIds = [];
 
-    /** @var null|array{compiled: list<string>, skipped: array<string, string>, digest: string} */
+    /** @var null|array{compiled: list<string>, skipped: array<string, string>, digest: string, graph: string, build: string, artifact: string} */
     private ?array $compilationReport = null;
 
     /** @var array<string, true> */
     private array $dynamicServiceIds = [];
 
     private ?DefinitionGraph $graph = null;
+
+    private ?string $releaseIdentity = null;
 
     /** @var array<string, true> */
     private array $resolvedHookIds = [];
@@ -125,13 +127,13 @@ final class ContainerBuilder
         return $this;
     }
 
-    /** @return null|array{compiled: list<string>, skipped: array<string, string>, digest: string} */
+    /** @return null|array{compiled: list<string>, skipped: array<string, string>, digest: string, graph: string, build: string, artifact: string} */
     public function compilationReport(): ?array
     {
         return $this->compilationReport;
     }
 
-    /** @return array{compiled: list<string>, skipped: array<string, string>, digest: string} */
+    /** @return array{compiled: list<string>, skipped: array<string, string>, digest: string, graph: string, build: string, artifact: string} */
     public function compile(string $path, bool $strict = false): array
     {
         $graph = $this->finalizeGraph();
@@ -151,11 +153,18 @@ final class ContainerBuilder
             }
         }
 
-        $generated = new StaticRuntimeGenerator()->generate($graph, $path);
+        $generated = new StaticRuntimeGenerator()->generate(
+            $graph,
+            $path,
+            releaseIdentity: $this->releaseIdentity,
+        );
         $this->compilationReport = [
             'compiled' => $generated['compiled'],
             'skipped' => $generated['skipped'],
             'digest' => $generated['digest'],
+            'graph' => $generated['graph'],
+            'build' => $generated['build'],
+            'artifact' => $generated['artifact'],
         ];
 
         return $this->compilationReport;
@@ -305,11 +314,16 @@ final class ContainerBuilder
 
     public function production(string $path): ProductionContainer
     {
-        $this->finalizeGraph();
+        $graph = $this->finalizeGraph();
         $fallback = $this->configuration->forkConfigurationRuntime(false);
 
         try {
-            return new StaticRuntimeGenerator()->load($path, $fallback);
+            return new StaticRuntimeGenerator()->load(
+                $path,
+                $fallback,
+                $graph,
+                $this->releaseIdentity,
+            );
         } finally {
             $fallback->lock();
         }
@@ -317,7 +331,7 @@ final class ContainerBuilder
 
     public function productionPrevalidated(string $path, string $digest): ProductionContainer
     {
-        $this->finalizeGraph();
+        $graph = $this->finalizeGraph();
         $fallback = $this->configuration->forkConfigurationRuntime(false);
 
         try {
@@ -325,6 +339,8 @@ final class ContainerBuilder
                 $path,
                 $digest,
                 $fallback,
+                $graph,
+                $this->releaseIdentity,
             );
         } finally {
             $fallback->lock();
@@ -338,6 +354,18 @@ final class ContainerBuilder
             $attributeFqcn,
             $resolverFqcn,
         );
+
+        return $this;
+    }
+
+    public function releaseIdentity(string $identity): self
+    {
+        $this->assertMutable();
+        if ($identity === '') {
+            throw new ContainerException('Release identity cannot be empty.');
+        }
+
+        $this->releaseIdentity = $identity;
 
         return $this;
     }
