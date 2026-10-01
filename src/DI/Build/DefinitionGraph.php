@@ -156,6 +156,12 @@ final readonly class DefinitionGraph
         return $this->defaultMethod;
     }
 
+    /** @return array<int, string> */
+    public function dynamicServiceIds(): array
+    {
+        return array_keys($this->dynamicServiceIds);
+    }
+
     /** @return array<string, array{lifetime: LifetimeEnum, tags: array<int, string>}> */
     public function definitionMeta(): array
     {
@@ -204,9 +210,21 @@ final readonly class DefinitionGraph
         return isset($this->resolvedHookIds[$id]);
     }
 
+    /** @return array<int, string> */
+    public function resolvedHookIds(): array
+    {
+        return array_keys($this->resolvedHookIds);
+    }
+
     public function hasResolvingHook(string $id): bool
     {
         return isset($this->resolvingHookIds[$id]);
+    }
+
+    /** @return array<int, string> */
+    public function resolvingHookIds(): array
+    {
+        return array_keys($this->resolvingHookIds);
     }
 
     public function hasScopeLeaveHook(string $scope): bool
@@ -217,6 +235,16 @@ final readonly class DefinitionGraph
     public function injectionEnabled(): bool
     {
         return $this->injectionEnabled;
+    }
+
+    public function requiresReleaseIdentity(): bool
+    {
+        return $this->closureResources !== []
+            || $this->dynamicServiceIds !== []
+            || $this->attributeTypes !== []
+            || $this->resolvingHookIds !== []
+            || $this->resolvedHookIds !== []
+            || $this->scopeLeaveHookScopes !== [];
     }
 
     public function methodAttributesEnabled(): bool
