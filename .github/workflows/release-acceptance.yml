@@ -242,7 +242,6 @@ jobs:
       - name: Exercise Runwire and CacheLayer host boundaries
         run: |
           vendor/bin/pest \
-            --configuration=vendor/infocyph/phpforge/resources/pest.xml \
             tests/Integration/RunwireBridgeIntegrationTest.php \
             tests/Integration/CacheLayerIntegrationTest.php \
             tests/Container/RunwireScopeIntegrationTest.php
