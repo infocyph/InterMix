@@ -465,11 +465,11 @@ final class StaticRuntimeGenerator
                 $this->loadRuntime($temporaryPath);
             },
         );
+
         AtomicFileWriter::write(
             $staging . DIRECTORY_SEPARATOR . StaticRuntimeArtifactMetadata::MANIFEST_NAME,
             $manifest,
             $this->validateStagedManifest(...),
         );
     }
-
 }
