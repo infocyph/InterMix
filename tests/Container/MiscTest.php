@@ -3,16 +3,16 @@
 declare(strict_types=1);
 
 use Infocyph\InterMix\DI\Container;
-use Infocyph\InterMix\DI\ContainerBuilder;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\Tests\Fixture\EmailService;
 use Infocyph\InterMix\Tests\Fixture\InjectionLessClass;
 
-$injectionLess = ContainerBuilder::create('injection_less')
-    ->enableInjection(false)
+$injectionLess = new ConfigurationContainer('injection_less');
+$injectionLess->options()
+    ->setOptions(false)
+    ->registration()
     ->registerClass(InjectionLessClass::class, [123])
-    ->registerMethod(InjectionLessClass::class, 'ilc', [456])
-    ->autowire(InjectionLessClass::class, InjectionLessClass::class)
-    ->build();
+    ->registerMethod(InjectionLessClass::class, 'ilc', [456]);
 
 test('Instance', function () use ($injectionLess) {
     expect($injectionLess->get(InjectionLessClass::class))
@@ -33,13 +33,13 @@ test('Method parameter', function () use ($get2) {
     expect($get2['method'])->toBe('456');
 });
 
-$injectionLessWithProperty = ContainerBuilder::create('injection_less_with_prop')
-    ->enableInjection(false)
+$injectionLessWithProperty = new ConfigurationContainer('injection_less_with_prop');
+$injectionLessWithProperty->options()
+    ->setOptions(false)
+    ->registration()
     ->registerClass(InjectionLessClass::class, [123])
     ->registerMethod(InjectionLessClass::class, 'ilc', [456])
-    ->registerProperty(InjectionLessClass::class, ['internalProperty' => 'propSet'])
-    ->autowire(InjectionLessClass::class, InjectionLessClass::class)
-    ->build();
+    ->registerProperty(InjectionLessClass::class, ['internalProperty' => 'propSet']);
 
 test('Non-static Property', function () use ($injectionLessWithProperty) {
     $get3 = $injectionLessWithProperty->getReturn(InjectionLessClass::class);
@@ -72,13 +72,13 @@ test('resolve() executes closure with DI on, configuring EmailService before sen
 | direct() (DI OFF) — register class + method in one chain, then resolve
 |--------------------------------------------------------------------------
 */
-test('DI-off builder returns the registered method result', function () {
-    $runtime = ContainerBuilder::create('helper_direct_chain')
-        ->enableInjection(false)
+test('DI-off internal configuration path returns the registered method result', function () {
+    $runtime = new ConfigurationContainer('helper_direct_chain');
+    $runtime->options()
+        ->setOptions(false)
+        ->registration()
         ->registerClass(InjectionLessClass::class, [123])
-        ->registerMethod(InjectionLessClass::class, 'ilc', [456])
-        ->autowire(InjectionLessClass::class, InjectionLessClass::class)
-        ->build();
+        ->registerMethod(InjectionLessClass::class, 'ilc', [456]);
 
     $ret = $runtime->getReturn(InjectionLessClass::class);
 
@@ -103,13 +103,13 @@ test('direct(null) returns a container (DI off)', function () {
     expect($c)->toBeInstanceOf(Container::class);
 });
 test('Static Property', function () {
-    $runtime = ContainerBuilder::create('injection_less_with_static_prop')
-        ->enableInjection(false)
+    $runtime = new ConfigurationContainer('injection_less_with_static_prop');
+    $runtime->options()
+        ->setOptions(injection: false)
+        ->registration()
         ->registerClass(InjectionLessClass::class, [123])
         ->registerMethod(InjectionLessClass::class, 'ilc', [456])
-        ->registerProperty(InjectionLessClass::class, ['staticProperty' => 'propSetStatic'])
-        ->autowire(InjectionLessClass::class, InjectionLessClass::class)
-        ->build();
+        ->registerProperty(InjectionLessClass::class, ['staticProperty' => 'propSetStatic']);
 
     $get4 = $runtime->getReturn(InjectionLessClass::class);
 
