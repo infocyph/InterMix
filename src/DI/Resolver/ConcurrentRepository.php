@@ -369,9 +369,16 @@ final class ConcurrentRepository extends Repository
     private function leaveExecutionScope(ExecutionScopeStore $store, string $context): void
     {
         $scope = $store->scopeForLeave($context);
+        if (!isset($this->scopeLeaveHooks[$scope])) {
+            $store->leaveScope($context);
+            $this->finishExecutionContext($store, $context);
+
+            return;
+        }
+
         $failures = [];
         $failureCount = 0;
-        foreach ($this->scopeLeaveHooks[$scope] ?? [] as $hook) {
+        foreach ($this->scopeLeaveHooks[$scope] as $hook) {
             try {
                 $hook($scope, $this->container());
             } catch (Throwable $throwable) {
