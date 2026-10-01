@@ -906,7 +906,7 @@ batch is closed.
 | --- | --- | --- | --- |
 | 1 | P0 + P1 — baseline and runtime hardening | **Complete** | Closed on `f55be8b`: P0 contract/baseline frozen; P1 F1–F3 fixed. Corrected 10.1.1 regression gate, PHPForge QA/analysis/benchmarks, clean install, and Swoole/OpenSwoole PHP 8.4/8.5 are green. |
 | 2 | P2 + P3 - builder/definitions and runtime/scope contract | **Complete** | Closed on `de8bdb18`: B1-B5 and B7 builder/runtime contracts implemented; legacy execution/global ownership removed; strict scopes, captive guards, tagged-scope liveness, cleanup aggregation, and dynamic/compiled parity covered. Exact-head release regression, PHPForge QA/analysis/benchmarks, clean install, and Swoole/OpenSwoole PHP 8.4/8.5 are green. |
-| 3 | P4 + P5 — compiled graph and provider boundaries | **In progress — final Batch 3 QA** | P4/B6 frozen artifact/ABI/publication contract is implemented. P5 targets CacheLayer `^4.0` and Runwire `^2.1`, adds the optional host-owned Runwire bridge, real CacheLayer 4 builder-contract coverage, and provider ownership docs. Final exact-head QA remains the only open Batch 3 gate. |
+| 3 | P4 + P5 — compiled graph and provider boundaries | **Complete** | Closed on `d3ad3278`: P4/B6 frozen artifact/ABI/publication contract and P5 provider boundaries are implemented. CacheLayer `^4.0` / Runwire `^2.1` integration, host-owned Runwire bridge, provider ownership docs, exact-head PHPForge QA/analysis/benchmarks, clean install, unchanged release regression, and Swoole/OpenSwoole PHP 8.4/8.5 are green. |
 | 4 | P6 + P7 + P8 — migration, measured acceptance and release candidate | Pending | P6: docs/consumer migration. P7: benchmarks/soak/host acceptance. P8: exact-SHA CI, packaging and RC evidence. P8 remains the final gate inside this batch. |
 
 ### Batch 1 closure evidence
@@ -1008,12 +1008,31 @@ measurement to be harness/API-shape noise; it is never silenced by threshold,
 baseline, skip, or exclusion changes.
 
 
-### Batch 3 / P4 + P5 live tracker
+### Batch 3 closure evidence
 
-Current implementation candidate before final Batch 3 QA:
-`42ac09022ca4eed25359d4cdd1c5935375fbc366`.
+Batch 3 acceptance revision:
+`d3ad3278910cd55f10cdd54a38bfcbe435cc1526`.
 
-P4 / B6 compiled graph:
+Immutable pull-request evidence:
+
+- Security & Standards run `36815253774`:
+  - release regression passed on PHP 8.4 and PHP 8.5;
+  - PHPForge QA passed on PHP 8.4/8.5 for prefer-stable and prefer-lowest;
+  - PHPForge analysis passed on PHP 8.4 and PHP 8.5;
+  - PHPForge benchmark lanes passed on PHP 8.4 and PHP 8.5;
+  - clean production install passed;
+  - release publication remained correctly skipped for the pull request.
+- Swoole/OpenSwoole Scope Compatibility run `36815253213`:
+  - Swoole carrier lanes passed on PHP 8.4 and PHP 8.5;
+  - OpenSwoole carrier lanes passed on PHP 8.4 and PHP 8.5.
+- Release regression against exact 10.1.1 baseline `f687452` passed without
+  changing the existing component budgets:
+  - PHP 8.4 sequential **-9.60%** (79.083 ns -> 71.488 ns), Fiber **+2.79%**
+    (17,606.879 ns -> 18,097.357 ns);
+  - PHP 8.5 sequential **-7.19%** (110.384 ns -> 102.447 ns), Fiber **+2.38%**
+    (32,889.685 ns -> 33,673.884 ns).
+
+P4 / B6 compiled graph closure:
 
 - [x] compilation consumes the finalized immutable `DefinitionGraph`;
 - [x] generated artifacts carry InterMix major/ABI, PHP major/minor, source digest,
@@ -1033,11 +1052,11 @@ P4 / B6 compiled graph:
 - [x] P4 manifest typing and staging logic meet the existing PHPForge complexity
   limit without exclusions or raised thresholds.
 
-P5 provider boundaries:
+P5 provider-boundary closure:
 
 - [x] development compatibility targets are CacheLayer `^4.0` and Runwire
   `^2.1`; core production dependencies remain PSR-6/PSR-11 only;
-- [x] `Infocyph\\InterMix\\Integration\\Runwire\\RunwireIntegration` is an
+- [x] `Infocyph\InterMix\Integration\Runwire\RunwireIntegration` is an
   optional host-owned boundary and never creates a Runwire runtime, request,
   coroutine runtime, event loop, listener, worker pool or signal owner;
 - [x] Runwire runtime/request/coroutine objects are declared as scoped inputs and
@@ -1057,15 +1076,18 @@ P5 provider boundaries:
   generation and per-definition eligibility;
 - [x] operator documentation records supported versions, ownership, child
   propagation, cache identity and failure policy;
-- [ ] one exact branch revision passes PHPForge QA/analysis/benchmarks on PHP
+- [x] one exact branch revision passes PHPForge QA/analysis/benchmarks on PHP
   8.4/8.5 stable + lowest, clean install, unchanged release-regression gate, and
   Swoole/OpenSwoole PHP 8.4/8.5.
 
 No PHPForge threshold, benchmark budget, skip policy, exclusion, suppression or
-baseline has been weakened for Batch 3. The Batch 2 release-regression decision
-remains in force: the unchanged component microbench gate stays mandatory
-diagnostic evidence, while P7 adds representative host RPM/RPS, tail latency,
-CPU and RSS evidence for the final major-release performance verdict.
+baseline was weakened for Batch 3. The Batch 2 performance-regression decision
+remains in force for Batch 4/P7: component microbenchmarks stay mandatory
+diagnostic evidence, while representative host RPM/RPS, tail latency, CPU and RSS
+remain the primary final major-release acceptance evidence.
+
+**Batch 3 is closed. Batch 4 / P6 + P7 + P8 may now begin from this exact
+P4/P5 acceptance revision.**
 
 ### Batch 1 superseded tuning evidence
 
