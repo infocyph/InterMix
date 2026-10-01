@@ -35,6 +35,7 @@ function removeProductionRuntimeArtifact(string $path): void
 
 it('separates build configuration from the generated production runtime', function () {
     $builder = ContainerBuilder::create(uniqid('production_builder_'))
+        ->releaseIdentity('intermix-test')
         ->autowire('root', ProductionRuntimeRoot::class)
         ->value('app.name', 'InterMix');
 
@@ -61,6 +62,7 @@ it('separates build configuration from the generated production runtime', functi
 
 it('specializes scoped identity and scope seeds in production', function () {
     $builder = ContainerBuilder::create(uniqid('production_scope_'))
+        ->releaseIdentity('intermix-test')
         ->autowire('leaf', ProductionRuntimeLeaf::class, lifetime: LifetimeEnum::Scoped);
 
     $path = productionRuntimeArtifactPath();
@@ -99,6 +101,7 @@ it('specializes scoped identity and scope seeds in production', function () {
 
 it('keeps dynamic definitions and arbitrary classes as cold fallback islands', function () {
     $builder = ContainerBuilder::create(uniqid('production_dynamic_'))
+        ->releaseIdentity('intermix-test')
         ->autowire('root', ProductionRuntimeRoot::class)
         ->factory('dynamic', static fn(): object => new stdClass());
 
@@ -119,6 +122,7 @@ it('keeps dynamic definitions and arbitrary classes as cold fallback islands', f
 
 it('compiles direct eager and lazy tag dispatch for known production services', function () {
     $builder = ContainerBuilder::create(uniqid('production_tags_'))
+        ->releaseIdentity('intermix-test')
         ->autowire('first', ProductionRuntimeLeaf::class, tags: ['worker'])
         ->autowire('second', ProductionRuntimeLeaf::class, lifetime: LifetimeEnum::Transient, tags: ['worker']);
 
@@ -146,6 +150,7 @@ it('compiles direct eager and lazy tag dispatch for known production services', 
 
 it('loads independent production runtimes from the same frozen graph', function () {
     $builder = ContainerBuilder::create(uniqid('production_reload_'))
+        ->releaseIdentity('intermix-test')
         ->autowire('leaf', ProductionRuntimeLeaf::class);
     $path = productionRuntimeArtifactPath();
 
@@ -165,6 +170,7 @@ it('loads independent production runtimes from the same frozen graph', function 
 
 it('rejects builder mutation after finalization without changing built runtimes', function () {
     $builder = ContainerBuilder::create(uniqid('production_frozen_builder_'))
+        ->releaseIdentity('intermix-test')
         ->autowire('leaf', ProductionRuntimeLeaf::class);
     $path = productionRuntimeArtifactPath();
 
