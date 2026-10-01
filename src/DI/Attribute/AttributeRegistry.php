@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Attribute;
 
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ContainerAccess;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Reflector;
 
@@ -39,7 +40,7 @@ final class AttributeRegistry
      */
     public function register(string $attributeFqcn, string $resolverFqcn): void
     {
-        $repository = $this->container->getRepository();
+        $repository = ContainerAccess::repository($this->container);
         $repository->assertMutable();
         if (!class_exists($attributeFqcn) || !class_exists($resolverFqcn)) {
             throw new ContainerException('Attribute or resolver class missing');

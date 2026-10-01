@@ -170,5 +170,31 @@ final class ConfigurationContainer extends Container
         return $runtime;
     }
 
+    public function compileTo(string $path, bool $load = false): self
+    {
+        parent::compileTo($path, $load);
+
+        return $this;
+    }
+
+    public function getRepository(): \Infocyph\InterMix\DI\Resolver\Repository
+    {
+        return parent::getRepository();
+    }
+
+    public function useCompiled(string $path): self
+    {
+        parent::useCompiled($path);
+
+        return $this;
+    }
+
+    public function usePrevalidated(string $path, string $fingerprint): self
+    {
+        parent::usePrevalidated($path, $fingerprint);
+
+        return $this;
+    }
+
 
 }

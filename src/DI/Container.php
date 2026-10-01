@@ -123,7 +123,7 @@ class Container implements ContainerInterface
     }
 
     /** @throws ContainerException|ReflectionException */
-    public function compileTo(string $path, bool $load = false): self
+    protected function compileTo(string $path, bool $load = false): self
     {
         $compiled = new CompiledResolverGenerator()->generate($this, $path);
         $this->compilationReport = $compiled['report'];
@@ -266,7 +266,7 @@ class Container implements ContainerInterface
     }
 
     /** @internal */
-    public function getRepository(): Repository
+    protected function getRepository(): Repository
     {
         return $this->repository;
     }
@@ -484,7 +484,7 @@ class Container implements ContainerInterface
         }
     }
 
-    public function useCompiled(string $path): self
+    protected function useCompiled(string $path): self
     {
         $compiled = new CompiledResolverGenerator()->load($this, $path);
         $this->repository->setCompiledResolver($compiled['resolver'], $compiled['ids']);
@@ -493,7 +493,7 @@ class Container implements ContainerInterface
         return $this;
     }
 
-    public function usePrevalidated(string $path, string $fingerprint): self
+    protected function usePrevalidated(string $path, string $fingerprint): self
     {
         $compiled = new CompiledResolverGenerator()->loadPrevalidated($path, $fingerprint);
         $this->repository->setCompiledResolver($compiled['resolver'], $compiled['ids']);

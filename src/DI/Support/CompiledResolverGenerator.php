@@ -8,6 +8,7 @@ use Closure;
 use Composer\InstalledVersions;
 use Infocyph\InterMix\DI\Build\DefinitionGraph;
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ContainerAccess;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Internal\AtomicFileWriter;
 use Infocyph\InterMix\Internal\ReflectionResource;
@@ -31,7 +32,7 @@ final class CompiledResolverGenerator
      */
     public function generate(Container $container, string $filePath): array
     {
-        $graph = DefinitionGraph::from($container->getRepository());
+        $graph = DefinitionGraph::from(ContainerAccess::repository($container));
         $definitions = $graph->definitions();
         ksort($definitions, SORT_STRING);
 
@@ -90,7 +91,7 @@ final class CompiledResolverGenerator
     public function load(Container $container, string $filePath): array
     {
         return $this->loadAgainstGraph(
-            DefinitionGraph::from($container->getRepository()),
+            DefinitionGraph::from(ContainerAccess::repository($container)),
             $filePath,
         );
     }
