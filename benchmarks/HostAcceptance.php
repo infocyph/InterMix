@@ -359,6 +359,7 @@ final class HostAcceptance
                 $fiber->resume();
                 if ($fiber->getReturn() !== $expected[$index]) {
                     ++$wrong;
+
                     continue;
                 }
                 ++$successful;
