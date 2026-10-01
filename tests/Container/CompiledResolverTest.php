@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Infocyph\InterMix\DI\Attribute\Inject;
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\DI\Invoker\CompiledCall;
 use Infocyph\InterMix\DI\Invoker\InjectedCall;
 use Infocyph\InterMix\DI\Support\FactoryDefinition;
@@ -143,7 +144,7 @@ function compiledResolverPath(): string
 
 it('resolves declarative constructors and static factories dynamically and when compiled', function () {
     $literal = "quoted value '); this remains data\n";
-    $container = Container::instance(uniqid('declarative_'));
+    $container = new ConfigurationContainer(uniqid('declarative_'));
     $container->bind('dependency', CompiledResolverDependency::class, LifetimeEnum::Transient);
     $container->bind(
         'constructed',
@@ -202,7 +203,7 @@ it('rejects invalid declarative targets during configuration', function () {
 });
 
 it('reports compiled and deliberately dynamic definitions', function () {
-    $container = Container::instance(uniqid('compile_report_'));
+    $container = new ConfigurationContainer(uniqid('compile_report_'));
     $container->bind('compiled', CompiledResolverDependency::class);
     $container->bind('closure', static fn() => new stdClass());
     $container->bindFactory('direct', static fn() => new stdClass());
@@ -220,7 +221,7 @@ it('reports compiled and deliberately dynamic definitions', function () {
 
 it('fuses identical compiled expressions into one dispatcher arm', function () {
     $path = compiledResolverPath();
-    $container = Container::instance(uniqid('compile_fusion_'));
+    $container = new ConfigurationContainer(uniqid('compile_fusion_'));
     $container->bind('fused.first', CompiledResolverDependency::class, LifetimeEnum::Transient);
     $container->bind('fused.second', CompiledResolverDependency::class, LifetimeEnum::Transient);
     $container->compileTo($path);
@@ -232,7 +233,7 @@ it('fuses identical compiled expressions into one dispatcher arm', function () {
 });
 
 it('falls back before automatic compilation can bypass dynamic injection semantics', function () {
-    $container = Container::instance(uniqid('semantic_fallback_'));
+    $container = new ConfigurationContainer(uniqid('semantic_fallback_'));
     $contextual = new CompiledResolverDependency();
     $named = new CompiledResolverDependency();
 
@@ -268,7 +269,7 @@ it('falls back before automatic compilation can bypass dynamic injection semanti
     $container->bind('call-on', CompiledResolverCallOn::class, LifetimeEnum::Transient);
     $container->compileTo(compiledResolverPath(), load: true);
 
-    $defaultContainer = Container::instance(uniqid('default_method_fallback_'));
+    $defaultContainer = new ConfigurationContainer(uniqid('default_method_fallback_'));
     $defaultContainer->options()->setOptions(defaultMethod: 'boot');
     $defaultContainer->bind('default-method', CompiledResolverDefaultMethod::class, LifetimeEnum::Transient);
     $defaultContainer->compileTo(compiledResolverPath(), load: true);
@@ -313,7 +314,7 @@ it('falls back before automatic compilation can bypass dynamic injection semanti
 });
 
 it('keeps closures and direct factories dynamic after a compiled map is active', function () {
-    $container = Container::instance(uniqid('dynamic_factories_'));
+    $container = new ConfigurationContainer(uniqid('dynamic_factories_'));
     $calls = 0;
     $container->bind('closure', function () use (&$calls): int {
         return ++$calls;
@@ -330,11 +331,11 @@ it('keeps closures and direct factories dynamic after a compiled map is active',
 });
 
 it('keeps reflection resolvers lazy for compiled-only resolution', function () {
-    $dynamicContainer = Container::instance(uniqid('dynamic_resolver_mode_'));
+    $dynamicContainer = new ConfigurationContainer(uniqid('dynamic_resolver_mode_'));
 
     expect($dynamicContainer->getCurrentResolver())->toBeInstanceOf(InjectedCall::class);
 
-    $container = Container::instance(uniqid('compiled_lazy_reflection_'));
+    $container = new ConfigurationContainer(uniqid('compiled_lazy_reflection_'));
     $container->bind('compiled', CompiledResolverDependency::class, LifetimeEnum::Transient);
     $container->bind('dynamic', CompiledResolverVariadic::class, LifetimeEnum::Transient);
     $container->compileTo(compiledResolverPath(), load: true);
@@ -353,7 +354,7 @@ it('keeps reflection resolvers lazy for compiled-only resolution', function () {
 });
 
 it('preserves singleton transient and scoped lifetimes around compiled recipes', function () {
-    $container = Container::instance(uniqid('compiled_lifetimes_'));
+    $container = new ConfigurationContainer(uniqid('compiled_lifetimes_'));
     $recipe = FactoryDefinition::construct(CompiledResolverProduct::class);
     $container->bind('singleton', $recipe, LifetimeEnum::Singleton);
     $container->bind('transient', $recipe, LifetimeEnum::Transient);
@@ -375,7 +376,7 @@ it('preserves singleton transient and scoped lifetimes around compiled recipes',
 });
 
 it('preserves tag lookup around compiled recipes', function () {
-    $container = Container::instance(uniqid('compiled_tags_'));
+    $container = new ConfigurationContainer(uniqid('compiled_tags_'));
     $container->bind(
         'tagged.service',
         FactoryDefinition::construct(CompiledResolverProduct::class),
@@ -390,7 +391,7 @@ it('preserves tag lookup around compiled recipes', function () {
 });
 
 it('preserves hooks tracing and cycle detection around compiled recipes', function () {
-    $container = Container::instance(uniqid('compiled_lifecycle_'));
+    $container = new ConfigurationContainer(uniqid('compiled_lifecycle_'));
     $events = [];
     $container->options()->enableDebugTracing(true, TraceLevelEnum::Verbose)->end();
     $container->bind('dependency', CompiledResolverDependency::class, LifetimeEnum::Transient);
@@ -421,7 +422,7 @@ it('preserves hooks tracing and cycle detection around compiled recipes', functi
     expect($events)->toBe(['resolving:root', 'resolved:root'])
         ->and($hasEdge)->toBeTrue();
 
-    $cycle = Container::instance(uniqid('compiled_cycle_'));
+    $cycle = new ConfigurationContainer(uniqid('compiled_cycle_'));
     $cycle->bind(
         'cycle',
         FactoryDefinition::construct(CompiledResolverProduct::class, [new ServiceReference('cycle')]),
@@ -433,17 +434,17 @@ it('preserves hooks tracing and cycle detection around compiled recipes', functi
 
 it('rejects stale artifacts before replacing an active resolver map', function () {
     $goodPath = compiledResolverPath();
-    $good = Container::instance(uniqid('artifact_good_'));
+    $good = new ConfigurationContainer(uniqid('artifact_good_'));
     $good->bind('service', CompiledResolverDependency::class, LifetimeEnum::Transient);
     $good->compileTo($goodPath);
 
-    $target = Container::instance(uniqid('artifact_target_'));
+    $target = new ConfigurationContainer(uniqid('artifact_target_'));
     $target->bind('service', CompiledResolverDependency::class, LifetimeEnum::Transient);
     $target->useCompiled($goodPath);
     $active = $target->getRepository()->getCompiledResolver('service');
 
     $stalePath = compiledResolverPath();
-    $stale = Container::instance(uniqid('artifact_stale_'));
+    $stale = new ConfigurationContainer(uniqid('artifact_stale_'));
     $stale->bind('service', CompiledResolverAlternative::class, LifetimeEnum::Transient);
     $stale->compileTo($stalePath);
 
@@ -455,28 +456,28 @@ it('rejects stale artifacts before replacing an active resolver map', function (
 
 it('requires registration before loading and rejects environment mismatches', function () {
     $path = compiledResolverPath();
-    $source = Container::instance(uniqid('artifact_env_source_'));
+    $source = new ConfigurationContainer(uniqid('artifact_env_source_'));
     $source->bind('service', CompiledResolverDependency::class);
     $source->setEnvironment('production');
     $source->compileTo($path);
 
-    $empty = Container::instance(uniqid('artifact_empty_'));
+    $empty = new ConfigurationContainer(uniqid('artifact_empty_'));
     expect(fn() => $empty->useCompiled($path))->toThrow(ContainerException::class);
 
-    $otherEnvironment = Container::instance(uniqid('artifact_env_target_'));
+    $otherEnvironment = new ConfigurationContainer(uniqid('artifact_env_target_'));
     $otherEnvironment->bind('service', CompiledResolverDependency::class);
     $otherEnvironment->setEnvironment('testing');
     expect(fn() => $otherEnvironment->useCompiled($path))
         ->toThrow(ContainerException::class, 'stale or incompatible');
 
-    $extraDefinition = Container::instance(uniqid('artifact_extra_target_'));
+    $extraDefinition = new ConfigurationContainer(uniqid('artifact_extra_target_'));
     $extraDefinition->bind('service', CompiledResolverDependency::class);
     $extraDefinition->bind('extra', CompiledResolverAlternative::class);
     $extraDefinition->setEnvironment('production');
     expect(fn() => $extraDefinition->useCompiled($path))
         ->toThrow(ContainerException::class, 'stale or incompatible');
 
-    $dynamicExtra = Container::instance(uniqid('artifact_dynamic_target_'));
+    $dynamicExtra = new ConfigurationContainer(uniqid('artifact_dynamic_target_'));
     $dynamicExtra->bind('service', CompiledResolverDependency::class);
     $dynamicExtra->bind('dynamic.extra', static fn() => new stdClass());
     $dynamicExtra->setEnvironment('production');
@@ -485,17 +486,17 @@ it('requires registration before loading and rejects environment mismatches', fu
 });
 
 it('loads a deployment-prevalidated artifact and rejects a mismatched manifest fingerprint', function () {
-    $source = Container::instance(uniqid('prevalidated_source_'));
+    $source = new ConfigurationContainer(uniqid('prevalidated_source_'));
     $source->bind('service', CompiledResolverDependency::class, LifetimeEnum::Transient);
     $path = compiledResolverPath();
     $source->compileTo($path);
     $fingerprint = (string) $source->compilationReport()['fingerprint'];
 
-    $runtime = Container::instance(uniqid('prevalidated_runtime_'));
+    $runtime = new ConfigurationContainer(uniqid('prevalidated_runtime_'));
     $runtime->bind('service', CompiledResolverDependency::class, LifetimeEnum::Transient);
     $runtime->usePrevalidated($path, $fingerprint);
 
-    $rejected = Container::instance(uniqid('prevalidated_rejected_'));
+    $rejected = new ConfigurationContainer(uniqid('prevalidated_rejected_'));
     $rejected->bind('service', CompiledResolverDependency::class, LifetimeEnum::Transient);
 
     expect($runtime->get('service'))->toBeInstanceOf(CompiledResolverDependency::class)
@@ -524,7 +525,7 @@ it('rejects malformed service IDs in a prevalidated artifact', function () {
         ];
         PHP);
 
-    $container = Container::instance(uniqid('prevalidated_malformed_'));
+    $container = new ConfigurationContainer(uniqid('prevalidated_malformed_'));
 
     expect(fn() => $container->usePrevalidated($path, $fingerprint))
         ->toThrow(ContainerException::class, 'metadata is malformed');
@@ -532,11 +533,11 @@ it('rejects malformed service IDs in a prevalidated artifact', function () {
 
 it('rejects artifacts when resolution-affecting registration changes', function () {
     $path = compiledResolverPath();
-    $source = Container::instance(uniqid('artifact_resolution_source_'));
+    $source = new ConfigurationContainer(uniqid('artifact_resolution_source_'));
     $source->bind('consumer', CompiledResolverContextConsumer::class);
     $source->compileTo($path);
 
-    $target = Container::instance(uniqid('artifact_resolution_target_'));
+    $target = new ConfigurationContainer(uniqid('artifact_resolution_target_'));
     $target->bind('consumer', CompiledResolverContextConsumer::class);
     $target->when(CompiledResolverContextConsumer::class)
         ->needs(CompiledResolverDependency::class)
@@ -549,7 +550,7 @@ it('rejects artifacts when resolution-affecting registration changes', function 
 
 it('invalidates active compiled resolvers on definition context environment and option mutations', function () {
     $newContainer = static function (string $suffix): Container {
-        $container = Container::instance(uniqid("invalidate_{$suffix}_"));
+        $container = new ConfigurationContainer(uniqid("invalidate_{$suffix}_"));
         $container->bind('service', CompiledResolverDependency::class, LifetimeEnum::Transient);
         $container->compileTo(compiledResolverPath(), load: true);
 
@@ -580,11 +581,11 @@ it('invalidates active compiled resolvers on definition context environment and 
 });
 
 it('generates deterministic artifacts regardless of definition registration order', function () {
-    $first = Container::instance(uniqid('deterministic_first_'));
+    $first = new ConfigurationContainer(uniqid('deterministic_first_'));
     $first->bind('a', CompiledResolverDependency::class);
     $first->bind('b', CompiledResolverAlternative::class);
 
-    $second = Container::instance(uniqid('deterministic_second_'));
+    $second = new ConfigurationContainer(uniqid('deterministic_second_'));
     $second->bind('b', CompiledResolverAlternative::class);
     $second->bind('a', CompiledResolverDependency::class);
 
