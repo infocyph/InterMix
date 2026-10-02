@@ -67,11 +67,12 @@ class InvocationManager
             return $resolved;
         }
 
-        $alias = null;
-        $lifetime = $this->repository->getDeclaredDefinitionLifetime($id, $alias);
-        if (!$lifetime instanceof LifetimeEnum) {
+        if (!$this->has($id)) {
             throw new NotFoundException("No entry found for '$id'.");
         }
+
+        $alias = null;
+        $lifetime = $this->repository->getDefinitionLifetime($id, $alias);
         $scope = null;
         if ($lifetime === LifetimeEnum::Scoped) {
             $this->assertScopedResolutionAllowed($id);
