@@ -1,0 +1,125 @@
+name: "Release Candidate Validation"
+
+on:
+  pull_request:
+    branches: [ "main", "master", "develop", "development" ]
+  workflow_call:
+
+concurrency:
+  group: intermix-release-candidate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: Release package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          tools: composer:v2
+          coverage: none
+
+      - name: Build release archive
+        shell: bash
+        run: |
+          git archive --format=tar.gz --output="$RUNNER_TEMP/intermix-release.tar.gz" HEAD
+          mkdir "$RUNNER_TEMP/release"
+          tar -xzf "$RUNNER_TEMP/intermix-release.tar.gz" -C "$RUNNER_TEMP/release"
+          for excluded in .github benchmarks docs tests vendor composer.lock; do
+            test ! -e "$RUNNER_TEMP/release/$excluded"
+          done
+          test -f "$RUNNER_TEMP/release/composer.json"
+          test -d "$RUNNER_TEMP/release/src"
+
+      - name: Install and smoke release archive
+        shell: bash
+        run: |
+          composer install \
+            --working-dir="$RUNNER_TEMP/release" \
+            --no-dev --no-interaction --prefer-dist --no-progress --classmap-authoritative
+          php -r '
+            require getenv("RUNNER_TEMP") . "/release/vendor/autoload.php";
+            $runtime = \Infocyph\InterMix\DI\ContainerBuilder::create("release.archive")
+                ->value("answer", 42)
+                ->build();
+            if ($runtime->get("answer") !== 42) {
+                throw new RuntimeException("Release archive smoke failed.");
+            }
+          '
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: intermix-release-archive
+          path: ${{ runner.temp }}/intermix-release.tar.gz
+          retention-days: 61
+
+  consumer-install:
+    name: "Consumer install - ${{ matrix.integration }}"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        integration: ["core", "cachelayer", "runwire", "opis"]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: current
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          tools: composer:v2
+          coverage: none
+
+      - name: Create clean consumer
+        shell: bash
+        run: |
+          mkdir consumer
+          cd consumer
+          composer init --name=intermix/release-consumer --no-interaction
+          composer config minimum-stability dev
+          composer config prefer-stable true
+          composer config repositories.intermix path "$GITHUB_WORKSPACE/current"
+          composer require infocyph/intermix:@dev --no-interaction --prefer-dist --no-progress
+          case "${{ matrix.integration }}" in
+            cachelayer) composer require infocyph/cachelayer:^4.0 --no-interaction --prefer-dist --no-progress ;;
+            runwire) composer require infocyph/runwire:^2.1 --no-interaction --prefer-dist --no-progress ;;
+            opis) composer require opis/closure:^4.5 --no-interaction --prefer-dist --no-progress ;;
+          esac
+          composer dump-autoload --classmap-authoritative --no-interaction
+
+      - name: Validate clean consumer
+        shell: bash
+        run: |
+          cd consumer
+          php -r '
+            require "vendor/autoload.php";
+            $runtime = \Infocyph\InterMix\DI\ContainerBuilder::create("consumer")
+                ->value("value", "ok")
+                ->build();
+            if ($runtime->get("value") !== "ok") {
+                throw new RuntimeException("Consumer runtime failed.");
+            }
+          '
+          case "${{ matrix.integration }}" in
+            core)
+              if composer show infocyph/runwire >/dev/null 2>&1; then
+                echo "Core install unexpectedly pulled Runwire." >&2
+                exit 1
+              fi
+              ;;
+            cachelayer) php -r 'require "vendor/autoload.php"; exit(class_exists(\Infocyph\CacheLayer\Cache\Cache::class) ? 0 : 1);' ;;
+            runwire) php -r 'require "vendor/autoload.php"; exit(class_exists(\Infocyph\Runwire\RuntimeContext::class) ? 0 : 1);' ;;
+            opis) php -r 'require "vendor/autoload.php"; exit(class_exists(\Opis\Closure\Serializer::class) ? 0 : 1);' ;;
+          esac

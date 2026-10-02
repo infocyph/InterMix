@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Build;
 
+use Infocyph\InterMix\DI\Internal\BoundedValueInspector;
+use Infocyph\InterMix\DI\Support\ServiceReference;
+use Infocyph\InterMix\DI\Support\ValueDefinition;
 use ReflectionClass;
 use ReflectionFunctionAbstract;
 use ReflectionIntersectionType;
@@ -71,10 +74,14 @@ final class StaticParameterPlanner
 
     /**
      * @param ReflectionClass<object> $class
+     * @param array<int|string, mixed> $supplied
      * @return array{arguments: list<ServiceArgument>, dependencies: list<string>}|string
      */
-    public function constructorPlan(DefinitionGraph $graph, ReflectionClass $class): array|string
-    {
+    public function constructorPlan(
+        DefinitionGraph $graph,
+        ReflectionClass $class,
+        array $supplied = [],
+    ): array|string {
         $constructor = $class->getConstructor();
         if ($constructor === null) {
             return ['arguments' => [], 'dependencies' => []];
@@ -84,7 +91,9 @@ final class StaticParameterPlanner
             $graph,
             $class,
             $constructor,
-            $this->resourceParameters($graph, $class->getName(), 'constructor'),
+            $supplied !== []
+                ? $supplied
+                : $this->resourceParameters($graph, $class->getName(), 'constructor'),
             'constructor',
             false,
         );
@@ -105,14 +114,7 @@ final class StaticParameterPlanner
 
     private function isExportable(mixed $value): bool
     {
-        if ($value === null || is_scalar($value)) {
-            return true;
-        }
-        if (!is_array($value)) {
-            return false;
-        }
-
-        return array_all($value, fn(mixed $item): bool => $this->isExportable($item));
+        return BoundedValueInspector::isScalarNullArray($value);
     }
 
     /** @param ReflectionClass<object> $class */
@@ -235,7 +237,7 @@ final class StaticParameterPlanner
 
     /**
      * @param ReflectionClass<object> $consumer
-     * @return array{kind: 'service', id: string}|string
+     * @return ServiceArgument|string
      */
     private function typedParameterPlan(
         DefinitionGraph $graph,
@@ -258,7 +260,7 @@ final class StaticParameterPlanner
         return $this->typedServicePlan($graph, $consumer->getName(), $dependency, $label);
     }
 
-    /** @return array{kind: 'service', id: string}|string */
+    /** @return ServiceArgument|string */
     private function typedServicePlan(
         DefinitionGraph $graph,
         string $consumer,
@@ -273,14 +275,19 @@ final class StaticParameterPlanner
         }
 
         $binding = $graph->contextualBinding($consumer, $dependency);
+        if ($binding instanceof ServiceReference) {
+            return ['kind' => 'service', 'id' => $binding->id];
+        }
+        if ($binding instanceof ValueDefinition) {
+            return BoundedValueInspector::isScalarNullArray($binding->value)
+                ? ['kind' => 'value', 'code' => var_export($binding->value, true)]
+                : "{$label} dependency '$dependency' has a dynamic contextual value";
+        }
         if (!is_string($binding)) {
             return "{$label} dependency '$dependency' has a dynamic contextual binding";
         }
-        if ($graph->hasDefinition($binding)) {
-            return ['kind' => 'service', 'id' => $binding];
-        }
         if (!class_exists($binding) && !interface_exists($binding)) {
-            return "{$label} dependency '$dependency' has a non-service contextual binding";
+            return "{$label} dependency '$dependency' has an invalid contextual class";
         }
 
         return [
@@ -291,7 +298,7 @@ final class StaticParameterPlanner
 
     /**
      * @param ReflectionClass<object> $consumer
-     * @return array{kind: 'service', id: string}|string|null
+     * @return ServiceArgument|string|null
      */
     private function typeParameterPlan(
         DefinitionGraph $graph,

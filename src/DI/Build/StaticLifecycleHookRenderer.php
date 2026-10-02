@@ -23,9 +23,10 @@ final class StaticLifecycleHookRenderer
         string $id,
         LifetimeEnum $lifetime,
         string $serviceStatements,
+        bool $guardCaptive = true,
     ): string {
         $source = "    private function s{$slot}(): mixed\n    {\n";
-        $source .= $this->seedGuard($slot, $lifetime);
+        $source .= $this->seedGuard($slot, $lifetime, $id, $guardCaptive);
         if ($lifetime === LifetimeEnum::Scoped) {
             $source .= "        if (isset(\$scope->resolved[{$slot}])) {\n";
             $source .= "            return \$scope->resolved[{$slot}];\n";
@@ -35,6 +36,7 @@ final class StaticLifecycleHookRenderer
             $source .= "            return \$this->v{$slot};\n";
             $source .= "        }\n\n";
         }
+        $source .= $this->scopeGuard($lifetime, $id);
         if ($graph->hasResolvingHook($id)) {
             $source .= '        $this->dispatchCompiledResolvingHooks(' . var_export($id, true) . ");\n\n";
         }
@@ -58,9 +60,10 @@ final class StaticLifecycleHookRenderer
         LifetimeEnum $lifetime,
         string $expression,
         string $singletonStore,
+        bool $guardCaptive = true,
     ): string {
         $source = "    private function s{$slot}(): mixed\n    {\n";
-        $source .= $this->seedGuard($slot, $lifetime);
+        $source .= $this->seedGuard($slot, $lifetime, $id, $guardCaptive);
         if ($lifetime === LifetimeEnum::Scoped) {
             $source .= "        if (array_key_exists({$slot}, \$scope->resolved)) {\n";
             $source .= "            return \$scope->resolved[{$slot}];\n";
@@ -70,6 +73,7 @@ final class StaticLifecycleHookRenderer
             $source .= "            return \$this->{$singletonStore}[{$slot}];\n";
             $source .= "        }\n\n";
         }
+        $source .= $this->scopeGuard($lifetime, $id);
         if ($graph->hasResolvingHook($id)) {
             $source .= '        $this->dispatchCompiledResolvingHooks(' . var_export($id, true) . ");\n\n";
         }
@@ -107,7 +111,8 @@ final class StaticLifecycleHookRenderer
     /** @param array<string, ServicePlan> $plans */
     public function renderValueSingletonProperties(DefinitionGraph $graph, array $plans): string
     {
-        foreach ($plans as $id => $plan) {
+        foreach ($plans as $rawId => $plan) {
+            $id = (string) $rawId;
             if ($plan['kind'] === 'value'
                 && $plan['lifetime'] === LifetimeEnum::Singleton
                 && $this->hasResolutionHooks($graph, $id)
@@ -119,8 +124,22 @@ final class StaticLifecycleHookRenderer
         return '';
     }
 
-    private function seedGuard(int $slot, LifetimeEnum $lifetime): string
+    private function scopeGuard(LifetimeEnum $lifetime, string $id): string
     {
-        return new StaticScopeAccessRenderer()->seedGuard($slot, $lifetime);
+        return new StaticScopeAccessRenderer()->constructionGuard($lifetime, $id);
+    }
+
+    private function seedGuard(
+        int $slot,
+        LifetimeEnum $lifetime,
+        string $id,
+        bool $guardCaptive,
+    ): string {
+        return new StaticScopeAccessRenderer()->seedGuard(
+            $slot,
+            $lifetime,
+            $id,
+            $guardCaptive,
+        );
     }
 }

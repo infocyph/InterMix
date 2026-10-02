@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Support;
 
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ContainerAccess;
 use Infocyph\InterMix\Internal\AtomicFileWriter;
 use Infocyph\InterMix\Internal\ReflectionResource;
 use ReflectionException;
@@ -20,7 +21,7 @@ final class PreloadGenerator
      */
     public function generate(Container $container, string $filePath): void
     {
-        $repo = $container->getRepository();
+        $repo = ContainerAccess::repository($container);
 
         $classes = array_keys($repo->getClassResource());
 

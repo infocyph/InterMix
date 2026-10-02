@@ -14,11 +14,10 @@ use ReflectionMethod;
 
 class ClassResolver
 {
-    /** @var array<int, string> Tracing-only class ancestry. */
-    private array $classStack = [];
+    use TracksResolutionAncestry;
 
-    /** @var array<string, bool> */
-    private array $entriesResolving = [];
+    /** @var array<int|string, array<int, string>> Tracing-only class ancestry by carrier. */
+    private array $classStacks = [];
 
     public function __construct(
         private readonly Repository $repository,
@@ -30,6 +29,7 @@ class ClassResolver
      * @param ReflectionClass<object> $class
      * @param array<int|string, mixed> $constructorParameters
      * @param array<int|string, mixed> $methodParameters
+     * @param array<string, mixed> $propertyParameters
      */
     public function resolve(
         ReflectionClass $class,
@@ -38,6 +38,7 @@ class ClassResolver
         bool $make = false,
         array $constructorParameters = [],
         array $methodParameters = [],
+        array $propertyParameters = [],
     ): ClassResolution {
         $requestedClassName = $class->getName();
         $activated = $class->isInterface()
@@ -64,34 +65,31 @@ class ClassResolver
 
         $class = $this->getConcreteClassForInterface($class, $supplied);
         $className = $class->getName();
-        $tracing = $this->repository->isTracingEnabled();
-        if ($tracing) {
-            $parent = end($this->classStack);
-            if (is_string($parent) && $parent !== $className) {
-                $this->repository->tracer()->recordDependency($parent, $className, 'class');
-            }
-            $this->classStack[] = $className;
-            $this->repository->tracer()->push("class:$className");
-        }
+        $traceOwner = $this->beginTrace($className);
 
         try {
             $resolved = $make
-                ? $this->resolveMake($class, $callMethod, $constructorParameters, $methodParameters)
+                ? $this->resolveMake(
+                    $class,
+                    $callMethod,
+                    $constructorParameters,
+                    $methodParameters,
+                    $propertyParameters,
+                )
                 : $this->resolveClassResources(
                     $class,
                     $className,
                     $callMethod,
                     $constructorParameters,
                     $methodParameters,
+                    $propertyParameters,
                 );
             $this->repository->markResolved($requestedClassName);
             $this->repository->markResolved($className);
 
             return $resolved;
         } finally {
-            if ($tracing) {
-                array_pop($this->classStack);
-            }
+            $this->endTrace($traceOwner);
         }
     }
 
@@ -127,6 +125,37 @@ class ClassResolver
         }
 
         return $this->resolveInjectFromClassOrInterface($type);
+    }
+
+    private function beginTrace(string $className): int|string|null
+    {
+        if (!$this->repository->isTracingEnabled()) {
+            return null;
+        }
+
+        $context = $this->resolutionOwner();
+        $stack = $this->classStacks[$context] ?? [];
+        $parent = end($stack);
+        if (is_string($parent) && $parent !== $className) {
+            $this->repository->tracer()->recordDependency($parent, $className, 'class');
+        }
+        $stack[] = $className;
+        $this->classStacks[$context] = $stack;
+        $this->repository->tracer()->push("class:$className");
+
+        return $context;
+    }
+
+    private function endTrace(int|string|null $context): void
+    {
+        if ($context === null) {
+            return;
+        }
+
+        array_pop($this->classStacks[$context]);
+        if ($this->classStacks[$context] === []) {
+            unset($this->classStacks[$context]);
+        }
     }
 
     /**
@@ -225,6 +254,7 @@ class ClassResolver
      * @param ReflectionClass<object> $class
      * @param array<int|string, mixed> $constructorParameters
      * @param array<int|string, mixed> $methodParameters
+     * @param array<string, mixed> $propertyParameters
      */
     private function resolveClassResources(
         ReflectionClass $class,
@@ -232,24 +262,25 @@ class ClassResolver
         string|bool|null $callMethod,
         array $constructorParameters,
         array $methodParameters,
+        array $propertyParameters,
     ): ClassResolution {
-        if (isset($this->entriesResolving[$className])) {
-            throw new ContainerException("Circular dependency on {$className}");
-        }
-        $this->entriesResolving[$className] = true;
+        $owner = $this->beginResolutionEntry(
+            $className,
+            "Circular dependency on {$className}",
+        );
 
         try {
             $resolved = $this->repository->getResolvedResourceFor($className);
             if (!$resolved instanceof ClassResolution) {
                 $instance = $this->resolveConstructor($class, $constructorParameters);
-                $this->propertyResolver->resolve($class, $instance);
+                $this->propertyResolver->resolve($class, $instance, $propertyParameters);
                 $resolved = new ClassResolution($instance);
                 $this->repository->setResolvedResource($className, $resolved);
             }
 
             return $this->resolveMethod($class, $callMethod, $resolved, $methodParameters);
         } finally {
-            unset($this->entriesResolving[$className]);
+            $this->endResolutionEntry($className, $owner);
         }
     }
 
@@ -261,15 +292,7 @@ class ClassResolver
         string $className,
         string|bool|null $callMethod,
     ): ?string {
-        $constant = $class->hasConstant('CALL_ON') ? 'CALL_ON' : 'callOn';
-        $callOn = $class->hasConstant($constant) ? $class->getConstant($constant) : null;
-        $method = $callMethod
-            ?: $this->readConfiguredMethod($className)
-                ?: ($callOn ?: $this->repository->getDefaultMethod());
-
-        if (!$method && $class->hasMethod('__invoke')) {
-            $method = '__invoke';
-        }
+        $method = $callMethod ?: $this->readConfiguredMethod($className);
 
         return is_string($method) && $class->hasMethod($method) ? $method : null;
     }
@@ -352,15 +375,17 @@ class ClassResolver
      * @param ReflectionClass<object> $class
      * @param array<int|string, mixed> $constructorParameters
      * @param array<int|string, mixed> $methodParameters
+     * @param array<string, mixed> $propertyParameters
      */
     private function resolveMake(
         ReflectionClass $class,
         string|bool|null $callMethod,
         array $constructorParameters,
         array $methodParameters,
+        array $propertyParameters,
     ): ClassResolution {
         $instance = $this->resolveConstructor($class, $constructorParameters);
-        $this->propertyResolver->resolve($class, $instance);
+        $this->propertyResolver->resolve($class, $instance, $propertyParameters);
 
         return $this->resolveMethod(
             $class,

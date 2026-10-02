@@ -9,7 +9,11 @@ use Infocyph\InterMix\DI\Attribute\Inject;
 use Infocyph\InterMix\DI\Resolver\Concerns\ResolvesAssociativeParameters;
 use Infocyph\InterMix\DI\Resolver\Concerns\ResolvesNumericAndVariadicParameters;
 use Infocyph\InterMix\DI\Resolver\Concerns\ResolvesParameterAttributes;
+use Infocyph\InterMix\DI\Support\FactoryDefinition;
+use Infocyph\InterMix\DI\Support\RuntimeFactoryDefinition;
+use Infocyph\InterMix\DI\Support\ServiceReference;
 use Infocyph\InterMix\DI\Support\TraceLevelEnum;
+use Infocyph\InterMix\DI\Support\ValueDefinition;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Internal\ReflectionResource;
 use ReflectionAttribute;
@@ -109,9 +113,8 @@ class ParameterResolver
 
     public function resolveByDefinitionType(string $name, ReflectionParameter $parameter): mixed
     {
-        $hasScopeSeeds = $this->repository->hasScopeSeeds();
         $seeded = null;
-        if ($hasScopeSeeds && $this->repository->findScopeSeed($name, $seeded)) {
+        if ($this->repository->findScopeSeed($name, $seeded)) {
             return $seeded;
         }
 
@@ -130,7 +133,7 @@ class ParameterResolver
                     $named->getName(),
                     $parameter->getDeclaringClass(),
                 );
-                $resolved = $this->resolveNamedDefinitionType($typeName, $hasScopeSeeds, $seeded);
+                $resolved = $this->resolveNamedDefinitionType($typeName, $seeded);
                 if ($resolved !== AttributeResolution::Unresolved) {
                     return $resolved;
                 }
@@ -152,23 +155,31 @@ class ParameterResolver
         }
 
         $binding = $this->repository->getContextualBinding($consumer, $dependency->getName());
+        $container = $this->repository->container();
 
+        if ($binding instanceof ServiceReference) {
+            return $container->get($binding->id);
+        }
+        if ($binding instanceof ValueDefinition) {
+            return $binding->value;
+        }
+        if ($binding instanceof RuntimeFactoryDefinition || $binding instanceof FactoryDefinition) {
+            return $binding->resolve($container);
+        }
+        if (is_string($binding) && (class_exists($binding) || interface_exists($binding))) {
+            return $this->classResolver->resolveClassInstance(
+                ReflectionResource::getClassReflection($this->applyEnvOverride($binding)),
+            );
+        }
+
+        // Transitional 10.x runtime contextual semantics. Builder-owned 11.0
+        // configuration stores only the explicit wrapper/class forms above.
         if (is_callable($binding)) {
-            return $binding($this->repository->container());
+            return $binding($container);
         }
-
-        if (is_string($binding)) {
-            if ($this->repository->hasFunctionReference($binding)) {
-                return $this->repository->container()->get($binding);
-            }
-
-            if (class_exists($binding) || interface_exists($binding)) {
-                return $this->classResolver->resolveClassInstance(
-                    ReflectionResource::getClassReflection($this->applyEnvOverride($binding)),
-                );
-            }
+        if (is_string($binding) && $this->repository->hasFunctionReference($binding)) {
+            return $container->get($binding);
         }
-
         if (is_object($binding) && is_a($binding, $dependency->getName())) {
             return $binding;
         }
@@ -459,9 +470,9 @@ class ParameterResolver
         return $value;
     }
 
-    private function resolveNamedDefinitionType(string $name, bool $hasScopeSeeds, mixed &$seeded): mixed
+    private function resolveNamedDefinitionType(string $name, mixed &$seeded): mixed
     {
-        if ($hasScopeSeeds && $this->repository->findScopeSeed($name, $seeded)) {
+        if ($this->repository->findScopeSeed($name, $seeded)) {
             return $seeded;
         }
 

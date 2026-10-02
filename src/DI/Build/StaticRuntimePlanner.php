@@ -5,9 +5,13 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Build;
 
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\BoundedValueInspector;
+use Infocyph\InterMix\DI\RuntimeContainerInterface;
 use Infocyph\InterMix\DI\Support\AliasDefinition;
+use Infocyph\InterMix\DI\Support\AutowireDefinition;
 use Infocyph\InterMix\DI\Support\FactoryDefinition;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
+use Infocyph\InterMix\DI\Support\ValueDefinition;
 use Infocyph\InterMix\Internal\ReflectionResource;
 use Psr\Container\ContainerInterface;
 use ReflectionClass;
@@ -26,6 +30,14 @@ use ReflectionClass;
  */
 final class StaticRuntimePlanner
 {
+    /** @return array<string, ServicePlan> */
+    public function dependencyPlans(DefinitionGraph $graph): array
+    {
+        [$plans, $skipped] = $this->buildPlans($graph);
+
+        return $this->expandImplicitClasses($graph, $plans, $skipped);
+    }
+
     /** @return array{plans: array<string, ServicePlan>, skipped: array<string, string>} */
     public function plan(DefinitionGraph $graph): array
     {
@@ -47,7 +59,8 @@ final class StaticRuntimePlanner
         $aliasCycles = $this->detectAliasCycles($definitions);
         ksort($definitions, SORT_STRING);
 
-        foreach ($definitions as $id => $definition) {
+        foreach ($definitions as $rawId => $definition) {
+            $id = (string) $rawId;
             if (isset($aliasCycles[$id])) {
                 $skipped[$id] = 'alias graph contains a cycle';
 
@@ -68,12 +81,16 @@ final class StaticRuntimePlanner
 
     /**
      * @param ReflectionClass<object> $class
+     * @param array<int|string, mixed> $constructorParameters
+     * @param array<string, mixed> $propertyParameters
      * @return ClassPlan|string
      */
     private function classPlan(
         DefinitionGraph $graph,
         string $id,
         ReflectionClass $class,
+        array $constructorParameters = [],
+        array $propertyParameters = [],
     ): array|string {
         if (!$class->isInstantiable()) {
             return 'class definition is not instantiable';
@@ -87,11 +104,15 @@ final class StaticRuntimePlanner
             return $dynamicReason;
         }
 
-        $constructor = new StaticParameterPlanner()->constructorPlan($graph, $class);
+        $constructor = new StaticParameterPlanner()->constructorPlan(
+            $graph,
+            $class,
+            $constructorParameters,
+        );
         if (is_string($constructor)) {
             return $constructor;
         }
-        $property = new StaticPropertyPlanner()->plan($graph, $class);
+        $property = new StaticPropertyPlanner()->plan($graph, $class, $propertyParameters);
         $postMethod = new StaticMethodPlanner()->plan($graph, $class);
         $methodDependencies = is_array($postMethod) ? $postMethod['dependencies'] : [];
 
@@ -117,7 +138,8 @@ final class StaticRuntimePlanner
     private function detectAliasCycles(array $definitions): array
     {
         $cyclic = [];
-        foreach ($definitions as $id => $definition) {
+        foreach ($definitions as $rawId => $definition) {
+            $id = (string) $rawId;
             if (!$definition instanceof AliasDefinition) {
                 continue;
             }
@@ -250,14 +272,7 @@ final class StaticRuntimePlanner
 
     private function isExportable(mixed $value): bool
     {
-        if ($value === null || is_scalar($value)) {
-            return true;
-        }
-        if (!is_array($value)) {
-            return false;
-        }
-
-        return array_all($value, fn(mixed $item): bool => $this->isExportable($item));
+        return BoundedValueInspector::isScalarNullArray($value);
     }
 
     /**
@@ -276,24 +291,21 @@ final class StaticRuntimePlanner
     }
 
     /** @return AliasPlan */
-    private function planAlias(DefinitionGraph $graph, string $id, AliasDefinition $definition): array
-    {
+    private function planAlias(
+        DefinitionGraph $graph,
+        AliasDefinition $definition,
+    ): array {
         $target = $definition->target;
         $definitions = $graph->definitions();
-        $alias = $definitions[$target] ?? null;
 
-        while ($alias instanceof AliasDefinition) {
-            if ($graph->definitionMetaFor($target)['lifetime'] !== LifetimeEnum::Transient) {
-                break;
-            }
+        while (($alias = $definitions[$target] ?? null) instanceof AliasDefinition) {
             $target = $alias->target;
-            $alias = $definitions[$target] ?? null;
         }
 
         return [
             'kind' => 'alias',
             'target' => $target,
-            'lifetime' => $graph->definitionMetaFor($id)['lifetime'],
+            'lifetime' => $graph->definitionMetaFor($target)['lifetime'],
             'arguments' => [],
             'properties' => [],
             'dependencies' => [$target],
@@ -331,10 +343,23 @@ final class StaticRuntimePlanner
         }
 
         if ($definition instanceof AliasDefinition) {
-            return $this->planAlias($graph, $id, $definition);
+            return $this->planAlias($graph, $definition);
+        }
+        if ($definition instanceof AutowireDefinition) {
+            return $this->classPlan(
+                $graph,
+                $id,
+                ReflectionResource::getClassReflection($definition->class),
+                $definition->arguments,
+                $definition->properties,
+            );
         }
         if ($definition instanceof FactoryDefinition) {
             return new StaticFactoryPlanner()->plan($graph, $id, $definition);
+        }
+        if ($definition instanceof ValueDefinition) {
+            return $this->valuePlan($graph, $id, $definition->value, true)
+                ?? 'literal value requires the frozen dynamic fallback';
         }
         if (is_array($definition) && $this->isCallableArrayDefinition($definition)) {
             return $this->planArrayDefinition($graph, $id, $definition);
@@ -365,7 +390,8 @@ final class StaticRuntimePlanner
         $remaining = array_fill_keys(array_keys($plans), true);
         do {
             $changed = false;
-            foreach (array_keys($remaining) as $id) {
+            foreach (array_keys($remaining) as $rawId) {
+                $id = (string) $rawId;
                 if ($this->hasRemainingDependency($plans, $remaining, $id)) {
                     continue;
                 }
@@ -374,7 +400,8 @@ final class StaticRuntimePlanner
             }
         } while ($changed);
 
-        foreach (array_keys($remaining) as $id) {
+        foreach (array_keys($remaining) as $rawId) {
+            $id = (string) $rawId;
             $skipped[$id] = 'static dependency graph contains or depends on a cycle';
             unset($plans[$id]);
         }
@@ -409,9 +436,15 @@ final class StaticRuntimePlanner
     }
 
     /** @return ValuePlan|null */
-    private function valuePlan(DefinitionGraph $graph, string $id, mixed $definition): ?array
-    {
-        if ($id === ContainerInterface::class && $definition instanceof Container) {
+    private function valuePlan(
+        DefinitionGraph $graph,
+        string $id,
+        mixed $definition,
+        bool $literal = false,
+    ): ?array {
+        if (($id === ContainerInterface::class || $id === RuntimeContainerInterface::class)
+            && $definition instanceof Container
+        ) {
             return [
                 'kind' => 'value',
                 'code' => '$this',
@@ -421,10 +454,12 @@ final class StaticRuntimePlanner
                 'dependencies' => [],
             ];
         }
-        if (!$this->isExportable($definition) || (is_array($definition) && $this->isCallableArrayDefinition($definition))) {
+        if (!$this->isExportable($definition)
+            || (!$literal && is_array($definition) && $this->isCallableArrayDefinition($definition))
+        ) {
             return null;
         }
-        if (is_string($definition) && class_exists($definition)) {
+        if (!$literal && is_string($definition) && class_exists($definition)) {
             return null;
         }
 

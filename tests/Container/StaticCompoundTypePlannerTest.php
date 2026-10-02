@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Infocyph\InterMix\DI\Build\DefinitionGraph;
 use Infocyph\InterMix\DI\Build\StaticRuntimeGenerator;
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\DI\Support\AliasDefinition;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 
@@ -55,7 +56,7 @@ function removeStaticCompoundArtifact(string $path): void
 }
 
 it('compiles ordered union autowiring with development parity', function () {
-    $container = new Container(uniqid('static_compound_union_'));
+    $container = new ConfigurationContainer(uniqid('static_compound_union_'));
     $container->singleton('consumer', StaticCompoundUnionConsumer::class);
 
     $development = $container->get('consumer');
@@ -77,7 +78,7 @@ it('compiles ordered union autowiring with development parity', function () {
 });
 
 it('compiles intersection types through a parameter-name definition', function () {
-    $container = new Container(uniqid('static_compound_intersection_'));
+    $container = new ConfigurationContainer(uniqid('static_compound_intersection_'));
     $container->singleton('dependency', StaticCompoundBoth::class);
     $container->singleton('consumer', StaticCompoundIntersectionConsumer::class);
 
@@ -99,7 +100,7 @@ it('compiles intersection types through a parameter-name definition', function (
 });
 
 it('proves aliases targeting implicit classes for compound parameters', function () {
-    $container = new Container(uniqid('static_compound_alias_'));
+    $container = new ConfigurationContainer(uniqid('static_compound_alias_'));
     $container->bind(
         'dependency',
         new AliasDefinition(StaticCompoundBoth::class),
@@ -123,7 +124,7 @@ it('proves aliases targeting implicit classes for compound parameters', function
 });
 
 it('compiles DNF types using the first statically resolvable group', function () {
-    $container = new Container(uniqid('static_compound_dnf_'));
+    $container = new ConfigurationContainer(uniqid('static_compound_dnf_'));
     $container->singleton('consumer', StaticCompoundDnfConsumer::class);
 
     $development = $container->get('consumer');
@@ -144,7 +145,7 @@ it('compiles DNF types using the first statically resolvable group', function ()
 });
 
 it('folds environment bindings for interface intersections', function () {
-    $container = new Container(uniqid('static_compound_environment_'));
+    $container = new ConfigurationContainer(uniqid('static_compound_environment_'));
     $container->singleton('consumer', StaticCompoundIntersectionConsumer::class);
     $container->options()->bindInterfaceForEnv(
         'production',
@@ -169,7 +170,7 @@ it('folds environment bindings for interface intersections', function () {
 });
 
 it('keeps dynamic compound contextual bindings in the fallback island', function () {
-    $container = new Container(uniqid('static_compound_dynamic_context_'));
+    $container = new ConfigurationContainer(uniqid('static_compound_dynamic_context_'));
     $container->singleton('consumer', StaticCompoundIntersectionConsumer::class);
     $container->when(StaticCompoundIntersectionConsumer::class)
         ->needs(StaticCompoundLeft::class)
@@ -190,7 +191,7 @@ it('keeps dynamic compound contextual bindings in the fallback island', function
 });
 
 it('compiles unresolved nullable compound parameters as null', function () {
-    $container = new Container(uniqid('static_compound_nullable_'));
+    $container = new ConfigurationContainer(uniqid('static_compound_nullable_'));
     $container->singleton('consumer', StaticCompoundNullableConsumer::class);
 
     $path = staticCompoundArtifactPath();

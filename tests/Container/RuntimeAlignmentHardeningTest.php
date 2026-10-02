@@ -3,12 +3,20 @@
 declare(strict_types=1);
 
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\DI\Internal\ExecutionContext;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
 
 final class RuntimeAlignmentCompiledLeaf {}
+
+final class RuntimeAlignmentScopedInput {}
+
+final class RuntimeAlignmentCaptiveSingleton
+{
+    public function __construct(public RuntimeAlignmentScopedInput $input) {}
+}
 
 function runtimeAlignmentArtifactPath(): string
 {
@@ -24,66 +32,102 @@ function removeRuntimeAlignmentArtifact(string $path): void
     }
 }
 
+it('keeps live Fiber carrier identities distinct', function () {
+    $fibers = [];
+    $ids = [];
+
+    for ($i = 0; $i < 64; ++$i) {
+        $fiber = new Fiber(static function (): void {
+            Fiber::suspend(ExecutionContext::id());
+        });
+        $ids[] = $fiber->start();
+        $fibers[] = $fiber;
+    }
+
+    expect(array_filter($ids, is_string(...)))->toHaveCount(64)
+        ->and(array_unique($ids))->toHaveCount(64);
+
+    foreach ($fibers as $fiber) {
+        $fiber->resume();
+    }
+});
+
 it('does not reuse collected Fiber carrier identities', function () {
     $ids = [];
 
     for ($i = 0; $i < 64; ++$i) {
         $fiber = new Fiber(static fn(): ?string => ExecutionContext::id());
         $fiber->start();
-        $ids[] = $fiber->getReturn();
+        $id = $fiber->getReturn();
+        if (is_string($id)) {
+            $ids[] = $id;
+        }
         unset($fiber);
         gc_collect_cycles();
     }
 
-    expect(array_filter($ids, is_string(...)))->toHaveCount(64)
+    expect($ids)->toHaveCount(64)
         ->and(array_unique($ids))->toHaveCount(64);
 });
 
-it('preserves compiled and fallback scoped identity across capture and safe deoptimization', function () {
-    $builder = ContainerBuilder::create(uniqid('runtime_alignment_fallback_'));
-    $builder->scoped('compiled', RuntimeAlignmentCompiledLeaf::class)
-        ->bindFactory('dynamic', static fn(): stdClass => new stdClass(), LifetimeEnum::Scoped);
+it('does not retain collected Fiber carriers', function () {
+    $fiber = new Fiber(static fn(): ?string => ExecutionContext::id());
+    $fiber->start();
+
+    expect($fiber->getReturn())->toBeString();
+
+    $reference = \WeakReference::create($fiber);
+    unset($fiber);
+    gc_collect_cycles();
+
+    expect($reference->get())->toBeNull();
+});
+
+it('preserves compiled and fallback scoped identity after builder finalization', function () {
+    $builder = ContainerBuilder::create(uniqid('runtime_alignment_fallback_'))
+        ->releaseIdentity('intermix-test');
+    $builder->autowire('compiled', RuntimeAlignmentCompiledLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->factory('dynamic', static fn(): stdClass => new stdClass(), LifetimeEnum::Scoped);
 
     $path = runtimeAlignmentArtifactPath();
     try {
         $builder->compile($path);
         $runtime = $builder->production($path);
-        $runtime->enterScope('request');
+        testEnterScope($runtime, 'request');
         $compiled = $runtime->get('compiled');
         $dynamic = $runtime->get('dynamic');
         $context = $runtime->captureScopeContext();
 
-        $builder->value('late.value', 'available-after-deopt');
+        expect(fn() => $builder->value('late.value', 'blocked'))
+            ->toThrow(ContainerException::class, 'ContainerBuilder is finalized');
 
         $fiber = new Fiber(static fn(): array => $runtime->withinScopeContext(
             $context,
             static fn($active): array => [
                 $active->get('compiled'),
                 $active->get('dynamic'),
-                $active->get('late.value'),
             ],
         ));
         $fiber->start();
-        [$childCompiled, $childDynamic, $late] = $fiber->getReturn();
+        [$childCompiled, $childDynamic] = $fiber->getReturn();
 
         expect($childCompiled)->toBe($compiled)
-            ->and($childDynamic)->toBe($dynamic)
-            ->and($late)->toBe('available-after-deopt');
+            ->and($childDynamic)->toBe($dynamic);
 
-        $runtime->leaveScope();
+        testLeaveScope($runtime);
     } finally {
         removeRuntimeAlignmentArtifact($path);
     }
 });
 
 it('rejects dynamic configuration mutation from a foreign carrier while its scope is active', function () {
-    $container = new Container(uniqid('runtime_alignment_dynamic_mutation_'));
+    $container = new ConfigurationContainer(uniqid('runtime_alignment_dynamic_mutation_'));
     $container->value('stable', 'baseline');
 
     $fiber = new Fiber(static function () use ($container): void {
-        $container->enterScope('request');
+        testEnterScope($container, 'request');
         Fiber::suspend();
-        $container->leaveScope();
+        testLeaveScope($container);
     });
     $fiber->start();
 
@@ -99,17 +143,16 @@ it('rejects dynamic configuration mutation from a foreign carrier while its scop
     expect($container->get('late'))->toBe('allowed');
 });
 
-it('rejects compiled graph mutation while a propagated child carrier is attached', function () {
-    $builder = ContainerBuilder::create(uniqid('runtime_alignment_compiled_mutation_'));
-    $builder->scoped('compiled', RuntimeAlignmentCompiledLeaf::class);
-    $development = $builder->development();
-
+it('keeps a finalized compiled graph immutable while a propagated child is attached', function () {
+    $builder = ContainerBuilder::create(uniqid('runtime_alignment_compiled_mutation_'))
+        ->releaseIdentity('intermix-test');
+    $builder->autowire('compiled', RuntimeAlignmentCompiledLeaf::class, lifetime: LifetimeEnum::Scoped);
     $path = runtimeAlignmentArtifactPath();
     try {
         $builder->compile($path);
         $report = $builder->compilationReport();
         $runtime = $builder->production($path);
-        $runtime->enterScope('request');
+        testEnterScope($runtime, 'request');
         $context = $runtime->captureScopeContext();
 
         $child = new Fiber(static fn(): RuntimeAlignmentCompiledLeaf => $runtime->withinScopeContext(
@@ -123,21 +166,50 @@ it('rejects compiled graph mutation while a propagated child carrier is attached
         ));
         $child->start();
 
-        expect(fn() => $runtime->deoptimize())
-            ->toThrow(ContainerException::class, 'concurrent scope execution is active')
-            ->and(fn() => $runtime->attachFallback(new Container(uniqid('unsafe_fallback_'))))
-            ->toThrow(ContainerException::class, 'concurrent scope execution is active')
-            ->and(fn() => $builder->value('late.value', 'blocked'))
-            ->toThrow(ContainerException::class, 'concurrent scope execution is active')
+        expect(fn() => $builder->value('late.value', 'blocked'))
+            ->toThrow(ContainerException::class, 'ContainerBuilder is finalized')
             ->and($builder->compilationReport())->toBe($report)
-            ->and($development->getRepository()->hasFunctionReference('late.value'))->toBeFalse();
+            ->and($builder->build()->has('late.value'))->toBeFalse();
 
         $child->resume();
-        $builder->value('late.value', 'allowed');
 
-        expect($runtime->get('late.value'))->toBe('allowed');
-        $runtime->leaveScope();
+        expect(fn() => $builder->value('late.value', 'still-blocked'))
+            ->toThrow(ContainerException::class, 'ContainerBuilder is finalized')
+            ->and($runtime->get('compiled'))->toBeInstanceOf(RuntimeAlignmentCompiledLeaf::class);
+
+        testLeaveScope($runtime);
     } finally {
         removeRuntimeAlignmentArtifact($path);
     }
+});
+
+it('rejects singleton autowiring that captures a scoped input during graph finalization', function () {
+    $builder = ContainerBuilder::create(uniqid('runtime_alignment_seed_guard_'))
+        ->input(RuntimeAlignmentScopedInput::class)
+        ->autowire(
+            RuntimeAlignmentCaptiveSingleton::class,
+            RuntimeAlignmentCaptiveSingleton::class,
+            lifetime: LifetimeEnum::Singleton,
+        );
+
+    expect(fn() => $builder->build())
+        ->toThrow(ContainerException::class, 'depends on scoped entry');
+});
+
+it('keeps dynamic singleton factories behind the runtime captive-dependency guard', function () {
+    $builder = ContainerBuilder::create(uniqid('runtime_alignment_dynamic_seed_guard_'))
+        ->input(RuntimeAlignmentScopedInput::class)
+        ->factory(
+            'dynamic.singleton',
+            static fn($container) => $container->get(RuntimeAlignmentScopedInput::class),
+            LifetimeEnum::Singleton,
+        );
+
+    $runtime = $builder->build();
+
+    expect(fn() => $runtime->withinScope(
+        'request',
+        static fn($active) => $active->get('dynamic.singleton'),
+        [RuntimeAlignmentScopedInput::class => new RuntimeAlignmentScopedInput()],
+    ))->toThrow(ContainerException::class, 'cannot capture scoped entry');
 });

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Tests\Fixture\BasicClass;
 use Infocyph\InterMix\Tests\Fixture\ClassA;
@@ -41,7 +42,7 @@ beforeEach(function () {
 // -------------------------------------------------------------------------
 
 test('PSR-11: container can get() a class with no constructor', function () {
-    $container = Container::instance('basic_test')
+    $container = new ConfigurationContainer('basic_test')
         ->lock(); // locking is optional here
 
     expect($container->has(BasicClass::class))->toBeTrue();
@@ -56,7 +57,7 @@ test('PSR-11: container can get() a class with no constructor', function () {
 });
 
 test('PSR-11: container throws on missing definitions if reflection is off', function () {
-    $container = Container::instance('missing_test')->lock();
+    $container = new ConfigurationContainer('missing_test')->lock();
 
     $container->options()->setOptions(injection: false)->end()->get(BasicClass::class);
 })->throws(ContainerException::class); // or NotFoundException, etc.
@@ -66,7 +67,7 @@ test('PSR-11: container throws on missing definitions if reflection is off', fun
 // -------------------------------------------------------------------------
 
 test('Constructor Injection: interface & scalar param', function () {
-    $container = container(null, 'user_service')
+    $container = new ConfigurationContainer('user_service')
         ->options()
         ->setOptions(true, true)
         ->definitions()
@@ -89,7 +90,7 @@ test('Constructor Injection: interface & scalar param', function () {
 });
 
 test('Constructor injection: multiple interfaces + scalar', function () {
-    $container = container(null, 'multi_interfaces')
+    $container = new ConfigurationContainer('multi_interfaces')
         ->options()
         ->setOptions(true, true)
         ->definitions()
@@ -120,7 +121,7 @@ test('Constructor injection: multiple interfaces + scalar', function () {
 
 test('Constructor injection: singletons vs. make for ClassInit', function () {
     /** @var \Infocyph\InterMix\DI\Container $container */
-    $container = container(null, 'class_init_test')
+    $container = new ConfigurationContainer('class_init_test')
         ->options()
         ->setOptions(true, true)
         ->registration()
@@ -140,13 +141,13 @@ test('Constructor injection: singletons vs. make for ClassInit', function () {
     expect($rand1)->toEqual($rand2);
 
     // 3) .make() => fresh new instance => different random
-    $newInstance = $container->make(ClassInit::class, 'getValues');
-    $rand3 = $newInstance['random'];
+    $newInstance = $container->make(ClassInit::class);
+    $rand3 = $container->invoke([$newInstance, 'getValues'])['random'];
     expect($rand3)->not->toEqual($rand1);
 
     // Another .make() => another fresh
-    $newInstance2 = $container->make(ClassInit::class, 'getValues');
-    $rand4 = $newInstance2['random'];
+    $newInstance2 = $container->make(ClassInit::class);
+    $rand4 = $container->invoke([$newInstance2, 'getValues'])['random'];
     expect($rand4)->not->toEqual($rand3);
 });
 
@@ -155,7 +156,7 @@ test('Constructor injection: singletons vs. make for ClassInit', function () {
 // -------------------------------------------------------------------------
 
 test('Method Injection: EmailService setConfig()', function () {
-    $container = container(null, 'method_injection')
+    $container = new ConfigurationContainer('method_injection')
         ->options()
         ->setOptions(true, true)
         ->registration()
@@ -178,7 +179,7 @@ test('Method Injection: EmailService setConfig()', function () {
 // -------------------------------------------------------------------------
 
 test('Property Injection: ParentPropertyClass & PropertyClass', function () {
-    $container = container(null, 'property_injection')
+    $container = new ConfigurationContainer('property_injection')
         ->options()
         ->setOptions(true, false, true)
         ->registration()
@@ -213,7 +214,7 @@ test('Property Injection: ParentPropertyClass & PropertyClass', function () {
 });
 
 test('Property Injection: NotificationService -> logger', function () {
-    $container = container(null, 'notification')
+    $container = new ConfigurationContainer('notification')
         ->options()
         ->setOptions(true, false, true)
         ->definitions()
@@ -233,7 +234,7 @@ test('Property Injection: NotificationService -> logger', function () {
 // -------------------------------------------------------------------------
 
 test('Method injection with attribute Inject (ClassA->resolveIt)', function () {
-    $container = container(null, 'classA_method_test')
+    $container = new ConfigurationContainer('classA_method_test')
         ->options()
         ->setOptions(true, true)
         ->definitions()
@@ -261,7 +262,7 @@ test('Method injection with attribute Inject (ClassA->resolveIt)', function () {
 });
 
 test('Method injection with attribute supply from definition (ClassA->resolveIt)', function () {
-    $container = container(null, 'classA_attribute')
+    $container = new ConfigurationContainer('classA_attribute')
         ->options()
         ->setOptions(true, true)
         ->definitions()
@@ -291,7 +292,7 @@ test('Method injection with attribute supply from definition (ClassA->resolveIt)
 // -------------------------------------------------------------------------
 
 test('Closure definitions for a custom service', function () {
-    $container = container(null, 'closure_test')
+    $container = new ConfigurationContainer('closure_test')
         ->definitions()
         ->bind('example.closure', function () {
             return new ClosureExample();
@@ -311,7 +312,7 @@ test('Closure definitions for a custom service', function () {
 // -------------------------------------------------------------------------
 
 test('Circular dependency: ServiceA <-> ServiceB should fail', function () {
-    $container = container(null, 'circular_test')
+    $container = new ConfigurationContainer('circular_test')
         ->options()
         ->setOptions(true, true)->end();
 
@@ -326,7 +327,7 @@ test('Circular dependency: ServiceA <-> ServiceB should fail', function () {
 // -------------------------------------------------------------------------
 
 test('Multiple constructor arguments with optional interface in MultiConstructorArgsClass', function () {
-    $container = container(null, 'multi_args')
+    $container = new ConfigurationContainer('multi_args')
         ->options()
         ->setOptions(true, true)
         ->definitions()

@@ -7,6 +7,7 @@ use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\DI\Support\FactoryDefinition;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\DI\Support\ServiceReference;
+use Infocyph\InterMix\Exceptions\ContainerException;
 
 final class AdvancedCompiledDependency {}
 
@@ -80,13 +81,13 @@ function removeAdvancedCompilationArtifact(string $path): void
 
 it('compiles registered public property injection directly', function () {
     $builder = ContainerBuilder::create(uniqid('advanced_property_'));
-    $builder->singleton(AdvancedRegisteredProperty::class);
-    $builder->registration()->registerProperty(
+    $builder->autowire(
         AdvancedRegisteredProperty::class,
-        ['name' => 'compiled'],
+        AdvancedRegisteredProperty::class,
+        properties: ['name' => 'compiled'],
     );
 
-    expect($builder->development()->get(AdvancedRegisteredProperty::class)->name)->toBe('compiled');
+    expect($builder->build()->get(AdvancedRegisteredProperty::class)->name)->toBe('compiled');
 
     $path = advancedCompilationArtifactPath();
     try {
@@ -102,9 +103,9 @@ it('compiles registered public property injection directly', function () {
 
 it('compiles deterministic property Inject attributes', function () {
     $builder = ContainerBuilder::create(uniqid('advanced_inject_'));
-    $builder->singleton(AdvancedCompiledDependency::class)
-        ->singleton(AdvancedInjectedProperty::class);
-    $builder->options()->setOptions(propertyAttributes: true);
+    $builder->autowire(AdvancedCompiledDependency::class, AdvancedCompiledDependency::class)
+        ->autowire(AdvancedInjectedProperty::class, AdvancedInjectedProperty::class);
+    $builder->enablePropertyAttributes();
 
     $path = advancedCompilationArtifactPath();
     try {
@@ -121,9 +122,9 @@ it('compiles deterministic property Inject attributes', function () {
 
 it('compiles constructor parameter attributes with the current development semantics', function () {
     $builder = ContainerBuilder::create(uniqid('advanced_constructor_attr_'));
-    $builder->singleton(AdvancedCompiledDependency::class)
-        ->singleton('advanced.dep', AdvancedCompiledDependency::class)
-        ->singleton(AdvancedConstructorAttribute::class);
+    $builder->autowire(AdvancedCompiledDependency::class, AdvancedCompiledDependency::class)
+        ->autowire('advanced.dep', AdvancedCompiledDependency::class)
+        ->autowire(AdvancedConstructorAttribute::class, AdvancedConstructorAttribute::class);
 
     $path = advancedCompilationArtifactPath();
     try {
@@ -143,8 +144,8 @@ it('compiles constructor parameter attributes with the current development seman
 
 it('compiles declarative constructor and static factories with service references', function () {
     $builder = ContainerBuilder::create(uniqid('advanced_factory_'));
-    $builder->singleton(AdvancedCompiledDependency::class)
-        ->bind(
+    $builder->autowire(AdvancedCompiledDependency::class, AdvancedCompiledDependency::class)
+        ->factory(
             'factory.construct',
             FactoryDefinition::construct(
                 AdvancedFactoryProduct::class,
@@ -152,7 +153,7 @@ it('compiles declarative constructor and static factories with service reference
             ),
             LifetimeEnum::Singleton,
         )
-        ->bind(
+        ->factory(
             'factory.static',
             FactoryDefinition::staticFactory(
                 AdvancedFactoryMaker::class,
@@ -184,10 +185,10 @@ it('compiles declarative constructor and static factories with service reference
 
 it('keeps reflection-only property writes as targeted compiled property islands', function () {
     $builder = ContainerBuilder::create(uniqid('advanced_protected_'));
-    $builder->singleton(AdvancedProtectedProperty::class);
-    $builder->registration()->registerProperty(
+    $builder->autowire(
         AdvancedProtectedProperty::class,
-        ['name' => 'compiled-reflection'],
+        AdvancedProtectedProperty::class,
+        properties: ['name' => 'compiled-reflection'],
     );
 
     $path = advancedCompilationArtifactPath();
@@ -204,28 +205,27 @@ it('keeps reflection-only property writes as targeted compiled property islands'
     }
 });
 
-it('deoptimizes before builder mutation and preserves compiled singleton and scope identity', function () {
-    $builder = ContainerBuilder::create(uniqid('advanced_deopt_'));
-    $builder->singleton(AdvancedCompiledDependency::class)
-        ->singleton(AdvancedDeoptRoot::class)
-        ->scoped(AdvancedDeoptScoped::class);
+it('keeps compiled singleton and scope identity after builder finalization', function () {
+    $builder = ContainerBuilder::create(uniqid('advanced_frozen_'));
+    $builder->autowire(AdvancedCompiledDependency::class, AdvancedCompiledDependency::class)
+        ->autowire(AdvancedDeoptRoot::class, AdvancedDeoptRoot::class)
+        ->autowire(AdvancedDeoptScoped::class, AdvancedDeoptScoped::class, lifetime: LifetimeEnum::Scoped);
 
     $path = advancedCompilationArtifactPath();
     try {
         $builder->compile($path);
         $runtime = $builder->production($path);
         $root = $runtime->get(AdvancedDeoptRoot::class);
-        $runtime->enterScope('request');
+        testEnterScope($runtime, 'request');
         $scoped = $runtime->get(AdvancedDeoptScoped::class);
 
-        $builder->value('late.value', 'available-after-deopt');
-
-        expect($runtime->get(AdvancedDeoptRoot::class))->toBe($root)
+        expect(fn() => $builder->value('late.value', 'blocked'))
+            ->toThrow(ContainerException::class, 'ContainerBuilder is finalized')
+            ->and($runtime->get(AdvancedDeoptRoot::class))->toBe($root)
             ->and($runtime->get(AdvancedCompiledDependency::class))->toBe($root->dependency)
-            ->and($runtime->get(AdvancedDeoptScoped::class))->toBe($scoped)
-            ->and($runtime->get('late.value'))->toBe('available-after-deopt');
+            ->and($runtime->get(AdvancedDeoptScoped::class))->toBe($scoped);
 
-        $runtime->leaveScope();
+        testLeaveScope($runtime);
     } finally {
         removeAdvancedCompilationArtifact($path);
     }

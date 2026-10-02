@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use Infocyph\InterMix\DI\Attribute\Inject;
-use Infocyph\InterMix\DI\Build\DefinitionGraph;
 use Infocyph\InterMix\DI\Build\StaticRuntimeGenerator;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\ContainerBuilder;
@@ -47,10 +46,11 @@ function removeStaticBatchArtifact(string $path): void
 }
 
 it('keeps lifecycle-hooked services compiled without affecting unhooked neighbors', function () {
-    $builder = ContainerBuilder::create(uniqid('static_batch_hooks_'));
+    $builder = ContainerBuilder::create(uniqid('static_batch_hooks_'))
+        ->releaseIdentity('intermix-test');
     $resolved = 0;
-    $builder->singleton('stable', StaticBatchStableService::class)
-        ->singleton('hooked', StaticBatchDynamicService::class)
+    $builder->autowire('stable', StaticBatchStableService::class)
+        ->autowire('hooked', StaticBatchDynamicService::class)
         ->onResolved('hooked', function () use (&$resolved): void {
             ++$resolved;
         });
@@ -74,10 +74,11 @@ it('keeps lifecycle-hooked services compiled without affecting unhooked neighbor
 });
 
 it('compiles deterministic property attributes when property attributes are enabled', function () {
-    $builder = ContainerBuilder::create(uniqid('static_batch_property_'));
-    $builder->singleton(StaticBatchStableService::class)
-        ->singleton('attributed', StaticBatchAttributedPropertyService::class);
-    $builder->options()->setOptions(propertyAttributes: true);
+    $builder = ContainerBuilder::create(uniqid('static_batch_property_'))
+        ->releaseIdentity('intermix-test');
+    $builder->autowire(StaticBatchStableService::class, StaticBatchStableService::class)
+        ->autowire('attributed', StaticBatchAttributedPropertyService::class);
+    $builder->enablePropertyAttributes();
 
     $path = staticBatchArtifactPath();
     try {
@@ -95,8 +96,9 @@ it('compiles deterministic property attributes when property attributes are enab
 });
 
 it('uses the compiled service for calls to known definition ids', function () {
-    $builder = ContainerBuilder::create(uniqid('static_batch_call_'));
-    $builder->singleton('callable', StaticBatchCallableService::class);
+    $builder = ContainerBuilder::create(uniqid('static_batch_call_'))
+        ->releaseIdentity('intermix-test');
+    $builder->autowire('callable', StaticBatchCallableService::class);
 
     $path = staticBatchArtifactPath();
     try {
@@ -104,25 +106,28 @@ it('uses the compiled service for calls to known definition ids', function () {
         $runtime = $builder->production($path);
         $service = $runtime->get('callable');
 
-        expect($runtime->call('callable'))->toBe($service)
-            ->and($runtime->call('callable', 'ping'))->toBe('pong');
+        expect($runtime->get('callable'))->toBe($service)
+            ->and($runtime->invoke([$service, 'ping']))->toBe('pong');
     } finally {
         removeStaticBatchArtifact($path);
     }
 });
 
-it('keeps direct factories and closure definitions as isolated dynamic services', function () {
-    $builder = ContainerBuilder::create(uniqid('static_batch_dynamic_defs_'));
-    $builder->singleton(StaticBatchStableService::class)
-        ->bindFactory(
+it('keeps explicit runtime factories as isolated dynamic services', function () {
+    $builder = ContainerBuilder::create(uniqid('static_batch_dynamic_defs_'))
+        ->releaseIdentity('intermix-test');
+    $builder->autowire(StaticBatchStableService::class, StaticBatchStableService::class)
+        ->factory(
             'factory',
-            static fn(Container $container): object => new StaticBatchDynamicConsumer(
-                $container->get(StaticBatchStableService::class),
+            static fn(Container $runtime): object => new StaticBatchDynamicConsumer(
+                $runtime->get(StaticBatchStableService::class),
             ),
         )
-        ->bind(
+        ->factory(
             'closure',
-            static fn(StaticBatchStableService $stable): object => new StaticBatchDynamicConsumer($stable),
+            static fn(Container $runtime): object => new StaticBatchDynamicConsumer(
+                $runtime->get(StaticBatchStableService::class),
+            ),
         );
 
     $path = staticBatchArtifactPath();
@@ -146,15 +151,16 @@ it('keeps direct factories and closure definitions as isolated dynamic services'
 });
 
 it('falls back for arbitrary autowireable classes without replacing compiled state', function () {
-    $builder = ContainerBuilder::create(uniqid('static_batch_arbitrary_'));
-    $builder->singleton(StaticBatchStableService::class);
+    $builder = ContainerBuilder::create(uniqid('static_batch_arbitrary_'))
+        ->releaseIdentity('intermix-test');
+    $builder->autowire(StaticBatchStableService::class, StaticBatchStableService::class);
 
     $path = staticBatchArtifactPath();
     try {
         $builder->compile($path);
         $runtime = $builder->production($path);
         $stable = $runtime->get(StaticBatchStableService::class);
-        $dynamic = $runtime->get(StaticBatchDynamicConsumer::class);
+        $dynamic = $runtime->make(StaticBatchDynamicConsumer::class);
 
         expect($dynamic)->toBeInstanceOf(StaticBatchDynamicConsumer::class)
             ->and($dynamic->stable)->toBe($stable)
@@ -165,13 +171,14 @@ it('falls back for arbitrary autowireable classes without replacing compiled sta
 });
 
 it('validates the generated runtime against its metadata sidecar before loading', function () {
-    $container = new Container(uniqid('static_batch_manifest_'));
-    $container->singleton('stable', StaticBatchStableService::class);
+    $builder = ContainerBuilder::create(uniqid('static_batch_manifest_'))
+        ->releaseIdentity('intermix-test')
+        ->autowire('stable', StaticBatchStableService::class);
 
     $path = staticBatchArtifactPath();
     try {
         $generator = new StaticRuntimeGenerator();
-        $generator->generate(DefinitionGraph::from($container->getRepository()), $path);
+        $generator->generate($builder->definitionGraph(), $path);
         file_put_contents($path, "\n", FILE_APPEND);
 
         expect(fn() => $generator->load($path))->toThrow(

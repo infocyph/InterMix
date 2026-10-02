@@ -25,7 +25,8 @@ final class StaticRuntimeRequirements
             $reasons[$id] = $reason;
         }
 
-        foreach ($plans as $id => $plan) {
+        foreach ($plans as $rawId => $plan) {
+            $id = (string) $rawId;
             foreach ($plan['properties'] as $property) {
                 if (($property['runtime'] ?? null) === 'attribute') {
                     $reasons[$id] = sprintf(

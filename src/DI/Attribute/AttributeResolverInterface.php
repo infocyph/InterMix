@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Attribute;
 
-use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\RuntimeContainerInterface;
 use Reflector;
 
 /**
@@ -21,6 +21,6 @@ interface AttributeResolverInterface
     public function resolve(
         object $attributeInstance,
         Reflector $target,
-        Container $container,
+        RuntimeContainerInterface $container,
     ): mixed;
 }

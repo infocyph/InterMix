@@ -26,14 +26,16 @@ final class StaticInvocationRenderer
         string $id,
         bool $resolvingHook = false,
         bool $resolvedHook = false,
+        bool $guardCaptive = true,
     ): string {
         if (!$resolvingHook && !$resolvedHook) {
-            return $this->renderPlainMethod($slot, $plan, $slots);
+            return $this->renderPlainMethod($slot, $plan, $slots, $id, $guardCaptive);
         }
 
         $source = "    private function s{$slot}(): mixed\n    {\n";
-        $source .= $this->seedGuard($slot, $plan['lifetime']);
+        $source .= $this->seedGuard($slot, $plan['lifetime'], $id, $guardCaptive);
         $source .= $this->cacheGuard($slot, $plan['lifetime']);
+        $source .= $this->scopeGuard($plan['lifetime'], $id);
         if ($resolvingHook) {
             $source .= '        $this->dispatchCompiledResolvingHooks(' . var_export($id, true) . ");\n\n";
         }
@@ -102,15 +104,21 @@ final class StaticInvocationRenderer
      * @param InvocationPlan $plan
      * @param array<string, int> $slots
      */
-    private function renderPlainMethod(int $slot, array $plan, array $slots): string
-    {
+    private function renderPlainMethod(
+        int $slot,
+        array $plan,
+        array $slots,
+        string $id,
+        bool $guardCaptive,
+    ): string {
         $source = "    private function s{$slot}(): mixed\n    {\n";
-        $source .= $this->seedGuard($slot, $plan['lifetime']);
+        $source .= $this->seedGuard($slot, $plan['lifetime'], $id, $guardCaptive);
 
         if ($plan['lifetime'] === LifetimeEnum::Scoped) {
             $source .= "        if (array_key_exists({$slot}, \$scope->resolved)) {\n";
             $source .= "            return \$scope->resolved[{$slot}];\n";
             $source .= "        }\n\n";
+            $source .= $this->scopeGuard($plan['lifetime'], $id);
             $source .= $this->statements($plan, $slots);
             $source .= "\n        return \$scope->resolved[{$slot}] = \$result;\n";
         } elseif ($plan['lifetime'] === LifetimeEnum::Singleton) {
@@ -127,9 +135,23 @@ final class StaticInvocationRenderer
         return $source . "    }\n\n";
     }
 
-    private function seedGuard(int $slot, LifetimeEnum $lifetime): string
+    private function scopeGuard(LifetimeEnum $lifetime, string $id): string
     {
-        return new StaticScopeAccessRenderer()->seedGuard($slot, $lifetime);
+        return new StaticScopeAccessRenderer()->constructionGuard($lifetime, $id);
+    }
+
+    private function seedGuard(
+        int $slot,
+        LifetimeEnum $lifetime,
+        string $id,
+        bool $guardCaptive,
+    ): string {
+        return new StaticScopeAccessRenderer()->seedGuard(
+            $slot,
+            $lifetime,
+            $id,
+            $guardCaptive,
+        );
     }
 
     /**

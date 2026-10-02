@@ -6,11 +6,10 @@ namespace Infocyph\InterMix\DI\Managers;
 
 use ArrayAccess;
 use Closure;
-use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\DI\Support\ServiceProviderInterface;
 use Infocyph\InterMix\Exceptions\ContainerException;
-use ReflectionClass;
 
 /**
  * Handles registering closures, classes, methods, and properties.
@@ -25,11 +24,11 @@ class RegistrationManager implements ArrayAccess
      * Initializes the registration manager with a repository and a container.
      *
      * @param Repository $repository The internal repository of definitions, resolved instances, etc.
-     * @param Container $container The container instance to which this manager is bound.
+     * @param ConfigurationContainer $container The container instance to which this manager is bound.
      */
     public function __construct(
         protected Repository $repository,
-        protected Container  $container,
+        protected ConfigurationContainer $container,
     ) {}
 
     /**
@@ -59,27 +58,11 @@ class RegistrationManager implements ArrayAccess
      */
     public function import(string|ServiceProviderInterface $provider): self
     {
-        if (is_string($provider)) {
-            if (!class_exists($provider)
-                || !is_a($provider, ServiceProviderInterface::class, true)
-            ) {
-                throw new ContainerException(
-                    'Service-provider must be an existing implementation of ServiceProviderInterface.',
-                );
-            }
-            $reflection = new ReflectionClass($provider);
-            $constructor = $reflection->getConstructor();
-            if (!$reflection->isInstantiable()
-                || ($constructor !== null && $constructor->getNumberOfRequiredParameters() > 0)
-            ) {
-                throw new ContainerException('Service providers must be instantiable with zero arguments.');
-            }
-            $provider = $reflection->newInstance();
-        }
+        unset($provider);
 
-        $provider->register($this->container);
-
-        return $this;
+        throw new ContainerException(
+            'Service providers must be imported through ContainerBuilder before runtime finalization.',
+        );
     }
 
     /**

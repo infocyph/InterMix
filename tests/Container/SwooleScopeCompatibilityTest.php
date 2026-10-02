@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\ContainerBuilder;
+use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\DI\Internal\ExecutionContext;
 
 final class SwooleCompatibilityScopedLeaf {}
@@ -101,8 +103,9 @@ it('shares a logical scope explicitly across a Swoole family child without chang
     }
 
     [$coroutineClass, $namespace] = $runtime;
-    $container = new Container(uniqid('swoole_scope_'));
-    $container->scoped('leaf', SwooleCompatibilityScopedLeaf::class);
+    $container = ContainerBuilder::create(uniqid('swoole_scope_'))
+        ->autowire('leaf', SwooleCompatibilityScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->build();
     $shared = null;
     $isolated = null;
 
@@ -115,7 +118,7 @@ it('shares a logical scope explicitly across a Swoole family child without chang
             /** @var callable(float): mixed $sleep */
             $sleep = [$coroutineClass, 'sleep'];
 
-            $container->enterScope('request');
+            testEnterScope($container, 'request');
             $parent = $container->get('leaf');
             $context = $container->captureScopeContext();
             $remaining = 2;
@@ -134,11 +137,11 @@ it('shares a logical scope explicitly across a Swoole family child without chang
 
             $created = $create(static function () use ($container, &$isolated, &$remaining): void {
                 try {
-                    $container->enterScope('independent');
+                    testEnterScope($container, 'independent');
                     try {
                         $isolated = $container->get('leaf');
                     } finally {
-                        $container->leaveScope();
+                        testLeaveScope($container);
                     }
                 } finally {
                     --$remaining;
@@ -153,7 +156,7 @@ it('shares a logical scope explicitly across a Swoole family child without chang
             expect($shared)->toBe($parent)
                 ->and($isolated)->not->toBe($parent);
 
-            $container->leaveScope();
+            testLeaveScope($container);
         },
     );
 });

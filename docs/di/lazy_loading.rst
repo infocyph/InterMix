@@ -1,101 +1,15 @@
 .. _di.lazy_loading:
 
 ================
-Lazy Loading
+Lazy loading
 ================
 
-Lazy loading delays service construction until the **first time** you access it.
-Instead of creating the object right away, InterMix stores a lightweight
-internal deferred entry.
-
-When enabled (default), this reduces **startup cost** for services that might
-never be used in a request or command.
-
-----------------
-How It Works ⚙️
-----------------
+Lazy class construction can be configured before finalization.
 
 .. code-block:: php
 
-   $c->definitions()->bind(
-       'expensive',
-       BigService::class
-   );
+   $builder->enableLazyLoading(true);
 
-With lazy loading **on**, the container stores an internal initializer
-for class/array-style definitions and resolves it when ``get()`` is first called.
+The setting belongs to the builder and is frozen with the graph. Runtime factory closures execute only when their definition is resolved according to its lifetime.
 
------------------------------------------
-When does InterMix create the instance?
------------------------------------------
-
-* On your first call to ``$c->get('expensive')``
-* If another service depends on it via autowiring or attribute
-* If another explicit warmup path resolves the definition
-
----------------
-Default Rules
----------------
-
-.. list-table::
-   :header-rows: 1
-   :widths: 40 60
-
-   * - Definition type
-     - Lazy by default?
-   * - Class / string
-     - Yes
-   * - Array definition
-     - Yes
-   * - User closure plus Singleton/Scoped
-     - Resolved on first ``get()``
-   * - User closure plus Transient
-     - No caching (runs each ``get()``)
-
----------------
-Why not all?
----------------
-
-User closures are not wrapped in an additional deferred object. They run when the
-service is resolved and their reuse depends on lifetime (singleton/scoped cache
-the resolved value; transient does not).
-
---------------------
-Enable or Disable 🔧
---------------------
-
-.. code-block:: php
-
-   $c->options()->enableLazyLoading(true);   // on (default)
-   $c->options()->enableLazyLoading(false);  // turn off
-
----------------------
-Debugging 🐞
----------------------
-
-To see lazy resolutions in action:
-
-.. code-block:: php
-
-   use Infocyph\InterMix\DI\Support\TraceLevelEnum;
-
-   $c->options()->enableDebugTracing(true, TraceLevelEnum::Verbose);
-
-Then inspect resolution paths for markers like ``[lazy-init]`` or ``[deferred]``.
-
----------------------
-Best Practices 💡
----------------------
-
-* Leave lazy loading **on** unless you're doing eager preloading
-* Use it with **scoped** services for maximum gain (e.g. per request objects)
-* Consider disabling during unit tests to catch misconfigurations early
-
-Compiling a v10 production artifact does not instantiate services. Generated
-singleton and scoped slots remain lazy until first resolution, while skipped
-definitions are resolved by lazy dynamic islands.
-
-See also:
-
-* :doc:`scopes` – lazy services are unique per scope if their lifetime is Scoped
-* :doc:`lifetimes` – for controlling instancing behavior
+Use explicit factories for runtime behavior and FactoryDefinition for deterministic compilation-safe construction.

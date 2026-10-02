@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Support;
 
-use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\RuntimeContainerInterface;
 use Infocyph\InterMix\Exceptions\ContainerException;
 
 final class TaggedPipeline
@@ -12,7 +12,7 @@ final class TaggedPipeline
     private mixed $passable = null;
 
     public function __construct(
-        private readonly Container $container,
+        private readonly RuntimeContainerInterface $container,
         private readonly string $tag,
     ) {}
 
@@ -29,8 +29,7 @@ final class TaggedPipeline
     public function thenReturn(): mixed
     {
         $current = $this->passable;
-        foreach ($this->container->findByTagLazy($this->tag) as $id => $resolver) {
-            $service = $resolver();
+        foreach ($this->container->tagged($this->tag) as $id => $service) {
 
             if (is_callable($service)) {
                 $current = $service($current);

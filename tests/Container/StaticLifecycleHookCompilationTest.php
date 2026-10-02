@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Infocyph\InterMix\DI\Build\StaticRuntimeGenerator;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\ContainerBuilder;
+use Infocyph\InterMix\DI\Support\FactoryDefinition;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
 
@@ -12,7 +13,7 @@ final class StaticHookCompiledService {}
 
 final class StaticHookInvocationService
 {
-    public function execute(): string
+    public static function execute(): string
     {
         return 'invoked';
     }
@@ -34,8 +35,9 @@ function removeStaticLifecycleHookArtifact(string $path): void
 
 it('keeps hooked singleton services compiled and dispatches hooks only on cache miss', function () {
     $events = [];
-    $builder = ContainerBuilder::create(uniqid('static_hook_singleton_'));
-    $builder->singleton('service', StaticHookCompiledService::class);
+    $builder = ContainerBuilder::create(uniqid('static_hook_singleton_'))
+        ->releaseIdentity('intermix-test');
+    $builder->autowire('service', StaticHookCompiledService::class);
     $builder->onResolving('service', function (string $id) use (&$events): void {
         $events[] = "resolving:$id";
     });
@@ -62,10 +64,10 @@ it('keeps hooked singleton services compiled and dispatches hooks only on cache 
 
 it('captures hooks registered through a retained development container', function () {
     $events = [];
-    $builder = ContainerBuilder::create(uniqid('static_hook_development_'));
-    $development = $builder->development();
-    $builder->singleton('service', StaticHookCompiledService::class);
-    $development->onResolved('service', function (string $id) use (&$events): void {
+    $builder = ContainerBuilder::create(uniqid('static_hook_development_'))
+        ->releaseIdentity('intermix-test');
+    $builder->autowire('service', StaticHookCompiledService::class);
+    $builder->onResolved('service', function (string $id) use (&$events): void {
         $events[] = $id;
     });
     $path = staticLifecycleHookArtifactPath();
@@ -83,8 +85,9 @@ it('captures hooks registered through a retained development container', functio
 
 it('dispatches compiled transient value hooks for every resolution', function () {
     $events = [];
-    $builder = ContainerBuilder::create(uniqid('static_hook_value_'));
-    $builder->bind('answer', 42, LifetimeEnum::Transient);
+    $builder = ContainerBuilder::create(uniqid('static_hook_value_'))
+        ->releaseIdentity('intermix-test');
+    $builder->factory('answer', static fn(): int => 42, LifetimeEnum::Transient);
     $builder->onResolving('answer', function (string $id) use (&$events): void {
         $events[] = "resolving:$id";
     });
@@ -99,7 +102,7 @@ it('dispatches compiled transient value hooks for every resolution', function ()
 
         expect($runtime->get('answer'))->toBe(42)
             ->and($runtime->get('answer'))->toBe(42)
-            ->and($report['compiled'])->toContain('answer')
+            ->and($report['compiled'])->not->toContain('answer')
             ->and($events)->toBe([
                 'resolving:answer',
                 'resolved:answer:42',
@@ -114,14 +117,14 @@ it('dispatches compiled transient value hooks for every resolution', function ()
 it('preserves scoped hook and scope-leave semantics in production', function () {
     $resolved = 0;
     $left = [];
-    $builder = ContainerBuilder::create(uniqid('static_hook_scope_'));
-    $development = $builder->development();
-    $builder->scoped('service', StaticHookCompiledService::class);
+    $builder = ContainerBuilder::create(uniqid('static_hook_scope_'))
+        ->releaseIdentity('intermix-test');
+    $builder->autowire('service', StaticHookCompiledService::class, lifetime: LifetimeEnum::Scoped);
     $builder->onResolved('service', function () use (&$resolved): void {
         ++$resolved;
     });
-    $builder->onScopeLeave('request', function (string $scope, Container $container) use (&$left, $development): void {
-        $left[] = [$scope, $container === $development];
+    $builder->onScopeLeave('request', function (string $scope, Container $container) use (&$left): void {
+        $left[] = [$scope, $container instanceof Container];
     });
     $path = staticLifecycleHookArtifactPath();
 
@@ -129,14 +132,14 @@ it('preserves scoped hook and scope-leave semantics in production', function () 
         $report = $builder->compile($path);
         $runtime = $builder->productionPrevalidated($path, $report['digest']);
 
-        $runtime->enterScope('request');
+        testEnterScope($runtime, 'request');
         $first = $runtime->get('service');
         expect($runtime->get('service'))->toBe($first);
-        $runtime->leaveScope();
+        testLeaveScope($runtime);
 
-        $runtime->enterScope('request');
+        testEnterScope($runtime, 'request');
         $second = $runtime->get('service');
-        $runtime->leaveScope();
+        testLeaveScope($runtime);
 
         expect($report['compiled'])->toContain('service')
             ->and($second)->not->toBe($first)
@@ -152,8 +155,12 @@ it('preserves scoped hook and scope-leave semantics in production', function () 
 
 it('dispatches lifecycle hooks around compiled invocation results', function () {
     $events = [];
-    $builder = ContainerBuilder::create(uniqid('static_hook_invocation_'));
-    $builder->bind('invocation', [StaticHookInvocationService::class, 'execute']);
+    $builder = ContainerBuilder::create(uniqid('static_hook_invocation_'))
+        ->releaseIdentity('intermix-test');
+    $builder->factory(
+        'invocation',
+        FactoryDefinition::staticFactory(StaticHookInvocationService::class, 'execute'),
+    );
     $builder->onResolving('invocation', function (string $id) use (&$events): void {
         $events[] = "resolving:$id";
     });
@@ -176,30 +183,29 @@ it('dispatches lifecycle hooks around compiled invocation results', function () 
 });
 
 it('fails closed when a hooked artifact is loaded without its runtime hook graph', function () {
-    $builder = ContainerBuilder::create(uniqid('static_hook_missing_runtime_'));
-    $builder->singleton('service', StaticHookCompiledService::class);
+    $builder = ContainerBuilder::create(uniqid('static_hook_missing_runtime_'))
+        ->releaseIdentity('intermix-test');
+    $builder->autowire('service', StaticHookCompiledService::class);
     $builder->onResolved('service', static function (): void {});
     $builder->onScopeLeave('request', static function (): void {});
     $path = staticLifecycleHookArtifactPath();
 
     try {
         $report = $builder->compile($path);
-        $runtime = new StaticRuntimeGenerator()->loadPrevalidated($path, $report['digest']);
 
-        expect(fn() => $runtime->get('service'))
-            ->toThrow(ContainerException::class, 'runtime lifecycle-hook graph');
-
-        $runtime->enterScope('request');
-        expect(fn() => $runtime->leaveScope())
-            ->toThrow(ContainerException::class, 'runtime scope-leave hook graph');
+        expect(fn() => new StaticRuntimeGenerator()->loadPrevalidated(
+            $path,
+            $report['digest'],
+        ))->toThrow(ContainerException::class, 'frozen fallback graph');
     } finally {
         removeStaticLifecycleHookArtifact($path);
     }
 });
 
 it('emits no lifecycle-hook calls for an artifact without hooks', function () {
-    $builder = ContainerBuilder::create(uniqid('static_hook_free_'));
-    $builder->singleton('service', StaticHookCompiledService::class);
+    $builder = ContainerBuilder::create(uniqid('static_hook_free_'))
+        ->releaseIdentity('intermix-test');
+    $builder->autowire('service', StaticHookCompiledService::class);
     $path = staticLifecycleHookArtifactPath();
 
     try {

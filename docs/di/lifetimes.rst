@@ -1,79 +1,33 @@
 .. _di.lifetimes:
 
-===================
-Service Lifetimes
-===================
+================================================
+Service lifetimes
+================================================
 
-InterMix supports three configurable **lifetimes** via
-:php:class:`Infocyph\\InterMix\\DI\\Support\\LifetimeEnum`.
-
-This allows fine-grained control over how instances are reused or regenerated.
-
-.. list-table::
-   :header-rows: 1
-   :widths: 25 75
-
-   * - Lifetime
-     - Description
-   * - Singleton
-     - One shared instance per container alias
-   * - Transient
-     - A new instance every time
-   * - Scoped
-     - One instance per scope ID
-
----------------
-Basic Example
----------------
+InterMix supports Singleton, Scoped, and Transient lifetimes.
 
 .. code-block:: php
 
    use Infocyph\InterMix\DI\Support\LifetimeEnum;
 
-   $def->bind('uniq', fn () => new stdClass, LifetimeEnum::Singleton);
-   $def->bind('tmp',  fn () => new stdClass, LifetimeEnum::Transient);
-   $def->bind('req',  fn () => new stdClass, LifetimeEnum::Scoped);
+   $builder
+       ->autowire(Cache::class, Cache::class, lifetime: LifetimeEnum::Singleton)
+       ->autowire(RequestState::class, RequestState::class, lifetime: LifetimeEnum::Scoped)
+       ->autowire(Job::class, Job::class, lifetime: LifetimeEnum::Transient);
 
----------------
-Scope Switching
----------------
+Singleton
+---------
 
-Scoped services are tied to an identifier. You can switch scopes like this:
+One instance per runtime.
 
-.. code-block:: php
+Scoped
+------
 
-   $c->enterScope('request-42');
-   // resolve scoped services
-   $c->leaveScope();
+One instance per active logical scope. Scoped entries cannot be resolved from the root scope. A singleton may not capture a scoped dependency.
 
-This creates a fresh "bucket" for services marked as ``Scoped``, so each
-scope can have independent instances without affecting others.
+Transient
+---------
 
-------------------------
-When to Use What?
-------------------------
+A fresh instance is created for each resolution.
 
-✅ **Singleton** – default. Use for shared services (e.g., config, logger).
-
-✅ **Transient** – stateless classes or builders where isolation is preferred.
-
-✅ **Scoped** – per-request or per-job lifetimes (useful in web or queue contexts).
-
----------------------
-Best Practices 💡
----------------------
-
-* Don’t overuse ``Transient`` unless necessary — caching saves performance.
-* Use ``Scoped`` with request-specific data or tenant-aware resolution.
-* Each container alias (``Container::instance('xyz')``) has its own Singleton set.
-* Generated production slots preserve the same singleton/scoped/transient
-  semantics across compiled-to-dynamic dependency edges and safe deoptimization.
-
------------
-Summary 📚
------------
-
-+ **Singleton** – one per container instance
-+ **Transient** – fresh each time
-+ **Scoped** – one per logical scope
-+ Managed via ``LifetimeEnum::*`` constants on any ``bind()``
+Separate runtimes created from the same finalized builder have separate lifetime stores.

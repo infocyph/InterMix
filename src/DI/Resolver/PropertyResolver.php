@@ -29,11 +29,12 @@ class PropertyResolver
 
     /**
      * @param ReflectionClass<object> $class
+     * @param array<string, mixed> $overrides
      * @throws ContainerException|ReflectionException|InvalidArgumentException
      */
-    public function resolve(ReflectionClass $class, object $instance): void
+    public function resolve(ReflectionClass $class, object $instance, array $overrides = []): void
     {
-        if (!$this->hasPropertyWork($class)) {
+        if ($overrides === [] && !$this->hasPropertyWork($class)) {
             return;
         }
 
@@ -45,6 +46,12 @@ class PropertyResolver
             $registered = $registeredByClass[$declaring]
                 ??= $this->getRegisteredProperties($declaring);
             $name = $property->getName();
+
+            if (array_key_exists($name, $overrides)) {
+                $this->setPropertyValue($property, $instance, $overrides[$name]);
+
+                continue;
+            }
 
             if (array_key_exists($name, $registered)) {
                 $this->setPropertyValue($property, $instance, $registered[$name]);

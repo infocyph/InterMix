@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\ContainerBuilder;
+use Infocyph\InterMix\DI\Internal\ContainerAccess;
 use Infocyph\InterMix\DI\ProductionContainer;
+use Infocyph\InterMix\DI\Support\LifetimeEnum;
 
 final class StructuredStressScopedLeaf {}
 
@@ -31,7 +33,7 @@ function exercisePersistentAttachedScopeChurn(object $container, int $iterations
 
     for ($iteration = 0; $iteration < $iterations; ++$iteration) {
         $seed = 'request-' . $iteration;
-        $container->enterScope('request', ['request.seed' => $seed]);
+        testEnterScope($container, 'request', ['request.seed' => $seed]);
         $parent = $container->get('leaf');
 
         if ($previous !== null) {
@@ -44,12 +46,12 @@ function exercisePersistentAttachedScopeChurn(object $container, int $iterations
             static function (Container|ProductionContainer $active) use ($seed): array {
                 $shared = $active->get('leaf');
                 $resolvedSeed = $active->get('request.seed');
-                $active->enterScope('child');
+                testEnterScope($active, 'child');
 
                 try {
                     $child = $active->get('leaf');
                 } finally {
-                    $active->leaveScope();
+                    testLeaveScope($active);
                 }
 
                 return [$shared, $child, $resolvedSeed];
@@ -62,7 +64,7 @@ function exercisePersistentAttachedScopeChurn(object $container, int $iterations
             ->and($child)->not->toBe($parent)
             ->and($resolvedSeed)->toBe($seed);
 
-        $container->leaveScope();
+        testLeaveScope($container);
         $container->resetCurrentExecutionScope();
         $previous = $parent;
     }
@@ -71,7 +73,7 @@ function exercisePersistentAttachedScopeChurn(object $container, int $iterations
 function exerciseMeasuredStructuredScopeChurn(Container $container, int $iterations): void
 {
     for ($iteration = 0; $iteration < $iterations; ++$iteration) {
-        $container->enterScope('request', ['request.seed' => $iteration]);
+        testEnterScope($container, 'request', ['request.seed' => $iteration]);
         $context = $container->captureScopeContext();
         $fiber = new Fiber(static fn(): object => $container->withinScopeContext(
             $context,
@@ -83,7 +85,7 @@ function exerciseMeasuredStructuredScopeChurn(Container $container, int $iterati
             throw new RuntimeException('Persistent churn did not resolve the expected scoped service.');
         }
 
-        $container->leaveScope();
+        testLeaveScope($container);
         $container->resetCurrentExecutionScope();
         unset($resolved, $fiber, $context);
     }
@@ -91,69 +93,59 @@ function exerciseMeasuredStructuredScopeChurn(Container $container, int $iterati
 
 function structuredStressExecutionStore(Container $container): mixed
 {
-    $repository = $container->getRepository();
+    $repository = ContainerAccess::repository($container);
     $property = new ReflectionProperty($repository, 'executionScopes');
 
     return $property->getValue($repository);
 }
 
-/** @return array<string, Container> */
-function structuredStressContainerAliases(): array
-{
-    $property = new ReflectionProperty(Container::class, 'instances');
-    $aliases = $property->getValue();
-    if (!is_array($aliases)) {
-        throw new RuntimeException('Container alias registry must be an array.');
-    }
-
-    return $aliases;
-}
-
 it('reuses one dynamic container across persistent attached request churn without leaking scope state', function (): void {
-    $container = new Container(uniqid('structured_stress_dynamic_'));
-    $container->scoped('leaf', StructuredStressScopedLeaf::class);
+    $container = ContainerBuilder::create(uniqid('structured_stress_dynamic_'))
+        ->input('request.seed')
+        ->autowire('leaf', StructuredStressScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->build();
 
     exercisePersistentAttachedScopeChurn($container, 64);
 
-    $container->enterScope('request', ['request.seed' => 'final']);
+    testEnterScope($container, 'request', ['request.seed' => 'final']);
     expect($container->get('request.seed'))->toBe('final');
-    $container->leaveScope();
+    testLeaveScope($container);
 });
 
-it('reuses compiled and deoptimized runtimes across persistent attached request churn', function (): void {
+it('reuses one frozen production runtime across persistent attached request churn', function (): void {
     $builder = ContainerBuilder::create(uniqid('structured_stress_production_'));
-    $builder->scoped('leaf', StructuredStressScopedLeaf::class);
+    $builder->input('request.seed')
+        ->autowire('leaf', StructuredStressScopedLeaf::class, lifetime: LifetimeEnum::Scoped);
 
     $path = structuredStressArtifactPath();
     try {
         $builder->compile($path);
         $runtime = $builder->production($path);
 
-        exercisePersistentAttachedScopeChurn($runtime, 32);
-
-        $runtime->deoptimize();
-        exercisePersistentAttachedScopeChurn($runtime, 32);
+        exercisePersistentAttachedScopeChurn($runtime, 64);
     } finally {
         removeStructuredStressArtifact($path);
     }
 });
 
 it('cleans nested attached frames after repeated child exceptions', function (): void {
-    $container = new Container(uniqid('structured_stress_exception_'));
-    $container->scoped('leaf', StructuredStressScopedLeaf::class);
     $nestedLeaves = 0;
-    $container->onScopeLeave('nested', static function () use (&$nestedLeaves): void {
-        ++$nestedLeaves;
-    });
+    $container = ContainerBuilder::create(uniqid('structured_stress_exception_'))
+        ->input('request.seed')
+        ->autowire('leaf', StructuredStressScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->onScopeLeave('nested', static function () use (&$nestedLeaves): void {
+            ++$nestedLeaves;
+        })
+        ->build();
 
     for ($iteration = 0; $iteration < 32; ++$iteration) {
-        $container->enterScope('request');
+        testEnterScope($container, 'request');
         $parent = $container->get('leaf');
         $context = $container->captureScopeContext();
         $fiber = new Fiber(static fn() => $container->withinScopeContext(
             $context,
             static function (Container $active): never {
-                $active->enterScope('nested');
+                testEnterScope($active, 'nested');
                 $active->get('leaf');
                 throw new RuntimeException('expected-child-failure');
             },
@@ -162,15 +154,17 @@ it('cleans nested attached frames after repeated child exceptions', function ():
         expect(fn() => $fiber->start())->toThrow(RuntimeException::class, 'expected-child-failure')
             ->and($container->get('leaf'))->toBe($parent);
 
-        $container->leaveScope();
+        testLeaveScope($container);
     }
 
     expect($nestedLeaves)->toBe(32);
 });
 
 it('stabilizes memory and releases carrier and logical scope bookkeeping after persistent churn', function (): void {
-    $container = new Container(uniqid('structured_stress_memory_'));
-    $container->scoped('leaf', StructuredStressScopedLeaf::class);
+    $container = ContainerBuilder::create(uniqid('structured_stress_memory_'))
+        ->input('request.seed')
+        ->autowire('leaf', StructuredStressScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->build();
 
     exerciseMeasuredStructuredScopeChurn($container, 64);
     gc_collect_cycles();
@@ -189,13 +183,13 @@ it('stabilizes memory and releases carrier and logical scope bookkeeping after p
     expect($growth <= 1024 * 1024)->toBeTrue()
         ->and($spread <= 1024 * 1024)->toBeTrue();
 
-    $container->enterScope('request');
+    testEnterScope($container, 'request');
     $context = $container->captureScopeContext();
     $scopeProperty = new ReflectionProperty($context, 'scope');
     $logicalScope = $scopeProperty->getValue($context);
     $contextReference = WeakReference::create($context);
     $scopeReference = WeakReference::create($logicalScope);
-    $container->leaveScope();
+    testLeaveScope($container);
     unset($logicalScope, $context);
     gc_collect_cycles();
 
@@ -204,25 +198,16 @@ it('stabilizes memory and releases carrier and logical scope bookkeeping after p
         ->and(structuredStressExecutionStore($container))->toBeNull();
 });
 
-it('keeps the application container alias registry cardinality stable across framework-style request reuse', function (): void {
-    $before = structuredStressContainerAliases();
-    $alias = '__structured_stress_application_' . bin2hex(random_bytes(8));
-    $container = Container::instance($alias);
+it('does not retain a process-global container alias registry', function (): void {
+    $reflection = new ReflectionClass(Container::class);
+    $first = ContainerBuilder::create(uniqid('structured_stress_owner_'))
+        ->value('identity', new stdClass())
+        ->build();
+    $second = ContainerBuilder::create(uniqid('structured_stress_owner_'))
+        ->value('identity', new stdClass())
+        ->build();
 
-    try {
-        for ($iteration = 0; $iteration < 256; ++$iteration) {
-            expect(Container::instance($alias))->toBe($container);
-            $container->withinScope('request', static fn(): bool => true);
-        }
-
-        $during = structuredStressContainerAliases();
-        expect(count($during))->toBe(count($before) + 1)
-            ->and($during[$alias] ?? null)->toBe($container);
-    } finally {
-        $container->unset();
-    }
-
-    $after = structuredStressContainerAliases();
-    expect(count($after))->toBe(count($before))
-        ->and(array_key_exists($alias, $after))->toBeFalse();
+    expect($reflection->hasProperty('instances'))->toBeFalse()
+        ->and($first)->not->toBe($second)
+        ->and($first->get('identity'))->not->toBe($second->get('identity'));
 });

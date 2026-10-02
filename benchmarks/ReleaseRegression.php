@@ -8,6 +8,7 @@ use Fiber;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\DI\ProductionContainer;
+use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use RuntimeException;
 
 final class ReleaseRegressionLeaf {}
@@ -147,14 +148,24 @@ final class ReleaseRegression
 
         try {
             $builder = ContainerBuilder::create('__release_regression_' . bin2hex(random_bytes(4)));
-            $builder->scoped('leaf', ReleaseRegressionLeaf::class);
+            if (method_exists($builder, 'autowire')) {
+                $builder->autowire('leaf', ReleaseRegressionLeaf::class, lifetime: LifetimeEnum::Scoped);
+            } else {
+                $builder->scoped('leaf', ReleaseRegressionLeaf::class);
+            }
             $builder->compile($artifact);
             $production = $builder->production($artifact);
-            $production->enterScope('request');
-            $production->get('leaf');
 
-            $dynamic = new Container('__release_regression_fiber_' . bin2hex(random_bytes(4)));
-            $dynamic->scoped('leaf', ReleaseRegressionLeaf::class);
+            if (method_exists($builder, 'build')) {
+                $dynamic = ContainerBuilder::create(
+                    '__release_regression_fiber_' . bin2hex(random_bytes(4)),
+                )
+                    ->autowire('leaf', ReleaseRegressionLeaf::class, lifetime: LifetimeEnum::Scoped)
+                    ->build();
+            } else {
+                $dynamic = new Container('__release_regression_fiber_' . bin2hex(random_bytes(4)));
+                $dynamic->scoped('leaf', ReleaseRegressionLeaf::class);
+            }
 
             self::warmSequential($production);
             self::warmFiber($dynamic);
@@ -180,15 +191,12 @@ final class ReleaseRegression
         for ($sample = 0; $sample < self::SAMPLES; ++$sample) {
             $started = hrtime(true);
             for ($iteration = 0; $iteration < self::FIBER_ITERATIONS; ++$iteration) {
-                $fiber = new Fiber(static function () use ($container): object {
-                    $container->enterScope('request');
-
-                    try {
-                        return $container->get('leaf');
-                    } finally {
-                        $container->leaveScope();
-                    }
-                });
+                $fiber = new Fiber(
+                    static fn(): object => $container->withinScope(
+                        'request',
+                        static fn(Container $active): object => $active->get('leaf'),
+                    ),
+                );
                 $fiber->start();
                 $sink = $fiber->getReturn();
             }
@@ -203,20 +211,27 @@ final class ReleaseRegression
 
     private static function measureSequential(ProductionContainer $container): float
     {
-        $samples = [];
-        $sink = null;
-        for ($sample = 0; $sample < self::SAMPLES; ++$sample) {
-            $started = hrtime(true);
-            for ($iteration = 0; $iteration < self::SEQUENTIAL_ITERATIONS; ++$iteration) {
-                $sink = $container->get('leaf');
-            }
-            $samples[] = (hrtime(true) - $started) / self::SEQUENTIAL_ITERATIONS;
-        }
-        if (!$sink instanceof ReleaseRegressionLeaf) {
-            throw new RuntimeException('Sequential benchmark did not resolve the expected scoped service.');
-        }
+        return $container->withinScope(
+            'request',
+            static function (ProductionContainer $active): float {
+                $samples = [];
+                $sink = null;
+                for ($sample = 0; $sample < self::SAMPLES; ++$sample) {
+                    $started = hrtime(true);
+                    for ($iteration = 0; $iteration < self::SEQUENTIAL_ITERATIONS; ++$iteration) {
+                        $sink = $active->get('leaf');
+                    }
+                    $samples[] = (hrtime(true) - $started) / self::SEQUENTIAL_ITERATIONS;
+                }
+                if (!$sink instanceof ReleaseRegressionLeaf) {
+                    throw new RuntimeException(
+                        'Sequential benchmark did not resolve the expected scoped service.',
+                    );
+                }
 
-        return self::median($samples);
+                return self::median($samples);
+            },
+        );
     }
 
     /** @param list<float> $values */
@@ -276,24 +291,26 @@ final class ReleaseRegression
     private static function warmFiber(Container $container): void
     {
         for ($iteration = 0; $iteration < 250; ++$iteration) {
-            $fiber = new Fiber(static function () use ($container): void {
-                $container->enterScope('request');
-
-                try {
-                    $container->get('leaf');
-                } finally {
-                    $container->leaveScope();
-                }
-            });
+            $fiber = new Fiber(
+                static fn(): mixed => $container->withinScope(
+                    'request',
+                    static fn(Container $active): mixed => $active->get('leaf'),
+                ),
+            );
             $fiber->start();
         }
     }
 
     private static function warmSequential(ProductionContainer $container): void
     {
-        for ($iteration = 0; $iteration < 50000; ++$iteration) {
-            $container->get('leaf');
-        }
+        $container->withinScope(
+            'request',
+            static function (ProductionContainer $active): void {
+                for ($iteration = 0; $iteration < 50000; ++$iteration) {
+                    $active->get('leaf');
+                }
+            },
+        );
     }
 }
 

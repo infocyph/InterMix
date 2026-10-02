@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 use Infocyph\CacheLayer\Cache\Cache;
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\ContainerBuilder;
+use Infocyph\InterMix\DI\Internal\ContainerAccess;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\CacheItemInterface;
@@ -159,7 +162,7 @@ final class IntegrationCachePool implements CacheItemPoolInterface
 
 function cacheLayerContainer(string $alias): Container
 {
-    return new Container('cachelayer.' . $alias);
+    return new ConfigurationContainer('cachelayer.' . $alias);
 }
 
 it('persists only safe singleton values through CacheLayer memory', function () {
@@ -408,7 +411,7 @@ it('reports fail-open warmup failures and surfaces strict failures', function ()
 it('keeps cache configuration idempotent and cache keys opaque', function () {
     $pool = new IntegrationCachePool();
     $replacement = new IntegrationCachePool();
-    $container = new Container('private.tenant.path');
+    $container = new ConfigurationContainer('private.tenant.path');
     $container->setEnvironment('production-secret');
     $container->bind('Sensitive\\Service\\Name', static fn(): string => 'resolved');
     $container->definitions()->enableDefinitionCache($pool, 'release-secret');
@@ -429,4 +432,189 @@ it('keeps cache configuration idempotent and cache keys opaque', function () {
 
     $container->definitions()->enableDefinitionCache($replacement, 'next-release', false);
     expect($repository->makeDefinitionCacheKey('Sensitive\\Service\\Name'))->not->toBe($key);
+});
+
+
+it('uses CacheLayer 4 memory with explicit 11.0 cache identity and eligibility', function (): void {
+    $cache = Cache::memory('intermix.p5.memory.' . bin2hex(random_bytes(4)));
+    $runs = 0;
+
+    $first = ContainerBuilder::create(uniqid('p5_memory_first_', true))
+        ->definitionCache($cache, 'application-a', 'release-1')
+        ->factory('value', static function () use (&$runs): array {
+            ++$runs;
+
+            return ['cached' => true];
+        })
+        ->cacheDefinition('value')
+        ->build();
+
+    expect($first->get('value'))->toBe(['cached' => true])
+        ->and($runs)->toBe(1);
+
+    $second = ContainerBuilder::create(uniqid('p5_memory_second_', true))
+        ->definitionCache($cache, 'application-a', 'release-1')
+        ->factory('value', static function () use (&$runs): array {
+            ++$runs;
+
+            return ['cached' => false];
+        })
+        ->cacheDefinition('value')
+        ->build();
+
+    expect($second->get('value'))->toBe(['cached' => true])
+        ->and($runs)->toBe(1)
+        ->and(ContainerAccess::repository($second)->makeDefinitionCacheKey('value'))
+        ->toStartWith('imx11.');
+});
+
+it('treats cached null as a real CacheLayer 4 hit', function (): void {
+    $cache = Cache::memory('intermix.p5.null.' . bin2hex(random_bytes(4)));
+
+    $first = ContainerBuilder::create(uniqid('p5_null_first_', true))
+        ->definitionCache($cache, 'application-null', 'release-1')
+        ->factory('nullable', static fn(): null => null)
+        ->cacheDefinition('nullable')
+        ->build();
+
+    expect($first->get('nullable'))->toBeNull();
+
+    $second = ContainerBuilder::create(uniqid('p5_null_second_', true))
+        ->definitionCache($cache, 'application-null', 'release-1')
+        ->factory('nullable', static fn(): string => 'miss')
+        ->cacheDefinition('nullable')
+        ->build();
+
+    expect($second->get('nullable'))->toBeNull();
+});
+
+it('separates CacheLayer 4 values by explicit generation', function (): void {
+    $cache = Cache::memory('intermix.p5.generation.' . bin2hex(random_bytes(4)));
+
+    $first = ContainerBuilder::create(uniqid('p5_generation_first_', true))
+        ->definitionCache($cache, 'application-generation', 'release-1')
+        ->factory('value', static fn(): string => 'first')
+        ->cacheDefinition('value')
+        ->build();
+    expect($first->get('value'))->toBe('first');
+
+    $second = ContainerBuilder::create(uniqid('p5_generation_second_', true))
+        ->definitionCache($cache, 'application-generation', 'release-2')
+        ->factory('value', static fn(): string => 'second')
+        ->cacheDefinition('value')
+        ->build();
+
+    expect($second->get('value'))->toBe('second');
+});
+
+it('rejects malformed CacheLayer 4 hits and resolves a safe value instead', function (): void {
+    $cache = Cache::memory('intermix.p5.malformed.' . bin2hex(random_bytes(4)));
+    $builder = ContainerBuilder::create(uniqid('p5_malformed_', true))
+        ->definitionCache($cache, 'application-malformed', 'release-1')
+        ->factory('value', static fn(): int => 42)
+        ->cacheDefinition('value');
+
+    $runtime = $builder->build();
+    $key = ContainerAccess::repository($runtime)->makeDefinitionCacheKey('value');
+    $item = $cache->getItem($key);
+    $item->set(new stdClass());
+    $cache->save($item);
+
+    expect($runtime->get('value'))->toBe(42);
+});
+
+it('warms CacheLayer 4 through PSR-6 deferred writes and commit', function (): void {
+    $cache = Cache::memory('intermix.p5.warm.' . bin2hex(random_bytes(4)));
+    $builder = ContainerBuilder::create(uniqid('p5_warm_', true))
+        ->definitionCache($cache, 'application-warm', 'release-1')
+        ->factory('value', static fn(): array => ['warm' => true])
+        ->cacheDefinition('value');
+
+    $report = $builder->warmDefinitionCache();
+
+    expect($report)->toMatchArray([
+        'hits' => 0,
+        'written' => 1,
+        'failed' => 0,
+    ])
+        ->and($builder->build()->get('value'))->toBe(['warm' => true]);
+});
+
+it('uses CacheLayer 4 tiered storage through the PSR-6 boundary', function (): void {
+    $cache = Cache::tiered([
+        ['driver' => 'memory', 'namespace' => 'intermix.p5.tier.l1.' . bin2hex(random_bytes(3))],
+        ['driver' => 'memory', 'namespace' => 'intermix.p5.tier.l2.' . bin2hex(random_bytes(3))],
+    ]);
+
+    $first = ContainerBuilder::create(uniqid('p5_tier_first_', true))
+        ->definitionCache($cache, 'application-tier', 'release-1')
+        ->factory('value', static fn(): string => 'tiered')
+        ->cacheDefinition('value')
+        ->build();
+    expect($first->get('value'))->toBe('tiered');
+
+    $second = ContainerBuilder::create(uniqid('p5_tier_second_', true))
+        ->definitionCache($cache, 'application-tier', 'release-1')
+        ->factory('value', static fn(): string => 'miss')
+        ->cacheDefinition('value')
+        ->build();
+
+    expect($second->get('value'))->toBe('tiered');
+});
+
+it('uses CacheLayer 4 SQLite through the explicit builder cache contract', function (): void {
+    if (!extension_loaded('pdo_sqlite')) {
+        expect(extension_loaded('pdo_sqlite'))->toBeFalse();
+
+        return;
+    }
+
+    $file = sys_get_temp_dir() . '/intermix-p5-' . bin2hex(random_bytes(8)) . '.sqlite';
+    try {
+        $first = ContainerBuilder::create(uniqid('p5_sqlite_first_', true))
+            ->definitionCache(
+                Cache::sqlite('intermix.p5.sqlite', $file),
+                'application-sqlite',
+                'release-1',
+            )
+            ->factory('value', static fn(): string => 'sqlite')
+            ->cacheDefinition('value')
+            ->build();
+        expect($first->get('value'))->toBe('sqlite');
+
+        $second = ContainerBuilder::create(uniqid('p5_sqlite_second_', true))
+            ->definitionCache(
+                Cache::sqlite('intermix.p5.sqlite', $file),
+                'application-sqlite',
+                'release-1',
+            )
+            ->factory('value', static fn(): string => 'miss')
+            ->cacheDefinition('value')
+            ->build();
+
+        expect($second->get('value'))->toBe('sqlite');
+    } finally {
+        foreach ([$file, $file . '-shm', $file . '-wal'] as $candidate) {
+            if (is_file($candidate)) {
+                unlink($candidate);
+            }
+        }
+    }
+});
+
+it('uses CacheLayer 4 APCu when the CLI backend is enabled', function (): void {
+    if (!extension_loaded('apcu') || !apcu_enabled()) {
+        expect(extension_loaded('apcu') && apcu_enabled())->toBeFalse();
+
+        return;
+    }
+
+    $cache = Cache::apcu('intermix.p5.apcu.' . bin2hex(random_bytes(4)));
+    $runtime = ContainerBuilder::create(uniqid('p5_apcu_', true))
+        ->definitionCache($cache, 'application-apcu', 'release-1')
+        ->factory('value', static fn(): int => 42)
+        ->cacheDefinition('value')
+        ->build();
+
+    expect($runtime->get('value'))->toBe(42);
 });

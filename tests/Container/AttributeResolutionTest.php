@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\RuntimeContainerInterface;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\DI\Attribute\AttributeResolverInterface;
 use Infocyph\InterMix\DI\Attribute\Inject;
 use Infocyph\InterMix\Tests\Fixture\ExampleAttr;
@@ -22,7 +24,7 @@ class NullInjection {}
 
 class NullInjectionResolver implements AttributeResolverInterface
 {
-    public function resolve(object $attributeInstance, Reflector $target, Container $container): mixed
+    public function resolve(object $attributeInstance, Reflector $target, RuntimeContainerInterface $container): mixed
     {
         return null;
     }
@@ -35,7 +37,7 @@ class NullableAttributeTarget
 }
 
 beforeEach(function () {
-    $this->container = new Container();
+    $this->container = new ConfigurationContainer();
 });
 
 it('resolves built-in and custom attributes', function () {

@@ -6,6 +6,7 @@ namespace Infocyph\InterMix\DI\Internal;
 
 use Infocyph\InterMix\DI\ScopeContext;
 use Infocyph\InterMix\Exceptions\ContainerException;
+use Infocyph\InterMix\Exceptions\ScopeCleanupException;
 use stdClass;
 
 /**
@@ -36,10 +37,28 @@ final class ProductionScopeStore
         return $this->rootContextActive ? self::ROOT_CONTEXT : null;
     }
 
+    public function assertCurrent(ScopeContext $scopeContext): void
+    {
+        [$scope] = $this->unwrap($scopeContext);
+        $context = $this->activeContext();
+        $state = $context === null ? null : ($this->states[$context] ?? null);
+        if ($scope->closed
+            || !$state instanceof ProductionExecutionScopeState
+            || $state->current !== $scope
+        ) {
+            throw new ContainerException(
+                'Tagged iterator scope is no longer active on the current execution carrier.',
+            );
+        }
+    }
+
     public function attach(ScopeState $scope, ScopeState $sequentialScope): string
     {
         if ($scope->closed) {
             throw new ContainerException('Scope context is no longer active.');
+        }
+        if ($scope->draining) {
+            throw new ContainerException('Scope context is draining and cannot accept new attachments.');
         }
 
         $context = ExecutionContext::id();
@@ -88,6 +107,8 @@ final class ProductionScopeStore
         if (!$scope instanceof ScopeState || $scope->name === 'root' || $scope->closed) {
             throw new ContainerException('Cannot capture a scope context without an active scope.');
         }
+
+        $scope->retained = true;
 
         return [
             new ProductionCapturedScopeContext($this->owner(), $scope, $fallbackContext),
@@ -203,12 +224,19 @@ final class ProductionScopeStore
         return $sequentialScope;
     }
 
-    /** @param callable(ScopeState): void $beforeClose */
-    public function resetCurrent(ScopeState $sequentialScope, callable $beforeClose): ScopeState
-    {
+    /**
+     * @param callable(ScopeState): void $beforeClose
+     * @param list<\Throwable> $failures
+     */
+    public function resetCurrent(
+        ScopeState $sequentialScope,
+        callable $beforeClose,
+        array &$failures,
+        int &$failureCount,
+    ): ScopeState {
         $context = $this->activeContext();
         if ($context === null) {
-            return $this->resetSequential($sequentialScope, $beforeClose);
+            return $this->resetSequential($sequentialScope, $beforeClose, $failures, $failureCount);
         }
 
         $state = $this->states[$context] ?? null;
@@ -217,12 +245,12 @@ final class ProductionScopeStore
         }
 
         if ($state->attachedScope instanceof ScopeState) {
-            $this->resetAttached($context, $state, $beforeClose);
+            $this->resetAttached($context, $state, $beforeClose, $failures, $failureCount);
 
             return $sequentialScope;
         }
 
-        $this->resetOwnedContext($context, $beforeClose);
+        $this->resetOwnedContext($context, $beforeClose, $failures, $failureCount);
 
         return $sequentialScope;
     }
@@ -237,9 +265,28 @@ final class ProductionScopeStore
         return $scopeContext->unwrap($this->owner());
     }
 
+    /**
+     * @param list<\Throwable> $failures
+     */
+    private function appendCleanupFailure(
+        ScopeCleanupException $failure,
+        array &$failures,
+        int &$failureCount,
+    ): void {
+        $failureCount += $failure->cleanupFailureCount;
+        foreach ($failure->cleanupFailures as $cleanupFailure) {
+            if (count($failures) >= 32) {
+                break;
+            }
+            $failures[] = $cleanupFailure;
+        }
+    }
+
     private function assertNoAttachments(ScopeState $scope): void
     {
         if ($scope->attachments > 0) {
+            $scope->draining = true;
+
             throw new ContainerException('Cannot leave a scope while child execution carriers are still attached.');
         }
     }
@@ -248,6 +295,16 @@ final class ProductionScopeStore
     {
         $scope->closed = true;
         $scope->constructing = [];
+        if (!$scope->retained) {
+            return;
+        }
+
+        $scope->draining = false;
+        $scope->parent = null;
+        $scope->rawSeeds = [];
+        $scope->resolved = [];
+        $scope->returned = [];
+        $scope->seeds = [];
     }
 
     /** @param callable(ScopeState): void $beforeClose */
@@ -267,18 +324,20 @@ final class ProductionScopeStore
         }
 
         $this->assertNoAttachments($current);
-        $beforeClose($current);
-        $this->close($current);
 
         $parent = $current->parent;
-        if ($parent instanceof ScopeState && $parent->name !== 'root') {
-            $state->current = $parent;
 
-            return;
+        try {
+            $beforeClose($current);
+        } finally {
+            $this->close($current);
+            if ($parent instanceof ScopeState && $parent->name !== 'root') {
+                $state->current = $parent;
+            } else {
+                unset($this->states[$context]);
+                $this->finishContext($context);
+            }
         }
-
-        unset($this->states[$context]);
-        $this->finishContext($context);
     }
 
     /** @param callable(ScopeState): void $beforeClose */
@@ -289,10 +348,16 @@ final class ProductionScopeStore
         }
 
         $this->assertNoAttachments($scope);
-        $beforeClose($scope);
-        $this->close($scope);
 
-        return $scope->parent ?? new ScopeState('root');
+        $parent = $scope->parent ?? new ScopeState('root');
+
+        try {
+            $beforeClose($scope);
+        } finally {
+            $this->close($scope);
+        }
+
+        return $parent;
     }
 
     private function finishContext(string $context): void
@@ -307,14 +372,24 @@ final class ProductionScopeStore
         return $this->owner ??= new stdClass();
     }
 
-    /** @param callable(ScopeState): void $beforeClose */
+    /**
+     * @param callable(ScopeState): void $beforeClose
+     * @param list<\Throwable> $failures
+     */
     private function resetAttached(
         string $context,
         ProductionExecutionScopeState $state,
         callable $beforeClose,
+        array &$failures,
+        int &$failureCount,
     ): void {
         while ($state->current !== $state->attachedScope) {
-            $this->closeContextScope($context, $beforeClose);
+            try {
+                $this->closeContextScope($context, $beforeClose);
+            } catch (ScopeCleanupException $failure) {
+                $this->appendCleanupFailure($failure, $failures, $failureCount);
+            }
+
             $state = $this->states[$context];
         }
 
@@ -326,15 +401,28 @@ final class ProductionScopeStore
         $this->finishContext($context);
     }
 
-    /** @param callable(ScopeState): void $beforeClose */
-    private function resetOwnedContext(string $context, callable $beforeClose): void
-    {
+    /**
+     * @param callable(ScopeState): void $beforeClose
+     * @param list<\Throwable> $failures
+     */
+    private function resetOwnedContext(
+        string $context,
+        callable $beforeClose,
+        array &$failures,
+        int &$failureCount,
+    ): void {
         while (true) {
             $current = $this->states[$context]->current ?? null;
             if (!$current instanceof ScopeState || $current->name === 'root') {
                 break;
             }
-            $this->closeContextScope($context, $beforeClose);
+
+            try {
+                $this->closeContextScope($context, $beforeClose);
+            } catch (ScopeCleanupException $failure) {
+                $this->appendCleanupFailure($failure, $failures, $failureCount);
+            }
+
             if (!isset($this->states[$context])) {
                 return;
             }
@@ -344,11 +432,25 @@ final class ProductionScopeStore
         $this->finishContext($context);
     }
 
-    /** @param callable(ScopeState): void $beforeClose */
-    private function resetSequential(ScopeState $scope, callable $beforeClose): ScopeState
-    {
+    /**
+     * @param callable(ScopeState): void $beforeClose
+     * @param list<\Throwable> $failures
+     */
+    private function resetSequential(
+        ScopeState $scope,
+        callable $beforeClose,
+        array &$failures,
+        int &$failureCount,
+    ): ScopeState {
         while ($scope->name !== 'root') {
-            $scope = $this->closeSequentialScope($scope, $beforeClose);
+            $parent = $scope->parent ?? new ScopeState('root');
+
+            try {
+                $scope = $this->closeSequentialScope($scope, $beforeClose);
+            } catch (ScopeCleanupException $failure) {
+                $this->appendCleanupFailure($failure, $failures, $failureCount);
+                $scope = $parent;
+            }
         }
 
         return $scope;

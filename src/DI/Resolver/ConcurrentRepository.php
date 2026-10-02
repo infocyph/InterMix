@@ -8,12 +8,15 @@ use Infocyph\InterMix\DI\Internal\ExecutionContext;
 use Infocyph\InterMix\DI\Internal\ExecutionScopeStore;
 use Infocyph\InterMix\DI\ScopeContext;
 use Infocyph\InterMix\Exceptions\ContainerException;
+use Infocyph\InterMix\Exceptions\ScopeCleanupException;
 use stdClass;
+use Throwable;
 
 /** @internal */
 final class ConcurrentRepository extends Repository
 {
     use ConcurrentScopeConstruction;
+    use ConcurrentScopeLookup;
 
     private const string ROOT_CONTEXT = "\0intermix.root";
 
@@ -36,6 +39,22 @@ final class ConcurrentRepository extends Repository
 
     /** @var array<int, string> */
     private array $scopeStack = [];
+
+    /** @var array<string, string> */
+    private array $singletonConstructing = [];
+
+    public function assertCurrentScopeContext(ScopeContext $scopeContext): void
+    {
+        $context = $this->activeExecutionContext();
+        $store = $this->executionScopes;
+        if ($context === null || !$store instanceof ExecutionScopeStore) {
+            throw new ContainerException(
+                'Tagged iterator scope is no longer active on the current execution carrier.',
+            );
+        }
+
+        $store->assertCurrentScopeContext($context, $scopeContext, $this->scopeContextOwner());
+    }
 
     public function attachScopeContext(ScopeContext $scopeContext): void
     {
@@ -76,6 +95,16 @@ final class ConcurrentRepository extends Repository
         }
 
         return $store->captureScopeContext($physicalContext, $this->scopeContextOwner());
+    }
+
+    /** @internal */
+    public function copyConfigurationTo(Repository $target): void
+    {
+        parent::copyConfigurationTo($target);
+
+        if ($target instanceof self) {
+            $target->scopeLeaveHooks = $this->scopeLeaveHooks;
+        }
     }
 
     public function detachScopeContext(ScopeContext $scopeContext): void
@@ -130,86 +159,6 @@ final class ConcurrentRepository extends Repository
         }
     }
 
-    /** @internal */
-    public function findScopeSeed(string $id, mixed &$value): bool
-    {
-        $store = $this->executionScopes;
-        if ($store instanceof ExecutionScopeStore) {
-            $context = $this->activeExecutionContext();
-            if ($context !== null) {
-                return $store->findScopeSeed($context, $id, $value);
-            }
-        }
-
-        if ($this->scopeSeeds === []) {
-            return false;
-        }
-
-        $seeds = $this->scopeSeeds[$this->currentScope] ?? null;
-        if (!is_array($seeds) || !array_key_exists($id, $seeds)) {
-            return false;
-        }
-
-        $value = $seeds[$id];
-
-        return true;
-    }
-
-    /** @internal */
-    public function getResolvedScopedEntry(string $scope, string $id): mixed
-    {
-        $store = $this->executionScopes;
-        if ($store instanceof ExecutionScopeStore) {
-            $context = $this->activeExecutionContext();
-            if ($context !== null) {
-                return $store->getResolvedScopedEntry($context, $scope, $id);
-            }
-        }
-
-        return $this->resolvedScoped[$scope][$id] ?? null;
-    }
-
-    public function getScope(): string
-    {
-        $store = $this->executionScopes;
-        if ($store instanceof ExecutionScopeStore) {
-            $context = $this->activeExecutionContext();
-            if ($context !== null) {
-                return $store->getScope($context);
-            }
-        }
-
-        return $this->currentScope;
-    }
-
-    /** @internal */
-    public function hasResolvedScoped(string $scope, string $id): bool
-    {
-        $store = $this->executionScopes;
-        if ($store instanceof ExecutionScopeStore) {
-            $context = $this->activeExecutionContext();
-            if ($context !== null) {
-                return $store->hasResolvedScoped($context, $scope, $id);
-            }
-        }
-
-        return array_key_exists($id, $this->resolvedScoped[$scope] ?? []);
-    }
-
-    /** @internal */
-    public function hasScopeSeeds(): bool
-    {
-        $store = $this->executionScopes;
-        if ($store instanceof ExecutionScopeStore) {
-            $context = $this->activeExecutionContext();
-            if ($context !== null) {
-                return $store->hasScopeSeeds($context);
-            }
-        }
-
-        return $this->scopeSeeds !== [];
-    }
-
     public function invalidateClass(string $class): void
     {
         parent::invalidateClass($class);
@@ -254,13 +203,26 @@ final class ConcurrentRepository extends Repository
         }
 
         $scope = $this->currentScope;
+        $failures = [];
+        $failureCount = 0;
         foreach ($this->scopeLeaveHooks[$scope] ?? [] as $hook) {
-            $hook($scope, $this->container());
+            try {
+                $hook($scope, $this->container());
+            } catch (Throwable $throwable) {
+                ++$failureCount;
+                if (count($failures) < 32) {
+                    $failures[] = $throwable;
+                }
+            }
         }
 
         unset($this->resolvedScoped[$scope], $this->scopeSeeds[$scope]);
         $previous = array_pop($this->scopeStack);
         $this->currentScope = is_string($previous) ? $previous : 'root';
+
+        if ($failures !== []) {
+            throw new ScopeCleanupException($failures, $failureCount);
+        }
     }
 
     public function onScopeLeave(string $scope, callable $hook): void
@@ -281,27 +243,17 @@ final class ConcurrentRepository extends Repository
         $store = $this->executionScopes;
         $context = $this->activeExecutionContext();
         if ($store instanceof ExecutionScopeStore && $context !== null && $store->hasState($context)) {
-            if ($store->isAttached($context)) {
-                while ($store->hasNestedScope($context)) {
-                    $this->leaveExecutionScope($store, $context);
-                }
-                $store->detachCurrentScopeContext($context);
-                $this->finishExecutionContext($store, $context);
-
-                return;
-            }
-
-            while ($store->hasState($context)) {
-                $this->leaveExecutionScope($store, $context);
-            }
+            $result = $store->resetContext(
+                $context,
+                fn() => $this->leaveExecutionScope($store, $context),
+            );
             $this->finishExecutionContext($store, $context);
+            $this->throwCleanupFailures($result['failures'], $result['count']);
 
             return;
         }
 
-        while ($this->currentScope !== 'root') {
-            $this->leaveScope();
-        }
+        $this->resetSequentialExecutionScope();
     }
 
     public function resetScope(): void
@@ -407,11 +359,31 @@ final class ConcurrentRepository extends Repository
     private function leaveExecutionScope(ExecutionScopeStore $store, string $context): void
     {
         $scope = $store->scopeForLeave($context);
-        foreach ($this->scopeLeaveHooks[$scope] ?? [] as $hook) {
-            $hook($scope, $this->container());
+        if (!isset($this->scopeLeaveHooks[$scope])) {
+            $store->leaveScope($context);
+            $this->finishExecutionContext($store, $context);
+
+            return;
+        }
+
+        $failures = [];
+        $failureCount = 0;
+        foreach ($this->scopeLeaveHooks[$scope] as $hook) {
+            try {
+                $hook($scope, $this->container());
+            } catch (Throwable $throwable) {
+                ++$failureCount;
+                if (count($failures) < 32) {
+                    $failures[] = $throwable;
+                }
+            }
         }
         $store->leaveScope($context);
         $this->finishExecutionContext($store, $context);
+
+        if ($failures !== []) {
+            throw new ScopeCleanupException($failures, $failureCount);
+        }
     }
 
     private function promoteSequentialScope(): void
@@ -435,8 +407,38 @@ final class ConcurrentRepository extends Repository
         $this->rootContextActive = true;
     }
 
+    private function resetSequentialExecutionScope(): void
+    {
+        $failures = [];
+        $failureCount = 0;
+
+        while ($this->currentScope !== 'root') {
+            try {
+                $this->leaveScope();
+            } catch (ScopeCleanupException $failure) {
+                $failureCount += $failure->cleanupFailureCount;
+                foreach ($failure->cleanupFailures as $cleanupFailure) {
+                    if (count($failures) >= 32) {
+                        break;
+                    }
+                    $failures[] = $cleanupFailure;
+                }
+            }
+        }
+
+        $this->throwCleanupFailures($failures, $failureCount);
+    }
+
     private function scopeContextOwner(): object
     {
         return $this->scopeContextOwner ??= new stdClass();
+    }
+
+    /** @param list<Throwable> $failures */
+    private function throwCleanupFailures(array $failures, int $failureCount): void
+    {
+        if ($failureCount > 0) {
+            throw new ScopeCleanupException($failures, $failureCount);
+        }
     }
 }

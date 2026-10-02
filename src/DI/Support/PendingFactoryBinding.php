@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Support;
 
 use Closure;
-use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\Exceptions\ContainerException;
 
 final readonly class PendingFactoryBinding
 {
     public function __construct(
-        private Container $container,
+        private ConfigurationContainer $container,
         private string $id,
         private Closure $factory,
     ) {}
@@ -20,7 +20,7 @@ final readonly class PendingFactoryBinding
      * @param array<int, string> $tags
      * @throws ContainerException
      */
-    public function register(array $tags = []): Container
+    public function register(array $tags = []): ConfigurationContainer
     {
         return $this->singleton($tags);
     }
@@ -29,7 +29,7 @@ final readonly class PendingFactoryBinding
      * @param array<int, string> $tags
      * @throws ContainerException
      */
-    public function scoped(array $tags = []): Container
+    public function scoped(array $tags = []): ConfigurationContainer
     {
         return $this->apply(LifetimeEnum::Scoped, $tags);
     }
@@ -38,7 +38,7 @@ final readonly class PendingFactoryBinding
      * @param array<int, string> $tags
      * @throws ContainerException
      */
-    public function singleton(array $tags = []): Container
+    public function singleton(array $tags = []): ConfigurationContainer
     {
         return $this->apply(LifetimeEnum::Singleton, $tags);
     }
@@ -47,7 +47,7 @@ final readonly class PendingFactoryBinding
      * @param array<int, string> $tags
      * @throws ContainerException
      */
-    public function transient(array $tags = []): Container
+    public function transient(array $tags = []): ConfigurationContainer
     {
         return $this->apply(LifetimeEnum::Transient, $tags);
     }
@@ -56,7 +56,7 @@ final readonly class PendingFactoryBinding
      * @param array<int, string> $tags
      * @throws ContainerException
      */
-    private function apply(LifetimeEnum $lifetime, array $tags = []): Container
+    private function apply(LifetimeEnum $lifetime, array $tags = []): ConfigurationContainer
     {
         return $this->container->bind(
             $this->id,

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\Benchmarks;
 
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\ContainerBuilder;
+use Infocyph\InterMix\DI\ProductionContainer;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use PhpBench\Attributes\AfterMethods;
 use PhpBench\Attributes\BeforeMethods;
@@ -20,7 +22,7 @@ final class CompiledResolverBench
 {
     private string $artifact;
 
-    private Container $compiledRuntime;
+    private ProductionContainer $compiledRuntime;
 
     private int $containerCounter = 0;
 
@@ -30,39 +32,40 @@ final class CompiledResolverBench
 
     private mixed $sink;
 
-    private string $validatedFingerprint;
+    private string $validatedDigest;
 
     public function setUp(): void
     {
         $this->artifact = sys_get_temp_dir() . '/intermix-compiled-resolver-bench-' . getmypid() . '.php';
-        $source = $this->container('source', 100);
-        $source->compileTo($this->artifact);
-        $this->validatedFingerprint = (string) $source->compilationReport()['fingerprint'];
-        $source->unset();
+        $source = $this->builder('source', 100);
+        $report = $source->compile($this->artifact);
+        $this->validatedDigest = $report['digest'];
 
-        $this->dynamicRuntime = $this->container('dynamic-runtime', 1);
+        $this->dynamicRuntime = $this->builder('dynamic-runtime', 1)->build();
         $this->dynamicRuntime->get('compiled.root.0');
 
-        $this->compiledRuntime = $this->container('compiled-runtime', 1);
+        $compiledBuilder = $this->builder('compiled-runtime', 1);
         $runtimeArtifact = $this->artifact . '.runtime';
-        $this->compiledRuntime->compileTo($runtimeArtifact, load: true);
+        $compiledBuilder->compile($runtimeArtifact);
+        $this->compiledRuntime = $compiledBuilder->production($runtimeArtifact);
         $this->compiledRuntime->get('compiled.root.0');
 
-        $this->hotRuntime = $this->container('hot-runtime', 1);
-        $this->hotRuntime->bind('hot.singleton', CompiledBenchRoot::class);
-        $this->hotRuntime->bind('hot.scoped', CompiledBenchRoot::class, LifetimeEnum::Scoped);
+        $this->hotRuntime = ContainerBuilder::create($this->alias('hot-runtime'))
+            ->autowire(CompiledBenchLeaf::class, CompiledBenchLeaf::class)
+            ->autowire('hot.singleton', CompiledBenchRoot::class)
+            ->autowire('hot.scoped', CompiledBenchRoot::class, lifetime: LifetimeEnum::Scoped)
+            ->build();
         $this->hotRuntime->get('hot.singleton');
-        $this->hotRuntime->enterScope('benchmark');
-        $this->hotRuntime->get('hot.scoped');
     }
 
     public function tearDown(): void
     {
-        $this->dynamicRuntime->unset();
-        $this->compiledRuntime->unset();
-        $this->hotRuntime->leaveScope();
-        $this->hotRuntime->unset();
-        foreach ([$this->artifact, $this->artifact . '.runtime'] as $file) {
+        foreach ([
+            $this->artifact,
+            $this->artifact . '.meta.json',
+            $this->artifact . '.runtime',
+            $this->artifact . '.runtime.meta.json',
+        ] as $file) {
             if (is_file($file)) {
                 unlink($file);
             }
@@ -72,28 +75,21 @@ final class CompiledResolverBench
     #[Revs(5)]
     public function benchCacheGeneration(): void
     {
-        $container = $this->container('cache', 100);
-        $container->compileTo($this->artifact);
-        $container->unset();
-        $this->sink = $container;
+        $builder = $this->builder('cache', 100);
+        $this->sink = $builder->compile($this->artifact);
     }
 
     #[Revs(100)]
     public function benchCompiledBoot(): void
     {
-        $container = $this->container('compiled-boot', 100);
-        $container->useCompiled($this->artifact);
-        $container->unset();
-        $this->sink = $container;
+        $this->sink = $this->builder('compiled-boot', 100)->production($this->artifact);
     }
 
     #[Revs(100)]
     public function benchCompiledFirstResolution(): void
     {
-        $container = $this->container('compiled-first', 100);
-        $container->useCompiled($this->artifact);
-        $this->sink = $container->get('compiled.root.0');
-        $container->unset();
+        $runtime = $this->builder('compiled-first', 100)->production($this->artifact);
+        $this->sink = $runtime->get('compiled.root.0');
     }
 
     #[Revs(1000)]
@@ -105,25 +101,19 @@ final class CompiledResolverBench
     #[Revs(100)]
     public function benchContainerConstruction(): void
     {
-        $container = new Container('__compiled_bench_construction_' . (++$this->containerCounter));
-        $container->unset();
-        $this->sink = $container;
+        $this->sink = ContainerBuilder::create($this->alias('construction'))->build();
     }
 
     #[Revs(100)]
     public function benchDynamicBoot(): void
     {
-        $container = $this->container('dynamic-boot', 100);
-        $container->unset();
-        $this->sink = $container;
+        $this->sink = $this->builder('dynamic-boot', 100)->build();
     }
 
     #[Revs(100)]
     public function benchDynamicFirstResolution(): void
     {
-        $container = $this->container('dynamic-first', 100);
-        $this->sink = $container->get('compiled.root.0');
-        $container->unset();
+        $this->sink = $this->builder('dynamic-first', 100)->build()->get('compiled.root.0');
     }
 
     #[Revs(1000)]
@@ -141,33 +131,34 @@ final class CompiledResolverBench
     #[Revs(100)]
     public function benchPrevalidatedCompiledBoot(): void
     {
-        $container = $this->container('prevalidated-boot', 100);
-        $container->usePrevalidated($this->artifact, $this->validatedFingerprint);
-        $container->unset();
-        $this->sink = $container;
+        $this->sink = $this->builder('prevalidated-boot', 100)
+            ->productionPrevalidated($this->artifact, $this->validatedDigest);
     }
 
     #[Revs(100)]
     public function benchPrevalidatedCompiledFirstResolution(): void
     {
-        $container = $this->container('prevalidated-first', 100);
-        $container->usePrevalidated($this->artifact, $this->validatedFingerprint);
-        $this->sink = $container->get('compiled.root.0');
-        $container->unset();
+        $runtime = $this->builder('prevalidated-first', 100)
+            ->productionPrevalidated($this->artifact, $this->validatedDigest);
+        $this->sink = $runtime->get('compiled.root.0');
     }
 
     #[Revs(1000)]
     public function benchScopedHotPath(): void
     {
-        $this->sink = $this->hotRuntime->get('hot.scoped');
+        $this->sink = $this->hotRuntime->withinScope(
+            'benchmark-' . (++$this->containerCounter),
+            static fn(Container $active): object => $active->get('hot.scoped'),
+        );
     }
 
     #[Revs(100)]
     public function benchScopeEnterLeave(): void
     {
-        $scope = 'scope-' . (++$this->containerCounter);
-        $this->hotRuntime->enterScope($scope);
-        $this->hotRuntime->leaveScope();
+        $this->sink = $this->hotRuntime->withinScope(
+            'scope-' . (++$this->containerCounter),
+            static fn(): null => null,
+        );
     }
 
     #[Revs(1000)]
@@ -176,21 +167,24 @@ final class CompiledResolverBench
         $this->sink = $this->hotRuntime->get('hot.singleton');
     }
 
-    private function container(string $purpose, int $roots): Container
+    private function alias(string $purpose): string
     {
-        $container = new Container(
-            '__compiled_bench_' . $purpose . '_' . (++$this->containerCounter),
-        );
-        $container->bind(CompiledBenchLeaf::class, CompiledBenchLeaf::class);
+        return '__compiled_bench_' . $purpose . '_' . (++$this->containerCounter);
+    }
+
+    private function builder(string $purpose, int $roots): ContainerBuilder
+    {
+        $builder = ContainerBuilder::create($this->alias($purpose))
+            ->autowire(CompiledBenchLeaf::class, CompiledBenchLeaf::class);
         for ($index = 0; $index < $roots; ++$index) {
-            $container->bind(
+            $builder->autowire(
                 "compiled.root.$index",
                 CompiledBenchRoot::class,
-                LifetimeEnum::Transient,
+                lifetime: LifetimeEnum::Transient,
             );
         }
 
-        return $container;
+        return $builder;
     }
 }
 

@@ -1,185 +1,55 @@
 .. _container:
 
-================================
-Dependency Injection (Container)
-================================
+================================================
+Dependency injection runtime
+================================================
 
-.. admonition:: TL;DR
-   :class: tip
+InterMix 11 has two phases:
 
-   *Create → Register → Resolve*
+1. Configure a graph with ContainerBuilder.
+2. Execute the finalized graph through Container or ProductionContainer.
 
-   .. code-block:: php
-
-      use Infocyph\InterMix\DI\Container;
-
-      $c = Container::instance();             // ① create
-      $c->definitions()->bind('answer', 42);  // ② register
-      echo $c->get('answer');                 // ③ resolve  → 42
-
-   This dynamic ``Container`` remains the development and compatibility API.
-   For deployment, :doc:`di/compiled-resolvers` shows how ``ContainerBuilder``
-   finalizes the same graph into the generated InterMix 10 runtime.
-
------------------------------------
-Why bother with a DI-Container?
------------------------------------
-
-*Manual wiring* is fine—until the tenth place you instantiate the same class,
-or the day you must **swap** an implementation in *production* only.
-InterMix automates construction, honours interfaces, supports
-environment-specific overrides and gives you sugar for 1-liners.
-
----------------------------------------------------------
-15-second “Hello World” with constructor autowire
----------------------------------------------------------
-
-.. code-block:: php
-
-   class Greeter
-   {
-       public function __construct(private Clock $clock) {}
-
-       public function greet(string $name): string
-       {
-           return sprintf(
-               'Hello %s — %s',
-               $name,
-               $this->clock->now()->format('c')
-           );
-       }
-   }
-
-   interface Clock { public function now(): DateTimeImmutable; }
-   class SystemClock implements Clock
-   {
-       public function now(): DateTimeImmutable { return new DateTimeImmutable(); }
-   }
-
-.. code-block:: php
-
-   use Infocyph\InterMix\DI\Container;
-
-   $c = Container::instance()
-       ->definitions()->bind(Clock::class, SystemClock::class)->end();
-
-   echo $c->get(Greeter::class)->greet('Alice');
-   // → “Hello Alice — 2025-06-18T12:34:56+00:00”
-
---------------------------------
-Creating & naming containers
---------------------------------
-
-Use ``Container::instance('alias')`` for explicit named containers.
-Each alias returns an **isolated** registry. Use distinct aliases for tests,
-CLI workers, micro-modules, etc.
-
---------------------------------
-Container Features
---------------------------------
-
-* **Scoped services** – ``enterScope()``, ``leaveScope()``, ``withinScope()`` for logical request or job scopes
-* **Dependency graph export** – ``exportGraph()`` for debugging and analysis
-* **Environment-specific bindings** – ``setEnvironment()`` for different deployment configs
-* **Debug tracing** – ``debug()`` and ``tracer()`` for development insight
-* **Service location** – ``findByTag()`` for tagged service discovery
-* **Container locking** – ``lock()`` to prevent runtime modifications
-* **Multiple container instances** – ``Container::instance($alias)`` for isolated contexts
-* **Generated production runtime** – ``ContainerBuilder`` compiles finalized
-  graphs into a small ``ProductionContainer`` with lazy dynamic islands
-
-Container API Classification
-----------------------------
-
-The supported surface is grouped by intended use:
-
-* **Core** – ``get()``, ``has()``, ``bind()``, ``singleton()``, ``scoped()``,
-  ``transient()``, ``make()``, ``call()``, ``factory()``, and ``withinScope()``.
-* **Advanced** – compiled/prevalidated resolution, validation, pipelines,
-  lifecycle hooks, contextual/environment bindings, graph export, and tracing.
-* **Internal/tooling** – repository access, resolver selection, and callable
-  parsing. Public methods in this group exist for package tooling and are marked
-  ``@internal``; they are not quick-start application APIs.
-
-``has()`` answers whether an ID can resolve. Use ``definitions()->has()`` for
-explicit registration checks and ``isResolved()`` for process/container
-resolution-state checks; these three questions intentionally have different
-semantics.
-
-----------------------------------------------------------
-Modifying behaviour with ``options()->setOptions()``
-----------------------------------------------------------
-
-+ **injection** – reflection autowiring engine
-+ **methodAttributes / propertyAttributes** – enable ``#[Inject]``
-+ **defaultMethod** – method to call when none supplied
-+ **lazyLoading** – defer heavy construction until first use
-
-.. code-block:: php
-
-   $c->options()->setOptions(
-       injection: true,
-       methodAttributes: true,
-       propertyAttributes: true,
-       defaultMethod: 'handle'
-   );
-
---------------------------------------------------------
-Common quick patterns (copy-paste as you learn the rest)
---------------------------------------------------------
-
-*Register a class with predefined constructor args* ::
-
-   $c->registration()->registerClass(Db::class, [
-       'dsn' => 'mysql://root@localhost/db',
-       'flags' => [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION],
-   ]);
-
-*Register a bootstrap method* ::
-
-   $c->registration()->registerMethod(App::class, 'boot');
-
-*Tag & iterate* ::
-
-   $c->definitions()->bind('L1', fn()=>new ListenerA, tags:['event']);
-   foreach ($c->findByTag('event') as $id => $listener) {
-       $listener->handle();
-   }
-
-*Scope isolation* ::
-
-   $c->enterScope('request-123');
-   // scoped services now unique to this request
-   $c->leaveScope();
-
---------------------
-Dive in Details
---------------------
-
-Dive into the detailed sub-chapters. Happy mixing!  Questions?  Open an issue or drop by the discussion board.
+Runtime objects do not expose public mutation managers.
 
 .. toctree::
-    :titlesonly:
-    :hidden:
+   :maxdepth: 2
+   :caption: DI guide
 
-    di/overview
-    di/quickstart
-    di/development-production
-    di/understanding
-    di/definitions
-    di/registration
-    di/options
-    di/invocation
-    di/invoker
-    di/attribute
-    di/lifetimes
-    di/scopes
-    di/lazy_loading
-    di/tagging
-    di/environment
-    di/cache
-    di/compiled-resolvers
-    di/preload
-    di/debug_tracing
-    di/cheat_sheet
-    di/best_practices
+   di/overview
+   di/best_practices
+   di/quickstart
+   di/definitions
+   di/registration
+   di/lifetimes
+   di/scopes
+   di/invocation
+   di/tagging
+   di/environment
+   di/options
+   di/attribute
+   di/lazy_loading
+   di/cache
+   di/compiled-resolvers
+   di/preload
+   di/development-production
+   di/debug_tracing
+   di/cheat_sheet
+   di/understanding
+   di/invoker
+
+Minimal example
+---------------
+
+.. code-block:: php
+
+   use Infocyph\InterMix\DI\ContainerBuilder;
+
+   $builder = ContainerBuilder::create('app')
+       ->value('answer', 42)
+       ->autowire(Clock::class, SystemClock::class);
+
+   $runtime = $builder->build();
+
+   echo $runtime->get('answer');
+
+Configuration is immutable after the first successful build, compile, or production-load finalization. Create a new builder when wiring changes.

@@ -1,193 +1,43 @@
 .. _di.overview:
 
-========
-Overview
-========
+================
+DI overview
+================
 
-InterMix is a **“zero-config-until-you-want-it”** dependency-injection container.
-Start with *one* line, stay productive when your project grows – lifetimes,
-scopes, debug tracing, cache, preload generation … all optional.
+InterMix 11 separates graph configuration from graph execution.
 
-Why another container?
-----------------------
+ContainerBuilder
+----------------
 
-* **Simple first** – one-liner definitions, no config files
-* **Reflection-aware** – autowiring you can *switch off*
-* **Attribute powered** – one canonical ``#[Inject]`` API
-* **Fluent API** – four tiny managers that chain like one object
-* **Performant** – static reflection cache, parameter-resolution planning cache,
-  optional PSR-6 cache,
-  lazy services by default
-* **Production ready** – generated ``ProductionContainer`` runtime,
-  env-specific bindings, scoped lifetimes, preload file generator
-* **Debuggable** – built-in tracer (node / verbose)
-
-15-second “hello world”
-~~~~~~~~~~~~~~~~~~~~~~~
+ContainerBuilder owns definitions, environment selection, attributes, hooks, definition-cache policy, diagnostics, and compilation.
 
 .. code-block:: php
 
-   use function Infocyph\InterMix\container;
+   $builder = ContainerBuilder::create('app')
+       ->value('app.name', 'demo')
+       ->autowire(Logger::class, JsonLogger::class)
+       ->autowire(Service::class, Service::class);
 
-   interface Clock { public function now(): DateTimeImmutable; }
-   class SystemClock implements Clock
-   { public function now(): DateTimeImmutable { return new DateTimeImmutable(); } }
+   $runtime = $builder->build();
 
-   class Greeter
-   {
-       public function __construct(private Clock $clock) {}
-       public function greet(string $name): string
-       {
-           return 'Hello '.$name.' — '.$this->clock->now()->format('c');
-       }
-   }
+The first successful build(), compile(), production(), or productionPrevalidated() finalizes the graph. Later mutation attempts fail before changing state.
 
-   $c = container()
-       ->definitions()->bind(Clock::class, SystemClock::class);
+RuntimeContainerInterface
+-------------------------
 
-   echo $c->get(Greeter::class)->greet('Alice');
-   // → “Hello Alice — 2025-06-18T12:34:56+00:00”
+Container and ProductionContainer share the runtime contract:
 
-Managers & call chain
----------------------
+* get()/has() for PSR-11 access.
+* make() for fresh class construction.
+* invoke() for callable execution.
+* tagged() for tagged definitions.
+* withinScope() for owned request/job scopes.
+* captureScopeContext()/withinScopeContext() for borrowed child work.
+* resetCurrentExecutionScope() for explicit host cleanup.
 
-Every manager shares a tiny *proxy* trait – so you can hop around fluently and
-still land back on the main container:
+No public runtime configuration manager exists in 11.0.
 
-.. code-block:: php
+Dynamic and production runtimes
+-------------------------------
 
-   $c->definitions()
-         ->bind(Logger::class, FileLogger::class)
-         ->options()
-             ->setOptions(injection:true)
-             ->enableLazyLoading()
-         ->registration()
-             ->registerClass(App::class)
-         ->invocation()
-             ->call(App::class, 'boot')
-       ->lock();
-
-That proxy is ``ManagerProxy`` and it contributes three important behaviors:
-
-* Magic access: ``$mgr->serviceId``, ``$mgr('serviceId')``, ``$mgr['serviceId']``.
-* Method pass-through: unknown manager calls are forwarded to the container.
-* Chain safety: if a forwarded call returns the container, the manager keeps the fluent chain.
-
-Ascii peek
-~~~~~~~~~~
-
-::
-
-                       +---------------------+
-                       |  DefinitionManager  |
-                       +----------+----------+
-                                  ^
-                                  | .definitions()
-    +-----------------+ .options  |           | .registration()
-    |  OptionsManager +-----------+           v
-    +-----------------+                       +---------------------+
-                                                | RegistrationManager|
-                               .invocation()    +----------+--------+
-                                                ^          |
-                                                |          |
-                                                |          v
-                                           +----+---------------+
-                                           |  InvocationManager |
-                                           +--------------------+
-
-The shared **Repository** (not pictured) stores:
-
-* **functionReference** – your definitions
-* **classResource** – extra constructor / method / property data
-* **resolved / resolvedDefinition** – cached objects & values
-* **conditionalBindings** – environment overrides
-
-How resolution works
---------------------
-
-When you call ``get()``, ``getReturn()`` or ``call()`` InterMix walks the
-pipeline below – applying *lazy placeholders*, *caching* and *autowiring* as
-needed.
-
-#. **Already resolved?**
-
-   * Return immediately if found in the in-memory cache.
-   * If the cache entry is an internal deferred value, initialize it now and swap in the real object.
-
-#. **FunctionReference lookup**
-
-   If the ID exists in your *definitions*, InterMix runs
-   ``resolveDefinition($id)`` which
-   honours caching, env overrides, user closures, etc.
-
-#. **Fallback: class name**
-
-   If autowiring is **on**, reflection builds the class (constructor injection,
-   property/parameter attributes, method call).
-   If autowiring is **off**, the lightweight
-   :php:class:`GenericCall` path instantiates without reflection magic.
-
-#. **Cache layer**
-
-   With definition caching enabled, PSR-6 is consulted after the in-memory
-   singleton store. Only safe null/scalar/array singleton results are stored;
-   scoped, transient, object, Closure, and resource values remain runtime-only.
-
-User closure vs. lazy
-~~~~~~~~~~~~~~~~~~~~~
-
-* **User-supplied closure**
-
-  .. code-block:: php
-
-     $c->definitions()->bind('heavy', fn () => new Expensive());
-
-  executes when the definition is resolved. Singleton and scoped lifetimes
-  reuse the resolved value; transient definitions execute on every resolution.
-
-* **Internal deferred entry**
-
-  For class strings/arrays *and* ``enableLazyLoading(true)``, InterMix stores a
-  small internal initializer and postpones construction until the first real
-  ``get()``. This implementation type is not a public attribute or application API.
-
-Persistent-worker note
-~~~~~~~~~~~~~~~~~~~~~~
-
-Reflection metadata is immutable and may be reused process-wide. Resolved
-singletons and scopes belong to a container instance. In long-running workers,
-keep request/job state in short-lived scopes. InterMix isolates scope stacks,
-seeds, and scoped resolutions for each active PHP ``Fiber`` or
-Swoole/OpenSwoole coroutine. Scope entry and exit remain application-owned, and
-singletons remain shared by the container. Plain event-loop callbacks that do
-not run in distinct Fibers or coroutines share the main execution context.
-
-Parameter resolution cache note
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-InterMix caches parameter resolution plans, attribute metadata and reflection-derived lookup data.
-It does not cache resolved runtime argument values inside ParameterResolver.
-Runtime object reuse is controlled by the container lifetime layer: Singleton, Scoped or Transient.
-
-Typical lifecycle
------------------
-
-1. **Configure** a ``ContainerBuilder`` (or a dynamic ``Container`` for
-   development/compatibility).
-2. **Bind & register** definitions, classes, methods and properties.
-3. **Tune options** such as autowiring, attributes and environment.
-4. **Validate and compile** the finalized graph during build/deployment.
-5. **Load** ``ProductionContainer`` once at process bootstrap and resolve from it.
-
-The dynamic-only path may instead resolve directly and optionally call
-``lock()``. It remains fully supported, but it does not provide the v10 static
-hot path.
-
-Next steps
-----------
-
-If you like to learn by **code**, jump straight to :doc:`quickstart`.
-For application bootstrap and deployment, continue with
-:doc:`development-production`.
-Prefer concepts first? start with :doc:`understanding`.
-Either way – **happy mixing!**
+build() returns a dynamic Container from the same finalized DefinitionGraph used by compile(). production() loads a compiled artifact against that frozen graph. Each runtime owns separate singleton and scope stores.

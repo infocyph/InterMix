@@ -4,9 +4,7 @@
 InterMix Manual
 =========================
 
-For `InterMix <https://github.com/infocyph/InterMix>`_ |version|. Updated on |today|.
-
-Licensed under `MIT <https://github.com/infocyph/InterMix/blob/main/LICENSE>`_.
+For InterMix |version|. Updated on |today|.
 
 Contents
 --------
@@ -17,7 +15,11 @@ Contents
 
     start
     backstory
+    upgrade-11.0
+    release-11.0
+    process-state-11.0
     container
+    integrations
     fence
     serializer
     remix

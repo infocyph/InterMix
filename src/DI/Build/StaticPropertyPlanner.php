@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Build;
 
 use Infocyph\InterMix\DI\Attribute\Inject;
+use Infocyph\InterMix\DI\Internal\BoundedValueInspector;
 use ReflectionClass;
 use ReflectionNamedType;
 use ReflectionProperty;
@@ -18,16 +19,20 @@ final class StaticPropertyPlanner
 {
     /**
      * @param ReflectionClass<object> $class
+     * @param array<string, mixed> $supplied
      * @return array{properties: list<PropertyPlan>, dependencies: list<string>}
      */
-    public function plan(DefinitionGraph $graph, ReflectionClass $class): array
-    {
+    public function plan(
+        DefinitionGraph $graph,
+        ReflectionClass $class,
+        array $supplied = [],
+    ): array {
         $properties = [];
         $dependencies = [];
         $seenDependencies = [];
 
         for ($current = $class; $current instanceof ReflectionClass; $current = $current->getParentClass()) {
-            $registered = $this->registeredProperties($graph, $current->getName());
+            $registered = $supplied + $this->registeredProperties($graph, $current->getName());
 
             foreach ($current->getProperties() as $property) {
                 if ($property->getDeclaringClass()->getName() !== $current->getName()) {
@@ -102,14 +107,7 @@ final class StaticPropertyPlanner
 
     private function isExportable(mixed $value): bool
     {
-        if ($value === null || is_scalar($value)) {
-            return true;
-        }
-        if (!is_array($value)) {
-            return false;
-        }
-
-        return array_all($value, fn(mixed $item): bool => $this->isExportable($item));
+        return BoundedValueInspector::isScalarNullArray($value);
     }
 
     private function normalizeRelativeType(ReflectionProperty $property, string $type): string

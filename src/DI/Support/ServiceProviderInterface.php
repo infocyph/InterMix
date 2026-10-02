@@ -4,14 +4,9 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Support;
 
-use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\ContainerBuilder;
 
 interface ServiceProviderInterface
 {
-    /**
-     * Register the service provider.
-     *
-     * @param Container $container The container to register the provider with.
-     */
-    public function register(Container $container): void;
+    public function register(ContainerBuilder $builder): void;
 }

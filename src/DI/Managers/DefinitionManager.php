@@ -6,7 +6,8 @@ namespace Infocyph\InterMix\DI\Managers;
 
 use ArrayAccess;
 use Closure;
-use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
+use Infocyph\InterMix\DI\Internal\ContainerAccess;
 use Infocyph\InterMix\DI\Internal\ServiceId;
 use Infocyph\InterMix\DI\Invoker\CompiledCall;
 use Infocyph\InterMix\DI\Invoker\GenericCall;
@@ -15,6 +16,7 @@ use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\DI\Support\DirectFactory;
 use Infocyph\InterMix\DI\Support\FactoryDefinition;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
+use Infocyph\InterMix\DI\Support\RuntimeFactoryDefinition;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\CacheItemInterface;
 use Psr\Cache\CacheItemPoolInterface;
@@ -29,7 +31,7 @@ class DefinitionManager implements ArrayAccess
 
     public function __construct(
         protected Repository $repository,
-        protected Container $container,
+        protected ConfigurationContainer $container,
     ) {}
 
     /** @param array<string, mixed> $definitions */
@@ -127,7 +129,7 @@ class DefinitionManager implements ArrayAccess
             $this->repository->rotateDefinitionCacheGeneration();
         }
 
-        $resolver = $this->container->getCurrentResolver();
+        $resolver = ContainerAccess::resolver($this->container);
         if ($resolver instanceof GenericCall) {
             throw new ContainerException('Definition caching requires injection-enabled resolver.');
         }
@@ -169,7 +171,8 @@ class DefinitionManager implements ArrayAccess
             && (!is_object($definition)
                 || $definition instanceof Closure
                 || $definition instanceof DirectFactory
-                || $definition instanceof FactoryDefinition);
+                || $definition instanceof FactoryDefinition
+                || $definition instanceof RuntimeFactoryDefinition);
     }
 
     private function commitDefinitionCache(CacheItemPoolInterface $cache): bool
@@ -277,6 +280,7 @@ class DefinitionManager implements ArrayAccess
         $keys = [];
         foreach ($definitions as $id => $definition) {
             if ($this->repository->getDefinitionLifetime($id) !== LifetimeEnum::Singleton
+                || !$this->repository->usesDefinitionCacheFor($id)
                 || !$this->canResolveToPersistableValue($definition)
             ) {
                 ++$report['skipped'];

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Attribute;
 
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ContainerAccess;
+use Infocyph\InterMix\DI\RuntimeContainerInterface;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Reflector;
 
@@ -13,7 +15,7 @@ final class AttributeRegistry
     /** @var array<class-string, AttributeResolverInterface> */
     private array $map = [];
 
-    public function __construct(private readonly Container $container) {}
+    public function __construct(private readonly RuntimeContainerInterface $container) {}
 
     /**
      * Returns whether an attribute resolver is registered for the given attribute class.
@@ -39,7 +41,11 @@ final class AttributeRegistry
      */
     public function register(string $attributeFqcn, string $resolverFqcn): void
     {
-        $repository = $this->container->getRepository();
+        if (!$this->container instanceof Container) {
+            throw new ContainerException('Attribute resolvers can only be registered during configuration.');
+        }
+
+        $repository = ContainerAccess::repository($this->container);
         $repository->assertMutable();
         if (!class_exists($attributeFqcn) || !class_exists($resolverFqcn)) {
             throw new ContainerException('Attribute or resolver class missing');
@@ -59,6 +65,21 @@ final class AttributeRegistry
         }
         $repository->invalidateResolutionConfiguration();
         $this->map[$attributeFqcn] = new $resolverFqcn();
+    }
+
+    /**
+     * @return array<class-string, class-string<AttributeResolverInterface>>
+     * @internal
+     */
+    public function registrations(): array
+    {
+        $registrations = [];
+        foreach ($this->map as $attribute => $resolver) {
+            $registrations[$attribute] = $resolver::class;
+        }
+        ksort($registrations, SORT_STRING);
+
+        return $registrations;
     }
 
     /**

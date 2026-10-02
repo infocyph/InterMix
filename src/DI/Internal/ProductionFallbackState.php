@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Internal;
 
-use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Throwable;
 
@@ -16,7 +15,7 @@ final class ProductionFallbackState
      * @param array<string, array{exists: bool, definition: mixed, lifetime: \Infocyph\InterMix\DI\Support\LifetimeEnum, tags: array<int, string>}> $existing
      * @return array<string, array{exists: bool, definition: mixed, lifetime: \Infocyph\InterMix\DI\Support\LifetimeEnum, tags: array<int, string>}>
      */
-    public static function captureDefinitions(Container $fallback, array $compiledIds, array $existing): array
+    public static function captureDefinitions(ConfigurationContainer $fallback, array $compiledIds, array $existing): array
     {
         $repository = $fallback->getRepository();
         foreach ($compiledIds as $id) {
@@ -42,7 +41,7 @@ final class ProductionFallbackState
      * @param array<string, mixed> $bridges
      * @return array<string, true>
      */
-    public static function restoreDefinitions(Container $fallback, array $snapshots, array $bridges): array
+    public static function restoreDefinitions(ConfigurationContainer $fallback, array $snapshots, array $bridges): array
     {
         $overridden = [];
         $repository = $fallback->getRepository();
@@ -69,7 +68,7 @@ final class ProductionFallbackState
         return $overridden;
     }
 
-    public static function synchronizeScopes(Container $fallback, ScopeState $current): void
+    public static function synchronizeScopes(ConfigurationContainer $fallback, ScopeState $current): void
     {
         $scopes = [];
         for ($scope = $current; $scope->parent instanceof ScopeState; $scope = $scope->parent) {
@@ -91,7 +90,7 @@ final class ProductionFallbackState
      * @param array<int, string> $ids
      */
     public static function transferCompiledState(
-        Container $fallback,
+        ConfigurationContainer $fallback,
         array $overridden,
         array $singletons,
         array $ids,

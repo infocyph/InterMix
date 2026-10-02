@@ -1,192 +1,57 @@
-.. _di.cheat_sheet:
+.. _di.cheat-sheet:
 
-=================
-DI Cheat Sheet
-=================
+================
+DI cheat sheet
+================
 
-Quick reference for the current InterMix DI API.
-
--------------------------
-Container Entry Points
--------------------------
+Configuration
+-------------
 
 .. list-table::
    :header-rows: 1
-   :widths: 35 65
 
-   * - Action
-     - API
-   * - Create/get instance
-     - ``container()`` / ``Container::instance('app')`` / ``resolve(null, [], 'app')``
-   * - Get manager
-     - ``$c->definitions()`` / ``$c->registration()`` / ``$c->options()`` / ``$c->invocation()``
-   * - Resolve by ID/class
-     - ``$c->get($id)``
-   * - Distinguish lookup questions
-     - ``$c->has($id)`` (resolvable) / ``$c->definitions()->has($id)`` (explicit) / ``$c->isResolved($id)`` (already resolved)
-   * - Activate unresolved IDs
-     - ``$c->onMissing(fn (string $id, Container $c) => ...)``
-   * - Bind direct factory
-     - ``$c->bindFactory($id, $factory, LifetimeEnum::Singleton)`` / ``$c->factory($id, $factory)->scoped()``
-   * - Resolve + execute default/registered method
-     - ``$c->getReturn(Foo::class)``
-   * - Build class (optional method)
-     - ``$c->make(Foo::class, false|'run')``
-   * - Call closure/function/class/method
-     - ``$c->call($target, $method)``
-   * - Scopes
-     - ``$c->enterScope('req-1')`` / ``$c->leaveScope()`` / ``$c->withinScope('req-1', fn () => ...)``
-   * - Tags / tracing / graph
-     - ``$c->findByTag('event')``, ``$c->debug($id)``, ``$c->tracer()->toArray()``, ``$c->exportGraph()``
-   * - Freeze config
-     - ``$c->lock()``
-   * - Compile construction recipes
-     - ``$c->compileTo($path)`` / ``$c->useCompiled($path)`` / ``$c->compilationReport()``
-   * - Finalize a v10 production runtime
-     - ``$builder->compile($path)`` / ``$builder->production($path)`` / ``$builder->productionPrevalidated($path, $digest)``
+   * - Operation
+     - Purpose
+   * - value(id, value)
+     - Literal value.
+   * - autowire(id, class, arguments, lifetime, tags, properties)
+     - Class construction definition.
+   * - factory(id, factory, lifetime, tags)
+     - Runtime or declarative factory.
+   * - alias(id, target)
+     - Service alias.
+   * - input(id)
+     - Host-supplied scoped input.
+   * - when(consumer)
+     - Contextual binding builder.
+   * - import(provider)
+     - Import a provider instance.
+   * - definitionCache(pool, namespace, generation)
+     - Configure external definition caching.
+   * - compile(path, strict)
+     - Generate a frozen production artifact.
 
------------------------------
-Managers At A Glance
------------------------------
+Runtime
+-------
 
 .. list-table::
    :header-rows: 1
-   :widths: 25 75
 
-   * - Manager
-     - Core methods
-   * - ``definitions()``
-     - ``bind()``, ``has()``, ``addDefinitions()``, ``enableDefinitionCache($pool)``, ``warmDefinitionCache()``, ``setMetaForEnv()``
-   * - ``registration()``
-     - ``registerClass()``, ``registerMethod()``, ``registerProperty()``, ``registerClosure()``, ``import()``
-   * - ``options()``
-     - ``setOptions()``, ``enableLazyLoading()``, ``setEnvironment()``, ``bindInterfaceForEnv()``, ``setDefinitionMetaForEnv()``, ``enableDebugTracing()``, ``registerAttributeResolver()``, ``generatePreload()``
-   * - ``invocation()``
-     - ``call()``, ``make()``, ``get()``, ``getReturn()``, ``has()``
+   * - Operation
+     - Purpose
+   * - get()/has()
+     - PSR-11 access.
+   * - make()
+     - Fresh class construction.
+   * - invoke()
+     - Execute a real callable with DI.
+   * - tagged()
+     - Iterate tagged services.
+   * - withinScope()
+     - Own a structured scope.
+   * - captureScopeContext()/withinScopeContext()
+     - Borrow an existing scope in child work.
+   * - resetCurrentExecutionScope()
+     - Explicit host recovery/reset boundary.
 
-All managers use ``ManagerProxy``: ``$mgr('id')``, ``$mgr->id``, ``$mgr['id']``, proxied container methods and ``->end()`` to return to the container.
-
-----------------------
-Runtime Models
-----------------------
-
-.. list-table::
-   :header-rows: 1
-   :widths: 30 70
-
-   * - API
-     - Use
-   * - ``Container``
-     - Dynamic development/compatibility runtime; supports mutation and the
-       compatible ``compileTo()`` resolver map.
-   * - ``ContainerBuilder``
-     - Composition-root configuration, validation, build-time compilation and
-       production loading. Recompile after any graph mutation.
-   * - ``ProductionContainer``
-     - Generated runtime for request/job execution. Known paths are static;
-       unsupported behavior is delegated to lazy dynamic islands.
-
-------------------------------------------
-Task Matrix (Fluent vs Shortcut)
-------------------------------------------
-
-.. list-table::
-   :header-rows: 1
-   :widths: 26 37 37
-
-   * - Task
-     - Fluent chain
-     - Shortcut on container
-   * - Bind definition
-     - ``$c->definitions()->bind('answer', 42)``
-     - -
-   * - Bind reflection-free factory
-     - ``$c->factory('service', $factory)->transient()``
-     - ``$c->bindFactory('service', $factory, LifetimeEnum::Transient)``
-   * - Register constructor map
-     - ``$c->registration()->registerClass(Foo::class)``
-     - -
-   * - Set options
-     - ``$c->options()->setOptions(...)``
-     - ``$c->enableLazyLoading(true)``
-   * - Resolve service
-     - ``$c->invocation()->get(Foo::class)``
-     - ``$c->get(Foo::class)``
-   * - Resolve return value
-     - ``$c->invocation()->getReturn(Foo::class)``
-     - ``$c->getReturn(Foo::class)``
-   * - Call target
-     - ``$c->invocation()->call($target)``
-     - ``$c->call($target)``
-   * - Build target
-     - ``$c->invocation()->make(Foo::class)``
-     - ``$c->make(Foo::class)``
-
-----------------------
-Common Recipes
-----------------------
-
-Bootstrap chain:
-
-.. code-block:: php
-
-   $c->definitions()
-       ->bind(LoggerInterface::class, FileLogger::class)
-       ->registration()
-       ->registerClass(App::class, ['name' => 'InterMix'])
-       ->options()
-       ->setOptions(injection: true, methodAttributes: true)
-       ->enableLazyLoading(true)
-       ->end();
-
-Environment-specific binding + metadata:
-
-.. code-block:: php
-
-   use Infocyph\InterMix\DI\Support\LifetimeEnum;
-
-   $c->options()
-       ->bindInterfaceForEnv('prod', MailerInterface::class, SmtpMailer::class)
-       ->bindInterfaceForEnv('test', MailerInterface::class, FakeMailer::class)
-       ->setDefinitionMetaForEnv('test', 'mailer', LifetimeEnum::Transient, ['core', 'test-only'])
-       ->setEnvironment('test');
-
-Definition cache warmup:
-
-.. code-block:: php
-
-   $c->definitions()
-       ->enableDefinitionCache($pool)
-       ->warmDefinitionCache(rotateGeneration: true);
-
-Scoped resolution:
-
-.. code-block:: php
-
-   $result = $c->withinScope('request-42', function () use ($c) {
-       return $c->get(RequestContext::class);
-   });
-
-Seed an existing request/job object without rebinding a definition:
-
-.. code-block:: php
-
-   $result = $c->withinScope(
-       'request-42',
-       fn (Container $scoped) => $scoped->call($handler),
-       [RequestContext::class => $requestContext],
-   );
-
----------------------------
-Advanced Helpers
----------------------------
-
-* ``$c->parseCallable($spec)``: normalize closure/function/class/method input (class-method targets must be autoloadable and exist).
-* ``$c->resolveNow(...)``: resolve with explicit runtime knobs.
-* ``$c->getRepository()``: inspect low-level runtime state.
-* ``$c->setResolverClass(FooResolver::class)``: swap resolver implementation.
-
-These are internal/tooling surfaces. Application override checks should use
-``definitions()->has()`` rather than repository internals.
-
-See also: :ref:`di.quickstart`, :ref:`di.development_production`, :ref:`di.definitions`, :ref:`di.registration`, :ref:`di.options`, :ref:`di.invocation`, :ref:`di.scopes`, :ref:`di.environment`, :ref:`di.debug_tracing`
+Lifetimes are selected with LifetimeEnum on autowire() and factory().

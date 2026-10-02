@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\Benchmarks;
 
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use PhpBench\Attributes\Iterations;
 use PhpBench\Attributes\Revs;
@@ -21,9 +22,7 @@ final class RequestPathBench
     #[Revs(100)]
     public function benchColdContainerConstruction(): void
     {
-        $container = new Container($this->alias('construct'));
-        $container->unset();
-        $this->sink = $container;
+        $this->sink = ContainerBuilder::create($this->alias('construct'))->build();
     }
 
     #[Revs(50)]
@@ -47,40 +46,45 @@ final class RequestPathBench
     #[Revs(100)]
     public function benchFirstAutowiredGraph(): void
     {
-        $container = new Container($this->alias('first-graph'));
+        $container = $this->graphBuilder($this->alias('first-graph'))->build();
         $this->sink = $container->get(RequestBenchRoot::class);
     }
 
     #[Revs(100)]
     public function benchFirstDiClosure(): void
     {
-        $container = new Container($this->alias('first-closure'));
+        $container = $this->graphBuilder($this->alias('first-closure'))->build();
         $handler = static fn(RequestBenchRoot $root): int => $root->handle();
-        $this->sink = $container->call($handler);
+        $this->sink = $container->invoke($handler);
     }
 
     #[Revs(100)]
     public function benchFirstMethodInvocation(): void
     {
-        $container = new Container($this->alias('first-method'));
-        $this->sink = $container->call(RequestBenchController::class, 'handle');
+        $container = $this->graphBuilder($this->alias('first-method'), includeController: true)->build();
+        $controller = $container->get(RequestBenchController::class);
+        $this->sink = $container->invoke([$controller, 'handle']);
     }
 
     #[Revs(100)]
     public function benchFirstScopedResolution(): void
     {
-        $container = new Container($this->alias('first-scope'));
-        $container->scoped('root', RequestBenchRoot::class);
-        $container->enterScope('request');
-        $this->sink = $container->get('root');
-        $container->leaveScope();
+        $container = $this->graphBuilder(
+            $this->alias('first-scope'),
+            LifetimeEnum::Scoped,
+        )->build();
+        $this->sink = $container->withinScope(
+            'request',
+            static fn(Container $active): object => $active->get('root'),
+        );
     }
 
     #[Revs(100)]
     public function benchFirstSingletonResolution(): void
     {
-        $container = new Container($this->alias('first-singleton'));
-        $container->singleton('service', RequestBenchRoot::class);
+        $container = $this->graphBuilder($this->alias('first-singleton'))
+            ->alias('service', RequestBenchRoot::class)
+            ->build();
         $this->sink = $container->get('service');
     }
 
@@ -92,9 +96,9 @@ final class RequestPathBench
         if (!$container instanceof Container) {
             $container = $this->hotContainer();
             $handler = static fn(RequestBenchLeaf $leaf): int => $leaf->value();
-            $container->call($handler);
+            $container->invoke($handler);
         }
-        $this->sink = $container->call($handler);
+        $this->sink = $container->invoke($handler);
     }
 
     #[Revs(1000)]
@@ -102,12 +106,19 @@ final class RequestPathBench
     {
         static $container;
         if (!$container instanceof Container) {
-            $container = new Container($this->alias('hot-scope'));
-            $container->scoped('root', RequestBenchRoot::class);
-            $container->enterScope('request');
-            $container->get('root');
+            $container = $this->graphBuilder(
+                $this->alias('hot-scope'),
+                LifetimeEnum::Scoped,
+            )->build();
+            $container->withinScope(
+                'request',
+                static fn(Container $active): object => $active->get('root'),
+            );
         }
-        $this->sink = $container->get('root');
+        $this->sink = $container->withinScope(
+            'request',
+            static fn(Container $active): object => $active->get('root'),
+        );
     }
 
     #[Revs(1000)]
@@ -131,10 +142,31 @@ final class RequestPathBench
         return '__request_path_' . $purpose . '_' . (++$this->sequence);
     }
 
+    private function graphBuilder(
+        string $alias,
+        LifetimeEnum $lifetime = LifetimeEnum::Singleton,
+        bool $includeController = false,
+    ): ContainerBuilder {
+        $builder = ContainerBuilder::create($alias)
+            ->autowire(RequestBenchLeaf::class, RequestBenchLeaf::class, lifetime: $lifetime)
+            ->autowire(RequestBenchMiddle::class, RequestBenchMiddle::class, lifetime: $lifetime)
+            ->autowire(RequestBenchRoot::class, RequestBenchRoot::class, lifetime: $lifetime)
+            ->alias('root', RequestBenchRoot::class);
+
+        if ($includeController) {
+            $builder->autowire(
+                RequestBenchController::class,
+                RequestBenchController::class,
+                lifetime: $lifetime,
+            );
+        }
+
+        return $builder;
+    }
+
     private function hotContainer(): Container
     {
-        $container = new Container($this->alias('hot'));
-        $container->singleton('root', RequestBenchRoot::class);
+        $container = $this->graphBuilder($this->alias('hot'))->build();
         $container->get('root');
 
         return $container;
@@ -142,17 +174,16 @@ final class RequestPathBench
 
     private function registeredContainer(int $count, string $purpose): Container
     {
-        $container = new Container($this->alias($purpose));
+        $builder = ContainerBuilder::create($this->alias($purpose));
         for ($index = 0; $index < $count; ++$index) {
-            $container->bind(
+            $builder->autowire(
                 'service.' . $index,
-                static fn(): int => 1,
-                LifetimeEnum::Singleton,
-                ['request-path'],
+                RequestBenchLeaf::class,
+                tags: ['request-path'],
             );
         }
 
-        return $container;
+        return $builder->build();
     }
 }
 

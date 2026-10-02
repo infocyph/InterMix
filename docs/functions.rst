@@ -12,52 +12,51 @@ Load helpers manually when you want them:
 
    require_once __DIR__ . '/vendor/infocyph/intermix/src/functions.php';
 
-This page documents each helper and its runtime behavior.
-The DI helpers target the dynamic ``Container`` aliases. They do not select,
-compile, or load a ``ContainerBuilder``/``ProductionContainer``; keep generated
-runtime bootstrap explicit in production applications.
+InterMix 11 does not expose DI container globals. Build and own DI runtimes
+explicitly with ``ContainerBuilder`` and ``RuntimeContainerInterface`` as
+documented in :ref:`di.quickstart` and :ref:`di.overview`.
 
-DI Helpers
-----------
-
-container()
-===========
-
-.. php:function:: container(string|Closure|callable|array|null $closureOrClass = null, string $alias = Container::DEFAULT_ALIAS): mixed
-
-Get the helper container (default alias ``intermix.default``), or resolve/call immediately.
-
-- ``container()`` returns ``Container::instance('intermix.default')``.
-- ``container('my-alias')`` resolves ``'my-alias'`` as a service/callable.
-- For explicit named containers, use ``Container::instance('my-alias')``.
-- For stable runtime behavior, prefer explicit aliases across bootstrap and app code.
-
-resolve()
-=========
-
-.. php:function:: resolve(string|Closure|callable|array|null $spec = null, array $parameters = [], string $alias = Container::DI_ALIAS): mixed
-
-Resolve immediately with DI/autowiring path enabled.
-
-- ``resolve()`` returns container instance for the helper alias.
-- ``resolve($spec, $parameters)`` delegates to ``resolveNow(...)``.
-
-direct()
-========
-
-.. php:function:: direct(string|Closure|callable|array|null $spec = null, array $parameters = [], string $alias = Container::DIRECT_ALIAS): mixed
-
-Resolve immediately with injection disabled (generic invocation path).
-
-- Useful when you want strict/manual argument flow without attribute-based injection.
+The optional global helper file contains only the small functional helpers below.
 
 Functional Helpers
 ------------------
 
-tap(), when(), pipe(), measure(), retry()
-=================================================
+tap()
+=====
 
-These helpers are documented in detail in:
+Pass a value to a callback and return the original value. Without a callback,
+``tap()`` returns a ``TapProxy`` for fluent side effects.
 
-- :ref:`remix.tap-proxy`
-- :ref:`remix.helpers`
+See :ref:`remix.tap-proxy`.
+
+when()
+======
+
+Apply the truthy callback when the value is truthy. When the value is falsy,
+the optional falsy callback is used; otherwise the original value is returned.
+
+See :ref:`remix.helpers`.
+
+pipe()
+======
+
+Pass a value to a callback and return the callback result.
+
+See :ref:`remix.helpers`.
+
+measure()
+=========
+
+Execute a callback, return its result, and write elapsed milliseconds to the
+optional by-reference timing argument.
+
+See :ref:`remix.helpers`.
+
+retry()
+=======
+
+Execute a callback up to the configured number of attempts with optional retry
+filtering, delay, and multiplicative backoff. The last failure is rethrown when
+the operation never succeeds.
+
+See :ref:`remix.helpers`.

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\DI\Invoker\GenericCall;
 use Infocyph\InterMix\DI\Invoker\InjectedCall;
 use Infocyph\InterMix\Exceptions\ContainerException;
@@ -30,7 +31,7 @@ beforeEach(function () {
 */
 test('Environment-based interface override (separate containers for each environment)', function () {
     // 1) "production" container
-    $prodContainer = Container::instance('env_override_production')
+    $prodContainer = new ConfigurationContainer('env_override_production')
         ->options()
         ->setOptions(true, true)
         ->setEnvironment('production')
@@ -45,7 +46,7 @@ test('Environment-based interface override (separate containers for each environ
     // 2) "local" container
     // Build a *new* container instance with a different alias,
     // also applying environment-based bindings:
-    $localContainer = Container::instance('env_override_local')
+    $localContainer = new ConfigurationContainer('env_override_local')
         ->options()
         ->setOptions(true, true)
         ->setEnvironment('local')
@@ -65,7 +66,7 @@ test('Environment-based interface override (separate containers for each environ
 |--------------------------------------------------------------------------
 */
 test('Lock container forbids modifications', function () {
-    $container = Container::instance('lock_test');
+    $container = new ConfigurationContainer('lock_test');
     $container->lock();
 
     // Attempt to modify after locking => should throw
@@ -78,7 +79,7 @@ test('Lock container forbids modifications', function () {
 |--------------------------------------------------------------------------
 */
 test('Switching between injected and generic calls', function () {
-    $container = Container::instance('switch_resolver_test')
+    $container = new ConfigurationContainer('switch_resolver_test')
         ->options()
         ->setOptions(injection: true)
         ->end();
@@ -104,7 +105,7 @@ test('Switching between injected and generic calls', function () {
 |--------------------------------------------------------------------------
 */
 test('Auto-resolve an unregistered class when injection is on', function () {
-    $container = container(null, 'auto_resolve_on')
+    $container = new ConfigurationContainer('auto_resolve_on')
         ->options()
         ->setOptions(injection: true)
         ->end();
@@ -115,7 +116,7 @@ test('Auto-resolve an unregistered class when injection is on', function () {
 });
 
 test('Auto-resolve an unregistered class when injection is off', function () {
-    $container = container(null, 'auto_resolve_off')
+    $container = new ConfigurationContainer('auto_resolve_off')
         ->options()
         ->setOptions(injection: false)
         ->end();
@@ -129,7 +130,7 @@ test('Auto-resolve an unregistered class when injection is off', function () {
 |--------------------------------------------------------------------------
 */
 test('Property injection sets a static property', function () {
-    $container = container(null, 'static_prop')
+    $container = new ConfigurationContainer('static_prop')
         ->options()
         ->setOptions(true, false, true)
         ->registration()
@@ -154,7 +155,7 @@ test('Property injection sets a static property', function () {
 |--------------------------------------------------------------------------
 */
 test('Overwriting a previously bound definition', function () {
-    $container = container(null, 'overwrite_test')
+    $container = new ConfigurationContainer('overwrite_test')
         ->definitions()
         ->bind('logger', FileLogger::class)
         ->bind('logger', ClassA::class) // Overwrite
@@ -171,7 +172,7 @@ test('Overwriting a previously bound definition', function () {
 |--------------------------------------------------------------------------
 */
 test('Method injection with leftover parameters that are not variadic', function () {
-    $container = container(null, 'leftover_params')
+    $container = new ConfigurationContainer('leftover_params')
         ->options()
         ->setOptions(true, true)
         ->registration()
@@ -208,26 +209,18 @@ class InjectUnknownParam
 }
 
 test('Inject attribute with unknown reference', function () {
-    $container = container(null, 'inject_unknown')
+    $container = new ConfigurationContainer('inject_unknown')
         ->options()
         ->setOptions(true, true)
         ->end();
     $container->call(InjectUnknownParam::class, 'doSomething');
 })->throws(ContainerException::class);
 
-test('helper default aliases are readable and isolated', function () {
-    $cDefault = container();
-    $cResolve = resolve();
-    $cDirect = direct();
-
-    expect($cDefault)->toBeInstanceOf(Container::class)
-        ->and($cResolve)->toBeInstanceOf(Container::class)
-        ->and($cDirect)->toBeInstanceOf(Container::class)
-        ->and($cDefault)->not->toBe($cResolve)
-        ->and($cResolve)->not->toBe($cDirect)
-        ->and($cDefault)->not->toBe($cDirect);
+test('global DI lookup helpers are removed', function () {
+    expect(function_exists('container'))->toBeFalse()
+        ->and(function_exists('resolve'))->toBeFalse()
+        ->and(function_exists('direct'))->toBeFalse();
 });
-
 test('composer autoload files does not include global helpers by default', function () {
     $composer = json_decode((string) file_get_contents(__DIR__ . '/../../composer.json'), true, 512, JSON_THROW_ON_ERROR);
     $autoload = is_array($composer['autoload'] ?? null) ? $composer['autoload'] : [];

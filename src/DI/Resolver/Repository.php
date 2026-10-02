@@ -9,11 +9,13 @@ use Infocyph\InterMix\DI\Attribute\AttributeRegistry;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Internal\ClassResolution;
 use Infocyph\InterMix\DI\Resolver\Concerns\InvalidatesRepositoryState;
+use Infocyph\InterMix\DI\Resolver\Concerns\ManagesDefinitionCache;
 use Infocyph\InterMix\DI\Resolver\Concerns\ResolvesMissingServices;
+use Infocyph\InterMix\DI\RuntimeContainerInterface;
+use Infocyph\InterMix\DI\Support\AliasDefinition;
 use Infocyph\InterMix\DI\Support\DebugTracer;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
-use Psr\Cache\CacheItemPoolInterface;
 use Psr\Container\ContainerInterface;
 
 /**
@@ -23,6 +25,7 @@ use Psr\Container\ContainerInterface;
 class Repository
 {
     use InvalidatesRepositoryState;
+    use ManagesDefinitionCache;
     use ResolvesMissingServices;
 
     private ?AttributeRegistry $attributeRegistry = null;
@@ -52,15 +55,8 @@ class Repository
 
     private ?string $defaultMethod = null;
 
-    private ?CacheItemPoolInterface $definitionCache = null;
-
-    private bool $definitionCacheFailOpen = true;
-
-    private ?string $definitionCacheGeneration = null;
-
-    private ?string $definitionCachePrefix = null;
-
-    private int $definitionCacheRevision = 0;
+    /** @var array<string, array{lifetime: LifetimeEnum, alias: AliasDefinition|null}> */
+    private array $definitionLifetimeCache = [];
 
     /** @var array<string, array{lifetime: LifetimeEnum, tags: array<int, string>}> */
     private array $definitionMeta = [];
@@ -110,6 +106,9 @@ class Repository
     /** @var array<string, mixed> */
     private array $resolvedSingleton = [];
 
+    /** @var array<string, bool> */
+    private array $scopeSeedAllowedIds = [];
+
     /** @var array<string, array<string, mixed>> */
     private array $scopeSeeds = [];
 
@@ -138,6 +137,7 @@ class Repository
         private string $alias = 'default',
     ) {
         $this->functionReference[ContainerInterface::class] = $container;
+        $this->functionReference[RuntimeContainerInterface::class] = $container;
     }
 
     /**
@@ -183,6 +183,53 @@ class Repository
     public function container(): Container
     {
         return $this->container;
+    }
+
+    /** @internal */
+    public function copyConfigurationTo(Repository $target): void
+    {
+        $target->classResource = $this->classResource;
+        $target->closureResource = $this->closureResource;
+        $target->conditionalBindings = $this->conditionalBindings;
+        $target->contextualBindings = $this->contextualBindings;
+        $target->defaultMethod = $this->defaultMethod;
+        $target->definitionCache = $this->definitionCache;
+        $target->definitionCacheEligibleIds = $this->definitionCacheEligibleIds;
+        $target->definitionCacheExplicitOnly = $this->definitionCacheExplicitOnly;
+        $target->definitionCacheFailOpen = $this->definitionCacheFailOpen;
+        $target->definitionCacheGeneration = $this->definitionCacheGeneration;
+        $target->definitionCacheNamespace = $this->definitionCacheNamespace;
+        $target->definitionCachePrefix = null;
+        $target->definitionCacheRevision = $this->definitionCacheRevision;
+        $target->definitionMeta = $this->definitionMeta;
+        $target->definitionMetaByEnv = $this->definitionMetaByEnv;
+        $target->enableMethodAttribute = $this->enableMethodAttribute;
+        $target->enablePropertyAttribute = $this->enablePropertyAttribute;
+        $target->environment = $this->environment;
+        $target->functionReference = $this->functionReference;
+        $target->functionReference[ContainerInterface::class] = $target->container;
+        $target->functionReference[RuntimeContainerInterface::class] = $target->container;
+        $target->hasHooks = $this->hasHooks;
+        $target->hasPropertyResources = $this->hasPropertyResources;
+        $target->lazyLoading = $this->lazyLoading;
+        $target->onResolvedHooks = $this->onResolvedHooks;
+        $target->onResolvingHooks = $this->onResolvingHooks;
+        $target->onScopeLeaveHooks = $this->onScopeLeaveHooks;
+        $target->tagIndex = $this->tagIndex;
+        $target->tagIndexByEnv = $this->tagIndexByEnv;
+        $target->tagOverrideIdsByEnv = $this->tagOverrideIdsByEnv;
+
+        if ($this->attributeRegistry !== null) {
+            foreach ($this->attributeRegistry->registrations() as $attribute => $resolver) {
+                $target->attributeRegistry()->register($attribute, $resolver);
+            }
+        }
+
+        if ($this->tracer !== null) {
+            $target->tracer()
+                ->setCaptureLocation($this->tracer->isCaptureLocationEnabled())
+                ->setLevel($this->tracer->level());
+        }
     }
 
     public function dispatchResolvedHooks(string $id, mixed $value): void
@@ -364,21 +411,12 @@ class Repository
         return $this->defaultMethod;
     }
 
-    public function getDefinitionCache(): ?CacheItemPoolInterface
+    public function getDefinitionLifetime(string $id, ?AliasDefinition &$alias = null): LifetimeEnum
     {
-        return $this->definitionCache;
-    }
+        $cached = $this->definitionLifetimeFor($id);
+        $alias = $cached['alias'];
 
-    public function getDefinitionLifetime(string $id): LifetimeEnum
-    {
-        $lifetime = $this->definitionMeta[$id]['lifetime'] ?? LifetimeEnum::Singleton;
-        $env = $this->environment;
-
-        if ($env !== null && isset($this->definitionMetaByEnv[$env][$id]['lifetime'])) {
-            return $this->definitionMetaByEnv[$env][$id]['lifetime'];
-        }
-
-        return $lifetime;
+        return $cached['lifetime'];
     }
 
     /**
@@ -438,7 +476,10 @@ class Repository
         $env = $this->environment;
 
         if ($env === null) {
-            return array_keys($ids);
+            return array_map(
+                static fn(int|string $id): string => (string) $id,
+                array_keys($ids),
+            );
         }
 
         foreach ($this->tagIndexByEnv[$env][$tag] ?? [] as $id => $_) {
@@ -457,6 +498,15 @@ class Repository
         }
 
         return array_keys($ids);
+    }
+
+    /**
+     * @return array<class-string, class-string<\Infocyph\InterMix\DI\Attribute\AttributeResolverInterface>>
+     * @internal
+     */
+    public function getRegisteredAttributeResolvers(): array
+    {
+        return $this->attributeRegistry?->registrations() ?? [];
     }
 
     /**
@@ -500,7 +550,10 @@ class Repository
      */
     public function getResolvedHookIds(): array
     {
-        return array_keys($this->onResolvedHooks);
+        return array_map(
+            static fn(int|string $id): string => (string) $id,
+            array_keys($this->onResolvedHooks),
+        );
     }
 
     /**
@@ -534,7 +587,10 @@ class Repository
      */
     public function getResolvingHookIds(): array
     {
-        return array_keys($this->onResolvingHooks);
+        return array_map(
+            static fn(int|string $id): string => (string) $id,
+            array_keys($this->onResolvingHooks),
+        );
     }
 
     public function getScope(): string
@@ -613,11 +669,6 @@ class Repository
         return $this->scopeSeeds !== [];
     }
 
-    public function isDefinitionCacheFailOpen(): bool
-    {
-        return $this->definitionCacheFailOpen;
-    }
-
     public function isLazyLoading(): bool
     {
         return $this->lazyLoading;
@@ -637,6 +688,14 @@ class Repository
     public function isResolved(string $id): bool
     {
         return isset($this->resolvedIds[$id]);
+    }
+
+    /** @internal */
+    public function isScopeSeedAllowed(string $id): bool
+    {
+        return $this->scopeSeedAllowedIds[$id] ??= array_key_exists($id, $this->functionReference)
+            && !$this->functionReference[$id] instanceof AliasDefinition
+            && $this->getDirectDefinitionLifetime($id) === LifetimeEnum::Scoped;
     }
 
     public function isTracingEnabled(): bool
@@ -662,27 +721,6 @@ class Repository
     public function lock(): void
     {
         $this->isLocked = true;
-    }
-
-    /**
-     * Create a short PSR-6-safe cache key while reusing stable prefix hashes.
-     */
-    public function makeDefinitionCacheKey(string $definition): string
-    {
-        $this->definitionCachePrefix ??= 'imx.'
-            . substr(hash('xxh128', $this->alias), 0, 16)
-            . '.' . substr(
-                hash(
-                    'xxh128',
-                    ($this->definitionCacheGeneration ?? 'default') . "\0" . $this->definitionCacheRevision,
-                ),
-                0,
-                16,
-            )
-            . '.';
-
-        return $this->definitionCachePrefix
-            . substr(hash('xxh128', $definition . "\0" . ($this->environment ?? 'default')), 0, 16);
     }
 
     /** @internal */
@@ -744,6 +782,7 @@ class Repository
         unset(
             $this->functionReference[$id],
             $this->closureResource[$id],
+            $this->definitionCacheEligibleIds[$id],
             $this->definitionMeta[$id],
         );
         $this->invalidateDefinition($id);
@@ -756,12 +795,6 @@ class Repository
         $this->currentScope = 'root';
         $this->resolvedScoped = [];
         $this->scopeSeeds = [];
-    }
-
-    public function rotateDefinitionCacheGeneration(): void
-    {
-        ++$this->definitionCacheRevision;
-        $this->definitionCachePrefix = null;
     }
 
     public function setAlias(string $alias): void
@@ -850,34 +883,6 @@ class Repository
             $this->refreshBaseTagIndex($id, $oldTags, $normalizedTags);
         }
         $this->invalidateDefinition($id);
-    }
-
-    public function setDefinitionCache(
-        CacheItemPoolInterface $cache,
-        ?string $generation = null,
-        bool $failOpen = true,
-    ): void {
-        $this->checkIfLocked();
-        if ($generation === '') {
-            throw new ContainerException('Definition cache generation cannot be empty.');
-        }
-
-        if ($this->definitionCache === $cache
-            && ($generation === null || $generation === $this->definitionCacheGeneration)
-            && $this->definitionCacheFailOpen === $failOpen
-        ) {
-            return;
-        }
-
-        $this->notifyConfigurationMutation();
-
-        $this->definitionCache = $cache;
-        $this->definitionCacheFailOpen = $failOpen;
-        if ($generation !== null && $generation !== $this->definitionCacheGeneration) {
-            $this->definitionCacheGeneration = $generation;
-            $this->definitionCacheRevision = 0;
-            $this->definitionCachePrefix = null;
-        }
     }
 
     /**
@@ -991,11 +996,6 @@ class Repository
         $this->currentScope = $scope;
     }
 
-    public function shouldPersistDefinitionValue(mixed $value): bool
-    {
-        return $this->isSafeCachedDefinitionValue($value);
-    }
-
     public function tracer(): DebugTracer
     {
         return $this->tracer ??= new DebugTracer(
@@ -1022,16 +1022,16 @@ class Repository
         unset($this->resolvedScoped[$scope]);
     }
 
-    private function isSafeCachedDefinitionValue(mixed $value): bool
+    private function getDirectDefinitionLifetime(string $id): LifetimeEnum
     {
-        if (is_scalar($value) || $value === null) {
-            return true;
-        }
-        if (!is_array($value)) {
-            return false;
+        $lifetime = $this->definitionMeta[$id]['lifetime'] ?? LifetimeEnum::Singleton;
+        $env = $this->environment;
+
+        if ($env !== null && isset($this->definitionMetaByEnv[$env][$id]['lifetime'])) {
+            return $this->definitionMetaByEnv[$env][$id]['lifetime'];
         }
 
-        return array_all($value, fn($item) => $this->isSafeCachedDefinitionValue($item));
+        return $lifetime;
     }
 
     /**
@@ -1081,5 +1081,35 @@ class Repository
         }
 
         unset($this->resolvedSingleton[$id]);
+    }
+
+    /** @return array{lifetime: LifetimeEnum, alias: AliasDefinition|null} */
+    private function resolveDefinitionLifetime(string $id): array
+    {
+        $definition = $this->functionReference[$id] ?? null;
+        if (!$definition instanceof AliasDefinition) {
+            return [
+                'lifetime' => $this->getDirectDefinitionLifetime($id),
+                'alias' => null,
+            ];
+        }
+
+        $alias = $definition;
+        $current = $definition->target;
+        $seen = [$id => true];
+
+        while (($definition = $this->functionReference[$current] ?? null) instanceof AliasDefinition) {
+            if (isset($seen[$current])) {
+                throw new ContainerException("Circular alias dependency for '{$id}'.");
+            }
+
+            $seen[$current] = true;
+            $current = $definition->target;
+        }
+
+        return [
+            'lifetime' => $this->getDirectDefinitionLifetime($current),
+            'alias' => $alias,
+        ];
     }
 }

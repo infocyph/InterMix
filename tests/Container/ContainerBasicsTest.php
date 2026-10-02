@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\Tests\Fixture\BasicClass;
 use Infocyph\InterMix\Tests\Fixture\BarService;
 use Infocyph\InterMix\Tests\Fixture\ClassA;
@@ -10,14 +11,14 @@ use Infocyph\InterMix\Tests\Fixture\FooService;
 use Infocyph\InterMix\Tests\Fixture\InterfaceA;
 
 it('binds & resolves definitions', function () {
-    $c = Container::instance('intermix');
+    $c = new ConfigurationContainer('intermix');
     $c->definitions()->bind('answer', 42);
 
     expect($c->get('answer'))->toBe(42);
 });
 
 it('autowires through constructor', function () {
-    $c = Container::instance('intermix');
+    $c = new ConfigurationContainer('intermix');
     $bar = $c->make(BarService::class);
 
     expect($bar)->toBeInstanceOf(BarService::class)
@@ -25,7 +26,7 @@ it('autowires through constructor', function () {
 });
 
 it('distinguishes explicit definitions from broad resolvability', function () {
-    $c = new Container('definition-introspection');
+    $c = new ConfigurationContainer('definition-introspection');
     $definitions = $c->definitions();
     $c->options()
         ->setEnvironment('production')
@@ -50,7 +51,7 @@ it('distinguishes explicit definitions from broad resolvability', function () {
 });
 
 it('tracks successful resolution independently of definitions and caches', function () {
-    $c = new Container('resolution-introspection');
+    $c = new ConfigurationContainer('resolution-introspection');
     $c->transient('transient.service', static fn(): object => new stdClass());
 
     expect($c->isResolved('transient.service'))->toBeFalse()

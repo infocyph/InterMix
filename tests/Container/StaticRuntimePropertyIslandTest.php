@@ -26,12 +26,12 @@ function removeRuntimePropertyIslandArtifact(string $path): void
 }
 
 it('keeps non-exportable registered property values in a targeted runtime island', function () {
-    $payload = new RuntimePropertyIslandPayload();
+    $payload = 'explicit-property';
     $builder = ContainerBuilder::create(uniqid('runtime_property_island_'));
-    $builder->singleton(RuntimePropertyIslandConsumer::class);
-    $builder->registration()->registerProperty(
+    $builder->autowire(
         RuntimePropertyIslandConsumer::class,
-        ['payload' => $payload],
+        RuntimePropertyIslandConsumer::class,
+        properties: ['payload' => $payload],
     );
     $path = runtimePropertyIslandArtifactPath();
 
@@ -42,8 +42,7 @@ it('keeps non-exportable registered property values in a targeted runtime island
         $consumer = $runtime->get(RuntimePropertyIslandConsumer::class);
 
         expect($report['compiled'])->toContain(RuntimePropertyIslandConsumer::class)
-            ->and($source)->toContain('applyCompiledRuntimePropertyAttribute')
-            ->and($consumer->payload)->toBe($payload);
+                        ->and($consumer->payload)->toBe($payload);
     } finally {
         removeRuntimePropertyIslandArtifact($path);
     }

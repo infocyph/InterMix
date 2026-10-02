@@ -1,0 +1,299 @@
+name: "Release Acceptance"
+
+on:
+  pull_request:
+    branches: [ "main", "master", "develop", "development" ]
+    paths:
+      - "src/**"
+      - "composer.json"
+      - "benchmarks/HostAcceptance.php"
+      - "benchmarks/HostAcceptanceCompare.php"
+      - ".github/workflows/release-acceptance.yml"
+  workflow_call:
+
+concurrency:
+  group: intermix-release-acceptance-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host-acceptance:
+    name: "Host acceptance - PHP ${{ matrix.php-version }} - ${{ matrix.mode }} - c${{ matrix.concurrency }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ["8.4", "8.5"]
+        mode: ["dynamic"]
+        concurrency: [1, 8, 32, 64]
+        include:
+          - php-version: "8.4"
+            mode: "production"
+            concurrency: 32
+          - php-version: "8.5"
+            mode: "production"
+            concurrency: 32
+          - php-version: "8.4"
+            mode: "hybrid"
+            concurrency: 32
+          - php-version: "8.5"
+            mode: "hybrid"
+            concurrency: 32
+    steps:
+      - name: Checkout InterMix 11.0 candidate
+        uses: actions/checkout@v7
+        with:
+          path: current
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Checkout InterMix 10.1.1 baseline
+        uses: actions/checkout@v7
+        with:
+          repository: infocyph/InterMix
+          ref: "f687452b9b8d10333e7beb7d6905b479b2b8480e"
+          path: baseline
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          tools: composer:v2
+          coverage: none
+
+      - name: Install production dependencies
+        run: |
+          composer install --working-dir=baseline --no-dev --no-interaction --prefer-dist --no-progress --classmap-authoritative
+          composer install --working-dir=current --no-dev --no-interaction --prefer-dist --no-progress --classmap-authoritative
+
+      - name: Measure five alternating host pairs
+        shell: bash
+        env:
+          CONCURRENCY: ${{ matrix.concurrency }}
+          MODE: ${{ matrix.mode }}
+        run: |
+          baseline_files=()
+          current_files=()
+
+          measure_baseline() {
+            php current/benchmarks/HostAcceptance.php \
+              --autoload="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" \
+              --duration=30 \
+              --concurrency="$CONCURRENCY" \
+              --mode="$MODE" \
+              --output="$1"
+          }
+
+          measure_current() {
+            php current/benchmarks/HostAcceptance.php \
+              --autoload="$GITHUB_WORKSPACE/current/vendor/autoload.php" \
+              --duration=30 \
+              --concurrency="$CONCURRENCY" \
+              --mode="$MODE" \
+              --output="$1"
+          }
+
+          for iteration in 1 2 3 4 5 6 7; do
+            baseline_file="$RUNNER_TEMP/host-baseline-${{ matrix.php-version }}-$MODE-$CONCURRENCY-$iteration.json"
+            current_file="$RUNNER_TEMP/host-current-${{ matrix.php-version }}-$MODE-$CONCURRENCY-$iteration.json"
+            baseline_files+=("$baseline_file")
+            current_files+=("$current_file")
+
+            if (( iteration % 2 == 1 )); then
+              measure_baseline "$baseline_file"
+              measure_current "$current_file"
+            else
+              measure_current "$current_file"
+              measure_baseline "$baseline_file"
+            fi
+          done
+
+          (IFS=,; echo "HOST_BASELINE_FILES=${baseline_files[*]}" >> "$GITHUB_ENV")
+          (IFS=,; echo "HOST_CURRENT_FILES=${current_files[*]}" >> "$GITHUB_ENV")
+
+      - name: Measure balanced five-minute baseline and candidate pairs
+        shell: bash
+        env:
+          CONCURRENCY: ${{ matrix.concurrency }}
+          MODE: ${{ matrix.mode }}
+        run: |
+          baseline_long_files=()
+          current_long_files=()
+
+          measure_baseline_long() {
+            php current/benchmarks/HostAcceptance.php \
+              --autoload="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" \
+              --duration=300 \
+              --concurrency="$CONCURRENCY" \
+              --mode="$MODE" \
+              --output="$1"
+          }
+
+          measure_current_long() {
+            php current/benchmarks/HostAcceptance.php \
+              --autoload="$GITHUB_WORKSPACE/current/vendor/autoload.php" \
+              --duration=300 \
+              --concurrency="$CONCURRENCY" \
+              --mode="$MODE" \
+              --output="$1"
+          }
+
+          for iteration in 1 2; do
+            baseline_long="$RUNNER_TEMP/host-baseline-long-${{ matrix.php-version }}-$MODE-$CONCURRENCY-$iteration.json"
+            current_long="$RUNNER_TEMP/host-current-long-${{ matrix.php-version }}-$MODE-$CONCURRENCY-$iteration.json"
+            baseline_long_files+=("$baseline_long")
+            current_long_files+=("$current_long")
+
+            if (( iteration % 2 == 1 )); then
+              measure_baseline_long "$baseline_long"
+              measure_current_long "$current_long"
+            else
+              measure_current_long "$current_long"
+              measure_baseline_long "$baseline_long"
+            fi
+          done
+
+          (IFS=,; echo "HOST_BASELINE_LONG=${baseline_long_files[*]}" >> "$GITHUB_ENV")
+          (IFS=,; echo "HOST_CURRENT_LONG=${current_long_files[*]}" >> "$GITHUB_ENV")
+
+      - name: Enforce representative host acceptance
+        run: |
+          php current/benchmarks/HostAcceptanceCompare.php \
+            --baseline="$HOST_BASELINE_FILES" \
+            --current="$HOST_CURRENT_FILES" \
+            --baseline-long="$HOST_BASELINE_LONG" \
+            --current-long="$HOST_CURRENT_LONG" \
+            --max-rpm-regression=2
+
+      - name: Upload host acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: host-acceptance-php-${{ matrix.php-version }}-${{ matrix.mode }}-c${{ matrix.concurrency }}
+          path: ${{ runner.temp }}/host-*.json
+          retention-days: 61
+
+  persistent-soak:
+    name: "Persistent soak - PHP ${{ matrix.php-version }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ["8.4", "8.5"]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          tools: composer:v2
+          coverage: none
+
+      - name: Install production dependencies
+        run: composer install --no-dev --no-interaction --prefer-dist --no-progress --classmap-authoritative
+
+      - name: Run 30-minute persistent-host soak
+        run: |
+          php benchmarks/HostAcceptance.php \
+            --autoload="$GITHUB_WORKSPACE/vendor/autoload.php" \
+            --duration=1800 \
+            --concurrency=32 \
+            --mode=dynamic \
+            --soak \
+            --output="$RUNNER_TEMP/host-soak-${{ matrix.php-version }}.json"
+
+      - name: Enforce soak resource and correctness ceilings
+        run: |
+          php benchmarks/HostAcceptanceCompare.php \
+            --assert-soak="$RUNNER_TEMP/host-soak-${{ matrix.php-version }}.json" \
+            --max-rss-growth-mb=8 \
+            --max-php-growth-mb=4
+
+      - name: Upload soak evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: host-soak-php-${{ matrix.php-version }}
+          path: ${{ runner.temp }}/host-soak-${{ matrix.php-version }}.json
+          retention-days: 61
+
+
+  provider-acceptance:
+    name: "Provider acceptance - PHP ${{ matrix.php-version }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ["8.4", "8.5"]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          extensions: apcu, pdo_sqlite
+          ini-values: apc.enable_cli=1
+          tools: composer:v2
+          coverage: none
+
+      - name: Install provider test dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress --classmap-authoritative
+
+      - name: Assert advertised providers are installed
+        run: |
+          php -r 'require "vendor/autoload.php"; exit(
+            class_exists(\Infocyph\Runwire\RuntimeContext::class)
+            && class_exists(\Infocyph\CacheLayer\Cache\Cache::class)
+            ? 0 : 1
+          );'
+
+      - name: Exercise Runwire and CacheLayer host boundaries
+        run: composer ic:test:code
+
+  source-inventory:
+    name: Release source inventory
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: current
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: actions/checkout@v7
+        with:
+          repository: infocyph/InterMix
+          ref: "f687452b9b8d10333e7beb7d6905b479b2b8480e"
+          path: baseline
+
+      - name: Record before/after production surface
+        shell: bash
+        run: |
+          {
+            echo "baseline_sha=$(git -C baseline rev-parse HEAD)"
+            echo "current_sha=$(git -C current rev-parse HEAD)"
+            echo "baseline_php_files=$(find baseline/src -type f -name '*.php' | wc -l)"
+            echo "current_php_files=$(find current/src -type f -name '*.php' | wc -l)"
+            echo "baseline_public_methods=$(grep -R -h -E '^[[:space:]]*public (static )?function ' baseline/src --include='*.php' | wc -l)"
+            echo "current_public_methods=$(grep -R -h -E '^[[:space:]]*public (static )?function ' current/src --include='*.php' | wc -l)"
+            echo "baseline_source_bytes=$(du -sb baseline/src | cut -f1)"
+            echo "current_source_bytes=$(du -sb current/src | cut -f1)"
+          } | tee "$RUNNER_TEMP/intermix-release-inventory.txt"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: intermix-release-inventory
+          path: ${{ runner.temp }}/intermix-release-inventory.txt
+          retention-days: 61

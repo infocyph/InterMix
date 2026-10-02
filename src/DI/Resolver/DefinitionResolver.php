@@ -6,9 +6,13 @@ namespace Infocyph\InterMix\DI\Resolver;
 
 use Closure;
 use Infocyph\InterMix\DI\Support\AliasDefinition;
+use Infocyph\InterMix\DI\Support\AutowireDefinition;
 use Infocyph\InterMix\DI\Support\DirectFactory;
 use Infocyph\InterMix\DI\Support\FactoryDefinition;
+use Infocyph\InterMix\DI\Support\InputDefinition;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
+use Infocyph\InterMix\DI\Support\RuntimeFactoryDefinition;
+use Infocyph\InterMix\DI\Support\ValueDefinition;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Internal\ReflectionResource;
 use Psr\Cache\CacheItemInterface;
@@ -19,13 +23,12 @@ use Throwable;
 
 class DefinitionResolver
 {
+    use TracksResolutionAncestry;
+
     private ?ClassResolver $classResolver = null;
 
-    /** @var array<int, string> */
-    private array $definitionStack = [];
-
-    /** @var array<string, bool> */
-    private array $entriesResolving = [];
+    /** @var array<int|string, array<int, string>> */
+    private array $definitionStacks = [];
 
     private ?ParameterResolver $parameterResolver = null;
 
@@ -65,6 +68,12 @@ class DefinitionResolver
         $definition = $this->repository->getFunctionDefinition($name);
 
         return match (true) {
+            $definition instanceof ValueDefinition => $definition->value,
+            $definition instanceof InputDefinition => throw new ContainerException(
+                "Required scoped input '{$name}' was not supplied.",
+            ),
+            $definition instanceof AutowireDefinition => $this->resolveAutowireDefinition($name, $definition),
+            $definition instanceof RuntimeFactoryDefinition => $definition->resolve($this->repository->container()),
             $definition instanceof AliasDefinition => $this->resolveAliasDefinition($name, $definition),
             $definition instanceof DirectFactory => $definition->resolve(),
             $definition instanceof Closure => $this->resolveClosure($definition),
@@ -87,6 +96,7 @@ class DefinitionResolver
     {
         if ($this->repository->getDefinitionLifetime($name) !== LifetimeEnum::Singleton
             || $skipExternalCache
+            || !$this->repository->usesDefinitionCacheFor($name)
         ) {
             return $this->resolveDefinition($name);
         }
@@ -166,6 +176,23 @@ class DefinitionResolver
         return $this->resolveArrayDefinition(array_values($definition));
     }
 
+    private function resolveAutowireDefinition(
+        string $name,
+        AutowireDefinition $definition,
+    ): mixed {
+        [$classResolver] = $this->resolvers();
+        if ($this->repository->isTracingEnabled()) {
+            $this->repository->tracer()->recordDependency($name, $definition->class, 'definition-class');
+        }
+
+        return $classResolver->resolve(
+            ReflectionResource::getClassReflection($definition->class),
+            make: true,
+            constructorParameters: $definition->arguments,
+            propertyParameters: $definition->properties,
+        )->instance;
+    }
+
     private function resolveClassDefinition(string $name, string $definition): mixed
     {
         [$classResolver] = $this->resolvers();
@@ -232,21 +259,21 @@ class DefinitionResolver
 
     private function resolveTracked(string $name, bool $skipExternalCache): mixed
     {
-        if (isset($this->entriesResolving[$name])) {
-            throw new ContainerException("Circular dependency for definition '$name'.");
-        }
-
+        $context = $this->beginResolutionEntry(
+            $name,
+            "Circular dependency for definition '$name'.",
+        );
         $tracing = $this->repository->isTracingEnabled();
         if ($tracing) {
-            $parent = end($this->definitionStack);
+            $stack = $this->definitionStacks[$context] ?? [];
+            $parent = end($stack);
             if (is_string($parent) && $parent !== $name) {
                 $this->repository->tracer()->recordDependency($parent, $name, 'definition');
             }
-            $this->definitionStack[] = $name;
+            $stack[] = $name;
+            $this->definitionStacks[$context] = $stack;
             $this->repository->tracer()->push("def:$name");
         }
-
-        $this->entriesResolving[$name] = true;
 
         try {
             $resolved = $this->getFromCacheOrResolve($name, $skipExternalCache);
@@ -254,9 +281,12 @@ class DefinitionResolver
 
             return $resolved;
         } finally {
-            unset($this->entriesResolving[$name]);
+            $this->endResolutionEntry($name, $context);
             if ($tracing) {
-                array_pop($this->definitionStack);
+                array_pop($this->definitionStacks[$context]);
+                if ($this->definitionStacks[$context] === []) {
+                    unset($this->definitionStacks[$context]);
+                }
             }
         }
     }

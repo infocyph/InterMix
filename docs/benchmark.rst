@@ -4,137 +4,43 @@
 Benchmarking InterMix
 =====================
 
-InterMix ships with PhpBench suites at:
+InterMix maintains component PhpBench suites plus release acceptance harnesses.
 
-- ``benchmarks/IntermixBench.php``
-- ``benchmarks/RuntimeFeaturesBench.php``
-- ``benchmarks/CompiledResolverBench.php``
-- ``benchmarks/CompiledRuntimeBench.php``
-- ``benchmarks/DefinitionCacheBench.php``
-- ``benchmarks/RequestPathBench.php``
-- ``benchmarks/StructuredScopeBench.php``
-- ``benchmarks/FenceBench.php``
+Component benchmarks
+--------------------
 
-Run every suite with PHPForge's quick benchmark profile:
+Run the PHPForge quick benchmark profile:
 
 .. code-block:: bash
 
    composer ic:bench:quick
 
-This discovers every ``*Bench.php`` file under ``benchmarks/`` and uses fewer
-revolutions and iterations for a fast development or CI signal. No
-project-specific benchmark command is required.
+The suites cover dynamic and compiled resolution, definition caching, request paths, structured scopes, runtime features, and Fence behavior.
 
-Run the same complete suite with the full benchmark profile before accepting a
-performance-sensitive change or preparing a release:
+Release regression
+------------------
 
-.. code-block:: bash
+benchmarks/ReleaseRegression.php compares the immutable 10.1.1 baseline with the current candidate on PHP 8.4 and 8.5. It remains a mandatory diagnostic signal for hot-path regressions.
 
-   composer ic:benchmark
+Representative host acceptance
+------------------------------
 
-Render the complete suite as a console chart with:
+benchmarks/HostAcceptance.php measures equivalent persistent-host request/job work using version-specific setup outside the measured loop. Dynamic mode is measured across the full concurrency curve, while generated production and hybrid-fallback modes are measured at the representative c32 point on PHP 8.4 and 8.5. Provider acceptance separately exercises the real Runwire 2.1 and CacheLayer 4 host boundaries.
 
-.. code-block:: bash
+It records:
 
-   composer ic:bench:chart
+* successful RPS and RPM,
+* completed/failed responses,
+* actual end-to-end per-request p50/p95/p99 latency,
+* batch scheduling p50/p95/p99 as a separate diagnostic,
+* elapsed time and process CPU utilization,
+* steady and peak RSS,
+* PHP memory usage and memory growth,
+* bounded latency samples spanning the complete measured interval,
+* maximum in-flight requests.
 
-What it measures
-----------------
+The workload is closed-loop and has no external request queue, so it reports that queue model explicitly instead of publishing a fabricated queue-depth value.
 
-The suite covers DI paths end-to-end:
+The release comparison uses seven alternating baseline/candidate process pairs plus two five-minute sustained baseline/candidate pairs run in opposite orders. Both throughput gates retain the 2% regression ceiling; the balanced long-run ordering reduces host-frequency and thermal drift without widening the budget. Tail-latency and resource ceilings use the worst observed five-minute baseline/candidate evidence. Response validation is mandatory; invalid or failed responses never count as successful throughput.
 
-- Singleton ``get()`` hot-path throughput
-- Scoped ``get()`` and ``has()`` hot paths
-- Transient object graph creation via ``make()``
-- Closure invocation through container DI
-- Reflected and direct transient factory resolution
-- Class-method invocation via ``registerMethod()`` + ``make(..., method)``
-- Property wiring via ``registerProperty()`` + ``make()``
-- Immediate resolution via ``resolveNow()`` (class and method paths)
-- Scoped lifetime behavior with ``enterScope()`` / ``leaveScope()``
-- Structured-scope sequential resolved reads in dynamic and generated runtimes
-- Fiber-isolated scope enter/resolve/leave round trips
-- Logical ``ScopeContext`` capture
-- Explicit attached-child resolve/detach round trips
-- Attached child nested-scope enter/resolve/leave round trips
-- Tagged service lookup via ``findByTag()``
-- Lazy tagged iteration via ``tagged()``
-- ``Invoker`` wrapper method invocation path
-- ``Invoker`` static-method callable fast path
-- ``Invoker`` zero-argument closure fast path
-- ``Invoker`` function, invokable object, class-string, and static-method string paths
-- Unsigned and signed Closure serialization/deserialization
-- MacroMix instance/static invocation
-- MacroMix direct and bulk registration with mutation locking on and off
-- Compiled artifact generation, boot, prevalidated boot, and resolution
-- Generated ``ProductionContainer`` singleton/transient graphs versus dynamic,
-  compatible compiled-resolver, array-map, and native-construction baselines
-- Uncached scalar resolution and PSR-6/CacheLayer memory-cache hits
-- CacheLayer APCu hits when APCu is available
-- Definition-cache warmup at 10, 100, and 1000 entries
-- Bulk versus sequential warmup and logical generation rotation
-- Definition-free scope seeding for ready request/job instances
-- Service-provider registration path
-- Environment-conditional interface binding path
-- Manual object graph baseline (non-container)
-
-Structured-scope regression policy
-----------------------------------
-
-InterMix 10.1 keeps the ordinary sequential production path as the primary
-performance gate. The structured-concurrency machinery is intentionally lazy:
-plain request/job execution should not pay attachment or runtime-detection work
-on every ``get()`` call.
-
-For release review:
-
-* compare the existing sequential production/request benchmarks with the 10.0
-  baseline on the same PHP build and machine;
-* treat a sustained sequential production regression above roughly **3%** as a
-  release blocker unless the change is explicitly justified;
-* inspect ``StructuredScopeBench`` separately for capture, attached-child and
-  nested-frame costs—these are opt-in structured paths, not the baseline;
-* confirm Fiber-isolated scope cost does not materially regress; and
-* run both PHP 8.4 and 8.5 benchmark jobs used by the repository workflow.
-
-InterMix 10.1 also includes ``benchmarks/ReleaseRegression.php``. This is a
-release-gate harness rather than a PhpBench suite. The ``Security & Standards``
-workflow checks out the InterMix 10.0.4 baseline and the candidate on the same
-GitHub runner, executes five alternating baseline/candidate process pairs, and
-compares the median process result for:
-
-* generated production scoped-service reads, with a **3%** maximum regression;
-  and
-* isolated-Fiber scope round trips, with a **5%** maximum regression.
-
-The gate runs independently on PHP 8.4 and PHP 8.5 and uploads the raw JSON
-samples as workflow artifacts. For the final 10.1 alignment validation, the
-same-runner comparisons were within budget on both versions:
-
-* PHP 8.4: sequential production **-0.46%**, isolated Fiber **+3.19%**;
-* PHP 8.5: sequential production **+2.65%**, isolated Fiber **+2.13%**.
-
-The normal PHPForge benchmark jobs remain useful broad-suite signals. Their
-optional stored-baseline comparison steps may be skipped when no benchmark
-baseline/result arguments are supplied; the dedicated release-regression job is
-the authoritative 10.0.4-to-10.1 gate for the two frozen runtime paths above.
-
-Interpretation
---------------
-
-These are isolated microbenchmarks, not application requests-per-second or
-capacity guarantees. Compare the same subject, PHP build, extensions, machine,
-warmup and revision; inspect variance before acting on a difference. Generated
-runtime improvements should also be validated in an application-shaped request
-or job benchmark.
-
-Output columns
---------------
-
-- ``benchmark``: benchmark class name
-- ``subject``: measured scenario method
-- ``revs``: revolutions per iteration
-- ``its``: number of iterations
-- ``mem_peak``: peak memory in the measured process
-- ``mode``: modal execution time for the subject
-- ``rstdev``: relative standard deviation
+A component microbenchmark is diagnostic evidence, not proof of application-level performance.

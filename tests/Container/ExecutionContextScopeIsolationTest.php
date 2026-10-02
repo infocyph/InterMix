@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Fiber;
 use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\ContainerBuilder;
+use Infocyph\InterMix\DI\Support\LifetimeEnum;
 
 final class ExecutionContextScopedLeaf {}
 
@@ -20,25 +21,25 @@ function interleaveExecutionContextScopes(object $container): array
     $seedB = new ExecutionContextScopedLeaf();
 
     $fiberA = new Fiber(static function () use ($container, $seedA): array {
-        $container->enterScope('request', ['seeded' => $seedA]);
+        testEnterScope($container, 'request', ['seeded' => $seedA]);
         $first = $container->get('leaf');
         $seeded = $container->get('seeded');
         Fiber::suspend();
         $again = $container->get('leaf');
         $seededAgain = $container->get('seeded');
-        $container->leaveScope();
+        testLeaveScope($container);
 
         return [$first, $again, $seeded, $seededAgain];
     });
 
     $fiberB = new Fiber(static function () use ($container, $seedB): array {
-        $container->enterScope('request', ['seeded' => $seedB]);
+        testEnterScope($container, 'request', ['seeded' => $seedB]);
         $first = $container->get('leaf');
         $seeded = $container->get('seeded');
         Fiber::suspend();
         $again = $container->get('leaf');
         $seededAgain = $container->get('seeded');
-        $container->leaveScope();
+        testLeaveScope($container);
 
         return [$first, $again, $seeded, $seededAgain];
     });
@@ -63,33 +64,33 @@ function interleaveExecutionContextScopes(object $container): array
 function interleaveNestedExecutionContextScopes(object $container): array
 {
     $fiberA = new Fiber(static function () use ($container): array {
-        $container->enterScope('request');
+        testEnterScope($container, 'request');
         $parent = $container->get('leaf');
         Fiber::suspend();
 
-        $container->enterScope('nested-a');
+        testEnterScope($container, 'nested-a');
         $nested = $container->get('leaf');
         Fiber::suspend();
 
-        $container->leaveScope();
+        testLeaveScope($container);
         $restored = $container->get('leaf');
-        $container->leaveScope();
+        testLeaveScope($container);
 
         return [$parent, $nested, $restored];
     });
 
     $fiberB = new Fiber(static function () use ($container): array {
-        $container->enterScope('request');
+        testEnterScope($container, 'request');
         $parent = $container->get('leaf');
         Fiber::suspend();
 
-        $container->enterScope('nested-b');
+        testEnterScope($container, 'nested-b');
         $nested = $container->get('leaf');
         Fiber::suspend();
 
-        $container->leaveScope();
+        testLeaveScope($container);
         $restored = $container->get('leaf');
-        $container->leaveScope();
+        testLeaveScope($container);
 
         return [$parent, $nested, $restored];
     });
@@ -113,19 +114,19 @@ function interleaveNullableExecutionContextSeeds(object $container): array
     $seedB = new ExecutionContextScopedLeaf();
 
     $fiberA = new Fiber(static function () use ($container): mixed {
-        $container->enterScope('request', ['nullable' => null]);
+        testEnterScope($container, 'request', ['nullable' => null]);
         $seed = $container->get('nullable');
         Fiber::suspend();
-        $container->leaveScope();
+        testLeaveScope($container);
 
         return $seed;
     });
 
     $fiberB = new Fiber(static function () use ($container, $seedB): mixed {
-        $container->enterScope('request', ['nullable' => $seedB]);
+        testEnterScope($container, 'request', ['nullable' => $seedB]);
         $seed = $container->get('nullable');
         Fiber::suspend();
-        $container->leaveScope();
+        testLeaveScope($container);
 
         return $seed;
     });
@@ -156,9 +157,9 @@ function executionContextThrowableCleanup(object $container): array
             }
         }
 
-        $container->enterScope('request');
+        testEnterScope($container, 'request');
         $second = $container->get('leaf');
-        $container->leaveScope();
+        testLeaveScope($container);
 
         return [$first, $second];
     });
@@ -173,9 +174,9 @@ function repeatedExecutionContextScopeRoots(object $container, int $iterations =
     $resolved = [];
     for ($i = 0; $i < $iterations; ++$i) {
         $fiber = new Fiber(static function () use ($container): ExecutionContextScopedLeaf {
-            $container->enterScope('request');
+            testEnterScope($container, 'request');
             $leaf = $container->get('leaf');
-            $container->leaveScope();
+            testLeaveScope($container);
 
             return $leaf;
         });
@@ -201,9 +202,11 @@ function removeExecutionContextArtifact(string $path): void
 }
 
 it('isolates dynamic scoped identity and seeds across interleaved Fibers', function () {
-    $container = new Container(uniqid('context_dynamic_'));
-    $container->scoped('leaf', ExecutionContextScopedLeaf::class)
-        ->scoped('seeded', ExecutionContextScopedLeaf::class);
+    $container = ContainerBuilder::create(uniqid('context_dynamic_'))
+        ->releaseIdentity('intermix-test')
+        ->autowire('leaf', ExecutionContextScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->autowire('seeded', ExecutionContextScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->build();
 
     $result = interleaveExecutionContextScopes($container);
 
@@ -217,8 +220,9 @@ it('isolates dynamic scoped identity and seeds across interleaved Fibers', funct
 
 it('isolates compiled scoped identity and seeds across interleaved Fibers', function () {
     $builder = ContainerBuilder::create(uniqid('context_compiled_'))
-        ->scoped('leaf', ExecutionContextScopedLeaf::class)
-        ->scoped('seeded', ExecutionContextScopedLeaf::class);
+        ->releaseIdentity('intermix-test')
+        ->autowire('leaf', ExecutionContextScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->autowire('seeded', ExecutionContextScopedLeaf::class, lifetime: LifetimeEnum::Scoped);
     $path = executionContextArtifactPath();
 
     try {
@@ -238,24 +242,26 @@ it('isolates compiled scoped identity and seeds across interleaved Fibers', func
 });
 
 it('keeps sequential scope state isolated around Fiber scopes', function () {
-    $container = new Container(uniqid('context_mixed_'));
-    $container->scoped('leaf', ExecutionContextScopedLeaf::class)
-        ->scoped('seeded', ExecutionContextScopedLeaf::class);
+    $container = ContainerBuilder::create(uniqid('context_mixed_'))
+        ->releaseIdentity('intermix-test')
+        ->autowire('leaf', ExecutionContextScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->autowire('seeded', ExecutionContextScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->build();
 
     $beforeSeed = new ExecutionContextScopedLeaf();
-    $container->enterScope('request', ['seeded' => $beforeSeed]);
+    testEnterScope($container, 'request', ['seeded' => $beforeSeed]);
     $before = $container->get('leaf');
     $beforeAgain = $container->get('leaf');
     $beforeSeeded = $container->get('seeded');
-    $container->leaveScope();
+    testLeaveScope($container);
 
     $fibers = interleaveExecutionContextScopes($container);
 
     $afterSeed = new ExecutionContextScopedLeaf();
-    $container->enterScope('request', ['seeded' => $afterSeed]);
+    testEnterScope($container, 'request', ['seeded' => $afterSeed]);
     $after = $container->get('leaf');
     $afterSeeded = $container->get('seeded');
-    $container->leaveScope();
+    testLeaveScope($container);
 
     expect($before)->toBe($beforeAgain)
         ->and($beforeSeeded)->toBe($beforeSeed)
@@ -268,21 +274,24 @@ it('keeps sequential scope state isolated around Fiber scopes', function () {
 });
 
 it('dispatches scope leave hooks for sequential and Fiber scopes', function () {
-    $container = new Container(uniqid('context_hooks_'));
     $calls = [];
-    $container->onScopeLeave(
-        'request',
-        static function (string $scope, Container $activeContainer) use (&$calls, $container): void {
-            $calls[] = [$scope, Fiber::getCurrent() instanceof Fiber, $activeContainer === $container];
-        },
-    );
+    $container = null;
+    $builder = ContainerBuilder::create(uniqid('context_hooks_'))
+        ->releaseIdentity('intermix-test')
+        ->onScopeLeave(
+            'request',
+            static function (string $scope, Container $activeContainer) use (&$calls, &$container): void {
+                $calls[] = [$scope, Fiber::getCurrent() instanceof Fiber, $activeContainer === $container];
+            },
+        );
+    $container = $builder->build();
 
-    $container->enterScope('request');
-    $container->leaveScope();
+    testEnterScope($container, 'request');
+    testLeaveScope($container);
 
     $fiber = new Fiber(static function () use ($container): void {
-        $container->enterScope('request');
-        $container->leaveScope();
+        testEnterScope($container, 'request');
+        testLeaveScope($container);
     });
     $fiber->start();
 
@@ -293,8 +302,10 @@ it('dispatches scope leave hooks for sequential and Fiber scopes', function () {
 });
 
 it('keeps nested dynamic Fiber scope stacks independent', function () {
-    $container = new Container(uniqid('context_nested_dynamic_'));
-    $container->scoped('leaf', ExecutionContextScopedLeaf::class);
+    $container = ContainerBuilder::create(uniqid('context_nested_dynamic_'))
+        ->releaseIdentity('intermix-test')
+        ->autowire('leaf', ExecutionContextScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->build();
 
     $result = interleaveNestedExecutionContextScopes($container);
 
@@ -308,7 +319,8 @@ it('keeps nested dynamic Fiber scope stacks independent', function () {
 
 it('keeps nested compiled Fiber scope stacks independent', function () {
     $builder = ContainerBuilder::create(uniqid('context_nested_compiled_'))
-        ->scoped('leaf', ExecutionContextScopedLeaf::class);
+        ->releaseIdentity('intermix-test')
+        ->autowire('leaf', ExecutionContextScopedLeaf::class, lifetime: LifetimeEnum::Scoped);
     $path = executionContextArtifactPath();
 
     try {
@@ -328,8 +340,10 @@ it('keeps nested compiled Fiber scope stacks independent', function () {
 });
 
 it('preserves null seed isolation across dynamic Fibers', function () {
-    $container = new Container(uniqid('context_null_dynamic_'));
-    $container->scoped('nullable', ExecutionContextScopedLeaf::class);
+    $container = ContainerBuilder::create(uniqid('context_null_dynamic_'))
+        ->releaseIdentity('intermix-test')
+        ->autowire('nullable', ExecutionContextScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->build();
 
     [$nullSeed, $objectSeed] = interleaveNullableExecutionContextSeeds($container);
 
@@ -339,7 +353,8 @@ it('preserves null seed isolation across dynamic Fibers', function () {
 
 it('preserves null seed isolation across compiled Fibers', function () {
     $builder = ContainerBuilder::create(uniqid('context_null_compiled_'))
-        ->scoped('nullable', ExecutionContextScopedLeaf::class);
+        ->releaseIdentity('intermix-test')
+        ->autowire('nullable', ExecutionContextScopedLeaf::class, lifetime: LifetimeEnum::Scoped);
     $path = executionContextArtifactPath();
 
     try {
@@ -355,8 +370,10 @@ it('preserves null seed isolation across compiled Fibers', function () {
 });
 
 it('cleans dynamic Fiber scope state when withinScope throws', function () {
-    $container = new Container(uniqid('context_throw_dynamic_'));
-    $container->scoped('leaf', ExecutionContextScopedLeaf::class);
+    $container = ContainerBuilder::create(uniqid('context_throw_dynamic_'))
+        ->releaseIdentity('intermix-test')
+        ->autowire('leaf', ExecutionContextScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->build();
 
     [$beforeFailure, $afterFailure] = executionContextThrowableCleanup($container);
 
@@ -367,7 +384,8 @@ it('cleans dynamic Fiber scope state when withinScope throws', function () {
 
 it('cleans compiled Fiber scope state when withinScope throws', function () {
     $builder = ContainerBuilder::create(uniqid('context_throw_compiled_'))
-        ->scoped('leaf', ExecutionContextScopedLeaf::class);
+        ->releaseIdentity('intermix-test')
+        ->autowire('leaf', ExecutionContextScopedLeaf::class, lifetime: LifetimeEnum::Scoped);
     $path = executionContextArtifactPath();
 
     try {
@@ -384,8 +402,10 @@ it('cleans compiled Fiber scope state when withinScope throws', function () {
 });
 
 it('creates fresh dynamic roots for repeated Fibers using the same scope name', function () {
-    $container = new Container(uniqid('context_repeat_dynamic_'));
-    $container->scoped('leaf', ExecutionContextScopedLeaf::class);
+    $container = ContainerBuilder::create(uniqid('context_repeat_dynamic_'))
+        ->releaseIdentity('intermix-test')
+        ->autowire('leaf', ExecutionContextScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
+        ->build();
 
     $resolved = repeatedExecutionContextScopeRoots($container);
     $objectIds = array_map(spl_object_id(...), $resolved);
@@ -395,7 +415,8 @@ it('creates fresh dynamic roots for repeated Fibers using the same scope name', 
 
 it('creates fresh compiled roots for repeated Fibers using the same scope name', function () {
     $builder = ContainerBuilder::create(uniqid('context_repeat_compiled_'))
-        ->scoped('leaf', ExecutionContextScopedLeaf::class);
+        ->releaseIdentity('intermix-test')
+        ->autowire('leaf', ExecutionContextScopedLeaf::class, lifetime: LifetimeEnum::Scoped);
     $path = executionContextArtifactPath();
 
     try {
@@ -413,7 +434,8 @@ it('creates fresh compiled roots for repeated Fibers using the same scope name',
 it('dispatches compiled scope leave hooks for sequential and Fiber scopes', function () {
     $calls = [];
     $builder = ContainerBuilder::create(uniqid('context_compiled_hooks_'))
-        ->scoped('leaf', ExecutionContextScopedLeaf::class)
+        ->releaseIdentity('intermix-test')
+        ->autowire('leaf', ExecutionContextScopedLeaf::class, lifetime: LifetimeEnum::Scoped)
         ->onScopeLeave(
             'request',
             static function (string $scope, Container $activeContainer) use (&$calls): void {
@@ -425,12 +447,12 @@ it('dispatches compiled scope leave hooks for sequential and Fiber scopes', func
     try {
         $builder->compile($path);
         $runtime = $builder->production($path);
-        $runtime->enterScope('request');
-        $runtime->leaveScope();
+        testEnterScope($runtime, 'request');
+        testLeaveScope($runtime);
 
         $fiber = new Fiber(static function () use ($runtime): void {
-            $runtime->enterScope('request');
-            $runtime->leaveScope();
+            testEnterScope($runtime, 'request');
+            testLeaveScope($runtime);
         });
         $fiber->start();
 

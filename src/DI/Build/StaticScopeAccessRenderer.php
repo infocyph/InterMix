@@ -9,10 +9,48 @@ use Infocyph\InterMix\DI\Support\LifetimeEnum;
 /** @internal */
 final class StaticScopeAccessRenderer
 {
-    public function seedGuard(int $slot, LifetimeEnum $lifetime): string
+    public function constructionGuard(LifetimeEnum $lifetime, ?string $id = null): string
     {
+        if ($lifetime !== LifetimeEnum::Scoped) {
+            return '';
+        }
+
+        $message = var_export(
+            'Scoped entry \'' . ($id ?? '') . '\' requires an active scope.',
+            true,
+        );
+
+        return "        if (\$scope->name === 'root') {\n"
+            . "            throw new \\Infocyph\\InterMix\\Exceptions\\ContainerException({$message});\n"
+            . "        }\n\n";
+    }
+
+    /** @param array<string, array{kind: string, lifetime: LifetimeEnum}> $plans */
+    public function requiresCaptiveGuard(array $plans): bool
+    {
+        return array_any(
+            $plans,
+            fn(array $plan): bool => $plan['lifetime'] === LifetimeEnum::Singleton
+                && $plan['kind'] !== 'value',
+        );
+    }
+
+    public function seedGuard(
+        int $slot,
+        LifetimeEnum $lifetime,
+        ?string $id = null,
+        bool $guardCaptive = true,
+    ): string {
         if ($lifetime === LifetimeEnum::Scoped) {
-            return "        \$scope = \$this->contextScopesActive ? \$this->compiledScope() : \$this->scope;\n"
+            $source = "        \$scope = \$this->contextScopesActive ? \$this->compiledScope() : \$this->scope;\n";
+            if ($guardCaptive) {
+                $serviceId = var_export($id ?? '', true);
+                $source .= "        if (\$this->compiledSingletonResolutionActive) {\n"
+                    . "            \$this->assertCompiledScopedResolution({$serviceId});\n"
+                    . "        }\n";
+            }
+
+            return $source
                 . "        if (\$scope->hasSeeds && array_key_exists({$slot}, \$scope->seeds)) {\n"
                 . "            return \$scope->seeds[{$slot}];\n"
                 . "        }\n\n";

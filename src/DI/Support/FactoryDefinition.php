@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Support;
 
-use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\BoundedValueInspector;
+use Infocyph\InterMix\DI\RuntimeContainerInterface;
 use InvalidArgumentException;
 use ReflectionClass;
 
@@ -16,6 +17,9 @@ use ReflectionClass;
  */
 final readonly class FactoryDefinition
 {
+    /** @var array<int, scalar|array<array-key, mixed>|ServiceReference|null> */
+    public array $arguments;
+
     /**
      * @param class-string $class
      * @param string|null $method Public static factory name, or null for construction.
@@ -24,35 +28,10 @@ final readonly class FactoryDefinition
     private function __construct(
         public string $class,
         public ?string $method,
-        public array $arguments,
+        array $arguments,
     ) {
-        if (!class_exists($this->class)) {
-            throw new InvalidArgumentException("Factory class '{$this->class}' does not exist.");
-        }
-        $reflection = new ReflectionClass($this->class);
-        if ($this->method === null && !$reflection->isInstantiable()) {
-            throw new InvalidArgumentException("Factory class '{$this->class}' is not instantiable.");
-        }
-        if ($this->method !== null) {
-            if (!$reflection->hasMethod($this->method)) {
-                throw new InvalidArgumentException("Factory method '{$this->class}::{$this->method}' does not exist.");
-            }
-            $method = $reflection->getMethod($this->method);
-            if (!$method->isPublic() || !$method->isStatic()) {
-                throw new InvalidArgumentException('Declarative factory methods must be public and static.');
-            }
-        }
-        if (!array_is_list($this->arguments)) {
-            throw new InvalidArgumentException('Declarative factory arguments must be a positional list.');
-        }
-
-        foreach ($this->arguments as $argument) {
-            if (!$argument instanceof ServiceReference && !self::isExportable($argument)) {
-                throw new InvalidArgumentException(
-                    'Declarative factory arguments must be service references or exportable values.',
-                );
-            }
-        }
+        self::assertTarget($class, $method);
+        $this->arguments = self::snapshotArguments($arguments);
     }
 
     /**
@@ -77,7 +56,7 @@ final readonly class FactoryDefinition
         return new self($class, $method, $arguments);
     }
 
-    public function resolve(Container $container): mixed
+    public function resolve(RuntimeContainerInterface $container): mixed
     {
         $arguments = [];
         foreach ($this->arguments as $argument) {
@@ -96,9 +75,7 @@ final readonly class FactoryDefinition
         return new $class(...$arguments);
     }
 
-    /**
-     * @return array{class: class-string, method: string|null, arguments: array<int, mixed>}
-     */
+    /** @return array{class: class-string, method: string|null, arguments: array<int, mixed>} */
     public function signature(): array
     {
         $arguments = [];
@@ -115,15 +92,80 @@ final readonly class FactoryDefinition
         ];
     }
 
-    private static function isExportable(mixed $value): bool
+    /** @param class-string $class */
+    private static function assertTarget(string $class, ?string $method): void
     {
-        if ($value === null || is_scalar($value)) {
-            return true;
-        }
-        if (!is_array($value)) {
-            return false;
+        if (!class_exists($class)) {
+            throw new InvalidArgumentException("Factory class '{$class}' does not exist.");
         }
 
-        return array_all($value, fn($item) => self::isExportable($item));
+        $reflection = new ReflectionClass($class);
+        if ($method === null) {
+            if (!$reflection->isInstantiable()) {
+                throw new InvalidArgumentException("Factory class '{$class}' is not instantiable.");
+            }
+
+            return;
+        }
+
+        if (!$reflection->hasMethod($method)) {
+            throw new InvalidArgumentException("Factory method '{$class}::{$method}' does not exist.");
+        }
+
+        $factory = $reflection->getMethod($method);
+        if (!$factory->isPublic() || !$factory->isStatic()) {
+            throw new InvalidArgumentException('Declarative factory methods must be public and static.');
+        }
+    }
+
+    private static function isExportable(mixed $value): bool
+    {
+        return BoundedValueInspector::isScalarNullArray($value);
+    }
+
+    /**
+     * @param array<int, scalar|array<array-key, mixed>|ServiceReference|null> $arguments
+     * @return array<int, scalar|array<array-key, mixed>|ServiceReference|null>
+     */
+    private static function snapshotArguments(array $arguments): array
+    {
+        if (!array_is_list($arguments)) {
+            throw new InvalidArgumentException('Declarative factory arguments must be a positional list.');
+        }
+
+        $snapshot = [];
+        foreach ($arguments as $argument) {
+            if (!$argument instanceof ServiceReference && !self::isExportable($argument)) {
+                throw new InvalidArgumentException(
+                    'Declarative factory arguments must be service references or exportable values.',
+                );
+            }
+
+            $snapshot[] = $argument instanceof ServiceReference
+                ? $argument
+                : self::snapshotValue($argument);
+        }
+
+        return $snapshot;
+    }
+
+    /** @return scalar|array<array-key, mixed>|null */
+    private static function snapshotValue(mixed $value): mixed
+    {
+        if (is_scalar($value) || $value === null) {
+            return $value;
+        }
+        if (!is_array($value)) {
+            throw new InvalidArgumentException(
+                'Declarative factory arguments must be service references or exportable values.',
+            );
+        }
+
+        $snapshot = [];
+        foreach ($value as $key => $item) {
+            $snapshot[$key] = self::snapshotValue($item);
+        }
+
+        return $snapshot;
     }
 }

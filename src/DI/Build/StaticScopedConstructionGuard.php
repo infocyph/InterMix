@@ -25,7 +25,8 @@ final class StaticScopedConstructionGuard
     public function apply(string $source, array $plans, array $slots): string
     {
         $wrappers = '';
-        foreach ($plans as $id => $plan) {
+        foreach ($plans as $rawId => $plan) {
+            $id = (string) $rawId;
             if ($plan['lifetime'] !== LifetimeEnum::Scoped) {
                 continue;
             }
@@ -44,6 +45,9 @@ final class StaticScopedConstructionGuard
             $exportedId = var_export($id, true);
             $wrappers .= "    private function s{$slot}(): mixed\n"
                 . "    {\n"
+                . "        if (\$this->compiledSingletonResolutionActive) {\n"
+                . "            \$this->assertCompiledScopedResolution({$exportedId});\n"
+                . "        }\n"
                 . "        \$scope = \$this->contextScopesActive ? \$this->compiledScope() : \$this->scope;\n"
                 . "        if (\$scope->hasSeeds && array_key_exists({$slot}, \$scope->seeds)) {\n"
                 . "            return \$scope->seeds[{$slot}];\n"

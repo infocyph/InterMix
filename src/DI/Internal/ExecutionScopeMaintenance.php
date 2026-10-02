@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Internal;
 
 use Infocyph\InterMix\Exceptions\ContainerException;
+use Infocyph\InterMix\Exceptions\ScopeCleanupException;
 
 /** @internal */
 trait ExecutionScopeMaintenance
@@ -47,6 +48,39 @@ trait ExecutionScopeMaintenance
         });
     }
 
+    /**
+     * @param callable(): void $leaveScope
+     * @return array{failures: list<\Throwable>, count: int}
+     */
+    public function resetContext(string $context, callable $leaveScope): array
+    {
+        $failures = [];
+        $failureCount = 0;
+
+        if ($this->isAttached($context)) {
+            while ($this->hasNestedScope($context)) {
+                try {
+                    $leaveScope();
+                } catch (ScopeCleanupException $failure) {
+                    $this->appendCleanupFailure($failure, $failures, $failureCount);
+                }
+            }
+            $this->detachCurrentScopeContext($context);
+
+            return ['failures' => $failures, 'count' => $failureCount];
+        }
+
+        while ($this->hasState($context)) {
+            try {
+                $leaveScope();
+            } catch (ScopeCleanupException $failure) {
+                $this->appendCleanupFailure($failure, $failures, $failureCount);
+            }
+        }
+
+        return ['failures' => $failures, 'count' => $failureCount];
+    }
+
     public function scopeForLeave(string $context): string
     {
         $state = $this->states[$context] ?? null;
@@ -62,20 +96,43 @@ trait ExecutionScopeMaintenance
             throw new ContainerException('Cannot leave an attached scope context; detach it instead.');
         }
         if ($scope->attachments > 0) {
+            $scope->draining = true;
+
             throw new ContainerException('Cannot leave a scope while child execution carriers are still attached.');
         }
 
         return $scope->name;
     }
 
+    /**
+     * @param list<\Throwable> $failures
+     */
+    private function appendCleanupFailure(
+        ScopeCleanupException $failure,
+        array &$failures,
+        int &$failureCount,
+    ): void {
+        $failureCount += $failure->cleanupFailureCount;
+        foreach ($failure->cleanupFailures as $cleanupFailure) {
+            if (count($failures) >= 32) {
+                break;
+            }
+            $failures[] = $cleanupFailure;
+        }
+    }
+
     private function closeLogicalFrames(?LogicalScopeState $scope, ?LogicalScopeState $stopBefore = null): void
     {
-        for (; $scope instanceof LogicalScopeState && $scope !== $stopBefore; $scope = $scope->parent) {
+        while ($scope instanceof LogicalScopeState && $scope !== $stopBefore) {
             if ($scope->attachments > 0) {
+                $scope->draining = true;
+
                 throw new ContainerException('Cannot reset a scope while child execution carriers are still attached.');
             }
-            $scope->closed = true;
-            $scope->constructing = [];
+
+            $parent = $scope->parent;
+            $scope->close();
+            $scope = $parent;
         }
     }
 

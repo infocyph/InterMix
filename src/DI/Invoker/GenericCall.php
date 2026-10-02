@@ -6,7 +6,12 @@ namespace Infocyph\InterMix\DI\Invoker;
 
 use Infocyph\InterMix\DI\Internal\ClassResolution;
 use Infocyph\InterMix\DI\Resolver\Repository;
+use Infocyph\InterMix\DI\Support\AutowireDefinition;
 use Infocyph\InterMix\DI\Support\DirectFactory;
+use Infocyph\InterMix\DI\Support\FactoryDefinition;
+use Infocyph\InterMix\DI\Support\InputDefinition;
+use Infocyph\InterMix\DI\Support\RuntimeFactoryDefinition;
+use Infocyph\InterMix\DI\Support\ValueDefinition;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Internal\ReflectionResource;
 use InvalidArgumentException;
@@ -32,6 +37,7 @@ final readonly class GenericCall
      * @param bool $make Kept for resolver-contract parity.
      * @param array<int|string, mixed> $constructorParameters Ephemeral constructor arguments.
      * @param array<int|string, mixed> $methodParameters Ephemeral method arguments.
+     * @param array<string, mixed> $propertyParameters Ephemeral property overrides.
      * @throws ReflectionException
      */
     public function classSettler(
@@ -40,6 +46,7 @@ final readonly class GenericCall
         bool $make = false,
         array $constructorParameters = [],
         array $methodParameters = [],
+        array $propertyParameters = [],
     ): ClassResolution {
         // Generic resolution always constructs a fresh object, so the parity flag has no further effect.
         unset($make);
@@ -52,7 +59,7 @@ final readonly class GenericCall
         $this->repository->markResolved($class);
 
         // Set class properties (if any)
-        $props = $this->readNestedArray($classResource, ['property']);
+        $props = $propertyParameters + $this->readNestedArray($classResource, ['property']);
         $this->setProperties($instance, $props);
 
         // Determine method to invoke (method param, or classResource's configured "method", or defaultMethod)
@@ -99,6 +106,20 @@ final readonly class GenericCall
         $definition = $this->repository->getFunctionDefinition($name);
 
         $resolved = match (true) {
+            $definition instanceof ValueDefinition => $definition->value,
+            $definition instanceof InputDefinition => throw new ContainerException(
+                "Required scoped input '{$name}' was not supplied.",
+            ),
+            $definition instanceof AutowireDefinition => $this->classSettler(
+                $definition->class,
+                false,
+                true,
+                $definition->arguments,
+                [],
+                $definition->properties,
+            )->instance,
+            $definition instanceof RuntimeFactoryDefinition,
+            $definition instanceof FactoryDefinition => $definition->resolve($this->repository->container()),
             $definition instanceof DirectFactory => $definition->resolve(),
             $definition instanceof \Closure => $definition(),
             is_array($definition) => $this->resolveArrayDefinition($definition),

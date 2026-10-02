@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Infocyph\InterMix\DI\Build\DefinitionGraph;
 use Infocyph\InterMix\DI\Build\StaticRuntimeGenerator;
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\Exceptions\NotFoundException;
 use Psr\Container\NotFoundExceptionInterface;
@@ -47,7 +48,7 @@ function removeStaticRuntimeArtifact(string $path): void
 }
 
 it('generates direct transient service graphs without a runtime repository', function () {
-    $container = new Container(uniqid('static_runtime_transient_'));
+    $container = new ConfigurationContainer(uniqid('static_runtime_transient_'));
     $container->bind(StaticRuntimeLeaf::class, StaticRuntimeLeaf::class, LifetimeEnum::Transient);
     $container->bind(StaticRuntimeMiddle::class, StaticRuntimeMiddle::class, LifetimeEnum::Transient);
     $container->bind('root', StaticRuntimeRoot::class, LifetimeEnum::Transient);
@@ -81,7 +82,7 @@ it('generates direct transient service graphs without a runtime repository', fun
 });
 
 it('specializes singleton identity inside the generated runtime', function () {
-    $container = new Container(uniqid('static_runtime_singleton_'));
+    $container = new ConfigurationContainer(uniqid('static_runtime_singleton_'));
     $container->singleton(StaticRuntimeLeaf::class);
     $container->singleton(StaticRuntimeMiddle::class);
     $container->singleton('root', StaticRuntimeRoot::class);
@@ -104,7 +105,7 @@ it('specializes singleton identity inside the generated runtime', function () {
 it('rejects unknown identifiers using the PSR not-found contract', function () {
     expect(is_a(NotFoundException::class, NotFoundExceptionInterface::class, true))->toBeTrue();
 
-    $container = new Container(uniqid('static_runtime_not_found_'));
+    $container = new ConfigurationContainer(uniqid('static_runtime_not_found_'));
     $container->singleton(StaticRuntimeLeaf::class);
 
     $path = staticRuntimeArtifactPath();
@@ -121,7 +122,7 @@ it('rejects unknown identifiers using the PSR not-found contract', function () {
 });
 
 it('keeps dynamic contextual bindings outside the static graph', function () {
-    $container = new Container(uniqid('static_runtime_dynamic_contextual_'));
+    $container = new ConfigurationContainer(uniqid('static_runtime_dynamic_contextual_'));
     $container->singleton(StaticRuntimeLeaf::class);
     $container->singleton(StaticRuntimeMiddle::class);
     $container->singleton('root', StaticRuntimeRoot::class);
@@ -145,7 +146,7 @@ it('keeps dynamic contextual bindings outside the static graph', function () {
 });
 
 it('folds deterministic contextual class bindings into the static graph', function () {
-    $container = new Container(uniqid('static_runtime_contextual_'));
+    $container = new ConfigurationContainer(uniqid('static_runtime_contextual_'));
     $container->singleton('consumer', StaticRuntimeContractConsumer::class);
     $container->when(StaticRuntimeContractConsumer::class)
         ->needs(StaticRuntimeContract::class)
@@ -168,7 +169,7 @@ it('folds deterministic contextual class bindings into the static graph', functi
 });
 
 it('folds the active environment interface binding into the static graph', function () {
-    $container = new Container(uniqid('static_runtime_environment_'));
+    $container = new ConfigurationContainer(uniqid('static_runtime_environment_'));
     $container->singleton('consumer', StaticRuntimeContractConsumer::class);
     $container->options()->bindInterfaceForEnv(
         'production',

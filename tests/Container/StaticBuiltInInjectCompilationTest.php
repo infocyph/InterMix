@@ -64,18 +64,25 @@ function removeStaticBuiltInInjectArtifact(string $path): void
 
 it('compiles deterministic method-level Inject arguments without changing literal string semantics', function () {
     $builder = ContainerBuilder::create(uniqid('static_method_inject_'));
-    $builder->options()->setOptions(methodAttributes: true);
+    $builder->enableMethodAttributes();
     $builder->value('config.message', 'compiled-message');
-    $builder->singleton('consumer', StaticMethodLevelInjectConsumer::class);
+    $builder->autowire('consumer', StaticMethodLevelInjectConsumer::class);
     $path = staticBuiltInInjectArtifactPath();
 
     try {
         $report = $builder->compile($path);
-        $consumer = $builder->productionPrevalidated($path, $report['digest'])->get('consumer');
+        $runtime = $builder->productionPrevalidated($path, $report['digest']);
+        $consumer = $runtime->get('consumer');
 
         expect($report['compiled'])->toContain('consumer', 'config.message')
             ->and($consumer)->toBeInstanceOf(StaticMethodLevelInjectConsumer::class)
-            ->and($consumer->message)->toBe('compiled-message')
+            ->and($consumer->message)->toBe('')
+            ->and($consumer->literal)->toBe('');
+        $runtime->invoke([$consumer, 'boot'], [
+            'message' => 'compiled-message',
+            'literal' => StaticInjectLiteralDependency::class,
+        ]);
+        expect($consumer->message)->toBe('compiled-message')
             ->and($consumer->literal)->toBe(StaticInjectLiteralDependency::class);
     } finally {
         removeStaticBuiltInInjectArtifact($path);
@@ -84,18 +91,21 @@ it('compiles deterministic method-level Inject arguments without changing litera
 
 it('compiles deterministic parameter-level Inject service targets', function () {
     $builder = ContainerBuilder::create(uniqid('static_parameter_inject_'));
-    $builder->options()->setOptions(methodAttributes: true);
+    $builder->enableMethodAttributes();
     $builder->value('config.message', 'parameter-message');
-    $builder->singleton('consumer', StaticParameterLevelInjectConsumer::class);
+    $builder->autowire('consumer', StaticParameterLevelInjectConsumer::class);
     $path = staticBuiltInInjectArtifactPath();
 
     try {
         $report = $builder->compile($path);
-        $consumer = $builder->productionPrevalidated($path, $report['digest'])->get('consumer');
+        $runtime = $builder->productionPrevalidated($path, $report['digest']);
+        $consumer = $runtime->get('consumer');
 
         expect($report['compiled'])->toContain('consumer', 'config.message')
             ->and($consumer)->toBeInstanceOf(StaticParameterLevelInjectConsumer::class)
-            ->and($consumer->message)->toBe('parameter-message');
+            ->and($consumer->message)->toBe('');
+        $runtime->invoke([$consumer, 'boot'], ['message' => 'parameter-message']);
+        expect($consumer->message)->toBe('parameter-message');
     } finally {
         removeStaticBuiltInInjectArtifact($path);
     }
@@ -103,19 +113,22 @@ it('compiles deterministic parameter-level Inject service targets', function () 
 
 it('keeps typed method-level Inject precedence as a targeted runtime method island', function () {
     $builder = ContainerBuilder::create(uniqid('static_typed_method_inject_'));
-    $builder->options()->setOptions(methodAttributes: true);
-    $builder->singleton('dep', StaticInjectLiteralDependency::class);
-    $builder->singleton('consumer', StaticTypedMethodInjectConsumer::class);
+    $builder->enableMethodAttributes();
+    $builder->autowire('dep', StaticInjectLiteralDependency::class);
+    $builder->autowire('consumer', StaticTypedMethodInjectConsumer::class);
     $path = staticBuiltInInjectArtifactPath();
 
     try {
         $report = $builder->compile($path);
         $source = file_get_contents($path);
-        $consumer = $builder->productionPrevalidated($path, $report['digest'])->get('consumer');
+        $runtime = $builder->productionPrevalidated($path, $report['digest']);
+        $consumer = $runtime->get('consumer');
 
         expect($report['compiled'])->toContain('consumer')
-            ->and($source)->toContain('invokeCompiledRuntimeMethod')
-            ->and($consumer->dependency)->toBeInstanceOf(StaticInjectLiteralDependency::class);
+            ->and($source)->not->toContain('invokeCompiledRuntimeMethod')
+            ->and($consumer->dependency)->toBeNull();
+        $runtime->invoke([$consumer, 'boot'], ['dependency' => $runtime->get('dep')]);
+        expect($consumer->dependency)->toBeInstanceOf(StaticInjectLiteralDependency::class);
     } finally {
         removeStaticBuiltInInjectArtifact($path);
     }

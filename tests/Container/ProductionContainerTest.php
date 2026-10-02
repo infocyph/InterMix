@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\DI\ProductionContainer;
+use Infocyph\InterMix\DI\Support\LifetimeEnum;
+use Infocyph\InterMix\Exceptions\ContainerException;
 
 final class ProductionRuntimeLeaf {}
 
@@ -33,7 +35,8 @@ function removeProductionRuntimeArtifact(string $path): void
 
 it('separates build configuration from the generated production runtime', function () {
     $builder = ContainerBuilder::create(uniqid('production_builder_'))
-        ->singleton('root', ProductionRuntimeRoot::class)
+        ->releaseIdentity('intermix-test')
+        ->autowire('root', ProductionRuntimeRoot::class)
         ->value('app.name', 'InterMix');
 
     $path = productionRuntimeArtifactPath();
@@ -59,7 +62,8 @@ it('separates build configuration from the generated production runtime', functi
 
 it('specializes scoped identity and scope seeds in production', function () {
     $builder = ContainerBuilder::create(uniqid('production_scope_'))
-        ->scoped('leaf', ProductionRuntimeLeaf::class);
+        ->releaseIdentity('intermix-test')
+        ->autowire('leaf', ProductionRuntimeLeaf::class, lifetime: LifetimeEnum::Scoped);
 
     $path = productionRuntimeArtifactPath();
 
@@ -71,19 +75,25 @@ it('specializes scoped identity and scope seeds in production', function () {
             ->toContain('$scope->hasSeeds && array_key_exists(');
 
         $runtime = $builder->production($path);
-        $root = $runtime->get('leaf');
+        expect(fn() => $runtime->get('leaf'))->toThrow(ContainerException::class);
 
-        $runtime->enterScope('request-a');
-        $requestA = $runtime->get('leaf');
-        expect($requestA)->toBe($runtime->get('leaf'))->not->toBe($root);
-        $runtime->leaveScope();
+        $requestA = $runtime->withinScope('request-a', static function (ProductionContainer $active): object {
+            $leaf = $active->get('leaf');
+            expect($active->get('leaf'))->toBe($leaf);
+
+            return $leaf;
+        });
 
         $seed = new ProductionRuntimeLeaf();
-        $runtime->enterScope('request-b', ['leaf' => $seed]);
-        expect($runtime->get('leaf'))->toBe($seed);
-        $runtime->leaveScope();
+        $requestB = $runtime->withinScope(
+            'request-b',
+            static fn(ProductionContainer $active): object => $active->get('leaf'),
+            ['leaf' => $seed],
+        );
 
-        expect($runtime->get('leaf'))->toBe($root);
+        expect($requestB)->toBe($seed)
+            ->and($requestA)->not->toBe($requestB)
+            ->and(fn() => $runtime->get('leaf'))->toThrow(ContainerException::class);
     } finally {
         removeProductionRuntimeArtifact($path);
     }
@@ -91,8 +101,9 @@ it('specializes scoped identity and scope seeds in production', function () {
 
 it('keeps dynamic definitions and arbitrary classes as cold fallback islands', function () {
     $builder = ContainerBuilder::create(uniqid('production_dynamic_'))
-        ->singleton('root', ProductionRuntimeRoot::class)
-        ->bind('dynamic', static fn(): object => new stdClass());
+        ->releaseIdentity('intermix-test')
+        ->autowire('root', ProductionRuntimeRoot::class)
+        ->factory('dynamic', static fn(): object => new stdClass());
 
     $path = productionRuntimeArtifactPath();
 
@@ -111,8 +122,9 @@ it('keeps dynamic definitions and arbitrary classes as cold fallback islands', f
 
 it('compiles direct eager and lazy tag dispatch for known production services', function () {
     $builder = ContainerBuilder::create(uniqid('production_tags_'))
-        ->singleton('first', ProductionRuntimeLeaf::class, ['worker'])
-        ->transient('second', ProductionRuntimeLeaf::class, ['worker']);
+        ->releaseIdentity('intermix-test')
+        ->autowire('first', ProductionRuntimeLeaf::class, tags: ['worker'])
+        ->autowire('second', ProductionRuntimeLeaf::class, lifetime: LifetimeEnum::Transient, tags: ['worker']);
 
     $path = productionRuntimeArtifactPath();
 
@@ -120,60 +132,60 @@ it('compiles direct eager and lazy tag dispatch for known production services', 
         $builder->compile($path);
         $source = file_get_contents($path);
         $runtime = $builder->production($path);
-        $eager = $runtime->findByTag('worker');
-        $lazy = iterator_to_array($runtime->findByTagLazy('worker'));
+        $firstPass = iterator_to_array($runtime->tagged('worker'));
+        $secondPass = iterator_to_array($runtime->tagged('worker'));
 
         expect($source)->toBeString()
             ->toContain('protected function compiledTagged(string $tag): ?array')
-            ->toContain('protected function compiledTaggedLazy(string $tag): ?iterable')
-            ->and(array_keys($eager))->toBe(['first', 'second'])
-            ->and(array_keys($lazy))->toBe(['first', 'second'])
-            ->and($lazy['first']())->toBe($eager['first'])
-            ->and($lazy['second']())->toBeInstanceOf(ProductionRuntimeLeaf::class)
-            ->and($runtime->findByTag('missing'))->toBe([])
-            ->and(iterator_to_array($runtime->findByTagLazy('missing')))->toBe([]);
+            ->and(array_keys($firstPass))->toBe(['first', 'second'])
+            ->and(array_keys($secondPass))->toBe(['first', 'second'])
+            ->and($secondPass['first'])->toBe($firstPass['first'])
+            ->and($secondPass['second'])->toBeInstanceOf(ProductionRuntimeLeaf::class)
+            ->and($secondPass['second'])->not->toBe($firstPass['second'])
+            ->and(iterator_to_array($runtime->tagged('missing')))->toBe([]);
     } finally {
         removeProductionRuntimeArtifact($path);
     }
 });
 
-it('deoptimizes a prior production runtime before attaching another to the builder graph', function () {
+it('loads independent production runtimes from the same frozen graph', function () {
     $builder = ContainerBuilder::create(uniqid('production_reload_'))
-        ->singleton('leaf', ProductionRuntimeLeaf::class);
+        ->releaseIdentity('intermix-test')
+        ->autowire('leaf', ProductionRuntimeLeaf::class);
     $path = productionRuntimeArtifactPath();
 
     try {
         $report = $builder->compile($path);
         $first = $builder->production($path);
         $second = $builder->productionPrevalidated($path, $report['digest']);
-        $development = $builder->development();
 
         expect($first)->not->toBe($second)
-            ->and($development->getRepository()->getFunctionDefinition('leaf'))
-            ->toBe(ProductionRuntimeLeaf::class);
+            ->and($first->get('leaf'))->toBeInstanceOf(ProductionRuntimeLeaf::class)
+            ->and($second->get('leaf'))->toBeInstanceOf(ProductionRuntimeLeaf::class)
+            ->and($first->get('leaf'))->not->toBe($second->get('leaf'));
     } finally {
         removeProductionRuntimeArtifact($path);
     }
 });
 
-it('deoptimizes when a retained development manager mutates the finalized graph', function () {
-    $builder = ContainerBuilder::create(uniqid('production_retained_manager_'));
-    $definitions = $builder->definitions();
-    $definitions->bind('leaf', ProductionRuntimeLeaf::class);
+it('rejects builder mutation after finalization without changing built runtimes', function () {
+    $builder = ContainerBuilder::create(uniqid('production_frozen_builder_'))
+        ->releaseIdentity('intermix-test')
+        ->autowire('leaf', ProductionRuntimeLeaf::class);
     $path = productionRuntimeArtifactPath();
 
     try {
         $builder->compile($path);
         $runtime = $builder->production($path);
         $compiled = $runtime->get('leaf');
-        $replacement = new ProductionRuntimeLeaf();
 
-        $definitions->bind('leaf', $replacement);
+        expect(fn() => $builder->value('late', true))
+            ->toThrow(ContainerException::class, 'ContainerBuilder is finalized')
+            ->and($runtime->get('leaf'))->toBe($compiled);
 
-        expect($runtime->get('leaf'))->toBe($replacement)
-            ->and($runtime->get('leaf'))->not->toBe($compiled)
-            ->and(fn() => $builder->production($path))
-            ->toThrow(\Infocyph\InterMix\Exceptions\ContainerException::class, 'recompiled');
+        $second = $builder->production($path);
+        expect($second)->not->toBe($runtime)
+            ->and($second->get('leaf'))->toBeInstanceOf(ProductionRuntimeLeaf::class);
     } finally {
         removeProductionRuntimeArtifact($path);
     }

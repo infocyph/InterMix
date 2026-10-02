@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Resolver;
 
+use Infocyph\InterMix\DI\Internal\ExecutionContext;
 use Infocyph\InterMix\DI\Internal\ExecutionScopeStore;
+use Infocyph\InterMix\Exceptions\ContainerException;
 
 /** @internal */
 trait ConcurrentScopeConstruction
@@ -24,12 +26,39 @@ trait ConcurrentScopeConstruction
         return $store->beginScopedConstruction($context, $scope, $id);
     }
 
+    public function beginSingletonConstruction(string $id): bool
+    {
+        $context = ExecutionContext::id() ?? self::ROOT_CONTEXT;
+        $owner = $this->singletonConstructing[$id] ?? null;
+        if ($owner !== null) {
+            if ($owner === $context) {
+                return false;
+            }
+
+            throw new ContainerException(
+                "Singleton service '{$id}' is already being constructed by another execution carrier.",
+            );
+        }
+
+        $this->singletonConstructing[$id] = $context;
+
+        return true;
+    }
+
     public function endScopedConstruction(string $scope, string $id): void
     {
         $store = $this->executionScopes;
         $context = $this->activeExecutionContext();
         if ($store instanceof ExecutionScopeStore && $context !== null) {
             $store->endScopedConstruction($context, $scope, $id);
+        }
+    }
+
+    public function endSingletonConstruction(string $id): void
+    {
+        $context = ExecutionContext::id() ?? self::ROOT_CONTEXT;
+        if (($this->singletonConstructing[$id] ?? null) === $context) {
+            unset($this->singletonConstructing[$id]);
         }
     }
 

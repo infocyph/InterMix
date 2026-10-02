@@ -2,12 +2,10 @@
 
 declare(strict_types=1);
 
-use Infocyph\InterMix\DI\Build\DefinitionGraph;
 use Infocyph\InterMix\DI\Build\StaticRuntimePlanner;
-use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\ContainerBuilder;
-use Infocyph\InterMix\DI\Invoker\CompiledCall;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
+use Infocyph\InterMix\Exceptions\ContainerException;
 
 final class InvocationAliasLeaf {}
 
@@ -35,27 +33,23 @@ function removeInvocationAliasArtifact(string $path): void
     }
 }
 
-it('preserves alias lifetime barriers while flattening transient alias links', function () {
-    $builder = ContainerBuilder::create(uniqid('alias_barrier_'));
-    $builder->transient('target', InvocationAliasLeaf::class)
-        ->alias('cached', 'target', LifetimeEnum::Singleton)
-        ->alias('root', 'cached', LifetimeEnum::Transient);
+it('makes aliases follow target lifetime without owning a cache', function () {
+    $builder = ContainerBuilder::create(uniqid('alias_target_lifetime_'));
+    $builder->autowire('target', InvocationAliasLeaf::class, lifetime: LifetimeEnum::Transient)
+        ->alias('middle', 'target')
+        ->alias('root', 'middle');
 
-    $development = $builder->development();
-    $developmentRoot = $development->get('root');
-    expect($developmentRoot)->toBe($development->get('cached'))
-        ->and($development->get('root'))->toBe($developmentRoot);
+    $development = $builder->build();
+    expect($development->get('root'))->not->toBe($development->get('root'));
 
     $path = invocationAliasArtifactPath();
     try {
         $report = $builder->compile($path);
         $runtime = $builder->production($path);
-        $root = $runtime->get('root');
 
-        expect($report['compiled'])->toContain('target', 'cached', 'root')
-            ->and($root)->toBe($runtime->get('cached'))
-            ->and($runtime->get('root'))->toBe($root)
-            ->and($runtime->get('target'))->not->toBe($root);
+        expect($report['compiled'])->toContain('target', 'middle', 'root')
+            ->and($runtime->get('root'))->not->toBe($runtime->get('root'))
+            ->and($runtime->get('middle'))->not->toBe($runtime->get('target'));
     } finally {
         removeInvocationAliasArtifact($path);
     }
@@ -63,12 +57,12 @@ it('preserves alias lifetime barriers while flattening transient alias links', f
 
 it('flattens pure transient alias chains to their final build-time target', function () {
     $builder = ContainerBuilder::create(uniqid('alias_flatten_'));
-    $builder->singleton('target', InvocationAliasLeaf::class)
-        ->alias('middle', 'target', LifetimeEnum::Transient)
-        ->alias('root', 'middle', LifetimeEnum::Transient);
+    $builder->autowire('target', InvocationAliasLeaf::class)
+        ->alias('middle', 'target')
+        ->alias('root', 'middle');
 
     $planned = new StaticRuntimePlanner()->plan(
-        DefinitionGraph::from($builder->development()->getRepository()),
+        $builder->definitionGraph(),
     );
 
     expect($planned['plans']['root']['kind'])->toBe('alias')
@@ -76,7 +70,7 @@ it('flattens pure transient alias chains to their final build-time target', func
         ->and($planned['plans']['root']['dependencies'])->toBe(['target']);
 });
 
-it('rejects alias cycles during static planning', function () {
+it('rejects alias cycles before artifact publication', function () {
     $builder = ContainerBuilder::create(uniqid('alias_cycle_'));
     $builder->alias('a', 'b')
         ->alias('b', 'c')
@@ -84,12 +78,9 @@ it('rejects alias cycles during static planning', function () {
 
     $path = invocationAliasArtifactPath();
     try {
-        $report = $builder->compile($path);
-
-        expect($report['compiled'])->not->toContain('a', 'b', 'c')
-            ->and($report['skipped']['a'])->toBe('alias graph contains a cycle')
-            ->and($report['skipped']['b'])->toBe('alias graph contains a cycle')
-            ->and($report['skipped']['c'])->toBe('alias graph contains a cycle');
+        expect(fn() => $builder->compile($path))
+            ->toThrow(ContainerException::class, "Alias 'a' participates in a cycle.")
+            ->and(is_file($path))->toBeFalse();
     } finally {
         removeInvocationAliasArtifact($path);
     }
@@ -97,8 +88,8 @@ it('rejects alias cycles during static planning', function () {
 
 it('makes fresh compiled classes while retaining compiled dependency lifetimes', function () {
     $builder = ContainerBuilder::create(uniqid('compiled_make_'));
-    $builder->singleton(InvocationAliasLeaf::class)
-        ->singleton(InvocationAliasRoot::class);
+    $builder->autowire(InvocationAliasLeaf::class, InvocationAliasLeaf::class)
+        ->autowire(InvocationAliasRoot::class, InvocationAliasRoot::class);
 
     $path = invocationAliasArtifactPath();
     try {
@@ -106,66 +97,68 @@ it('makes fresh compiled classes while retaining compiled dependency lifetimes',
         $runtime = $builder->production($path);
         $shared = $runtime->get(InvocationAliasRoot::class);
         $fresh = $runtime->make(InvocationAliasRoot::class);
-        $resolvedNow = $runtime->resolveNow(InvocationAliasRoot::class);
+        $secondFresh = $runtime->make(InvocationAliasRoot::class);
 
         expect($fresh)->toBeInstanceOf(InvocationAliasRoot::class)
             ->and($fresh)->not->toBe($shared)
-            ->and($resolvedNow)->toBeInstanceOf(InvocationAliasRoot::class)
-            ->and($resolvedNow)->not->toBe($shared)
+            ->and($secondFresh)->toBeInstanceOf(InvocationAliasRoot::class)
+            ->and($secondFresh)->not->toBe($shared)
             ->and($fresh->leaf)->toBe($runtime->get(InvocationAliasLeaf::class))
-            ->and($resolvedNow->leaf)->toBe($runtime->get(InvocationAliasLeaf::class));
+            ->and($secondFresh->leaf)->toBe($runtime->get(InvocationAliasLeaf::class));
     } finally {
         removeInvocationAliasArtifact($path);
     }
 });
 
-it('keeps compiled getReturn and null resolveNow on the production boundary', function () {
-    $builder = ContainerBuilder::create(uniqid('compiled_return_'));
-    $builder->singleton(InvocationAliasRoot::class)
-        ->singleton(InvocationAliasLeaf::class);
-
+it('exposes only canonical retrieval and construction methods', function () {
+    $builder = ContainerBuilder::create(uniqid('compiled_boundary_'))
+        ->autowire(InvocationAliasRoot::class, InvocationAliasRoot::class)
+        ->autowire(InvocationAliasLeaf::class, InvocationAliasLeaf::class);
     $path = invocationAliasArtifactPath();
+
     try {
         $builder->compile($path);
         $runtime = $builder->production($path);
+        expect($runtime->get(InvocationAliasRoot::class))->toBe($runtime->get(InvocationAliasRoot::class))
+            ->and($runtime->make(InvocationAliasRoot::class))->not->toBe($runtime->get(InvocationAliasRoot::class))
+            ->and(method_exists($runtime, 'getReturn'))->toBeFalse()
+            ->and(method_exists($runtime, 'resolveNow'))->toBeFalse();
+    } finally {
+        removeInvocationAliasArtifact($path);
+    }
+});
+it('keeps compiled definition dispatch frozen after builder finalization', function () {
+    $builder = ContainerBuilder::create(uniqid('frozen_compiled_'))
+        ->autowire(InvocationAliasLeaf::class, InvocationAliasLeaf::class)
+        ->autowire('service', InvocationAliasRoot::class);
 
-        expect($runtime->getReturn(InvocationAliasRoot::class))->toBe($runtime->get(InvocationAliasRoot::class))
-            ->and($runtime->resolveNow(null))->toBe($runtime);
+    $path = invocationAliasArtifactPath();
+    try {
+        $report = $builder->compile($path);
+        $runtime = $builder->productionPrevalidated($path, $report['digest']);
+        $service = $runtime->get('service');
+
+        expect($report['compiled'])->toContain('service', InvocationAliasLeaf::class)
+            ->and($service)->toBeInstanceOf(InvocationAliasRoot::class)
+            ->and(fn() => $builder->enableLazyLoading(false))
+            ->toThrow(ContainerException::class, 'ContainerBuilder is finalized')
+            ->and($runtime->get('service'))->toBe($service);
     } finally {
         removeInvocationAliasArtifact($path);
     }
 });
 
-it('routes stale compiled definition dispatch through the dynamic resolver after invalidation', function () {
-    $container = new Container(uniqid('stale_compiled_'));
-    $container->singleton('service', InvocationAliasRoot::class)
-        ->singleton(InvocationAliasLeaf::class);
+it('applies property metadata before finalization and freezes later mutation', function () {
+    $builder = ContainerBuilder::create(uniqid('property_fast_flag_'))
+        ->autowire(
+            'target',
+            InvocationAliasPropertyTarget::class,
+            properties: ['value' => 'registered'],
+        );
 
-    $path = invocationAliasArtifactPath();
-    try {
-        $container->compileTo($path, true);
-        expect($container->getCurrentResolver())->toBeInstanceOf(CompiledCall::class)
-            ->and($container->getRepository()->hasCompiledResolvers())->toBeTrue();
+    $runtime = $builder->build();
 
-        $container->enableLazyLoading(false);
-
-        expect($container->getRepository()->hasCompiledResolvers())->toBeFalse()
-            ->and($container->get('service'))->toBeInstanceOf(InvocationAliasRoot::class);
-    } finally {
-        if (is_file($path)) {
-            unlink($path);
-        }
-    }
-});
-
-it('does not let the empty property fast path hide later property registration', function () {
-    $container = new Container(uniqid('property_fast_flag_'));
-    $container->get(InvocationAliasLeaf::class);
-
-    $container->registration()->registerProperty(
-        InvocationAliasPropertyTarget::class,
-        ['value' => 'registered'],
-    );
-
-    expect($container->get(InvocationAliasPropertyTarget::class)->value)->toBe('registered');
+    expect($runtime->get('target')->value)->toBe('registered')
+        ->and(fn() => $builder->value('late', true))->toThrow(ContainerException::class, 'ContainerBuilder is finalized')
+        ->and($runtime->get('target')->value)->toBe('registered');
 });

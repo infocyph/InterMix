@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Infocyph\InterMix\DI\ContainerBuilder;
+use Infocyph\InterMix\DI\Support\LifetimeEnum;
 
 final class MethodCompiledDependency {}
 
@@ -17,9 +18,7 @@ final readonly class MethodRegisteredConstructor
 final class MethodRegisteredInvocation
 {
     public int $calls = 0;
-
     public ?MethodCompiledDependency $dependency = null;
-
     public string $label = 'unset';
 
     public function boot(MethodCompiledDependency $dependency, string $label = 'default'): void
@@ -51,7 +50,6 @@ final class MethodVariadicInvocation
 final class MethodStaticInvocation
 {
     public static ?MethodCompiledDependency $dependency = null;
-
     public static string $label = 'unset';
 
     public static function boot(MethodCompiledDependency $dependency, string $label = 'default'): void
@@ -64,44 +62,11 @@ final class MethodStaticInvocation
 final class MethodCallOnInvocation
 {
     public const CALL_ON = 'boot';
-
     public ?MethodCompiledDependency $dependency = null;
 
     public function boot(MethodCompiledDependency $dependency): void
     {
         $this->dependency = $dependency;
-    }
-}
-
-final class MethodInvokableInvocation
-{
-    public ?MethodCompiledDependency $dependency = null;
-
-    public function __invoke(MethodCompiledDependency $dependency): void
-    {
-        $this->dependency = $dependency;
-    }
-}
-
-final class MethodDefaultInvocation
-{
-    public ?MethodCompiledDependency $dependency = null;
-
-    public function boot(MethodCompiledDependency $dependency): void
-    {
-        $this->dependency = $dependency;
-    }
-}
-
-final class MethodProtectedInvocation
-{
-    public const CALL_ON = 'boot';
-
-    public bool $called = false;
-
-    protected function boot(): void
-    {
-        $this->called = true;
     }
 }
 
@@ -119,25 +84,25 @@ function removeMethodCompilationArtifact(string $path): void
     }
 }
 
-it('compiles deterministic registered constructor parameters', function () {
+it('compiles deterministic constructor arguments through the canonical graph', function () {
     $builder = ContainerBuilder::create(uniqid('method_constructor_'));
-    $builder->singleton(MethodCompiledDependency::class)
-        ->singleton(MethodRegisteredConstructor::class);
-    $builder->registration()->registerClass(
-        MethodRegisteredConstructor::class,
-        ['label' => 'compiled-constructor'],
-    );
+    $builder->autowire(MethodCompiledDependency::class, MethodCompiledDependency::class)
+        ->autowire(
+            MethodRegisteredConstructor::class,
+            MethodRegisteredConstructor::class,
+            ['label' => 'compiled-constructor'],
+        );
 
-    expect($builder->development()->get(MethodRegisteredConstructor::class)->label)
-        ->toBe('compiled-constructor');
-
+    $development = $builder->build()->get(MethodRegisteredConstructor::class);
     $path = methodCompilationArtifactPath();
+
     try {
         $report = $builder->compile($path);
         $runtime = $builder->production($path);
         $service = $runtime->get(MethodRegisteredConstructor::class);
 
         expect($report['compiled'])->toContain(MethodRegisteredConstructor::class)
+            ->and($development->label)->toBe('compiled-constructor')
             ->and($service->label)->toBe('compiled-constructor')
             ->and($service->dependency)->toBe($runtime->get(MethodCompiledDependency::class));
     } finally {
@@ -145,59 +110,67 @@ it('compiles deterministic registered constructor parameters', function () {
     }
 });
 
-it('compiles registered post-construction method invocation', function () {
-    $builder = ContainerBuilder::create(uniqid('method_registered_'));
-    $builder->singleton(MethodCompiledDependency::class)
-        ->singleton(MethodRegisteredInvocation::class);
-    $builder->registration()->registerMethod(
-        MethodRegisteredInvocation::class,
-        'boot',
-        ['label' => 'compiled-method'],
+it('invokes instance methods with injection and caller overrides in both runtimes', function () {
+    $builder = ContainerBuilder::create(uniqid('method_runtime_parameters_'));
+    $builder->autowire(MethodCompiledDependency::class, MethodCompiledDependency::class)
+        ->autowire(
+            MethodRuntimeParameterInvocation::class,
+            MethodRuntimeParameterInvocation::class,
+            lifetime: LifetimeEnum::Transient,
+        );
+
+    $development = $builder->build();
+    $developmentResult = $development->invoke(
+        [$development->make(MethodRuntimeParameterInvocation::class), 'run'],
+        ['label' => 'runtime-named'],
     );
-
     $path = methodCompilationArtifactPath();
-    try {
-        $report = $builder->compile($path);
-        $runtime = $builder->production($path);
-        $service = $runtime->get(MethodRegisteredInvocation::class);
 
-        expect($report['compiled'])->toContain(MethodRegisteredInvocation::class)
-            ->and($service->calls)->toBe(1)
-            ->and($service->label)->toBe('compiled-method')
-            ->and($service->dependency)->toBe($runtime->get(MethodCompiledDependency::class))
-            ->and($runtime->get(MethodRegisteredInvocation::class))->toBe($service)
-            ->and($service->calls)->toBe(1);
+    try {
+        $builder->compile($path);
+        $runtime = $builder->production($path);
+        $named = $runtime->invoke(
+            [$runtime->make(MethodRuntimeParameterInvocation::class), 'run'],
+            ['label' => 'runtime-named'],
+        );
+        $override = new MethodCompiledDependency();
+        $positional = $runtime->invoke(
+            [$runtime->make(MethodRuntimeParameterInvocation::class), 'run'],
+            [0 => $override, 1 => 'runtime-positional'],
+        );
+
+        expect($developmentResult[1])->toBe('runtime-named')
+            ->and($named[0])->toBe($runtime->get(MethodCompiledDependency::class))
+            ->and($named[1])->toBe('runtime-named')
+            ->and($positional)->toBe([$override, 'runtime-positional']);
     } finally {
         removeMethodCompilationArtifact($path);
     }
 });
 
-it('compiles public static methods without a reflection island', function () {
+it('invokes static and variadic callables explicitly', function () {
     MethodStaticInvocation::$dependency = null;
     MethodStaticInvocation::$label = 'unset';
 
-    $builder = ContainerBuilder::create(uniqid('method_static_'));
-    $builder->singleton(MethodCompiledDependency::class)
-        ->singleton(MethodStaticInvocation::class);
-    $builder->registration()->registerMethod(
-        MethodStaticInvocation::class,
-        'boot',
-        ['label' => 'compiled-static'],
-    );
-
+    $builder = ContainerBuilder::create(uniqid('method_explicit_'));
+    $builder->autowire(MethodCompiledDependency::class, MethodCompiledDependency::class)
+        ->autowire(MethodVariadicInvocation::class, MethodVariadicInvocation::class);
     $path = methodCompilationArtifactPath();
-    try {
-        $report = $builder->compile($path);
-        $source = file_get_contents($path);
-        $runtime = $builder->production($path);
-        $service = $runtime->get(MethodStaticInvocation::class);
 
-        expect($report['compiled'])->toContain(MethodStaticInvocation::class)
-            ->and($source)->toBeString()
-            ->toContain('\\MethodStaticInvocation::boot(')
-            ->and($service)->toBeInstanceOf(MethodStaticInvocation::class)
+    try {
+        $builder->compile($path);
+        $runtime = $builder->production($path);
+
+        $runtime->invoke([MethodStaticInvocation::class, 'boot'], ['label' => 'compiled-static']);
+        $variadic = $runtime->invoke(
+            [$runtime->get(MethodVariadicInvocation::class), 'run'],
+            ['first', 'second'],
+        );
+
+        expect(MethodStaticInvocation::$dependency)
+            ->toBe($runtime->get(MethodCompiledDependency::class))
             ->and(MethodStaticInvocation::$label)->toBe('compiled-static')
-            ->and(MethodStaticInvocation::$dependency)->toBe($runtime->get(MethodCompiledDependency::class));
+            ->and($variadic)->toBe(['first', 'second']);
     } finally {
         removeMethodCompilationArtifact($path);
         MethodStaticInvocation::$dependency = null;
@@ -205,134 +178,29 @@ it('compiles public static methods without a reflection island', function () {
     }
 });
 
-it('compiles supplied named and positional method arguments over the static plan', function () {
-    $builder = ContainerBuilder::create(uniqid('method_runtime_parameters_'));
-    $builder->singleton(MethodCompiledDependency::class)
-        ->transient(MethodRuntimeParameterInvocation::class);
-    $builder->registration()->registerMethod(MethodRuntimeParameterInvocation::class, 'run');
-
-    $development = $builder->development();
-    $developmentNamed = $development->resolveNow(
-        [MethodRuntimeParameterInvocation::class, 'run'],
-        ['label' => 'runtime-named'],
-    );
-
-    $path = methodCompilationArtifactPath();
-    try {
-        $report = $builder->compile($path);
-        $source = file_get_contents($path);
-        $runtime = $builder->production($path);
-        $named = $runtime->resolveNow(
-            [MethodRuntimeParameterInvocation::class, 'run'],
-            ['label' => 'runtime-named'],
-        );
-        $override = new MethodCompiledDependency();
-        $positional = $runtime->resolveNow(
-            [MethodRuntimeParameterInvocation::class, 'run'],
-            [0 => $override, 1 => 'runtime-positional'],
-        );
-
-        expect($report['compiled'])->toContain(MethodRuntimeParameterInvocation::class)
-            ->and($source)->toBeString()
-            ->toContain('freshCompiledInvocationWithParameters(')
-            ->toContain("array_key_exists('label', \$parameters)")
-            ->and($developmentNamed[1])->toBe('runtime-named')
-            ->and($named[0])->toBe($runtime->get(MethodCompiledDependency::class))
-            ->and($named[1])->toBe($developmentNamed[1])
-            ->and($positional[0])->toBe($override)
-            ->and($positional[1])->toBe('runtime-positional');
-    } finally {
-        removeMethodCompilationArtifact($path);
-    }
-});
-
-it('keeps variadic runtime arguments on the existing dynamic resolver', function () {
-    $builder = ContainerBuilder::create(uniqid('method_variadic_parameters_'));
-    $builder->transient(MethodVariadicInvocation::class);
-    $builder->registration()->registerMethod(MethodVariadicInvocation::class, 'run');
+it('does not infer post-construction methods', function () {
+    $builder = ContainerBuilder::create(uniqid('method_explicit_only_'));
+    $builder->autowire(MethodCompiledDependency::class, MethodCompiledDependency::class)
+        ->autowire(MethodRegisteredInvocation::class, MethodRegisteredInvocation::class)
+        ->autowire(MethodCallOnInvocation::class, MethodCallOnInvocation::class);
     $path = methodCompilationArtifactPath();
 
     try {
-        $report = $builder->compile($path);
-        $source = file_get_contents($path);
+        $builder->compile($path);
         $runtime = $builder->production($path);
-        $result = $runtime->resolveNow(
-            [MethodVariadicInvocation::class, 'run'],
-            ['first', 'second'],
-        );
-
-        expect($report['compiled'])->toContain(MethodVariadicInvocation::class)
-            ->and($source)->toBeString()
-            ->not->toContain('freshCompiledInvocationWithParameters(')
-            ->and($result)->toBe(['first', 'second']);
-    } finally {
-        removeMethodCompilationArtifact($path);
-    }
-});
-
-it('compiles CALL_ON and invokable post-construction methods while fresh make skips them', function () {
-    $builder = ContainerBuilder::create(uniqid('method_implicit_'));
-    $builder->singleton(MethodCompiledDependency::class)
-        ->singleton(MethodCallOnInvocation::class)
-        ->singleton(MethodInvokableInvocation::class);
-
-    $path = methodCompilationArtifactPath();
-    try {
-        $report = $builder->compile($path);
-        $runtime = $builder->production($path);
+        $registered = $runtime->get(MethodRegisteredInvocation::class);
         $callOn = $runtime->get(MethodCallOnInvocation::class);
-        $invokable = $runtime->get(MethodInvokableInvocation::class);
-        $fresh = $runtime->make(MethodInvokableInvocation::class);
-        $resolvedNow = $runtime->resolveNow(MethodInvokableInvocation::class);
 
-        expect($report['compiled'])->toContain(
-            MethodCallOnInvocation::class,
-            MethodInvokableInvocation::class,
-        )
-            ->and($callOn->dependency)->toBe($runtime->get(MethodCompiledDependency::class))
-            ->and($invokable->dependency)->toBe($runtime->get(MethodCompiledDependency::class))
-            ->and($fresh)->toBeInstanceOf(MethodInvokableInvocation::class)
-            ->and($fresh->dependency)->toBeNull()
-            ->and($resolvedNow)->toBeInstanceOf(MethodInvokableInvocation::class)
-            ->and($resolvedNow->dependency)->toBeNull();
-    } finally {
-        removeMethodCompilationArtifact($path);
-    }
-});
+        expect(method_exists($builder, 'registerMethod'))->toBeFalse()
+            ->and(method_exists($builder, 'setDefaultMethod'))->toBeFalse()
+            ->and($registered->calls)->toBe(0)
+            ->and($callOn->dependency)->toBeNull();
 
-it('compiles the configured default method when it is statically resolvable', function () {
-    $builder = ContainerBuilder::create(uniqid('method_default_'));
-    $builder->singleton(MethodCompiledDependency::class)
-        ->singleton(MethodDefaultInvocation::class);
-    $builder->options()->setOptions(defaultMethod: 'boot');
+        $runtime->invoke([$registered, 'boot'], ['label' => 'explicit']);
 
-    $path = methodCompilationArtifactPath();
-    try {
-        $report = $builder->compile($path);
-        $runtime = $builder->production($path);
-        $service = $runtime->get(MethodDefaultInvocation::class);
-
-        expect($report['compiled'])->toContain(MethodDefaultInvocation::class)
-            ->and($service->dependency)->toBe($runtime->get(MethodCompiledDependency::class));
-    } finally {
-        removeMethodCompilationArtifact($path);
-    }
-});
-
-it('keeps non-public implicit methods as targeted reflection islands', function () {
-    $builder = ContainerBuilder::create(uniqid('method_protected_'));
-    $builder->singleton(MethodProtectedInvocation::class);
-
-    $path = methodCompilationArtifactPath();
-    try {
-        $report = $builder->compile($path);
-        $source = file_get_contents($path);
-        $runtime = $builder->production($path);
-        $service = $runtime->get(MethodProtectedInvocation::class);
-
-        expect($report['compiled'])->toContain(MethodProtectedInvocation::class)
-            ->and($source)->toContain('invokeCompiledRuntimeMethod')
-            ->and($service->called)->toBeTrue();
+        expect($registered->calls)->toBe(1)
+            ->and($registered->label)->toBe('explicit')
+            ->and($registered->dependency)->toBe($runtime->get(MethodCompiledDependency::class));
     } finally {
         removeMethodCompilationArtifact($path);
     }

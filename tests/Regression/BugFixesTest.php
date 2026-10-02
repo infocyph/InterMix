@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\DI\Support\PreloadGenerator;
 use Infocyph\InterMix\DI\Support\TraceLevelEnum;
@@ -39,7 +40,7 @@ class RegressionMethodConsumer
 }
 
 it('disables debug tracing without throwing', function () {
-    $c = Container::instance(uniqid('trace_'));
+    $c = new ConfigurationContainer(uniqid('trace_'));
 
     $out = $c->options()->enableDebugTracing(false)->end();
 
@@ -48,7 +49,7 @@ it('disables debug tracing without throwing', function () {
 });
 
 it('generates a syntactically valid preload file', function () {
-    $c = Container::instance(uniqid('preload_'));
+    $c = new ConfigurationContainer(uniqid('preload_'));
     $file = sys_get_temp_dir() . '/intermix_preload_' . uniqid() . '.php';
 
     (new PreloadGenerator())->generate($c, $file);
@@ -170,7 +171,7 @@ it('supports pure PSR-6 pools when resolving definitions', function () {
         }
     };
 
-    $c = Container::instance(uniqid('psr6_'));
+    $c = new ConfigurationContainer(uniqid('psr6_'));
     $c->definitions()
         ->enableDefinitionCache($pool)
         ->bind('answer', fn () => 42);
@@ -180,7 +181,7 @@ it('supports pure PSR-6 pools when resolving definitions', function () {
 });
 
 it('does not reuse non-constructor method parameter resolution values across calls', function () {
-    $c = Container::instance(uniqid('method_args_'));
+    $c = new ConfigurationContainer(uniqid('method_args_'));
     $c->definitions()->bind(
         RegressionTokenSource::class,
         fn () => new RegressionTransientTokenSource(),
@@ -194,7 +195,7 @@ it('does not reuse non-constructor method parameter resolution values across cal
 });
 
 it('does not reuse closure parameter resolution across different closures', function () {
-    $c = Container::instance(uniqid('closure_args_'));
+    $c = new ConfigurationContainer(uniqid('closure_args_'));
     $c->definitions()->bind(
         RegressionTokenSource::class,
         fn () => new RegressionTransientTokenSource(),
@@ -210,7 +211,7 @@ it('does not reuse closure parameter resolution across different closures', func
 });
 
 it('distinguishes namespaced method closures on PHP 8.4', function () {
-    $container = Container::instance(uniqid('namespaced_closure_args_'));
+    $container = new ConfigurationContainer(uniqid('namespaced_closure_args_'));
 
     [$withoutArguments, $withArgument] = NamespacedClosureFactory::invoke($container);
 

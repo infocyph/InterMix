@@ -1,215 +1,58 @@
 .. _di.quickstart:
 
-============
-Quick-Start
-============
-
-InterMix works **out-of-the-box** – a single dependency via Composer and you’re up
-and running.  This page merges the former *Getting Started* notes so you have one
-concise reference.
-
-Create (or retrieve) a container
---------------------------------
-
-A container is identified by an **alias**.
-Each alias is an *isolated* registry of services.
-
-.. code-block:: php
-
-   use Infocyph\InterMix\DI\Container;
-   use function Infocyph\InterMix\container;
-
-   require_once __DIR__ . '/vendor/infocyph/intermix/src/functions.php';
-   $c1 = container();                // default alias: intermix.default
-   $c2 = Container::instance('cli'); // a second, independent container
-   // identical:
-   $c3 = Container::instance('cli');
-
-Keep aliases short and memorable – tests often use a random alias to isolate state.
-For production/runtime stability, prefer explicit aliases instead of relying on the
-default ``intermix.default`` alias.
-
-Configure behaviour (optional)
-------------------------------
-
-.. code-block:: php
-
-   $c1->options()->setOptions(
-       injection: true,          // reflection autowiring engine
-       methodAttributes: true,   // honour #[Inject] on parameters
-       propertyAttributes: true, // honour #[Inject] on properties
-       defaultMethod: 'handle'   // fallback method name
-   );
-
-**Defaults**
-
-+ *injection* = true
-+ *methodAttributes* = false
-+ *propertyAttributes* = false
-+ *lazyLoading* = true
-
-
-Register something
-------------------
-
-Bind an ID to a value / factory
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: php
-
-   $c1->definitions()
-      ->bind('answer', 42)
-      ->bind('now', fn () => new DateTimeImmutable());
-
-Register a class with constructor parameters
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: php
-
-   $c1->registration()->registerClass(PDO::class, [
-       'mysql:host=localhost;dbname=test', // DSN
-       'root',                             // user
-       'secret',                           // password
-   ]);
-
-Import a service provider
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Use a provider when you want one class to own all wiring for a feature/module.
-This keeps bootstrap files clean and lets you reuse the same registration set
-across CLI, HTTP, and tests.
-
-.. code-block:: php
-
-   use Infocyph\InterMix\DI\Container;
-   use Infocyph\InterMix\DI\Support\ServiceProviderInterface;
-
-   interface MailerInterface { public function send(string $to, string $text): void; }
-   final class Mailer implements MailerInterface
-   {
-       public function send(string $to, string $text): void
-       {
-           // send email...
-       }
-   }
-
-   final class MailProvider implements ServiceProviderInterface
-   {
-       public function register(Container $container): void
-       {
-           $container->definitions()->bind(MailerInterface::class, Mailer::class);
-       }
-   }
-
-   // import by class name (or pass new MailProvider())
-   $c1->registration()->import(MailProvider::class);
-
-   $mailer = $c1->get(MailerInterface::class);
-   $mailer->send('ops@example.com', 'InterMix is running');
-
-
-Resolve
--------
-
-.. code-block:: php
-
-   echo $c1->get('answer');                 // 42
-   echo $c1->get('now')->format('c');       // 2025-06-18T12:34:56+00:00
-
-Resolve a class through constructor injection::
-
-   class Greeter
-   {
-       public function __construct(DateTimeImmutable $clock) { $this->clock = $clock; }
-       public function hello(string $name): string
-       {
-           return 'Hi '.$name.' @ '.$this->clock->format('c');
-       }
-   }
-
-   echo $c1->get(Greeter::class)->hello('Bob');
-
-
-A taste of attributes
----------------------
-
-.. code-block:: php
-
-   use Infocyph\InterMix\DI\Attribute\Inject;
-
-   class Mailer
-   {
-       #[Inject] private LoggerInterface $logger;
-       public function __construct(#[Inject('cfg.smtp')] string $dsn = 'smtp://localhost') {}
-   }
-
-   $c1->definitions()
-      ->bind(LoggerInterface::class, DummyLogger::class)
-      ->bind('cfg.smtp', 'smtp://mail.prod');
-
-   $mailer = $c1->get(Mailer::class);   // property + parameter injected
-
-
-Environment swap (prod vs. local)
----------------------------------
-
-.. code-block:: php
-
-   interface PaymentGateway { public function pay(int $amount): string; }
-   class StripeGateway implements PaymentGateway { /* … */ }
-   class PaypalGateway implements PaymentGateway { /* … */ }
-
-   $c1->options()
-      ->bindInterfaceForEnv('prod',  PaymentGateway::class, StripeGateway::class)
-      ->bindInterfaceForEnv('local', PaymentGateway::class, PaypalGateway::class)
-      ->setEnvironment('prod');
-
-   $gw = $c1->get(PaymentGateway::class);   // StripeGateway in prod
-
-
-Lock & ship
------------
-
-For the InterMix 10 production runtime, configure through ``ContainerBuilder``,
-compile during build/deployment, and load the generated artifact at process
-bootstrap:
+================
+Quick start
+================
 
 .. code-block:: php
 
    use Infocyph\InterMix\DI\ContainerBuilder;
+   use Infocyph\InterMix\DI\Support\LifetimeEnum;
 
-   $builder = ContainerBuilder::create('app')
-       ->setEnvironment('prod')
-       ->singleton(MailerInterface::class, Mailer::class)
-       ->singleton(App::class);
+   final class Clock {}
 
-   // Build/deploy step:
-   $report = $builder->compile(__DIR__ . '/bootstrap/cache/intermix.php');
+   final class RequestContext
+   {
+       public function __construct(public string $id) {}
+   }
 
-   // Runtime bootstrap; persist the xxh128 digest as trusted deployment metadata.
-   $runtime = $builder->productionPrevalidated(
-       __DIR__ . '/bootstrap/cache/intermix.php',
-       $report['digest'],
+   final class Service
+   {
+       public function __construct(
+           public Clock $clock,
+           public RequestContext $request,
+       ) {}
+   }
+
+   $builder = ContainerBuilder::create('demo')
+       ->autowire(Clock::class, Clock::class)
+       ->input(RequestContext::class)
+       ->autowire(
+           Service::class,
+           Service::class,
+           lifetime: LifetimeEnum::Scoped,
+       );
+
+   $runtime = $builder->build();
+
+   $service = $runtime->withinScope(
+       'request-1',
+       static fn ($active) => $active->get(Service::class),
+       [RequestContext::class => new RequestContext('request-1')],
    );
 
-   $app = $runtime->get(App::class);
-
-The normal ``production()`` loader hashes and validates the artifact on boot with
-xxh128. ``productionPrevalidated()`` skips that file hash only when its digest
-came from trusted immutable deployment metadata. Never compile during a live
-request. See :doc:`compiled-resolvers` for dynamic-island and deployment rules.
-For complete side-by-side bootstraps and the reasons behind each choice, read
-:doc:`development-production`.
-
-For a dynamic-only application, lock after bootstrap to block accidental
-modifications:
-
-After bootstrap you may **lock** the container to block any further
-accidental modifications:
+Providers are imported before finalization:
 
 .. code-block:: php
 
-   $c1->lock();
+   final class AppProvider implements ServiceProviderInterface
+   {
+       public function register(ContainerBuilder $builder): void
+       {
+           $builder->value('app.name', 'demo');
+       }
+   }
 
+   $builder->import(new AppProvider());
 
-Happy mixing — your clay is ready!
+Use compile() plus production() when deploying a generated runtime.

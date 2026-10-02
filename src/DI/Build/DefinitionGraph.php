@@ -4,9 +4,21 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Build;
 
+use Infocyph\InterMix\DI\Container;
+use Infocyph\InterMix\DI\Internal\BoundedValueInspector;
+use Infocyph\InterMix\DI\Internal\ContainerAccess;
 use Infocyph\InterMix\DI\Invoker\GenericCall;
 use Infocyph\InterMix\DI\Resolver\Repository;
+use Infocyph\InterMix\DI\RuntimeContainerInterface;
+use Infocyph\InterMix\DI\Support\AliasDefinition;
+use Infocyph\InterMix\DI\Support\AutowireDefinition;
+use Infocyph\InterMix\DI\Support\FactoryDefinition;
+use Infocyph\InterMix\DI\Support\InputDefinition;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
+use Infocyph\InterMix\DI\Support\RuntimeFactoryDefinition;
+use Infocyph\InterMix\DI\Support\ServiceReference;
+use Infocyph\InterMix\DI\Support\ValueDefinition;
+use Psr\Container\ContainerInterface;
 
 /**
  * Immutable build-time snapshot of resolution-affecting container state.
@@ -25,7 +37,7 @@ final readonly class DefinitionGraph
      * @param array<string, array{on: callable, params: array<int|string, mixed>}> $closureResources
      * @param array<string, array<string, mixed>> $contextualBindings
      * @param array<string, string> $environmentBindings
-     * @param array<string, true> $attributeTypes
+     * @param array<class-string, class-string> $attributeResolvers
      * @param array<string, true> $dynamicServiceIds
      * @param array<string, true> $resolvingHookIds
      * @param array<string, true> $resolvedHookIds
@@ -38,7 +50,7 @@ final readonly class DefinitionGraph
         private array $closureResources,
         private array $contextualBindings,
         private array $environmentBindings,
-        private array $attributeTypes,
+        private array $attributeResolvers,
         private array $dynamicServiceIds,
         private array $resolvingHookIds,
         private array $resolvedHookIds,
@@ -65,7 +77,8 @@ final readonly class DefinitionGraph
     ): self {
         $definitions = $repository->getFunctionReference();
         $definitionMeta = [];
-        foreach ($definitions as $id => $_definition) {
+        foreach ($definitions as $rawId => $_definition) {
+            $id = (string) $rawId;
             $definitionMeta[$id] = $repository->getDefinitionMeta($id);
         }
 
@@ -90,7 +103,7 @@ final readonly class DefinitionGraph
                 $definitions,
                 $contextualBindings,
             ),
-            attributeTypes: array_fill_keys($repository->getRegisteredAttributeTypes(), true),
+            attributeResolvers: $repository->getRegisteredAttributeResolvers(),
             dynamicServiceIds: array_fill_keys($dynamicServiceIds, true),
             resolvingHookIds: array_fill_keys([
                 ...$resolvingHookIds,
@@ -106,7 +119,7 @@ final readonly class DefinitionGraph
             ], true),
             environment: $repository->getEnvironment(),
             defaultMethod: $repository->getDefaultMethod(),
-            injectionEnabled: !$repository->container()->getCurrentResolver() instanceof GenericCall,
+            injectionEnabled: !ContainerAccess::resolver($repository->container()) instanceof GenericCall,
             methodAttributes: $repository->isMethodAttributeEnabled(),
             propertyAttributes: $repository->isPropertyAttributeEnabled(),
         );
@@ -133,6 +146,12 @@ final readonly class DefinitionGraph
     public function contextualBinding(string $consumer, string $dependency): mixed
     {
         return $this->contextualBindings[$consumer][$dependency] ?? null;
+    }
+
+    /** @return array<string, array<string, mixed>> */
+    public function contextualBindings(): array
+    {
+        return $this->contextualBindings;
     }
 
     /** @return array<string, array<int, string>> */
@@ -172,9 +191,21 @@ final readonly class DefinitionGraph
         return $this->definitions;
     }
 
+    /** @return array<int, string> */
+    public function dynamicServiceIds(): array
+    {
+        return array_keys($this->dynamicServiceIds);
+    }
+
     public function environment(): ?string
     {
         return $this->environment;
+    }
+
+    /** @return array<string, string> */
+    public function environmentBindings(): array
+    {
+        return $this->environmentBindings;
     }
 
     public function environmentConcrete(string $type): ?string
@@ -184,7 +215,7 @@ final readonly class DefinitionGraph
 
     public function hasAttributeType(string $type): bool
     {
-        return isset($this->attributeTypes[$type]);
+        return isset($this->attributeResolvers[$type]);
     }
 
     public function hasContextualBinding(string $consumer, string $dependency): bool
@@ -227,10 +258,16 @@ final readonly class DefinitionGraph
         return $this->propertyAttributes;
     }
 
+    /** @return array<class-string, class-string> */
+    public function registeredAttributeResolvers(): array
+    {
+        return $this->attributeResolvers;
+    }
+
     /** @return array<int, string> */
     public function registeredAttributeTypes(): array
     {
-        return array_keys($this->attributeTypes);
+        return array_keys($this->attributeResolvers);
     }
 
     public function requiresDynamicService(string $id): bool
@@ -238,9 +275,111 @@ final readonly class DefinitionGraph
         return isset($this->dynamicServiceIds[$id]);
     }
 
+    public function requiresReleaseIdentity(): bool
+    {
+        return $this->hasOpaqueCallbacks()
+            || $this->hasOpaqueDefinitions()
+            || $this->hasOpaqueContextualBindings()
+            || $this->hasOpaqueClassResources();
+    }
+
+    /** @return array<int, string> */
+    public function resolvedHookIds(): array
+    {
+        return array_keys($this->resolvedHookIds);
+    }
+
+    /** @return array<int, string> */
+    public function resolvingHookIds(): array
+    {
+        return array_keys($this->resolvingHookIds);
+    }
+
     /** @return array<int, string> */
     public function scopeLeaveHookScopes(): array
     {
         return array_keys($this->scopeLeaveHookScopes);
+    }
+
+    private function definitionIsOpaque(string $id, mixed $definition): bool
+    {
+        if (($id === ContainerInterface::class || $id === RuntimeContainerInterface::class)
+            && $definition instanceof Container
+        ) {
+            return false;
+        }
+        if ($definition instanceof RuntimeFactoryDefinition) {
+            return true;
+        }
+        if ($definition instanceof ValueDefinition) {
+            return !$this->isPortableMetadata($definition->value);
+        }
+        if ($definition instanceof AutowireDefinition) {
+            return !$this->isPortableMetadata($definition->arguments)
+                || !$this->isPortableMetadata($definition->properties);
+        }
+        if ($definition instanceof AliasDefinition
+            || $definition instanceof FactoryDefinition
+            || $definition instanceof InputDefinition
+        ) {
+            return false;
+        }
+
+        return !$this->isPortableMetadata($definition);
+    }
+
+    private function hasOpaqueCallbacks(): bool
+    {
+        return $this->closureResources !== []
+            || $this->resolvingHookIds !== []
+            || $this->resolvedHookIds !== []
+            || $this->scopeLeaveHookScopes !== [];
+    }
+
+    private function hasOpaqueClassResources(): bool
+    {
+        return array_any(
+            $this->classResources,
+            fn(array $resources): bool => !$this->isPortableMetadata($resources),
+        );
+    }
+
+    private function hasOpaqueContextualBindings(): bool
+    {
+        foreach ($this->contextualBindings as $bindings) {
+            foreach ($bindings as $binding) {
+                if (!$this->isPortableMetadata($binding)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private function hasOpaqueDefinitions(): bool
+    {
+        return array_any(
+            $this->definitions,
+            fn(mixed $definition, int|string $rawId): bool => $this->definitionIsOpaque(
+                (string) $rawId,
+                $definition,
+            ),
+        );
+    }
+
+    private function isPortableMetadata(mixed $value): bool
+    {
+        if ($value instanceof FactoryDefinition || $value instanceof ServiceReference) {
+            return true;
+        }
+        if (is_scalar($value) || $value === null) {
+            return true;
+        }
+        if (!is_array($value)) {
+            return false;
+        }
+
+        return BoundedValueInspector::isScalarNullArray($value);
     }
 }
