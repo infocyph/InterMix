@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Infocyph\InterMix\Benchmarks\HostAcceptance;
 use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\DI\Internal\ContainerAccess;
+use Infocyph\InterMix\DI\ProductionContainer;
 use Psr\Container\NotFoundExceptionInterface;
 
 require_once dirname(__DIR__, 2) . '/benchmarks/HostAcceptance.php';
@@ -160,7 +161,7 @@ it('canonicalizes and bounds production invocation plans without retaining recei
             expect($runtime->invoke([$target, releaseReadinessMethodVariant($index)]))->toBe(1);
         }
 
-        $plannerProperty = new ReflectionProperty($runtime, 'productionInvocationPlanner');
+        $plannerProperty = new ReflectionProperty(ProductionContainer::class, 'productionInvocationPlanner');
         $planner = $plannerProperty->getValue($runtime);
         expect($planner)->not->toBeNull();
 
