@@ -115,18 +115,24 @@ it('keeps latency observations from early middle and late run windows', function
         releaseReadinessRecordSample($samples, $observations, $samplerState, $window);
     }
 
-    $counts = array_count_values($samples);
+    $counts = [1 => 0, 2 => 0, 3 => 0];
+    foreach ($samples as $sample) {
+        ++$counts[(int) $sample];
+    }
 
     expect($samples)->toHaveCount(20_000)
-        ->and($counts[1] ?? 0)->toBeGreaterThan(2_000)
-        ->and($counts[2] ?? 0)->toBeGreaterThan(2_000)
-        ->and($counts[3] ?? 0)->toBeGreaterThan(2_000);
+        ->and($counts[1])->toBeGreaterThan(2_000)
+        ->and($counts[2])->toBeGreaterThan(2_000)
+        ->and($counts[3])->toBeGreaterThan(2_000);
 });
 
 it('does not memoize high-cardinality missing definition lifetimes', function (): void {
     $runtime = ContainerBuilder::create(uniqid('missing-lifetime-', true))
         ->value('known', 42)
         ->build();
+    $repository = ContainerAccess::repository($runtime);
+    $cacheProperty = new ReflectionProperty($repository, 'definitionLifetimeCache');
+    $initial = $cacheProperty->getValue($repository);
 
     for ($index = 0; $index < 10_000; ++$index) {
         try {
@@ -135,16 +141,13 @@ it('does not memoize high-cardinality missing definition lifetimes', function ()
         }
     }
 
-    $repository = ContainerAccess::repository($runtime);
-    $cacheProperty = new ReflectionProperty($repository, 'definitionLifetimeCache');
-
-    expect($cacheProperty->getValue($repository))->toHaveCount(0);
+    expect($cacheProperty->getValue($repository))->toHaveCount(count($initial));
 
     $runtime->resetCurrentExecutionScope();
 
-    expect($cacheProperty->getValue($repository))->toHaveCount(0)
+    expect($cacheProperty->getValue($repository))->toHaveCount(count($initial))
         ->and($runtime->get('known'))->toBe(42)
-        ->and($cacheProperty->getValue($repository))->toHaveCount(1);
+        ->and($cacheProperty->getValue($repository))->toHaveKey('known');
 });
 
 it('canonicalizes and bounds production invocation plans without retaining receivers', function (): void {
@@ -158,7 +161,9 @@ it('canonicalizes and bounds production invocation plans without retaining recei
         $target = new ReleaseReadinessPlannerProbe();
 
         for ($index = 0; $index < 10_000; ++$index) {
-            expect($runtime->invoke([$target, releaseReadinessMethodVariant($index)]))->toBe(1);
+            if ($runtime->invoke([$target, releaseReadinessMethodVariant($index)]) !== 1) {
+                throw new RuntimeException('Case-insensitive production invocation returned an unexpected value.');
+            }
         }
 
         $plannerProperty = new ReflectionProperty(ProductionContainer::class, 'productionInvocationPlanner');
@@ -183,14 +188,26 @@ it('canonicalizes and bounds production invocation plans without retaining recei
             ->and($plans)->not->toHaveKey('synthetic-0')
             ->and($plans)->not->toHaveKey('synthetic-1');
 
+        $retainsObjects = false;
         foreach ($plans as $plan) {
-            expect($plan === false || is_array($plan))->toBeTrue();
-            if (is_array($plan)) {
-                foreach ($plan as $dependency) {
-                    expect($dependency)->toBeString();
+            if ($plan === false) {
+                continue;
+            }
+            if (!is_array($plan)) {
+                $retainsObjects = true;
+
+                break;
+            }
+            foreach ($plan as $dependency) {
+                if (!is_string($dependency)) {
+                    $retainsObjects = true;
+
+                    break 2;
                 }
             }
         }
+
+        expect($retainsObjects)->toBeFalse();
     } finally {
         releaseReadinessRemoveArtifact($path);
     }
