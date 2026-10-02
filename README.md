@@ -1,5 +1,13 @@
 # InterMix
 
+[![Security & Standards](https://github.com/infocyph/InterMix/actions/workflows/security-standards.yml/badge.svg)](https://github.com/infocyph/InterMix/actions/workflows/security-standards.yml)
+![Packagist Downloads](https://img.shields.io/packagist/dt/infocyph/intermix?color=green&link=https%3A%2F%2Fpackagist.org%2Fpackages%2Finfocyph%2Fintermix)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
+![Packagist Version](https://img.shields.io/packagist/v/infocyph/intermix)
+![Packagist PHP Version](https://img.shields.io/packagist/dependency-v/infocyph/intermix/php)
+![GitHub Code Size](https://img.shields.io/github/languages/code-size/infocyph/intermix)
+[![Documentation](https://img.shields.io/badge/Documentation-InterMix-blue?logo=readthedocs&logoColor=white)](https://docs.infocyph.com/projects/intermix/)
+
 InterMix is a PHP 8.4+ dependency-injection and runtime utility library focused on explicit configuration, immutable runtime wiring, scoped execution, compiled resolution, and low host overhead.
 
 InterMix 11 separates configuration from execution:
@@ -9,6 +17,30 @@ InterMix 11 separates configuration from execution:
 - RuntimeContainerInterface is the common runtime contract.
 - Scoped work uses structured scope callbacks instead of manual enter/leave pairs.
 - Optional Runwire and CacheLayer integration remains host-owned.
+
+## Key features
+
+- **Dependency injection** — A PSR-11 runtime with explicit value, autowire,
+  factory, alias, and host-input definitions.
+- **Invocation** — Resolve services, construct fresh objects, invoke callables,
+  inject attributes, and discover tagged services through one runtime contract.
+- **Scoped execution** — Isolate request and job state, seed declared inputs, and
+  propagate explicit scope contexts across structured Fiber or coroutine work.
+- **Compiled production runtime** — Generate and validate immutable resolution
+  artifacts while retaining narrow fallbacks for dynamic behavior.
+- **Definition caching** — Warm eligible factory results through a caller-owned
+  PSR-6 pool, including CacheLayer 4, with bounded and fail-open persistence.
+- **Runwire integration** — Accept the host's active Runwire 2.1 runtime and
+  request/task context, forward it to compatible capabilities such as
+  CacheLayer, and leave worker and event-loop ownership with the host.
+- **Closure serialization** — Serialize versioned Closure payloads with
+  explicit unsigned and signed modes through the optional Opis integration.
+- **Fence** — Enforce singleton-style construction rules where a class needs a
+  single guarded instance.
+- **Remix and MacroMix** — Add fluent conditionals, tap proxies, reusable
+  traits, and dynamic object or class macros.
+- **Optional functional helpers** — Load focused utilities such as `tap()`,
+  `when()`, `pipe()`, `measure()`, and `retry()` only when wanted.
 
 ## Installation
 
