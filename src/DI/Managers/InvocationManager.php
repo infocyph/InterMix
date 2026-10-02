@@ -57,7 +57,9 @@ class InvocationManager
     {
         $seed = null;
         if ($this->repository->findScopeSeed($id, $seed)) {
-            $this->assertScopedResolutionAllowed($id);
+            if ($this->singletonResolutionActive) {
+                $this->assertScopedResolutionAllowed($id);
+            }
 
             return $seed;
         }
@@ -67,15 +69,13 @@ class InvocationManager
             return $resolved;
         }
 
-        if (!$this->has($id)) {
-            throw new NotFoundException("No entry found for '$id'.");
-        }
-
         $alias = null;
         $lifetime = $this->repository->getDefinitionLifetime($id, $alias);
         $scope = null;
         if ($lifetime === LifetimeEnum::Scoped) {
-            $this->assertScopedResolutionAllowed($id);
+            if ($this->singletonResolutionActive) {
+                $this->assertScopedResolutionAllowed($id);
+            }
             $resolved = null;
             $scope = 'root';
             $found = $this->repository instanceof ConcurrentRepository
@@ -87,6 +87,10 @@ class InvocationManager
             if ($found) {
                 return $this->repository->fetchInstanceOrValue($resolved);
             }
+        }
+
+        if (!$this->has($id)) {
+            throw new NotFoundException("No entry found for '$id'.");
         }
 
         if ($alias instanceof AliasDefinition) {
