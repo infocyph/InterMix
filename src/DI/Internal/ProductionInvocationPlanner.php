@@ -19,7 +19,7 @@ final class ProductionInvocationPlanner
     /** @var array<string, list<string>|false> */
     private array $plans = [];
 
-    /** @param list<string> $compiledIds */
+    /** @param array<int, string> $compiledIds */
     public function __construct(
         private readonly Repository $repository,
         array $compiledIds,
