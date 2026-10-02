@@ -1150,6 +1150,12 @@ demonstrated contract gaps.
   continues sampling across the full interval; batch scheduling latency is recorded
   separately; the closed-loop workload declares that no external queue exists
   rather than reporting a synthetic queue-depth zero.
+- [x] **R5 measurement stability:** shared-runner retries showed materially different
+  absolute capacity and baseline-first/candidate-second drift while previously green
+  cells could change verdict. Release Acceptance therefore uses seven alternating
+  short baseline/candidate pairs plus two full five-minute pairs in opposite orders.
+  Median throughput regression remains capped at the unchanged **2%**; no threshold,
+  baseline, skip or exclusion was widened to absorb variance.
 - [x] **R5 execution modes:** equivalent 10.1.1/11.0 adapters cover dynamic mode
   across c1/c8/c32/c64 and generated production plus hybrid-fallback modes at c32
   on PHP 8.4/8.5. Setup/compilation remains outside measured loops.
