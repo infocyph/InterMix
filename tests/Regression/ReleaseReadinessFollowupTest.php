@@ -6,6 +6,7 @@ use Infocyph\InterMix\Benchmarks\HostAcceptance;
 use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\DI\Internal\ContainerAccess;
 use Infocyph\InterMix\DI\ProductionContainer;
+use Infocyph\InterMix\DI\Resolver\Repository;
 use Psr\Container\NotFoundExceptionInterface;
 
 require_once dirname(__DIR__, 2) . '/benchmarks/HostAcceptance.php';
@@ -131,7 +132,7 @@ it('does not memoize high-cardinality missing definition lifetimes', function ()
         ->value('known', 42)
         ->build();
     $repository = ContainerAccess::repository($runtime);
-    $cacheProperty = new ReflectionProperty($repository, 'definitionLifetimeCache');
+    $cacheProperty = new ReflectionProperty(Repository::class, 'definitionLifetimeCache');
     $initial = $cacheProperty->getValue($repository);
 
     for ($index = 0; $index < 10_000; ++$index) {
