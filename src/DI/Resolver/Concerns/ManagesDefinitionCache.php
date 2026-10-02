@@ -151,6 +151,7 @@ trait ManagesDefinitionCache
         return $this->definitionCache !== null
             && (!$this->definitionCacheExplicitOnly || isset($this->definitionCacheEligibleIds[$id]));
     }
+
     /**
      * @return array{lifetime: LifetimeEnum, alias: AliasDefinition|null}
      */
@@ -168,5 +169,4 @@ trait ManagesDefinitionCache
 
         return $resolved;
     }
-
 }
