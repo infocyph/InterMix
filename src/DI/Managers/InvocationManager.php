@@ -55,6 +55,13 @@ class InvocationManager
     /** @throws ContainerException|InvalidArgumentException|ReflectionException */
     public function get(string $id): mixed
     {
+        $seed = null;
+        if ($this->repository->findScopeSeed($id, $seed)) {
+            $this->assertScopedResolutionAllowed($id);
+
+            return $seed;
+        }
+
         $resolved = $this->repository->getResolvedSingletonEntry($id);
         if ($resolved !== null || $this->repository->hasResolvedSingleton($id)) {
             return $resolved;
@@ -68,13 +75,6 @@ class InvocationManager
         $lifetime = $this->repository->getDefinitionLifetime($id, $alias);
         $scope = null;
         if ($lifetime === LifetimeEnum::Scoped) {
-            $seed = null;
-            if ($this->repository->findScopeSeed($id, $seed)) {
-                $this->assertScopedResolutionAllowed($id);
-
-                return $seed;
-            }
-
             $this->assertScopedResolutionAllowed($id);
             $resolved = null;
             $scope = 'root';
