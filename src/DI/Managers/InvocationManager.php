@@ -89,17 +89,13 @@ class InvocationManager
             }
         }
 
-        if (!$this->has($id)) {
-            throw new NotFoundException("No entry found for '$id'.");
-        }
+        $this->assertResolvable($id);
 
         if ($alias instanceof AliasDefinition) {
             return $this->resolveAlias($id, $alias);
         }
 
-        if ($this->repository->isTracingEnabled()) {
-            $this->repository->tracer()->push("return:$id", TraceLevelEnum::Verbose);
-        }
+        $this->traceReturn($id);
 
         return match ($lifetime) {
             LifetimeEnum::Singleton => $this->resolveAndCache($id, true, null),
@@ -219,6 +215,13 @@ class InvocationManager
         return $this->repository->fetchInstanceOrValue(
             ContainerAccess::resolver($this->container)->resolveByDefinition($id),
         );
+    }
+
+    private function assertResolvable(string $id): void
+    {
+        if (!$this->has($id)) {
+            throw new NotFoundException("No entry found for '$id'.");
+        }
     }
 
     private function assertScopedResolutionAllowed(string $id): void
@@ -444,4 +447,12 @@ class InvocationManager
 
         $this->repository->setResolved($id, $resolved);
     }
+
+    private function traceReturn(string $id): void
+    {
+        if ($this->repository->isTracingEnabled()) {
+            $this->repository->tracer()->push("return:$id", TraceLevelEnum::Verbose);
+        }
+    }
+
 }
