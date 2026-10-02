@@ -15,6 +15,7 @@ concurrency:
 
 jobs:
   phpforge:
+    if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
     uses: infocyph/phpforge/.github/workflows/security-standards.yml@main
     with:
       php_extensions: "apcu"
@@ -27,6 +28,7 @@ jobs:
 
 
   documentation:
+    if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
     name: Documentation
     runs-on: ubuntu-latest
     permissions:
@@ -48,18 +50,13 @@ jobs:
 
 
   release-validation:
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
     uses: ./.github/workflows/release-validation.yml
     permissions:
       contents: read
 
   release:
-    needs:
-      - phpforge
-      - documentation
-      - release-regression
-      - release-validation
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && success()
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     uses: infocyph/phpforge/.github/workflows/release.yml@main
     permissions:
       contents: write
@@ -67,6 +64,7 @@ jobs:
       COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
 
   release-regression:
+    if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
     name: Release regression - PHP ${{ matrix.php-version }}
     runs-on: ubuntu-latest
     permissions:
