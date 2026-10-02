@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Internal;
 
 use Infocyph\InterMix\DI\Resolver\Repository;
+use Infocyph\InterMix\DI\RuntimeContainerInterface;
 use Infocyph\InterMix\Internal\ReflectionResource;
 use ReflectionMethod;
 use ReflectionNamedType;
@@ -26,8 +27,34 @@ final class ProductionInvocationPlanner
         $this->compiledIds = array_fill_keys($compiledIds, true);
     }
 
+    /** @param array<int|string, mixed> $arguments */
+    public function invoke(
+        callable $callable,
+        array $arguments,
+        RuntimeContainerInterface $container,
+        mixed &$result,
+    ): bool {
+        if ($arguments !== [] || !is_array($callable) || !is_object($callable[0])) {
+            return false;
+        }
+
+        $dependencies = $this->dependencies($callable[0], $callable[1]);
+        if ($dependencies === null) {
+            return false;
+        }
+
+        $resolved = [];
+        foreach ($dependencies as $dependency) {
+            $resolved[] = $container->get($dependency);
+        }
+
+        $result = $callable(...$resolved);
+
+        return true;
+    }
+
     /** @return list<string>|null */
-    public function dependencies(object $target, string $method): ?array
+    private function dependencies(object $target, string $method): ?array
     {
         $key = $target::class . '::' . $method;
         if (array_key_exists($key, $this->plans)) {
@@ -102,5 +129,4 @@ final class ProductionInvocationPlanner
 
         return $dependencies;
     }
-
 }
