@@ -44,24 +44,6 @@ trait ManagesDefinitionCache
         return $this->definitionCache;
     }
 
-    /**
-     * @return array{lifetime: LifetimeEnum, alias: AliasDefinition|null}
-     */
-    private function definitionLifetimeFor(string $id): array
-    {
-        $cached = $this->definitionLifetimeCache[$id] ?? null;
-        if ($cached !== null) {
-            return $cached;
-        }
-
-        $resolved = $this->resolveDefinitionLifetime($id);
-        if ($this->hasFunctionReference($id)) {
-            $this->definitionLifetimeCache[$id] = $resolved;
-        }
-
-        return $resolved;
-    }
-
     public function isDefinitionCacheEligible(string $id): bool
     {
         return isset($this->definitionCacheEligibleIds[$id]);
@@ -169,4 +151,22 @@ trait ManagesDefinitionCache
         return $this->definitionCache !== null
             && (!$this->definitionCacheExplicitOnly || isset($this->definitionCacheEligibleIds[$id]));
     }
+    /**
+     * @return array{lifetime: LifetimeEnum, alias: AliasDefinition|null}
+     */
+    private function definitionLifetimeFor(string $id): array
+    {
+        $cached = $this->definitionLifetimeCache[$id] ?? null;
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $resolved = $this->resolveDefinitionLifetime($id);
+        if ($this->hasFunctionReference($id)) {
+            $this->definitionLifetimeCache[$id] = $resolved;
+        }
+
+        return $resolved;
+    }
+
 }
