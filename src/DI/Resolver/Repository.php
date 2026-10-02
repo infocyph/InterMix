@@ -61,6 +61,9 @@ class Repository
     /** @var array<string, array<string, array{lifetime?: LifetimeEnum, tags?: array<int, string>}>> */
     private array $definitionMetaByEnv = [];
 
+    /** @var array<string, array{lifetime: LifetimeEnum, alias: AliasDefinition|null}> */
+    private array $definitionLifetimeCache = [];
+
     private bool $enableMethodAttribute = false;
 
     private bool $enablePropertyAttribute = false;
@@ -410,11 +413,38 @@ class Repository
 
     public function getDefinitionLifetime(string $id, ?AliasDefinition &$alias = null): LifetimeEnum
     {
-        $definition = $this->functionReference[$id] ?? null;
-        if (!$definition instanceof AliasDefinition) {
+        return $this->getDeclaredDefinitionLifetime($id, $alias)
+            ?? $this->getDirectDefinitionLifetime($id);
+    }
+
+    /** @internal */
+    public function getDeclaredDefinitionLifetime(
+        string $id,
+        ?AliasDefinition &$alias = null,
+    ): ?LifetimeEnum {
+        $cached = $this->definitionLifetimeCache[$id] ?? null;
+        if (is_array($cached)) {
+            $alias = $cached['alias'];
+
+            return $cached['lifetime'];
+        }
+
+        if (!array_key_exists($id, $this->functionReference)) {
             $alias = null;
 
-            return $this->getDirectDefinitionLifetime($id);
+            return null;
+        }
+
+        $definition = $this->functionReference[$id];
+        if (!$definition instanceof AliasDefinition) {
+            $alias = null;
+            $lifetime = $this->getDirectDefinitionLifetime($id);
+            $this->definitionLifetimeCache[$id] = [
+                'lifetime' => $lifetime,
+                'alias' => null,
+            ];
+
+            return $lifetime;
         }
 
         $alias = $definition;
@@ -430,7 +460,13 @@ class Repository
             $current = $definition->target;
         }
 
-        return $this->getDirectDefinitionLifetime($current);
+        $lifetime = $this->getDirectDefinitionLifetime($current);
+        $this->definitionLifetimeCache[$id] = [
+            'lifetime' => $lifetime,
+            'alias' => $alias,
+        ];
+
+        return $lifetime;
     }
 
     /**
