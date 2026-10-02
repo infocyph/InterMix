@@ -41,6 +41,6 @@ It records:
 
 The workload is closed-loop and has no external request queue, so it reports that queue model explicitly instead of publishing a fabricated queue-depth value.
 
-The release comparison uses median sustained successful throughput across alternating baseline/candidate processes plus five-minute sustained runs. Response validation is mandatory; invalid or failed responses never count as successful throughput.
+The release comparison uses seven alternating baseline/candidate process pairs plus two five-minute sustained baseline/candidate pairs run in opposite orders. Both throughput gates retain the 2% regression ceiling; the balanced long-run ordering reduces host-frequency and thermal drift without widening the budget. Tail-latency and resource ceilings use the worst observed five-minute baseline/candidate evidence. Response validation is mandatory; invalid or failed responses never count as successful throughput.
 
 A component microbenchmark is diagnostic evidence, not proof of application-level performance.
