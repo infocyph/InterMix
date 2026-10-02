@@ -413,60 +413,10 @@ class Repository
 
     public function getDefinitionLifetime(string $id, ?AliasDefinition &$alias = null): LifetimeEnum
     {
-        return $this->getDeclaredDefinitionLifetime($id, $alias)
-            ?? $this->getDirectDefinitionLifetime($id);
-    }
+        $cached = $this->definitionLifetimeCache[$id] ??= $this->resolveDefinitionLifetime($id);
+        $alias = $cached['alias'];
 
-    /** @internal */
-    public function getDeclaredDefinitionLifetime(
-        string $id,
-        ?AliasDefinition &$alias = null,
-    ): ?LifetimeEnum {
-        $cached = $this->definitionLifetimeCache[$id] ?? null;
-        if (is_array($cached)) {
-            $alias = $cached['alias'];
-
-            return $cached['lifetime'];
-        }
-
-        if (!array_key_exists($id, $this->functionReference)) {
-            $alias = null;
-
-            return null;
-        }
-
-        $definition = $this->functionReference[$id];
-        if (!$definition instanceof AliasDefinition) {
-            $alias = null;
-            $lifetime = $this->getDirectDefinitionLifetime($id);
-            $this->definitionLifetimeCache[$id] = [
-                'lifetime' => $lifetime,
-                'alias' => null,
-            ];
-
-            return $lifetime;
-        }
-
-        $alias = $definition;
-        $current = $definition->target;
-        $seen = [$id => true];
-
-        while (($definition = $this->functionReference[$current] ?? null) instanceof AliasDefinition) {
-            if (isset($seen[$current])) {
-                throw new ContainerException("Circular alias dependency for '{$id}'.");
-            }
-
-            $seen[$current] = true;
-            $current = $definition->target;
-        }
-
-        $lifetime = $this->getDirectDefinitionLifetime($current);
-        $this->definitionLifetimeCache[$id] = [
-            'lifetime' => $lifetime,
-            'alias' => $alias,
-        ];
-
-        return $lifetime;
+        return $cached['lifetime'];
     }
 
     /**
@@ -1131,5 +1081,35 @@ class Repository
         }
 
         unset($this->resolvedSingleton[$id]);
+    }
+
+    /** @return array{lifetime: LifetimeEnum, alias: AliasDefinition|null} */
+    private function resolveDefinitionLifetime(string $id): array
+    {
+        $definition = $this->functionReference[$id] ?? null;
+        if (!$definition instanceof AliasDefinition) {
+            return [
+                'lifetime' => $this->getDirectDefinitionLifetime($id),
+                'alias' => null,
+            ];
+        }
+
+        $alias = $definition;
+        $current = $definition->target;
+        $seen = [$id => true];
+
+        while (($definition = $this->functionReference[$current] ?? null) instanceof AliasDefinition) {
+            if (isset($seen[$current])) {
+                throw new ContainerException("Circular alias dependency for '{$id}'.");
+            }
+
+            $seen[$current] = true;
+            $current = $definition->target;
+        }
+
+        return [
+            'lifetime' => $this->getDirectDefinitionLifetime($current),
+            'alias' => $alias,
+        ];
     }
 }
