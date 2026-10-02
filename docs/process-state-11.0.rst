@@ -27,4 +27,4 @@ RunwireIntegration stores the host-supplied RuntimeContext binding plus its Task
 Release evidence
 ----------------
 
-The release candidate must retain terminated-Fiber/idle-worker collection coverage, dynamic/compiled scope churn, Swoole/OpenSwoole PHP 8.4/8.5 lanes, and a 30-minute persistent-host soak with controlled failure, cancellation, idle windows, zero wrong outputs, and bounded memory growth.
+Release validation retains terminated-Fiber/idle-worker collection coverage, dynamic/compiled scope churn, Swoole/OpenSwoole PHP 8.4/8.5 lanes, and a 30-minute persistent-host soak with controlled failure, cancellation, idle windows, zero wrong outputs, and bounded memory growth.
