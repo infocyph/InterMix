@@ -42,6 +42,22 @@ final class ProductionInvocationPlanner
         return $dependencies;
     }
 
+    private function hasMethodResources(string $targetClass, string $declaringClass): bool
+    {
+        $targetResources = $this->repository->getClassResourceFor($targetClass);
+        if (array_key_exists('method', $targetResources)) {
+            return true;
+        }
+        if ($declaringClass === $targetClass) {
+            return false;
+        }
+
+        return array_key_exists(
+            'method',
+            $this->repository->getClassResourceFor($declaringClass),
+        );
+    }
+
     /** @return list<string>|null */
     private function plan(object $target, string $method): ?array
     {
@@ -87,19 +103,4 @@ final class ProductionInvocationPlanner
         return $dependencies;
     }
 
-    private function hasMethodResources(string $targetClass, string $declaringClass): bool
-    {
-        $targetResources = $this->repository->getClassResourceFor($targetClass);
-        if (array_key_exists('method', $targetResources)) {
-            return true;
-        }
-        if ($declaringClass === $targetClass) {
-            return false;
-        }
-
-        return array_key_exists(
-            'method',
-            $this->repository->getClassResourceFor($declaringClass),
-        );
-    }
 }
