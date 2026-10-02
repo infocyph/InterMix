@@ -167,19 +167,6 @@ final class HostAcceptanceCompare
         }
     }
 
-    /**
-     * @param list<array<string, mixed>> $baseline
-     * @param list<array<string, mixed>> $current
-     */
-    private static function assertLongDuration(array $baseline, array $current): void
-    {
-        foreach ([...$baseline, ...$current] as $result) {
-            if ((float) ($result['duration_seconds'] ?? 0.0) < 300.0) {
-                throw new RuntimeException('Five-minute host evidence must measure at least 300 seconds.');
-            }
-        }
-    }
-
     private static function assertCorrect(array $results): void
     {
         foreach ($results as $result) {
@@ -190,6 +177,19 @@ final class HostAcceptanceCompare
             }
             if ((int) ($result['successful'] ?? 0) < 1) {
                 throw new RuntimeException('Host workload produced no successful requests.');
+            }
+        }
+    }
+
+    /**
+     * @param list<array<string, mixed>> $baseline
+     * @param list<array<string, mixed>> $current
+     */
+    private static function assertLongDuration(array $baseline, array $current): void
+    {
+        foreach ([...$baseline, ...$current] as $result) {
+            if ((float) ($result['duration_seconds'] ?? 0.0) < 300.0) {
+                throw new RuntimeException('Five-minute host evidence must measure at least 300 seconds.');
             }
         }
     }
