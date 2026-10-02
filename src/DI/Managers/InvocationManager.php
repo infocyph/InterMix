@@ -454,5 +454,3 @@ class InvocationManager
             $this->repository->tracer()->push("return:$id", TraceLevelEnum::Verbose);
         }
     }
-
-}
