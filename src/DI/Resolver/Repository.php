@@ -55,14 +55,14 @@ class Repository
 
     private ?string $defaultMethod = null;
 
+    /** @var array<string, array{lifetime: LifetimeEnum, alias: AliasDefinition|null}> */
+    private array $definitionLifetimeCache = [];
+
     /** @var array<string, array{lifetime: LifetimeEnum, tags: array<int, string>}> */
     private array $definitionMeta = [];
 
     /** @var array<string, array<string, array{lifetime?: LifetimeEnum, tags?: array<int, string>}>> */
     private array $definitionMetaByEnv = [];
-
-    /** @var array<string, array{lifetime: LifetimeEnum, alias: AliasDefinition|null}> */
-    private array $definitionLifetimeCache = [];
 
     private bool $enableMethodAttribute = false;
 
