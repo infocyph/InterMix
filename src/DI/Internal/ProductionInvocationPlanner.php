@@ -13,6 +13,8 @@ use ReflectionNamedType;
 /** @internal */
 final class ProductionInvocationPlanner
 {
+    private const int PLAN_CACHE_LIMIT = 512;
+
     /** @var array<string, true> */
     private array $compiledIds;
 
@@ -56,7 +58,7 @@ final class ProductionInvocationPlanner
     /** @return list<string>|null */
     private function dependencies(object $target, string $method): ?array
     {
-        $key = $target::class . '::' . $method;
+        $key = $target::class . '::' . strtolower($method);
         if (array_key_exists($key, $this->plans)) {
             $cached = $this->plans[$key];
 
@@ -64,6 +66,9 @@ final class ProductionInvocationPlanner
         }
 
         $dependencies = $this->plan($target, $method);
+        if (count($this->plans) >= self::PLAN_CACHE_LIMIT) {
+            unset($this->plans[array_key_first($this->plans)]);
+        }
         $this->plans[$key] = $dependencies ?? false;
 
         return $dependencies;

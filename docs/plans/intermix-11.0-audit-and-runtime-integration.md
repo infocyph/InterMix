@@ -893,7 +893,7 @@ Migration execution order:
 
 ## Implementation tracker
 
-Updated: 2026-10-01
+Updated: 2026-10-02
 
 This tracker is the authoritative execution state for this plan. A **batch is a
 coherent tranche containing multiple P-packages**, not a 1:1 alias for a package.
@@ -907,7 +907,7 @@ batch is closed.
 | 1 | P0 + P1 — baseline and runtime hardening | **Complete** | Closed on `f55be8b`: P0 contract/baseline frozen; P1 F1–F3 fixed. Corrected 10.1.1 regression gate, PHPForge QA/analysis/benchmarks, clean install, and Swoole/OpenSwoole PHP 8.4/8.5 are green. |
 | 2 | P2 + P3 - builder/definitions and runtime/scope contract | **Complete** | Closed on `de8bdb18`: B1-B5 and B7 builder/runtime contracts implemented; legacy execution/global ownership removed; strict scopes, captive guards, tagged-scope liveness, cleanup aggregation, and dynamic/compiled parity covered. Exact-head release regression, PHPForge QA/analysis/benchmarks, clean install, and Swoole/OpenSwoole PHP 8.4/8.5 are green. |
 | 3 | P4 + P5 — compiled graph and provider boundaries | **Complete** | Closed on `d3ad3278`: P4/B6 frozen artifact/ABI/publication contract and P5 provider boundaries are implemented. CacheLayer `^4.0` / Runwire `^2.1` integration, host-owned Runwire bridge, provider ownership docs, exact-head PHPForge QA/analysis/benchmarks, clean install, unchanged release regression, and Swoole/OpenSwoole PHP 8.4/8.5 are green. |
-| 4 | P6 + P7 + P8 — migration, measured acceptance and release candidate | **In progress — candidate readiness remediation** | P6 is closed. The 2026-10-01 candidate review reopened B3/B4/P7 acceptance with R1–R5. R1–R4 runtime fixes are implemented and PHPForge-green on `89d2baab`; R5 host evidence has been rebuilt for actual request latency, dynamic/production/hybrid modes and provider coverage. Exact-head P7/P8 evidence remains required before closure. |
+| 4 | P6 + P7 + P8 — migration, measured acceptance and release candidate | **In progress — follow-up remediation** | P6 is closed. R1–R5 were implemented and `54ef623` produced a fully green four-workflow run, but the 2026-10-02 follow-up review reopened final acceptance with R6–R8: periodic latency-sampler aliasing and two unbounded persistent-worker metadata caches. R6–R8 source fixes and focused regressions are implemented after that reviewed SHA; corrected exact-head P7/P8 evidence remains required before closure. |
 
 ### Batch 1 closure evidence
 
@@ -1146,10 +1146,11 @@ demonstrated contract gaps.
   passes Pest, PHPStan/Psalm and the existing release/package gates after the
   recovery regressions were added.
 - [x] **R5 harness implementation:** request p50/p95/p99 is measured from each
-  request's actual Fiber start through completion, with bounded compaction that
-  continues sampling across the full interval; batch scheduling latency is recorded
-  separately; the closed-loop workload declares that no external queue exists
-  rather than reporting a synthetic queue-depth zero.
+  request's actual Fiber start through completion; batch scheduling latency is
+  recorded separately; the closed-loop workload declares that no external queue
+  exists rather than reporting a synthetic queue-depth zero. The original bounded
+  stride/compaction sampler was subsequently superseded by the R6 correction below
+  because periodic request positions could alias with its retained indices.
 - [x] **R5 measurement stability:** shared-runner retries showed materially different
   absolute capacity and baseline-first/candidate-second drift while previously green
   cells could change verdict. Release Acceptance therefore uses seven alternating
@@ -1161,17 +1162,45 @@ demonstrated contract gaps.
   on PHP 8.4/8.5. Setup/compilation remains outside measured loops.
 - [x] **R5 provider cell:** Release Acceptance explicitly runs real Runwire 2.1 and
   CacheLayer 4 boundary/integration fixtures on PHP 8.4/8.5.
+#### 2026-10-02 follow-up review — reviewed SHA `54ef623`
+
+The reviewed SHA passed all four online workflows, including all 17 Release
+Acceptance jobs. Security & Standards `36960972672`, Swoole/OpenSwoole
+`36960972072`, Release Candidate Validation `36960972042`, and Release
+Acceptance `36960971976` were green. The largest reported positive five-minute
+throughput regression was +1.19% on PHP 8.4 dynamic c1, within the unchanged 2%
+budget. Those throughput/resource results remain useful, but the p99 evidence is
+not final because R6 demonstrated periodic aliasing in the bounded latency sampler.
+
+- [x] **R6 — unbiased bounded latency sampling:** replace stride/compaction with a
+  deterministic 20,000-observation reservoir. Admission is independent of fixed
+  c8/c32/c64 request positions and continues across the whole stream. Focused
+  regressions reproduce the 640,000-observation periodic-tail case and require its
+  true 100 ms p99, plus retained observations from early/middle/late windows.
+- [x] **R7 — missing-ID lifetime retention:** `definitionLifetimeCache` admits only
+  declared graph IDs. Missing IDs still resolve to the same strict PSR-11 failure
+  path but are not retained; declared cached lifetime hits keep their existing
+  direct cache lookup. A 10,000-distinct-miss regression requires zero retained
+  lifetime entries before/after scope reset.
+- [x] **R8 — production invocation-plan retention:** method keys canonicalize PHP's
+  case-insensitive method spelling and the planner uses a 512-entry oldest-first
+  bound matching existing callable metadata-cache conventions. Supported and
+  unsupported plans share the bound; plans store dependency strings/false only,
+  never receiver objects. Focused coverage exercises 10,000 casing variants,
+  dynamic fallback and bound eviction.
 - [ ] corrected exact-head Release Acceptance passes the unchanged 2% paired and
-  five-minute throughput budgets, baseline-derived p99/RSS/PHP-memory ceilings,
-  and 30-minute PHP 8.4/8.5 persistent-host soaks;
+  five-minute throughput budgets with the R6 reservoir-derived p99/RSS/PHP-memory
+  ceilings and 30-minute PHP 8.4/8.5 persistent-host soaks;
 - [ ] corrected exact-head PHPForge, release regression, documentation,
   Swoole/OpenSwoole, release package and clean consumer/provider matrices are green;
-- [ ] final R1–R5 evidence and exact revision/run IDs are recorded and Batch 4/P8
+- [ ] final R1–R8 evidence and exact revision/run IDs are recorded and Batch 4/P8
   is closed before tagging.
 
 No threshold, skip, suppression, exclusion, or baseline is weakened by this
 remediation. Earlier P7 results are superseded as final latency evidence because
-they measured average batch cost rather than request-latency distribution.
+they measured average batch cost rather than request-latency distribution, and the
+`54ef623` p99 values are supporting-only because R6 invalidated the sampler used
+to produce them.
 
 ### Batch 1 superseded tuning evidence
 

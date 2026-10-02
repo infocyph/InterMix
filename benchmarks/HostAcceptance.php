@@ -45,6 +45,14 @@ final class HostAcceptance
 {
     private const int LATENCY_SAMPLE_LIMIT = 20_000;
 
+    private const int LATENCY_SAMPLE_MODULUS = 2_147_483_647;
+
+    private const int LATENCY_SAMPLE_MULTIPLIER = 48_271;
+
+    private const int REQUEST_LATENCY_SAMPLE_SEED = 104_729;
+
+    private const int BATCH_LATENCY_SAMPLE_SEED = 130_363;
+
     private const int WARMUP_REQUESTS = 2_000;
 
     /** @param list<string> $arguments */
@@ -126,22 +134,6 @@ final class HostAcceptance
     }
 
     /**
-     * @param list<float> $samples
-     * @return list<float>
-     */
-    private static function compactSamples(array $samples): array
-    {
-        $compacted = [];
-        foreach ($samples as $index => $sample) {
-            if (($index % 2) === 0) {
-                $compacted[] = $sample;
-            }
-        }
-
-        return $compacted;
-    }
-
-    /**
      * @param array{scope: \Closure, get: \Closure, dispatch: \Closure, api: string, mode: string, hybrid: bool} $calls
      */
     private static function failureProbe(array $calls, int $sequence): int
@@ -219,10 +211,10 @@ final class HostAcceptance
         $idleWindows = 0;
         $requestLatencies = [];
         $requestLatencyObservations = 0;
-        $requestLatencyStride = 1;
+        $requestLatencySamplerState = self::REQUEST_LATENCY_SAMPLE_SEED;
         $batchLatencies = [];
         $batchLatencyObservations = 0;
-        $batchLatencyStride = 1;
+        $batchLatencySamplerState = self::BATCH_LATENCY_SAMPLE_SEED;
         $rssSamples = [$rssStart];
         $lastRssSample = $started;
         $lastSoakProbe = $started;
@@ -240,14 +232,14 @@ final class HostAcceptance
                 self::recordSample(
                     $requestLatencies,
                     $requestLatencyObservations,
-                    $requestLatencyStride,
+                    $requestLatencySamplerState,
                     $latency,
                 );
             }
             self::recordSample(
                 $batchLatencies,
                 $batchLatencyObservations,
-                $batchLatencyStride,
+                $batchLatencySamplerState,
                 ($batchEnded - $batchStarted) / 1_000_000,
             );
 
@@ -315,10 +307,12 @@ final class HostAcceptance
             'idle_windows' => $idleWindows,
             'request_latency_observations' => $requestLatencyObservations,
             'latency_samples' => count($requestLatencies),
-            'latency_sample_stride' => $requestLatencyStride,
+            'latency_sampling' => 'deterministic-reservoir',
+            'latency_sample_capacity' => self::LATENCY_SAMPLE_LIMIT,
             'batch_latency_observations' => $batchLatencyObservations,
             'batch_latency_samples' => count($batchLatencies),
-            'batch_latency_sample_stride' => $batchLatencyStride,
+            'batch_latency_sampling' => 'deterministic-reservoir',
+            'batch_latency_sample_capacity' => self::LATENCY_SAMPLE_LIMIT,
             'rss_samples_bytes' => $rssSamples,
         ];
     }
@@ -347,26 +341,34 @@ final class HostAcceptance
     }
 
     /**
+     * Keep a bounded uniform reservoir across the entire observation stream.
+     *
+     * A deterministic generator keeps baseline/candidate runs reproducible without
+     * tying retained positions to request-batch periodicity.
+     *
      * @param list<float> $samples
      */
     private static function recordSample(
         array &$samples,
         int &$observations,
-        int &$stride,
+        int &$samplerState,
         float $value,
     ): void {
         ++$observations;
-        if ((($observations - 1) % $stride) !== 0) {
-            return;
-        }
-
-        $samples[] = $value;
         if (count($samples) < self::LATENCY_SAMPLE_LIMIT) {
+            $samples[] = $value;
+
             return;
         }
 
-        $samples = self::compactSamples($samples);
-        $stride *= 2;
+        $samplerState = (int) (
+            ($samplerState * self::LATENCY_SAMPLE_MULTIPLIER)
+            % self::LATENCY_SAMPLE_MODULUS
+        );
+        $slot = $samplerState % $observations;
+        if ($slot < self::LATENCY_SAMPLE_LIMIT) {
+            $samples[$slot] = $value;
+        }
     }
 
     /** @param list<string> $arguments */
