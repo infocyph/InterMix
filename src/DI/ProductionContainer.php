@@ -15,6 +15,8 @@ use Infocyph\InterMix\Exceptions\ContainerException;
 use Infocyph\InterMix\Exceptions\ScopeCleanupException;
 use Infocyph\InterMix\Internal\ReflectionResource;
 use Psr\Container\ContainerInterface;
+use ReflectionMethod;
+use ReflectionNamedType;
 use Throwable;
 
 abstract class ProductionContainer implements RuntimeContainerInterface
@@ -24,6 +26,9 @@ abstract class ProductionContainer implements RuntimeContainerInterface
     protected bool $contextScopesActive = false;
 
     protected ScopeState $scope;
+
+    /** @var array<string, list<string>|false> */
+    private array $compiledInvokePlans = [];
 
     /** @var array<int|string, int> */
     private array $compiledSingletonResolutionOwners = [];
@@ -64,6 +69,24 @@ abstract class ProductionContainer implements RuntimeContainerInterface
     /** @param array<int|string, mixed> $arguments */
     final public function invoke(callable $callable, array $arguments = []): mixed
     {
+        if ($arguments === []
+            && is_array($callable)
+            && array_is_list($callable)
+            && count($callable) === 2
+            && is_object($callable[0])
+            && is_string($callable[1])
+        ) {
+            $dependencies = $this->compiledInvokeDependencies($callable[0], $callable[1]);
+            if ($dependencies !== null) {
+                $resolved = [];
+                foreach ($dependencies as $dependency) {
+                    $resolved[] = $this->get($dependency);
+                }
+
+                return $callable(...$resolved);
+            }
+        }
+
         return $this->dynamic()->invoke($callable, $arguments);
     }
 
@@ -278,9 +301,12 @@ abstract class ProductionContainer implements RuntimeContainerInterface
     /** @param array<string, mixed> $instances */
     final protected function enterScope(string $scope, array $instances = []): static
     {
-        $this->validateProductionScopeSeeds($instances);
         $seeds = [];
         foreach ($instances as $id => $value) {
+            if (!isset($this->validatedScopeSeedIds[$id])) {
+                $this->validateProductionScopeSeed($id, $value);
+            }
+
             $slot = $this->slotFor($id);
             if ($slot !== null) {
                 $seeds[$slot] = $value;
@@ -671,28 +697,100 @@ abstract class ProductionContainer implements RuntimeContainerInterface
         }
     }
 
-    /** @param array<string, mixed> $instances */
-    private function validateProductionScopeSeeds(array $instances): void
+    /** @return list<string>|null */
+    private function compiledInvokeDependencies(object $target, string $method): ?array
     {
-        foreach ($instances as $id => $instance) {
-            if (isset($this->validatedScopeSeedIds[$id])) {
-                continue;
-            }
-            if ($this->isCompiledScopedDefinition($id)) {
-                $this->validatedScopeSeedIds[$id] = true;
+        $key = $target::class . '::' . $method;
+        if (array_key_exists($key, $this->compiledInvokePlans)) {
+            $cached = $this->compiledInvokePlans[$key];
 
-                continue;
-            }
-            if ($this->fallback instanceof ConfigurationContainer) {
-                $this->fallback->assertValidScopeSeeds([$id => $instance]);
-                $this->validatedScopeSeedIds[$id] = true;
-
-                continue;
-            }
-
-            throw new ContainerException(
-                "Scope seed '$id' must identify a declared scoped entry or input.",
-            );
+            return $cached === false ? null : $cached;
         }
+
+        $fallback = $this->fallback;
+        if (!$fallback instanceof ConfigurationContainer) {
+            $this->compiledInvokePlans[$key] = false;
+
+            return null;
+        }
+
+        $repository = $fallback->getRepository();
+        if ($repository->isTracingEnabled()
+            || $repository->isMethodAttributeEnabled()
+            || $repository->hasContextualBindings()
+        ) {
+            $this->compiledInvokePlans[$key] = false;
+
+            return null;
+        }
+
+        $reflection = ReflectionResource::getCallableReflection([$target, $method]);
+        if (!$reflection instanceof ReflectionMethod || !$reflection->isPublic() || $reflection->isStatic()) {
+            $this->compiledInvokePlans[$key] = false;
+
+            return null;
+        }
+
+        $declaringClass = $reflection->getDeclaringClass()->getName();
+        $targetResources = $repository->getClassResourceFor($target::class);
+        $declaringResources = $declaringClass === $target::class
+            ? $targetResources
+            : $repository->getClassResourceFor($declaringClass);
+        if (array_key_exists('method', $targetResources)
+            || array_key_exists('method', $declaringResources)
+        ) {
+            $this->compiledInvokePlans[$key] = false;
+
+            return null;
+        }
+
+        $dependencies = [];
+        foreach ($reflection->getParameters() as $parameter) {
+            $type = $parameter->getType();
+            if (!$type instanceof ReflectionNamedType
+                || $type->isBuiltin()
+                || $type->allowsNull()
+                || $parameter->isVariadic()
+                || $parameter->isPassedByReference()
+                || $parameter->isDefaultValueAvailable()
+            ) {
+                $this->compiledInvokePlans[$key] = false;
+
+                return null;
+            }
+
+            $dependency = $type->getName();
+            if (in_array($dependency, ['self', 'parent', 'static'], true)
+                || !$this->isCompiledDefinition($dependency)
+            ) {
+                $this->compiledInvokePlans[$key] = false;
+
+                return null;
+            }
+            $dependencies[] = $dependency;
+        }
+
+        $this->compiledInvokePlans[$key] = $dependencies;
+
+        return $dependencies;
+    }
+
+    private function validateProductionScopeSeed(string $id, mixed $instance): void
+    {
+        if ($this->isCompiledScopedDefinition($id)) {
+            $this->validatedScopeSeedIds[$id] = true;
+
+            return;
+        }
+        if ($this->fallback instanceof ConfigurationContainer) {
+            $this->fallback->assertValidScopeSeeds([$id => $instance]);
+            $this->validatedScopeSeedIds[$id] = true;
+
+            return;
+        }
+
+        throw new ContainerException(
+            "Scope seed '$id' must identify a declared scoped entry or input.",
+        );
     }
 }
