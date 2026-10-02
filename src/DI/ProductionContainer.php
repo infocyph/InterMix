@@ -67,16 +67,9 @@ abstract class ProductionContainer implements RuntimeContainerInterface
     /** @param array<int|string, mixed> $arguments */
     final public function invoke(callable $callable, array $arguments = []): mixed
     {
-        if ($arguments === [] && is_array($callable) && is_object($callable[0])) {
-            $dependencies = $this->compiledInvocationPlanner()?->dependencies($callable[0], $callable[1]);
-            if ($dependencies !== null) {
-                $resolved = [];
-                foreach ($dependencies as $dependency) {
-                    $resolved[] = $this->get($dependency);
-                }
-
-                return $callable(...$resolved);
-            }
+        $result = null;
+        if ($this->compiledInvocationPlanner()?->invoke($callable, $arguments, $this, $result) === true) {
+            return $result;
         }
 
         return $this->dynamic()->invoke($callable, $arguments);
