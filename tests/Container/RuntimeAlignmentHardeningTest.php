@@ -70,6 +70,19 @@ it('does not reuse collected Fiber carrier identities', function () {
         ->and(array_unique($ids))->toHaveCount(64);
 });
 
+it('does not retain collected Fiber carriers', function () {
+    $fiber = new Fiber(static fn(): ?string => ExecutionContext::id());
+    $fiber->start();
+
+    expect($fiber->getReturn())->toBeString();
+
+    $reference = \WeakReference::create($fiber);
+    unset($fiber);
+    gc_collect_cycles();
+
+    expect($reference->get())->toBeNull();
+});
+
 it('preserves compiled and fallback scoped identity after builder finalization', function () {
     $builder = ContainerBuilder::create(uniqid('runtime_alignment_fallback_'))
         ->releaseIdentity('intermix-test');
