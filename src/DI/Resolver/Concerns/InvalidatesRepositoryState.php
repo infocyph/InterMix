@@ -45,6 +45,7 @@ trait InvalidatesRepositoryState
     public function invalidateDefinition(string $id): void
     {
         $this->notifyConfigurationMutation();
+        $this->definitionLifetimeCache = [];
         unset($this->resolved[$id], $this->resolvedSingleton[$id], $this->scopeSeedAllowedIds[$id]);
         foreach (array_keys($this->resolvedDefinition) as $key) {
             if ($key === $id || str_starts_with($key, $id . '@env:')) {
@@ -70,6 +71,7 @@ trait InvalidatesRepositoryState
         $this->resolvedDefinition = [];
         $this->resolvedResource = [];
         $this->resolvedScoped = [];
+        $this->definitionLifetimeCache = [];
         $this->scopeSeedAllowedIds = [];
         $this->invalidateCompiledResolvers();
         $this->rotateDefinitionCacheGeneration();
