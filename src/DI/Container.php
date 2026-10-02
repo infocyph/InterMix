@@ -50,6 +50,9 @@ class Container implements RuntimeContainerInterface
     /** @var class-string<InjectedCall|GenericCall> */
     private string $resolverClass = InjectedCall::class;
 
+    /** @var array<string, true> */
+    private array $validatedScopeSeedIds = [];
+
     public function __construct(protected readonly string $instanceAlias = 'intermix.default')
     {
         $this->repository = new ConcurrentRepository($this, $this->instanceAlias);
@@ -514,11 +517,17 @@ class Container implements RuntimeContainerInterface
     protected function validateScopeSeeds(array $instances): void
     {
         foreach ($instances as $id => $_instance) {
-            if (!$this->repository->isScopeSeedAllowed((string) $id)) {
+            $id = (string) $id;
+            if (isset($this->validatedScopeSeedIds[$id])) {
+                continue;
+            }
+            if (!$this->repository->isScopeSeedAllowed($id)) {
                 throw new ContainerException(
                     "Scope seed '$id' must identify a declared scoped entry or input.",
                 );
             }
+
+            $this->validatedScopeSeedIds[$id] = true;
         }
     }
 
