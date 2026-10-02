@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Resolver\Concerns;
 
 use Infocyph\InterMix\DI\Internal\BoundedValueInspector;
+use Infocyph\InterMix\DI\Support\AliasDefinition;
+use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\Exceptions\ContainerException;
 use Psr\Cache\CacheItemPoolInterface;
 
@@ -40,6 +42,24 @@ trait ManagesDefinitionCache
     public function getDefinitionCache(): ?CacheItemPoolInterface
     {
         return $this->definitionCache;
+    }
+
+    /**
+     * @return array{lifetime: LifetimeEnum, alias: AliasDefinition|null}
+     */
+    private function definitionLifetimeFor(string $id): array
+    {
+        $cached = $this->definitionLifetimeCache[$id] ?? null;
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $resolved = $this->resolveDefinitionLifetime($id);
+        if ($this->hasFunctionReference($id)) {
+            $this->definitionLifetimeCache[$id] = $resolved;
+        }
+
+        return $resolved;
     }
 
     public function isDefinitionCacheEligible(string $id): bool

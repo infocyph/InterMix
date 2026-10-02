@@ -413,13 +413,7 @@ class Repository
 
     public function getDefinitionLifetime(string $id, ?AliasDefinition &$alias = null): LifetimeEnum
     {
-        $cached = $this->definitionLifetimeCache[$id] ?? null;
-        if ($cached === null) {
-            $cached = $this->resolveDefinitionLifetime($id);
-            if ($this->hasFunctionReference($id)) {
-                $this->definitionLifetimeCache[$id] = $cached;
-            }
-        }
+        $cached = $this->definitionLifetimeFor($id);
         $alias = $cached['alias'];
 
         return $cached['lifetime'];

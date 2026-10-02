@@ -43,6 +43,8 @@ final class HostAcceptanceRequest
 
 final class HostAcceptance
 {
+    private const int BATCH_LATENCY_SAMPLE_SEED = 130_363;
+
     private const int LATENCY_SAMPLE_LIMIT = 20_000;
 
     private const int LATENCY_SAMPLE_MODULUS = 2_147_483_647;
@@ -50,8 +52,6 @@ final class HostAcceptance
     private const int LATENCY_SAMPLE_MULTIPLIER = 48_271;
 
     private const int REQUEST_LATENCY_SAMPLE_SEED = 104_729;
-
-    private const int BATCH_LATENCY_SAMPLE_SEED = 130_363;
 
     private const int WARMUP_REQUESTS = 2_000;
 
