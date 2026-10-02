@@ -94,7 +94,7 @@ jobs:
               --output="$1"
           }
 
-          for iteration in 1 2 3 4 5; do
+          for iteration in 1 2 3 4 5 6 7; do
             baseline_file="$RUNNER_TEMP/host-baseline-${{ matrix.php-version }}-$MODE-$CONCURRENCY-$iteration.json"
             current_file="$RUNNER_TEMP/host-current-${{ matrix.php-version }}-$MODE-$CONCURRENCY-$iteration.json"
             baseline_files+=("$baseline_file")
@@ -112,31 +112,50 @@ jobs:
           (IFS=,; echo "HOST_BASELINE_FILES=${baseline_files[*]}" >> "$GITHUB_ENV")
           (IFS=,; echo "HOST_CURRENT_FILES=${current_files[*]}" >> "$GITHUB_ENV")
 
-      - name: Measure five-minute baseline and candidate runs
+      - name: Measure balanced five-minute baseline and candidate pairs
         shell: bash
         env:
           CONCURRENCY: ${{ matrix.concurrency }}
           MODE: ${{ matrix.mode }}
         run: |
-          baseline_long="$RUNNER_TEMP/host-baseline-long-${{ matrix.php-version }}-$MODE-$CONCURRENCY.json"
-          current_long="$RUNNER_TEMP/host-current-long-${{ matrix.php-version }}-$MODE-$CONCURRENCY.json"
+          baseline_long_files=()
+          current_long_files=()
 
-          php current/benchmarks/HostAcceptance.php \
-            --autoload="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" \
-            --duration=300 \
-            --concurrency="$CONCURRENCY" \
-            --mode="$MODE" \
-            --output="$baseline_long"
+          measure_baseline_long() {
+            php current/benchmarks/HostAcceptance.php \
+              --autoload="$GITHUB_WORKSPACE/baseline/vendor/autoload.php" \
+              --duration=300 \
+              --concurrency="$CONCURRENCY" \
+              --mode="$MODE" \
+              --output="$1"
+          }
 
-          php current/benchmarks/HostAcceptance.php \
-            --autoload="$GITHUB_WORKSPACE/current/vendor/autoload.php" \
-            --duration=300 \
-            --concurrency="$CONCURRENCY" \
-            --mode="$MODE" \
-            --output="$current_long"
+          measure_current_long() {
+            php current/benchmarks/HostAcceptance.php \
+              --autoload="$GITHUB_WORKSPACE/current/vendor/autoload.php" \
+              --duration=300 \
+              --concurrency="$CONCURRENCY" \
+              --mode="$MODE" \
+              --output="$1"
+          }
 
-          echo "HOST_BASELINE_LONG=$baseline_long" >> "$GITHUB_ENV"
-          echo "HOST_CURRENT_LONG=$current_long" >> "$GITHUB_ENV"
+          for iteration in 1 2; do
+            baseline_long="$RUNNER_TEMP/host-baseline-long-${{ matrix.php-version }}-$MODE-$CONCURRENCY-$iteration.json"
+            current_long="$RUNNER_TEMP/host-current-long-${{ matrix.php-version }}-$MODE-$CONCURRENCY-$iteration.json"
+            baseline_long_files+=("$baseline_long")
+            current_long_files+=("$current_long")
+
+            if (( iteration % 2 == 1 )); then
+              measure_baseline_long "$baseline_long"
+              measure_current_long "$current_long"
+            else
+              measure_current_long "$current_long"
+              measure_baseline_long "$baseline_long"
+            fi
+          done
+
+          (IFS=,; echo "HOST_BASELINE_LONG=${baseline_long_files[*]}" >> "$GITHUB_ENV")
+          (IFS=,; echo "HOST_CURRENT_LONG=${current_long_files[*]}" >> "$GITHUB_ENV")
 
       - name: Enforce representative host acceptance
         run: |
