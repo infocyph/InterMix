@@ -534,3 +534,47 @@ it('reuses safe opted-in values across equivalent explicit cache generations', f
     expect($second->get('cached'))->toBe(41)
         ->and($secondRuns)->toBe(0);
 });
+
+it('loads a self contained production artifact through the public builder API', function (): void {
+    $path = builder11ArtifactPath();
+    try {
+        $report = ContainerBuilder::create('builder11_deployment')
+            ->setEnvironment('production')
+            ->value('compiled-value', 'ready')
+            ->compile($path);
+
+        $runtime = ContainerBuilder::loadProductionArtifact($path, $report['graph'], 'production');
+        expect($runtime)->toBeInstanceOf(\Infocyph\InterMix\DI\ProductionContainer::class)
+            ->and($runtime->get('compiled-value'))->toBe('ready');
+    } finally {
+        removeBuilder11Artifact($path);
+    }
+});
+
+it('rejects incompatible standalone production artifacts', function (string $mismatch): void {
+    $path = builder11ArtifactPath();
+    try {
+        $builder = ContainerBuilder::create('builder11_deployment')->setEnvironment('production');
+        if ($mismatch === 'fallback') {
+            $builder->input(stdClass::class);
+        } else {
+            $builder->value('compiled-value', 'ready');
+        }
+        $report = $builder->compile($path);
+        $graph = $mismatch === 'graph' ? str_repeat('0', 32) : $report['graph'];
+        $environment = $mismatch === 'environment' ? 'development' : 'production';
+        if ($mismatch === 'digest') {
+            file_put_contents($path, "\n// altered artifact\n", FILE_APPEND);
+        }
+
+        expect(static fn() => ContainerBuilder::loadProductionArtifact($path, $graph, $environment))
+            ->toThrow(ContainerException::class);
+    } finally {
+        removeBuilder11Artifact($path);
+    }
+})->with(['graph', 'environment', 'digest', 'fallback']);
+
+it('rejects malformed expected deployment graph identities before loading', function (): void {
+    expect(static fn() => ContainerBuilder::loadProductionArtifact('/missing/artifact.php', 'untrusted'))
+        ->toThrow(ContainerException::class, 'Expected static runtime graph identity must be a lowercase xxh128 digest.');
+});

@@ -106,6 +106,28 @@ final class StaticRuntimeGenerator
         return $this->attachFallback($this->loadRuntime($artifactPath), $fallback);
     }
 
+    public function loadCompiled(
+        string $filePath,
+        string $expectedGraphIdentity,
+        ?string $expectedEnvironment,
+    ): ProductionContainer {
+        if (preg_match('/^[a-f0-9]{32}$/D', $expectedGraphIdentity) !== 1) {
+            throw new ContainerException('Expected static runtime graph identity must be a lowercase xxh128 digest.');
+        }
+
+        $artifactPath = $this->artifactPath($filePath);
+        $manifest = new StaticRuntimeArtifactMetadata()->validate($artifactPath);
+        if (!hash_equals($expectedGraphIdentity, $manifest['graph'])) {
+            throw new ContainerException('Static runtime graph identity does not match the deployment.');
+        }
+        if ($manifest['environment'] !== $expectedEnvironment) {
+            throw new ContainerException('Static runtime environment does not match the deployment.');
+        }
+        $this->assertFallbackMatches($manifest, null, null);
+
+        return $this->loadRuntime($artifactPath);
+    }
+
     /**
      * Load an artifact whose xxh128 digest was validated during deployment.
      *

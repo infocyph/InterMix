@@ -181,6 +181,24 @@ $runtime = $builder->production(__DIR__ . '/var/intermix.php');
 
 The generated artifact is validated against the finalized graph, InterMix ABI, PHP runtime, environment identity, release identity, and fallback requirements before activation.
 
+For a fully compiled deployment with no fallback requirements, cold SAPI
+bootstrap can load the artifact without rebuilding its configuration runtime:
+
+~~~php
+$runtime = ContainerBuilder::loadProductionArtifact(
+    path: __DIR__ . '/var/intermix.php',
+    expectedGraphIdentity: $deployment['intermix_graph'],
+    expectedEnvironment: 'production',
+);
+~~~
+
+Record `compile()`'s `graph` in immutable deployment metadata and pass that
+expected identity at bootstrap. This path still validates the artifact digest,
+build identity, ABI, PHP version, graph and environment. It rejects artifacts
+that require inputs, runtime factories, hooks or other fallback configuration;
+use the configured builder's `production()` for those applications. A standalone
+runtime supports its compiled graph and has no dynamic configuration fallback.
+
 ## Definition cache
 
 Definition caching is explicit, PSR-6 based, and opt-in per eligible factory definition:
