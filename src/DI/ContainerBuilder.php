@@ -66,6 +66,19 @@ final class ContainerBuilder
         return new self($namespace);
     }
 
+    /**
+     * Load a self-contained deployment without reconstructing its builder.
+     * Source the expected graph identity from immutable deployment metadata.
+     * Artifacts requiring a runtime fallback must use production() instead.
+     */
+    public static function loadProductionArtifact(
+        string $path,
+        string $expectedGraphIdentity,
+        ?string $expectedEnvironment = null,
+    ): ProductionContainer {
+        return new StaticRuntimeGenerator()->loadCompiled($path, $expectedGraphIdentity, $expectedEnvironment);
+    }
+
     public function alias(string $id, string $target): self
     {
         $this->assertIdentifier($target, 'Alias target');
