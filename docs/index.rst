@@ -17,6 +17,7 @@ Contents
     backstory
     upgrade-11.0
     release-11.0
+    release-11.2
     process-state-11.0
     container
     integrations

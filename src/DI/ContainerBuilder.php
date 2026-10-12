@@ -429,7 +429,8 @@ final class ContainerBuilder
     {
         $issues = [
             ...$this->configuration->validate(false, $resolveFactories),
-            ...$this->validateBuilderState(),
+            ...$this->graphIssues(),
+            ...$this->cacheEligibilityIssues(),
         ];
         $issues = array_values(array_unique($issues));
 
@@ -465,6 +466,25 @@ final class ContainerBuilder
             $this->configuration->getRepository(),
             $consumer,
         );
+    }
+
+    /** @param array<string, mixed> $definitions */
+    private function aliasIssue(string $id, AliasDefinition $definition, array $definitions): ?string
+    {
+        if (!array_key_exists($definition->target, $definitions)) {
+            return "Alias '{$id}' targets undeclared service '{$definition->target}'.";
+        }
+        $seen = [];
+        $current = $id;
+        while (($alias = $definitions[$current] ?? null) instanceof AliasDefinition) {
+            if (isset($seen[$current])) {
+                return "Alias '{$id}' participates in a cycle.";
+            }
+            $seen[$current] = true;
+            $current = $alias->target;
+        }
+
+        return null;
     }
 
     private function assertIdentifier(string $id, string $label = 'Service ID'): void
@@ -597,13 +617,13 @@ final class ContainerBuilder
     private function captiveDependencyIssues(DefinitionGraph $graph): array
     {
         $plans = new StaticRuntimePlanner()->dependencyPlans($graph);
+        $scopedIds = array_fill_keys([
+            ...array_keys(array_filter($plans, static fn(array $plan): bool => $plan['lifetime'] === LifetimeEnum::Scoped)),
+            ...array_keys(array_filter($graph->definitionMeta(), static fn(array $meta): bool => $meta['lifetime'] === LifetimeEnum::Scoped)),
+        ], true);
         $issues = [];
         foreach ($plans as $id => $plan) {
-            if ($plan['lifetime'] !== LifetimeEnum::Singleton) {
-                continue;
-            }
-
-            $pending = $plan['dependencies'];
+            $pending = $plan['lifetime'] === LifetimeEnum::Singleton ? $plan['dependencies'] : [];
             $seen = [];
             while (($dependency = array_pop($pending)) !== null) {
                 if (isset($seen[$dependency])) {
@@ -611,24 +631,13 @@ final class ContainerBuilder
                 }
                 $seen[$dependency] = true;
 
-                if ($graph->hasDefinition($dependency)
-                    && $graph->definitionMetaFor($dependency)['lifetime'] === LifetimeEnum::Scoped
-                ) {
+                if (isset($scopedIds[$dependency])) {
                     $issues[] = "Singleton '{$id}' depends on scoped entry '{$dependency}'.";
 
                     break;
                 }
 
-                $dependencyPlan = $plans[$dependency] ?? null;
-                if (!is_array($dependencyPlan)) {
-                    continue;
-                }
-                if ($dependencyPlan['lifetime'] === LifetimeEnum::Scoped) {
-                    $issues[] = "Singleton '{$id}' depends on scoped entry '{$dependency}'.";
-
-                    break;
-                }
-                array_push($pending, ...$dependencyPlan['dependencies']);
+                array_push($pending, ...($plans[$dependency]['dependencies'] ?? []));
             }
         }
 
@@ -643,7 +652,8 @@ final class ContainerBuilder
 
         $issues = [
             ...$this->configuration->validate(false, false),
-            ...$this->validateBuilderState(),
+            ...$this->graphIssues(),
+            ...$this->cacheEligibilityIssues(),
         ];
         $issues = array_values(array_unique($issues));
         if ($issues !== []) {
@@ -681,22 +691,9 @@ final class ContainerBuilder
         foreach ($definitions as $rawId => $definition) {
             $id = (string) $rawId;
             if ($definition instanceof AliasDefinition) {
-                if (!$repository->hasFunctionReference($definition->target)) {
-                    $issues[] = "Alias '{$id}' targets undeclared service '{$definition->target}'.";
-
-                    continue;
-                }
-
-                $seen = [];
-                $current = $id;
-                while (($alias = $definitions[$current] ?? null) instanceof AliasDefinition) {
-                    if (isset($seen[$current])) {
-                        $issues[] = "Alias '{$id}' participates in a cycle.";
-
-                        break;
-                    }
-                    $seen[$current] = true;
-                    $current = $alias->target;
+                $issue = $this->aliasIssue($id, $definition, $definitions);
+                if ($issue !== null) {
+                    $issues[] = $issue;
                 }
             }
 
@@ -787,20 +784,9 @@ final class ContainerBuilder
                 $visited,
             );
 
-            if ($referenceId !== null) {
-                unset($activeReferences[$referenceId]);
-            }
+            unset($activeReferences[$referenceId ?? '']);
         }
 
         return $snapshot;
-    }
-
-    /** @return list<string> */
-    private function validateBuilderState(): array
-    {
-        return [
-            ...$this->graphIssues(),
-            ...$this->cacheEligibilityIssues(),
-        ];
     }
 }

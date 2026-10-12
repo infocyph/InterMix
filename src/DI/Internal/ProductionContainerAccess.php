@@ -24,7 +24,7 @@ final class ProductionContainerAccess
                 $this->captureFallbackDefinitions($fallback);
                 $this->installFallbackBridges($fallback);
                 $this->fallback = $fallback;
-                $this->synchronizeFallbackScopes($fallback);
+                ProductionFallbackState::synchronizeScopes($fallback, $this->compiledScope(), $this->compiledIds());
             },
             $runtime,
             ProductionContainer::class,

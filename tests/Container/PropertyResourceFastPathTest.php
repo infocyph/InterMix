@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Internal\ConfigurationContainer;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
+use Infocyph\InterMix\DI\Support\TraceLevelEnum;
 
 final class PropertyFastPathSubject
 {
@@ -26,8 +26,9 @@ it('keeps unrelated class resources off the property-resolution fast path', func
     expect($repository->hasPropertyResources())->toBeFalse();
 });
 
-it('activates the property-resource flag on late property registration', function () {
+it('activates the property-resource flag on late property registration', function (bool $attributes) {
     $container = new ConfigurationContainer(uniqid('property_fast_late_'));
+    $container->options()->setOptions(propertyAttributes: $attributes);
     $container->bind(
         PropertyFastPathSubject::class,
         PropertyFastPathSubject::class,
@@ -47,4 +48,16 @@ it('activates the property-resource flag on late property registration', functio
     $after = $container->get(PropertyFastPathSubject::class);
     expect($repository->hasPropertyResources())->toBeTrue()
         ->and($after->value)->toBe('registered');
+})->with([false, true]);
+
+it('preserves verbose property tracing after caching an unattributed class', function () {
+    $container = new ConfigurationContainer(uniqid('property_fast_trace_'));
+    $container->options()->setOptions(propertyAttributes: true);
+    $container->bind(PropertyFastPathSubject::class, PropertyFastPathSubject::class, LifetimeEnum::Transient);
+    $container->get(PropertyFastPathSubject::class);
+    $container->options()->enableDebugTracing(true, TraceLevelEnum::Verbose);
+    $container->get(PropertyFastPathSubject::class);
+
+    expect(array_column($container->tracer()->getEntries(), 'message'))
+        ->toContain('prop value of ' . PropertyFastPathSubject::class);
 });

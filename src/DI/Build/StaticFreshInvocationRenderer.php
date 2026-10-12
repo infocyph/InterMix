@@ -15,7 +15,8 @@ use Infocyph\InterMix\DI\Support\LifetimeEnum;
  * @phpstan-type FactoryPlan array{kind: 'factory', class: class-string, method: string|null, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
  * @phpstan-type InvocationPlan array{kind: 'invocation', class: class-string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, invocation: MethodPlan, dependencies: list<string>}
  * @phpstan-type ValuePlan array{kind: 'value', code: string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
- * @phpstan-type ServicePlan AliasPlan|ClassPlan|FactoryPlan|InvocationPlan|ValuePlan
+ * @phpstan-type InputPlan array{kind: 'input', lifetime: LifetimeEnum::Scoped, arguments: array{}, properties: array{}, dependencies: array{}}
+ * @phpstan-type ServicePlan AliasPlan|ClassPlan|FactoryPlan|InvocationPlan|ValuePlan|InputPlan
  * @phpstan-type FreshInvocationPlan array{class: class-string, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, invocation: MethodPlan}
  * @internal
  */

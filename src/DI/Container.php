@@ -56,8 +56,8 @@ class Container implements RuntimeContainerInterface
     public function __construct(protected readonly string $instanceAlias = 'intermix.default')
     {
         $this->repository = new ConcurrentRepository($this, $this->instanceAlias);
-        $this->resolver = $this->resolverFactory();
         $this->invocationManager = new InvocationManager($this->repository, $this);
+        $this->resolver = $this->resolverFactory();
     }
 
     public function captureScopeContext(): ScopeContext

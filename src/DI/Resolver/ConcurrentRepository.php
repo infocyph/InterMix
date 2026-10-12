@@ -31,9 +31,6 @@ final class ConcurrentRepository extends Repository
 
     private ?object $scopeContextOwner = null;
 
-    /** @var array<string, array<int, callable(string, \Infocyph\InterMix\DI\Container): void>> */
-    private array $scopeLeaveHooks = [];
-
     /** @var array<string, array<string, mixed>> */
     private array $scopeSeeds = [];
 
@@ -95,16 +92,6 @@ final class ConcurrentRepository extends Repository
         }
 
         return $store->captureScopeContext($physicalContext, $this->scopeContextOwner());
-    }
-
-    /** @internal */
-    public function copyConfigurationTo(Repository $target): void
-    {
-        parent::copyConfigurationTo($target);
-
-        if ($target instanceof self) {
-            $target->scopeLeaveHooks = $this->scopeLeaveHooks;
-        }
     }
 
     public function detachScopeContext(ScopeContext $scopeContext): void
@@ -203,18 +190,7 @@ final class ConcurrentRepository extends Repository
         }
 
         $scope = $this->currentScope;
-        $failures = [];
-        $failureCount = 0;
-        foreach ($this->scopeLeaveHooks[$scope] ?? [] as $hook) {
-            try {
-                $hook($scope, $this->container());
-            } catch (Throwable $throwable) {
-                ++$failureCount;
-                if (count($failures) < 32) {
-                    $failures[] = $throwable;
-                }
-            }
-        }
+        ['failures' => $failures, 'count' => $failureCount] = $this->scopeLeaveFailures($scope);
 
         unset($this->resolvedScoped[$scope], $this->scopeSeeds[$scope]);
         $previous = array_pop($this->scopeStack);
@@ -223,12 +199,6 @@ final class ConcurrentRepository extends Repository
         if ($failures !== []) {
             throw new ScopeCleanupException($failures, $failureCount);
         }
-    }
-
-    public function onScopeLeave(string $scope, callable $hook): void
-    {
-        parent::onScopeLeave($scope, $hook);
-        $this->scopeLeaveHooks[$scope][] = $hook;
     }
 
     /**
@@ -359,25 +329,14 @@ final class ConcurrentRepository extends Repository
     private function leaveExecutionScope(ExecutionScopeStore $store, string $context): void
     {
         $scope = $store->scopeForLeave($context);
-        if (!isset($this->scopeLeaveHooks[$scope])) {
+        if (!isset($this->onScopeLeaveHooks[$scope])) {
             $store->leaveScope($context);
             $this->finishExecutionContext($store, $context);
 
             return;
         }
 
-        $failures = [];
-        $failureCount = 0;
-        foreach ($this->scopeLeaveHooks[$scope] as $hook) {
-            try {
-                $hook($scope, $this->container());
-            } catch (Throwable $throwable) {
-                ++$failureCount;
-                if (count($failures) < 32) {
-                    $failures[] = $throwable;
-                }
-            }
-        }
+        ['failures' => $failures, 'count' => $failureCount] = $this->scopeLeaveFailures($scope);
         $store->leaveScope($context);
         $this->finishExecutionContext($store, $context);
 
@@ -432,6 +391,25 @@ final class ConcurrentRepository extends Repository
     private function scopeContextOwner(): object
     {
         return $this->scopeContextOwner ??= new stdClass();
+    }
+
+    /** @return array{failures: list<Throwable>, count: int} */
+    private function scopeLeaveFailures(string $scope): array
+    {
+        $failures = [];
+        $failureCount = 0;
+        foreach ($this->onScopeLeaveHooks[$scope] ?? [] as $hook) {
+            try {
+                $hook($scope, $this->container());
+            } catch (Throwable $throwable) {
+                ++$failureCount;
+                if (count($failures) < 32) {
+                    $failures[] = $throwable;
+                }
+            }
+        }
+
+        return ['failures' => $failures, 'count' => $failureCount];
     }
 
     /** @param list<Throwable> $failures */

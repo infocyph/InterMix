@@ -26,7 +26,7 @@ final class StaticLifecycleHookRenderer
         bool $guardCaptive = true,
     ): string {
         $source = "    private function s{$slot}(): mixed\n    {\n";
-        $source .= $this->seedGuard($slot, $lifetime, $id, $guardCaptive);
+        $source .= new StaticScopeAccessRenderer()->seedGuard($slot, $lifetime, $id, $guardCaptive);
         if ($lifetime === LifetimeEnum::Scoped) {
             $source .= "        if (isset(\$scope->resolved[{$slot}])) {\n";
             $source .= "            return \$scope->resolved[{$slot}];\n";
@@ -36,7 +36,7 @@ final class StaticLifecycleHookRenderer
             $source .= "            return \$this->v{$slot};\n";
             $source .= "        }\n\n";
         }
-        $source .= $this->scopeGuard($lifetime, $id);
+        $source .= new StaticScopeAccessRenderer()->constructionGuard($lifetime, $id);
         if ($graph->hasResolvingHook($id)) {
             $source .= '        $this->dispatchCompiledResolvingHooks(' . var_export($id, true) . ");\n\n";
         }
@@ -63,7 +63,7 @@ final class StaticLifecycleHookRenderer
         bool $guardCaptive = true,
     ): string {
         $source = "    private function s{$slot}(): mixed\n    {\n";
-        $source .= $this->seedGuard($slot, $lifetime, $id, $guardCaptive);
+        $source .= new StaticScopeAccessRenderer()->seedGuard($slot, $lifetime, $id, $guardCaptive);
         if ($lifetime === LifetimeEnum::Scoped) {
             $source .= "        if (array_key_exists({$slot}, \$scope->resolved)) {\n";
             $source .= "            return \$scope->resolved[{$slot}];\n";
@@ -73,7 +73,7 @@ final class StaticLifecycleHookRenderer
             $source .= "            return \$this->{$singletonStore}[{$slot}];\n";
             $source .= "        }\n\n";
         }
-        $source .= $this->scopeGuard($lifetime, $id);
+        $source .= new StaticScopeAccessRenderer()->constructionGuard($lifetime, $id);
         if ($graph->hasResolvingHook($id)) {
             $source .= '        $this->dispatchCompiledResolvingHooks(' . var_export($id, true) . ");\n\n";
         }
@@ -122,24 +122,5 @@ final class StaticLifecycleHookRenderer
         }
 
         return '';
-    }
-
-    private function scopeGuard(LifetimeEnum $lifetime, string $id): string
-    {
-        return new StaticScopeAccessRenderer()->constructionGuard($lifetime, $id);
-    }
-
-    private function seedGuard(
-        int $slot,
-        LifetimeEnum $lifetime,
-        string $id,
-        bool $guardCaptive,
-    ): string {
-        return new StaticScopeAccessRenderer()->seedGuard(
-            $slot,
-            $lifetime,
-            $id,
-            $guardCaptive,
-        );
     }
 }

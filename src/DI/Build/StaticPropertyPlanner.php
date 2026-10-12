@@ -105,11 +105,6 @@ final class StaticPropertyPlanner
         return $this->serviceArgument($graph, $target);
     }
 
-    private function isExportable(mixed $value): bool
-    {
-        return BoundedValueInspector::isScalarNullArray($value);
-    }
-
     private function normalizeRelativeType(ReflectionProperty $property, string $type): string
     {
         if ($type === 'self') {
@@ -135,44 +130,30 @@ final class StaticPropertyPlanner
     ): ?array {
         $name = $property->getName();
         if (array_key_exists($name, $registered)) {
-            if (!$this->isExportable($registered[$name])) {
-                return $this->runtimePropertyPlan($property);
-            }
-
-            return [
-                'declaring' => $property->getDeclaringClass()->getName(),
-                'property' => $name,
-                'static' => $property->isStatic(),
-                'argument' => ['kind' => 'value', 'code' => var_export($registered[$name], true)],
-                ...(!$property->isPublic() || $property->isReadOnly() ? ['runtime' => 'assign'] : []),
-            ];
-        }
-
-        if (!$graph->propertyAttributesEnabled()) {
+            $argument = BoundedValueInspector::isScalarNullArray($registered[$name])
+                ? ['kind' => 'value', 'code' => var_export($registered[$name], true)]
+                : 'non-exportable registered property';
+        } elseif (!$graph->propertyAttributesEnabled()) {
             return null;
+        } elseif ($property->getAttributes(Inject::class) !== []) {
+            $argument = $this->injectArgument($graph, $property);
+        } else {
+            return $this->hasRuntimeAttribute($graph, $property)
+                ? $this->runtimePropertyPlan($property)
+                : null;
         }
 
-        if ($property->getAttributes(Inject::class) !== []) {
-            $argument = $this->injectArgument($graph, $property);
-            if (is_string($argument)) {
-                return $this->runtimePropertyPlan($property);
-            }
-            if ($argument === null) {
-                return null;
-            }
-
-            return [
+        return match (true) {
+            is_string($argument) => $this->runtimePropertyPlan($property),
+            $argument === null => null,
+            default => [
                 'declaring' => $property->getDeclaringClass()->getName(),
                 'property' => $name,
                 'static' => $property->isStatic(),
                 'argument' => $argument,
                 ...(!$property->isPublic() || $property->isReadOnly() ? ['runtime' => 'assign'] : []),
-            ];
-        }
-
-        return $this->hasRuntimeAttribute($graph, $property)
-            ? $this->runtimePropertyPlan($property)
-            : null;
+            ],
+        };
     }
 
     /** @return array<string, mixed> */

@@ -9,14 +9,13 @@ use Psr\Cache\InvalidArgumentException;
 use ReflectionException;
 use ReflectionFunctionAbstract;
 use ReflectionMethod;
-use ReflectionNamedType;
 use ReflectionParameter;
 
 trait ResolvesNumericAndVariadicParameters
 {
     /**
      * @param array<int|string, mixed> $processed
-     * @param array{type: ReflectionNamedType|null, value: array<int|string, mixed>|null} $variadic
+     * @param array<int|string, mixed> $variadic
      * @param array<string, int> $sort
      * @return array<int|string, mixed>
      */
@@ -25,7 +24,7 @@ trait ResolvesNumericAndVariadicParameters
         array $variadic,
         array $sort,
     ): array {
-        $variadicValue = (array) $variadic['value'];
+        $variadicValue = $variadic;
         if (isset($variadicValue[0])) {
             uksort(
                 $processed,
@@ -67,7 +66,7 @@ trait ResolvesNumericAndVariadicParameters
      * @param array<int|string, mixed> $suppliedParameters
      * @return array{
      *   processed: array<int|string, mixed>,
-     *   variadic: array{type: ReflectionNamedType|null, value: array<int|string, mixed>|null}
+     *   variadic: array<int|string, mixed>|null
      * }
      *
      * @throws ContainerException
@@ -81,19 +80,14 @@ trait ResolvesNumericAndVariadicParameters
         bool $applyAttribute,
     ): array {
         $processed = [];
-        $variadic = ['type' => null, 'value' => null];
+        $variadic = null;
         $sequential = array_values($suppliedParameters);
 
         foreach ($availableParams as $key => $param) {
             $paramName = $param->getName();
 
             if ($param->isVariadic()) {
-                $variadic = [
-                    'type' => $param->getType() instanceof ReflectionNamedType
-                        ? $param->getType()
-                        : null,
-                    'value' => array_slice($suppliedParameters, $key),
-                ];
+                $variadic = array_slice($suppliedParameters, $key);
 
                 break;
             }
@@ -104,13 +98,11 @@ trait ResolvesNumericAndVariadicParameters
                 continue;
             }
 
-            if ($applyAttribute) {
-                $data = $this->resolveParameterAttribute($param);
-                if ($data['isResolved']) {
-                    $data['inject'] && $processed[$paramName] = $data['value'];
+            $data = $applyAttribute ? $this->resolveParameterAttribute($param) : ['isResolved' => false, 'inject' => false, 'value' => null];
+            if ($data['isResolved']) {
+                $data['inject'] && $processed[$paramName] = $data['value'];
 
-                    continue;
-                }
+                continue;
             }
 
             $processed[$paramName] = $this->resolveFallbackValue($param, $reflector);

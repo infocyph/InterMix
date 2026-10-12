@@ -6,6 +6,8 @@ namespace Infocyph\InterMix\DI\Resolver;
 
 use Infocyph\InterMix\DI\Attribute\AttributeResolution;
 use Infocyph\InterMix\DI\Attribute\Inject;
+use Infocyph\InterMix\DI\Internal\ContainerAccess;
+use Infocyph\InterMix\DI\Managers\InvocationManager;
 use Infocyph\InterMix\DI\Resolver\Concerns\ResolvesAssociativeParameters;
 use Infocyph\InterMix\DI\Resolver\Concerns\ResolvesNumericAndVariadicParameters;
 use Infocyph\InterMix\DI\Resolver\Concerns\ResolvesParameterAttributes;
@@ -39,6 +41,8 @@ class ParameterResolver
 
     private const int TYPE_GROUP_CACHE_LIMIT = 4096;
 
+    private readonly InvocationManager $invocationManager;
+
     private ClassResolver $classResolver;
 
     /** @var array<string, array<int, ReflectionAttribute<Inject>>> */
@@ -53,7 +57,10 @@ class ParameterResolver
     /** @var array<string, array<int, array<int, ReflectionNamedType>>> */
     private array $typeGroupCache = [];
 
-    public function __construct(private readonly Repository $repository) {}
+    public function __construct(private readonly Repository $repository)
+    {
+        $this->invocationManager = ContainerAccess::invocationManager($repository->container());
+    }
 
     /**
      * @param array<int|string, mixed> $suppliedParameters
@@ -106,23 +113,24 @@ class ParameterResolver
         );
         $processed += $numProcessed;
 
-        return $variadic['value'] !== null
+        return $variadic !== null
             ? $this->processVariadic($processed, $variadic, $sort)
             : $processed;
     }
 
     public function resolveByDefinitionType(string $name, ReflectionParameter $parameter): mixed
     {
-        $seeded = null;
-        if ($this->repository->findScopeSeed($name, $seeded)) {
-            return $seeded;
-        }
-
         $container = $this->repository->container();
         if ($this->repository->hasFunctionReference($name)) {
             return $container->get($name);
         }
 
+        $seeded = null;
+        if ($this->repository->findScopeSeed($name, $seeded)) {
+            $this->invocationManager->assertScopedResolutionAllowed($name);
+
+            return $seeded;
+        }
         foreach ($this->extractTypeGroups($parameter) as $group) {
             foreach ($group as $named) {
                 if ($named->isBuiltin()) {
@@ -179,9 +187,6 @@ class ParameterResolver
         }
         if (is_string($binding) && $this->repository->hasFunctionReference($binding)) {
             return $container->get($binding);
-        }
-        if (is_object($binding) && is_a($binding, $dependency->getName())) {
-            return $binding;
         }
 
         return $binding;
@@ -472,15 +477,16 @@ class ParameterResolver
 
     private function resolveNamedDefinitionType(string $name, mixed &$seeded): mixed
     {
-        if ($this->repository->findScopeSeed($name, $seeded)) {
-            return $seeded;
-        }
-
         $container = $this->repository->container();
         if ($this->repository->hasFunctionReference($name)) {
             return $container->get($name);
         }
 
+        if ($this->repository->findScopeSeed($name, $seeded)) {
+            $this->invocationManager->assertScopedResolutionAllowed($name);
+
+            return $seeded;
+        }
         if (!$this->repository->hasMissingHooks()
             || $container->has($name)
             || !$this->repository->tryResolveMissing($name)

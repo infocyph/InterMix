@@ -556,7 +556,7 @@ it('rejects incompatible standalone production artifacts', function (string $mis
     try {
         $builder = ContainerBuilder::create('builder11_deployment')->setEnvironment('production');
         if ($mismatch === 'fallback') {
-            $builder->input(stdClass::class);
+            $builder->factory('dynamic', static fn(): object => new stdClass());
         } else {
             $builder->value('compiled-value', 'ready');
         }

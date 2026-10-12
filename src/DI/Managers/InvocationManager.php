@@ -34,6 +34,21 @@ class InvocationManager
         protected Container $container,
     ) {}
 
+    /** @internal */
+    public function assertScopedResolutionAllowed(string $id): void
+    {
+        if (!$this->singletonResolutionActive) {
+            return;
+        }
+
+        $stack = $this->lifetimeStacks[$this->resolutionOwner()] ?? [];
+        if (in_array(LifetimeEnum::Singleton, $stack, true)) {
+            throw new ContainerException(
+                "Singleton construction cannot capture scoped entry '$id'.",
+            );
+        }
+    }
+
     /** @throws ContainerException|ReflectionException|InvalidArgumentException */
     public function call(string|Closure|callable $classOrClosure, string|bool|null $method = null): mixed
     {
@@ -55,53 +70,32 @@ class InvocationManager
     /** @throws ContainerException|InvalidArgumentException|ReflectionException */
     public function get(string $id): mixed
     {
-        $seed = null;
-        if ($this->repository->findScopeSeed($id, $seed)) {
-            if ($this->singletonResolutionActive) {
-                $this->assertScopedResolutionAllowed($id);
-            }
-
-            return $seed;
-        }
-
         $resolved = $this->repository->getResolvedSingletonEntry($id);
         if ($resolved !== null || $this->repository->hasResolvedSingleton($id)) {
             return $resolved;
         }
 
+        $seed = null;
+        if ($this->repository->findScopeSeed($id, $seed)) {
+            $this->assertScopedResolutionAllowed($id);
+
+            return $seed;
+        }
+
         $alias = null;
         $lifetime = $this->repository->getDefinitionLifetime($id, $alias);
-        $scope = null;
+        $scope = 'root';
         if ($lifetime === LifetimeEnum::Scoped) {
-            if ($this->singletonResolutionActive) {
-                $this->assertScopedResolutionAllowed($id);
-            }
-            $resolved = null;
-            $scope = 'root';
+            $this->assertScopedResolutionAllowed($id);
             $found = $this->repository instanceof ConcurrentRepository
                 ? $this->repository->findCurrentResolvedScoped($id, $scope, $resolved)
                 : $this->findResolvedScoped($id, $scope, $resolved);
-            if ($scope === 'root') {
-                throw new ContainerException("Scoped entry '$id' requires an active scope.");
-            }
-            if ($found) {
+            if ($found && $scope !== 'root') {
                 return $this->repository->fetchInstanceOrValue($resolved);
             }
         }
 
-        $this->assertResolvable($id);
-
-        if ($alias instanceof AliasDefinition) {
-            return $this->resolveAlias($id, $alias);
-        }
-
-        $this->traceReturn($id);
-
-        return match ($lifetime) {
-            LifetimeEnum::Singleton => $this->resolveAndCache($id, true, null),
-            LifetimeEnum::Transient => $this->resolveAndCache($id, false, null),
-            LifetimeEnum::Scoped => $this->resolveAndCache($id, true, $scope),
-        };
+        return $this->resolveUncached($id, $lifetime, $alias, $scope);
     }
 
     /** @internal 10.x fixture compatibility on ConfigurationContainer only. */
@@ -109,6 +103,8 @@ class InvocationManager
     {
         $seed = null;
         if ($this->repository->findScopeSeed($id, $seed)) {
+            $this->assertScopedResolutionAllowed($id);
+
             return $seed;
         }
 
@@ -123,22 +119,19 @@ class InvocationManager
         }
 
         $lifetime = $this->repository->getDefinitionLifetime($id);
-        $scope = null;
-        if ($lifetime === LifetimeEnum::Scoped) {
-            $scope = $this->repository->getScope();
-            $resolved = $this->repository->getResolvedScopedEntry($scope, $id);
-            if ($resolved !== null || $this->repository->hasResolvedScoped($scope, $id)) {
-                return $this->repository->fetchInstanceOrValue($resolved);
-            }
+        $scope = 'root';
+        if ($lifetime === LifetimeEnum::Scoped && $this->findResolvedScoped($id, $scope, $resolved)) {
+            return $this->repository->fetchInstanceOrValue($resolved);
         }
 
-        if (!$this->hasLegacy($id)) {
-            if (!$this->repository->tryResolveMissing($id)) {
-                throw new NotFoundException("No entry found for '$id'.");
-            }
-            $lifetime = $this->repository->getDefinitionLifetime($id);
-            $scope = $lifetime === LifetimeEnum::Scoped ? $this->repository->getScope() : null;
+        $missing = !$this->hasLegacy($id);
+        if ($missing && !$this->repository->tryResolveMissing($id)) {
+            throw new NotFoundException("No entry found for '$id'.");
         }
+        if ($missing) {
+            $lifetime = $this->repository->getDefinitionLifetime($id);
+        }
+        $scope = $lifetime === LifetimeEnum::Scoped ? $this->repository->getScope() : null;
 
         return match ($lifetime) {
             LifetimeEnum::Singleton => $this->resolveAndCache($id, true, null),
@@ -151,28 +144,16 @@ class InvocationManager
     public function getReturn(string $id): mixed
     {
         $resolved = $this->get($id);
-        $lifetime = $this->repository->getDefinitionLifetime($id);
-        $resource = $lifetime === LifetimeEnum::Scoped
-            ? $this->repository->getResolvedScopedEntry($this->repository->getScope(), $id)
-            : $this->repository->getResolvedEntry($id);
 
-        return $resource instanceof ClassResolution && $resource->methodInvoked
-            ? $resource->returned
-            : $resolved;
+        return $this->resolvedReturn($id, $resolved);
     }
 
     /** @internal */
     public function getReturnLegacy(string $id): mixed
     {
         $resolved = $this->getLegacy($id);
-        $lifetime = $this->repository->getDefinitionLifetime($id);
-        $resource = $lifetime === LifetimeEnum::Scoped
-            ? $this->repository->getResolvedScopedEntry($this->repository->getScope(), $id)
-            : $this->repository->getResolvedEntry($id);
 
-        return $resource instanceof ClassResolution && $resource->methodInvoked
-            ? $resource->returned
-            : $resolved;
+        return $this->resolvedReturn($id, $resolved);
     }
 
     public function has(string $id): bool
@@ -215,27 +196,6 @@ class InvocationManager
         return $this->repository->fetchInstanceOrValue(
             ContainerAccess::resolver($this->container)->resolveByDefinition($id),
         );
-    }
-
-    private function assertResolvable(string $id): void
-    {
-        if (!$this->has($id)) {
-            throw new NotFoundException("No entry found for '$id'.");
-        }
-    }
-
-    private function assertScopedResolutionAllowed(string $id): void
-    {
-        if (!$this->singletonResolutionActive) {
-            return;
-        }
-
-        $stack = $this->lifetimeStacks[$this->resolutionOwner()] ?? [];
-        if (in_array(LifetimeEnum::Singleton, $stack, true)) {
-            throw new ContainerException(
-                "Singleton construction cannot capture scoped entry '$id'.",
-            );
-        }
     }
 
     private function callCallable(callable $callable, string|bool|null $method): mixed
@@ -295,6 +255,7 @@ class InvocationManager
 
     private function findResolvedScoped(string $id, string &$scope, mixed &$resolved): bool
     {
+        $this->assertScopedResolutionAllowed($id);
         $scope = $this->repository->getScope();
         $resolved = $this->repository->getResolvedScopedEntry($scope, $id);
 
@@ -351,11 +312,10 @@ class InvocationManager
     private function resolveAndCache(string $id, bool $cacheable, ?string $scope): mixed
     {
         if ($scope === null && $cacheable) {
-            if ($this->repository instanceof ConcurrentRepository) {
-                return $this->resolveAndCacheSingletonGuarded($id, $this->repository);
-            }
-
-            return $this->resolveAndCacheSingletonTracked($id);
+            return $this->resolveAndCacheSingleton(
+                $id,
+                $this->repository instanceof ConcurrentRepository ? $this->repository : null,
+            );
         }
         if ($this->repository instanceof ConcurrentRepository
             && $scope !== null
@@ -409,11 +369,9 @@ class InvocationManager
         }
     }
 
-    private function resolveAndCacheSingletonGuarded(
-        string $id,
-        ConcurrentRepository $repository,
-    ): mixed {
-        $constructionOwner = $repository->beginSingletonConstruction($id);
+    private function resolveAndCacheSingleton(string $id, ?ConcurrentRepository $repository): mixed
+    {
+        $constructionOwner = $repository?->beginSingletonConstruction($id) ?? false;
         $this->pushLifetime(LifetimeEnum::Singleton);
 
         try {
@@ -426,15 +384,39 @@ class InvocationManager
         }
     }
 
-    private function resolveAndCacheSingletonTracked(string $id): mixed
+    private function resolvedReturn(string $id, mixed $resolved): mixed
     {
-        $this->pushLifetime(LifetimeEnum::Singleton);
+        $lifetime = $this->repository->getDefinitionLifetime($id);
+        $resource = $lifetime === LifetimeEnum::Scoped
+            ? $this->repository->getResolvedScopedEntry($this->repository->getScope(), $id)
+            : $this->repository->getResolvedEntry($id);
 
-        try {
-            return $this->resolveAndCacheDirect($id, true, null);
-        } finally {
-            $this->popLifetime();
+        return $resource instanceof ClassResolution && $resource->methodInvoked
+            ? $resource->returned
+            : $resolved;
+    }
+
+    private function resolveUncached(string $id, LifetimeEnum $lifetime, ?AliasDefinition $alias, string $scope): mixed
+    {
+        if ($lifetime === LifetimeEnum::Scoped && $scope === 'root') {
+            throw new ContainerException("Scoped entry '$id' requires an active scope.");
         }
+        if (!$this->has($id)) {
+            throw new NotFoundException("No entry found for '$id'.");
+        }
+
+        if ($alias instanceof AliasDefinition) {
+            return $this->resolveAlias($id, $alias);
+        }
+        if ($this->repository->isTracingEnabled()) {
+            $this->repository->tracer()->push("return:$id", TraceLevelEnum::Verbose);
+        }
+
+        return match ($lifetime) {
+            LifetimeEnum::Singleton => $this->resolveAndCache($id, true, null),
+            LifetimeEnum::Transient => $this->resolveAndCache($id, false, null),
+            LifetimeEnum::Scoped => $this->resolveAndCache($id, true, $scope),
+        };
     }
 
     private function storeResolvedByLifetime(string $id, mixed $resolved, ?string $scope): void
@@ -446,12 +428,5 @@ class InvocationManager
         }
 
         $this->repository->setResolved($id, $resolved);
-    }
-
-    private function traceReturn(string $id): void
-    {
-        if ($this->repository->isTracingEnabled()) {
-            $this->repository->tracer()->push("return:$id", TraceLevelEnum::Verbose);
-        }
     }
 }

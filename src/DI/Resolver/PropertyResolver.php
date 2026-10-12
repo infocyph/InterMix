@@ -20,7 +20,7 @@ class PropertyResolver
 
     private ClassResolver $classResolver;
 
-    /** @var array<string, array<int, ReflectionProperty>> */
+    /** @var array<string, array{properties: list<ReflectionProperty>, attributed: bool}> */
     private array $propertyPlanCache = [];
 
     public function __construct(
@@ -45,31 +45,34 @@ class PropertyResolver
             $declaring = $property->getDeclaringClass()->getName();
             $registered = $registeredByClass[$declaring]
                 ??= $this->getRegisteredProperties($declaring);
-            $name = $property->getName();
+            $this->resolveProperty($property, $instance, $overrides + $registered, $propertyAttributes);
+        }
+    }
 
-            if (array_key_exists($name, $overrides)) {
-                $this->setPropertyValue($property, $instance, $overrides[$name]);
+    /**
+     * @param array<string, mixed> $registered
+     * @internal
+     */
+    public function resolveProperty(
+        ReflectionProperty $property,
+        object $instance,
+        array $registered,
+        bool $propertyAttributes,
+    ): void {
+        $name = $property->getName();
+        if (array_key_exists($name, $registered)) {
+            $property->setValue($property->isStatic() ? null : $instance, $registered[$name]);
 
-                continue;
-            }
+            return;
+        }
+        if (!$propertyAttributes || ($property->isPromoted() && $property->getAttributes() === [])) {
+            return;
+        }
 
-            if (array_key_exists($name, $registered)) {
-                $this->setPropertyValue($property, $instance, $registered[$name]);
-
-                continue;
-            }
-
-            if (!$propertyAttributes
-                || ($property->isPromoted() && $property->getAttributes() === [])
-            ) {
-                continue;
-            }
-
-            $this->tracePropertyResolution($property);
-            $value = $this->resolveAttributedValue($property);
-            if ($value !== AttributeResolution::Unresolved) {
-                $this->setPropertyValue($property, $instance, $value);
-            }
+        $this->tracePropertyResolution($property);
+        $value = $this->resolveAttributedValue($property);
+        if ($value !== AttributeResolution::Unresolved) {
+            $property->setValue($property->isStatic() ? null : $instance, $value);
         }
     }
 
@@ -86,7 +89,7 @@ class PropertyResolver
     {
         $className = $class->getName();
         if (isset($this->propertyPlanCache[$className])) {
-            return $this->propertyPlanCache[$className];
+            return $this->propertyPlanCache[$className]['properties'];
         }
 
         $properties = [];
@@ -103,7 +106,12 @@ class PropertyResolver
             unset($this->propertyPlanCache[array_key_first($this->propertyPlanCache)]);
         }
 
-        return $this->propertyPlanCache[$className] = $properties;
+        $this->propertyPlanCache[$className] = [
+            'properties' => $properties,
+            'attributed' => array_any($properties, static fn(ReflectionProperty $property): bool => $property->getAttributes() !== []),
+        ];
+
+        return $properties;
     }
 
     /** @return array<string, mixed> */
@@ -128,7 +136,10 @@ class PropertyResolver
     private function hasPropertyWork(ReflectionClass $class): bool
     {
         if ($this->repository->isPropertyAttributeEnabled()) {
-            return true;
+            $this->getPropertyPlan($class);
+            if ($this->propertyPlanCache[$class->getName()]['attributed'] || $this->repository->isTracingEnabled()) {
+                return true;
+            }
         }
 
         if (!$this->repository->hasPropertyResources()) {
@@ -192,11 +203,6 @@ class PropertyResolver
         }
 
         return $resolved;
-    }
-
-    private function setPropertyValue(ReflectionProperty $property, object $instance, mixed $value): void
-    {
-        $property->setValue($property->isStatic() ? null : $instance, $value);
     }
 
     private function tracePropertyResolution(ReflectionProperty $property): void

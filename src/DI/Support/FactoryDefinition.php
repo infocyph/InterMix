@@ -118,11 +118,6 @@ final readonly class FactoryDefinition
         }
     }
 
-    private static function isExportable(mixed $value): bool
-    {
-        return BoundedValueInspector::isScalarNullArray($value);
-    }
-
     /**
      * @param array<int, scalar|array<array-key, mixed>|ServiceReference|null> $arguments
      * @return array<int, scalar|array<array-key, mixed>|ServiceReference|null>
@@ -135,7 +130,7 @@ final readonly class FactoryDefinition
 
         $snapshot = [];
         foreach ($arguments as $argument) {
-            if (!$argument instanceof ServiceReference && !self::isExportable($argument)) {
+            if (!$argument instanceof ServiceReference && !BoundedValueInspector::isScalarNullArray($argument)) {
                 throw new InvalidArgumentException(
                     'Declarative factory arguments must be service references or exportable values.',
                 );

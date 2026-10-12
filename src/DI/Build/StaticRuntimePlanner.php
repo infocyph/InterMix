@@ -10,6 +10,7 @@ use Infocyph\InterMix\DI\RuntimeContainerInterface;
 use Infocyph\InterMix\DI\Support\AliasDefinition;
 use Infocyph\InterMix\DI\Support\AutowireDefinition;
 use Infocyph\InterMix\DI\Support\FactoryDefinition;
+use Infocyph\InterMix\DI\Support\InputDefinition;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\DI\Support\ValueDefinition;
 use Infocyph\InterMix\Internal\ReflectionResource;
@@ -25,7 +26,8 @@ use ReflectionClass;
  * @phpstan-type FactoryPlan array{kind: 'factory', class: class-string<object>, method: string|null, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
  * @phpstan-type InvocationPlan array{kind: 'invocation', class: class-string<object>, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, invocation: MethodPlan, dependencies: list<string>}
  * @phpstan-type ValuePlan array{kind: 'value', code: string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
- * @phpstan-type ServicePlan AliasPlan|ClassPlan|FactoryPlan|InvocationPlan|ValuePlan
+ * @phpstan-type InputPlan array{kind: 'input', lifetime: LifetimeEnum::Scoped, arguments: array{}, properties: array{}, dependencies: array{}}
+ * @phpstan-type ServicePlan AliasPlan|ClassPlan|FactoryPlan|InvocationPlan|ValuePlan|InputPlan
  * @internal
  */
 final class StaticRuntimePlanner
@@ -48,6 +50,26 @@ final class StaticRuntimePlanner
         ksort($plans, SORT_STRING);
 
         return ['plans' => $plans, 'skipped' => $skipped];
+    }
+
+    /**
+     * @param array<string, mixed> $definitions
+     * @return list<string>
+     */
+    private function aliasCycleIds(array $definitions, string $current): array
+    {
+        $path = [];
+        $positions = [];
+        while (($alias = $definitions[$current] ?? null) instanceof AliasDefinition) {
+            if (isset($positions[$current])) {
+                return array_slice($path, $positions[$current]);
+            }
+            $positions[$current] = count($path);
+            $path[] = $current;
+            $current = $alias->target;
+        }
+
+        return [];
     }
 
     /** @return array{array<string, ServicePlan>, array<string, string>} */
@@ -144,25 +166,8 @@ final class StaticRuntimePlanner
                 continue;
             }
 
-            $path = [];
-            $positions = [];
-            $current = $id;
-            while (true) {
-                $alias = $definitions[$current] ?? null;
-                if (!$alias instanceof AliasDefinition) {
-                    break;
-                }
-                if (isset($positions[$current])) {
-                    foreach (array_slice($path, $positions[$current]) as $cycleId) {
-                        $cyclic[$cycleId] = true;
-                    }
-
-                    break;
-                }
-
-                $positions[$current] = count($path);
-                $path[] = $current;
-                $current = $alias->target;
+            foreach ($this->aliasCycleIds($definitions, $id) as $cycleId) {
+                $cyclic[$cycleId] = true;
             }
         }
 
@@ -179,24 +184,22 @@ final class StaticRuntimePlanner
         array $plans,
         array &$skipped,
     ): array {
-        do {
-            $changed = false;
-            foreach ($plans as $plan) {
-                foreach ($plan['dependencies'] as $dependency) {
-                    if ($this->isKnownDependency($graph, $plans, $skipped, $dependency)) {
-                        continue;
-                    }
-                    $implicit = $this->implicitDependencyPlan($graph, $dependency);
-                    if (is_string($implicit)) {
-                        $skipped[$dependency] = $implicit;
-
-                        continue;
-                    }
-                    $plans[$dependency] = $implicit;
-                    $changed = true;
+        $pending = array_values($plans);
+        while (($plan = array_pop($pending)) !== null) {
+            foreach ($plan['dependencies'] as $dependency) {
+                if ($this->isKnownDependency($graph, $plans, $skipped, $dependency)) {
+                    continue;
                 }
+                $implicit = $this->implicitDependencyPlan($graph, $dependency);
+                if (is_string($implicit)) {
+                    $skipped[$dependency] = $implicit;
+
+                    continue;
+                }
+                $plans[$dependency] = $implicit;
+                $pending[] = $implicit;
             }
-        } while ($changed);
+        }
 
         return $plans;
     }
@@ -270,11 +273,6 @@ final class StaticRuntimePlanner
             && class_exists($definition[0]);
     }
 
-    private function isExportable(mixed $value): bool
-    {
-        return BoundedValueInspector::isScalarNullArray($value);
-    }
-
     /**
      * @param array<string, ServicePlan> $plans
      * @param array<string, string> $skipped
@@ -344,6 +342,15 @@ final class StaticRuntimePlanner
 
         if ($definition instanceof AliasDefinition) {
             return $this->planAlias($graph, $definition);
+        }
+        if ($definition instanceof InputDefinition) {
+            return [
+                'kind' => 'input',
+                'lifetime' => LifetimeEnum::Scoped,
+                'arguments' => [],
+                'properties' => [],
+                'dependencies' => [],
+            ];
         }
         if ($definition instanceof AutowireDefinition) {
             return $this->classPlan(
@@ -454,7 +461,7 @@ final class StaticRuntimePlanner
                 'dependencies' => [],
             ];
         }
-        if (!$this->isExportable($definition)
+        if (!BoundedValueInspector::isScalarNullArray($definition)
             || (!$literal && is_array($definition) && $this->isCallableArrayDefinition($definition))
         ) {
             return null;

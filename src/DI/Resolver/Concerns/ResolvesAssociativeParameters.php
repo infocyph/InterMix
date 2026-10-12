@@ -16,6 +16,22 @@ use ReflectionParameter;
 trait ResolvesAssociativeParameters
 {
     /**
+     * @param ReflectionClass<object> $class
+     * @param array<int|string, mixed> $processed
+     */
+    private function assertAutowireDependency(ReflectionFunctionAbstract $reflector, ReflectionParameter $parameter, ReflectionClass $class, string $type, array $processed): void
+    {
+        if ($type === 'constructor' && $parameter->getDeclaringClass()?->getName() === $class->getName()) {
+            throw new ContainerException("Circular dependency on {$class->getName()}");
+        }
+        if ($this->alreadyExist($class->getName(), $processed)) {
+            throw new ContainerException(
+                "Multiple instances for {$class->getName()} in " . $this->ownerFor($reflector) . "::{$reflector->getShortName()}()",
+            );
+        }
+    }
+
+    /**
      * @param array<int, ReflectionParameter> $availableParams
      * @param array<int|string, mixed> $suppliedParameters
      * @param array<string, mixed> $parameterAttribute
@@ -89,30 +105,16 @@ trait ResolvesAssociativeParameters
         $declaring = $parameter->getDeclaringClass();
         foreach ($groups as $group) {
             foreach ($group as $named) {
-                if ($named->isBuiltin()) {
-                    continue;
-                }
-
                 $name = $this->applyEnvOverride(
                     $this->normalizeSelfParent($named->getName(), $declaring),
                 );
-                if (!class_exists($name)) {
+                if ($named->isBuiltin() || !class_exists($name)) {
                     continue;
                 }
 
                 $reflection = ReflectionResource::getClassReflection($name);
-                if ($type === 'constructor' && $declaring?->getName() === $reflection->getName()) {
-                    throw new ContainerException("Circular dependency on {$reflection->getName()}");
-                }
-                if ($this->alreadyExist($reflection->getName(), $processed)) {
-                    throw new ContainerException(
-                        "Multiple instances for {$reflection->getName()} in "
-                        . $this->ownerFor($reflector)
-                        . "::{$reflector->getShortName()}()",
-                    );
-                }
-
-                $resolved = $this->resolveClassDependency($reflection);
+                $this->assertAutowireDependency($reflector, $parameter, $reflection, $type, $processed);
+                $resolved = $this->classResolver->resolveClassInstance($reflection);
                 if ($this->satisfiesTypeGroup($resolved, $group, $declaring)) {
                     return $resolved;
                 }
@@ -120,14 +122,6 @@ trait ResolvesAssociativeParameters
         }
 
         return AttributeResolution::Unresolved;
-    }
-
-    /**
-     * @param ReflectionClass<object> $class
-     */
-    private function resolveClassDependency(ReflectionClass $class): object
-    {
-        return $this->classResolver->resolveClassInstance($class);
     }
 
     /**
@@ -147,26 +141,20 @@ trait ResolvesAssociativeParameters
             return AttributeResolution::Unresolved;
         }
 
-        foreach ($groups as $group) {
-            foreach ($group as $named) {
-                if ($named->isBuiltin()) {
-                    continue;
-                }
+        foreach (array_merge(...$groups) as $named) {
+            $name = $this->normalizeSelfParent($named->getName(), $declaring);
+            if ($named->isBuiltin() || !$this->repository->hasContextualBinding($consumer, $name)) {
+                continue;
+            }
 
-                $name = $this->normalizeSelfParent($named->getName(), $declaring);
-                if (!$this->repository->hasContextualBinding($consumer, $name)) {
-                    continue;
-                }
-
-                $resolved = $this->resolveContextualDependency(
-                    $consumer,
-                    ReflectionResource::getClassReflection($name),
-                );
-                if ($resolved !== AttributeResolution::Unresolved
-                    && $this->satisfiesAnyTypeGroupsForDeclaring($resolved, $groups, $declaring)
-                ) {
-                    return $resolved;
-                }
+            $resolved = $this->resolveContextualDependency(
+                $consumer,
+                ReflectionResource::getClassReflection($name),
+            );
+            if ($resolved !== AttributeResolution::Unresolved
+                && $this->satisfiesAnyTypeGroupsForDeclaring($resolved, $groups, $declaring)
+            ) {
+                return $resolved;
             }
         }
 

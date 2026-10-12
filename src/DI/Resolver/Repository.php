@@ -28,6 +28,9 @@ class Repository
     use ManagesDefinitionCache;
     use ResolvesMissingServices;
 
+    /** @var array<string, array<int, callable(string,Container): void>> */
+    protected array $onScopeLeaveHooks = [];
+
     private ?AttributeRegistry $attributeRegistry = null;
 
     /** @var array<string, array<string, mixed>> */
@@ -84,9 +87,6 @@ class Repository
 
     /** @var array<string, array<int, callable(string): void>> */
     private array $onResolvingHooks = [];
-
-    /** @var array<string, array<int, callable(string,Container): void>> */
-    private array $onScopeLeaveHooks = [];
 
     /** @var array<string, mixed> */
     private array $resolved = [];
@@ -427,17 +427,7 @@ class Repository
         $meta = $this->definitionMeta[$id] ?? ['lifetime' => LifetimeEnum::Singleton, 'tags' => []];
         $env = $this->environment;
 
-        if ($env !== null && isset($this->definitionMetaByEnv[$env][$id])) {
-            $override = $this->definitionMetaByEnv[$env][$id];
-            if (array_key_exists('lifetime', $override)) {
-                $meta['lifetime'] = $override['lifetime'];
-            }
-            if (array_key_exists('tags', $override)) {
-                $meta['tags'] = $override['tags'];
-            }
-        }
-
-        return $meta;
+        return $env === null ? $meta : ($this->definitionMetaByEnv[$env][$id] ?? []) + $meta;
     }
 
     public function getEnvConcrete(?string $interface): ?string
@@ -712,7 +702,7 @@ class Repository
             }
         }
 
-        $this->clearScopeResolvedEntries($scope);
+        unset($this->resolvedScoped[$scope]);
         unset($this->scopeSeeds[$scope]);
         $previous = array_pop($this->scopeStack);
         $this->currentScope = is_string($previous) ? $previous : 'root';
@@ -790,7 +780,7 @@ class Repository
 
     public function resetScope(): void
     {
-        $this->clearScopeResolvedEntries($this->currentScope);
+        unset($this->resolvedScoped[$this->currentScope]);
         $this->scopeStack = [];
         $this->currentScope = 'root';
         $this->resolvedScoped = [];
@@ -880,7 +870,7 @@ class Repository
         $this->functionReference[$id] = $definition;
         $this->definitionMeta[$id] = $meta;
         if ($oldTags !== $normalizedTags) {
-            $this->refreshBaseTagIndex($id, $oldTags, $normalizedTags);
+            $this->refreshTagIndex($id, $oldTags, $normalizedTags, $this->tagIndex);
         }
         $this->invalidateDefinition($id);
     }
@@ -902,7 +892,7 @@ class Repository
 
         $this->definitionMeta[$id] = $normalized;
         $this->refreshResolvedSingletonIndex($id);
-        $this->refreshBaseTagIndex($id, $oldTags, $normalizedTags);
+        $this->refreshTagIndex($id, $oldTags, $normalizedTags, $this->tagIndex);
         $this->invalidateDefinition($id);
     }
 
@@ -931,7 +921,8 @@ class Repository
         }
         if (array_key_exists('tags', $normalized)) {
             $oldTags = $existing['tags'] ?? [];
-            $this->refreshEnvTagIndex($env, $id, $oldTags, $normalized['tags']);
+            $this->tagIndexByEnv[$env] ??= [];
+            $this->refreshTagIndex($id, $oldTags, $normalized['tags'], $this->tagIndexByEnv[$env]);
             $this->tagOverrideIdsByEnv[$env][$id] = true;
         }
         $this->invalidateDefinition($id);
@@ -1017,11 +1008,6 @@ class Repository
         }
     }
 
-    private function clearScopeResolvedEntries(string $scope): void
-    {
-        unset($this->resolvedScoped[$scope]);
-    }
-
     private function getDirectDefinitionLifetime(string $id): LifetimeEnum
     {
         $lifetime = $this->definitionMeta[$id]['lifetime'] ?? LifetimeEnum::Singleton;
@@ -1032,42 +1018,6 @@ class Repository
         }
 
         return $lifetime;
-    }
-
-    /**
-     * @param array<int, string> $oldTags
-     * @param array<int, string> $newTags
-     */
-    private function refreshBaseTagIndex(string $id, array $oldTags, array $newTags): void
-    {
-        foreach ($oldTags as $tag) {
-            unset($this->tagIndex[$tag][$id]);
-            if (($this->tagIndex[$tag] ?? []) === []) {
-                unset($this->tagIndex[$tag]);
-            }
-        }
-
-        foreach ($newTags as $tag) {
-            $this->tagIndex[$tag][$id] = true;
-        }
-    }
-
-    /**
-     * @param array<int, string> $oldTags
-     * @param array<int, string> $newTags
-     */
-    private function refreshEnvTagIndex(string $env, string $id, array $oldTags, array $newTags): void
-    {
-        foreach ($oldTags as $tag) {
-            unset($this->tagIndexByEnv[$env][$tag][$id]);
-            if (($this->tagIndexByEnv[$env][$tag] ?? []) === []) {
-                unset($this->tagIndexByEnv[$env][$tag]);
-            }
-        }
-
-        foreach ($newTags as $tag) {
-            $this->tagIndexByEnv[$env][$tag][$id] = true;
-        }
     }
 
     private function refreshResolvedSingletonIndex(string $id): void
@@ -1081,6 +1031,24 @@ class Repository
         }
 
         unset($this->resolvedSingleton[$id]);
+    }
+
+    /**
+     * @param array<int, string> $oldTags
+     * @param array<int, string> $newTags
+     * @param array<string, array<string, bool>> $index
+     */
+    private function refreshTagIndex(string $id, array $oldTags, array $newTags, array &$index): void
+    {
+        foreach ($oldTags as $tag) {
+            unset($index[$tag][$id]);
+            if (($index[$tag] ?? []) === []) {
+                unset($index[$tag]);
+            }
+        }
+        foreach ($newTags as $tag) {
+            $index[$tag][$id] = true;
+        }
     }
 
     /** @return array{lifetime: LifetimeEnum, alias: AliasDefinition|null} */
