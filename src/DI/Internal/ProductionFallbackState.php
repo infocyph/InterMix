@@ -68,8 +68,13 @@ final class ProductionFallbackState
         return $overridden;
     }
 
-    public static function synchronizeScopes(ConfigurationContainer $fallback, ScopeState $current): void
+    /** @param array<int, string> $compiledIds */
+    public static function synchronizeScopes(ConfigurationContainer $fallback, ScopeState $current, array $compiledIds): void
     {
+        if ($current->name === 'root' || $fallback->getRepository()->getScope() !== 'root') {
+            return;
+        }
+        $compiled = array_fill_keys($compiledIds, true);
         $scopes = [];
         for ($scope = $current; $scope->parent instanceof ScopeState; $scope = $scope->parent) {
             $scopes[] = $scope;
@@ -77,7 +82,7 @@ final class ProductionFallbackState
 
         try {
             foreach (array_reverse($scopes) as $scope) {
-                $fallback->enterScope($scope->name, $scope->rawSeeds);
+                $fallback->enterScope($scope->name, array_diff_key($scope->rawSeeds, $compiled));
             }
         } catch (Throwable $throwable) {
             throw new ContainerException('Unable to synchronize production fallback scope state.', previous: $throwable);

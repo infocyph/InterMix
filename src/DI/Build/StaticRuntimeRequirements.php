@@ -20,23 +20,17 @@ final class StaticRuntimeRequirements
      */
     public function fallbackReasons(DefinitionGraph $graph, array $plans, array $skipped): array
     {
-        $reasons = [];
-        foreach ($skipped as $id => $reason) {
-            $reasons[$id] = $reason;
-        }
+        $reasons = $skipped;
 
         foreach ($plans as $rawId => $plan) {
             $id = (string) $rawId;
-            foreach ($plan['properties'] as $property) {
-                if (($property['runtime'] ?? null) === 'attribute') {
-                    $reasons[$id] = sprintf(
-                        "property '%s::\$%s' requires runtime attribute handling",
-                        $property['declaring'],
-                        $property['property'],
-                    );
-
-                    break;
-                }
+            $property = array_find($plan['properties'], static fn(array $property): bool => ($property['runtime'] ?? null) === 'attribute');
+            if ($property !== null) {
+                $reasons[$id] = sprintf(
+                    "property '%s::\$%s' requires runtime attribute handling",
+                    $property['declaring'],
+                    $property['property'],
+                );
             }
 
             $method = $plan['postMethod'] ?? $plan['invocation'] ?? null;

@@ -42,7 +42,8 @@ A fully compiled graph can load without reconstructing its builder or attaching 
 
 Record the ``graph`` returned by ``compile()`` in immutable deployment metadata.
 The loader validates the runtime digest, build identity, ABI, PHP version, expected graph and environment.
-It rejects artifacts that need inputs, runtime factories, hooks or other fallback configuration.
+Declared inputs compile natively and accept host-supplied seeds inside an active scope.
+It rejects artifacts that need runtime factories, hooks or other fallback configuration.
 Use the configured builder's ``production()`` for those graphs and for applications needing dynamic invocation or construction.
 The standalone runtime executes its compiled graph without a configuration fallback.
 

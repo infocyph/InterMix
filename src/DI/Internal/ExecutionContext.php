@@ -28,7 +28,7 @@ final class ExecutionContext
 
     private static bool $coroutineResolverInitialized = false;
 
-    /** @var WeakMap<Fiber<mixed, mixed, mixed, mixed>, string>|null */
+    /** @var WeakMap<object, string>|null Physical carrier identities, independent of Fiber value types. */
     private static ?WeakMap $fiberCarrierIds = null;
 
     private static ?string $lastObjectCarrierId = null;
@@ -47,7 +47,9 @@ final class ExecutionContext
     {
         $fiber = Fiber::getCurrent();
         if ($fiber instanceof Fiber) {
-            return self::fiberCarrierId($fiber);
+            $ids = self::$fiberCarrierIds ??= new WeakMap();
+
+            return $ids[$fiber] ??= 'fiber:' . ++self::$nextFiberCarrierId;
         }
 
         if (!self::$coroutineResolverInitialized) {
@@ -81,21 +83,6 @@ final class ExecutionContext
         return $prefix . $id;
     }
 
-    /** @param Fiber<mixed, mixed, mixed, mixed> $fiber */
-    private static function fiberCarrierId(Fiber $fiber): string
-    {
-        $ids = self::$fiberCarrierIds ??= self::newFiberCarrierMap();
-        $id = $ids[$fiber] ?? null;
-        if (is_string($id)) {
-            return $id;
-        }
-
-        $id = 'fiber:' . ++self::$nextFiberCarrierId;
-        $ids[$fiber] = $id;
-
-        return $id;
-    }
-
     private static function initializeCoroutineResolver(): void
     {
         self::$coroutineResolverInitialized = true;
@@ -121,15 +108,6 @@ final class ExecutionContext
 
             return;
         }
-    }
-
-    /** @return WeakMap<Fiber<mixed, mixed, mixed, mixed>, string> */
-    private static function newFiberCarrierMap(): WeakMap
-    {
-        /** @var WeakMap<Fiber<mixed, mixed, mixed, mixed>, string> $ids */
-        $ids = new WeakMap();
-
-        return $ids;
     }
 
     private static function objectCarrierId(object $carrier, string $prefix): string

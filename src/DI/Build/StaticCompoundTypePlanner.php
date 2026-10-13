@@ -6,7 +6,12 @@ namespace Infocyph\InterMix\DI\Build;
 
 use Closure;
 use Infocyph\InterMix\DI\Support\AliasDefinition;
+use Infocyph\InterMix\DI\Support\AutowireDefinition;
 use Infocyph\InterMix\DI\Support\FactoryDefinition;
+use Infocyph\InterMix\DI\Support\InputDefinition;
+use Infocyph\InterMix\DI\Support\RuntimeFactoryDefinition;
+use Infocyph\InterMix\DI\Support\ServiceReference as ContextualServiceReference;
+use Infocyph\InterMix\DI\Support\ValueDefinition;
 use ReflectionClass;
 use ReflectionIntersectionType;
 use ReflectionNamedType;
@@ -48,7 +53,7 @@ final class StaticCompoundTypePlanner
             return $namedDefinition;
         }
 
-        foreach ($this->flattenGroups($groups) as $named) {
+        foreach (array_merge(...$groups) as $named) {
             if ($named->isBuiltin()) {
                 continue;
             }
@@ -111,11 +116,8 @@ final class StaticCompoundTypePlanner
     {
         foreach ($groups as $group) {
             foreach ($group as $named) {
-                if ($named->isBuiltin()) {
-                    continue;
-                }
                 $dependency = $this->normalizeType($consumer, $named->getName());
-                if ($dependency === null) {
+                if ($dependency === null || $named->isBuiltin()) {
                     continue;
                 }
 
@@ -137,23 +139,18 @@ final class StaticCompoundTypePlanner
      */
     private function classFromDefinition(DefinitionGraph $graph, mixed $definition, array $seen): array
     {
-        if ($definition instanceof AliasDefinition) {
-            return $this->aliasDefinitionClass($graph, $definition, $seen);
-        }
-        if ($definition instanceof FactoryDefinition || $definition instanceof Closure) {
-            return ['known' => false, 'class' => null];
-        }
-        if (is_string($definition)) {
-            return $this->stringDefinitionClass($graph, $definition, $seen);
-        }
-        if (is_array($definition)) {
-            return $this->arrayDefinitionClass($definition);
-        }
-        if (is_object($definition)) {
-            return ['known' => true, 'class' => $definition::class];
-        }
-
-        return ['known' => true, 'class' => null];
+        return match (true) {
+            $definition instanceof AliasDefinition => $this->aliasDefinitionClass($graph, $definition, $seen),
+            $definition instanceof FactoryDefinition,
+            $definition instanceof RuntimeFactoryDefinition,
+            $definition instanceof Closure => ['known' => false, 'class' => null],
+            $definition instanceof AutowireDefinition => ['known' => true, 'class' => $definition->class],
+            $definition instanceof ValueDefinition => ['known' => true, 'class' => is_object($definition->value) ? $definition->value::class : null],
+            is_string($definition) => $this->stringDefinitionClass($graph, $definition, $seen),
+            is_array($definition) => $this->arrayDefinitionClass($definition),
+            is_object($definition) => ['known' => true, 'class' => $definition::class],
+            default => ['known' => true, 'class' => null],
+        };
     }
 
     /**
@@ -187,6 +184,30 @@ final class StaticCompoundTypePlanner
         }
 
         return true;
+    }
+
+    /**
+     * @param ReflectionClass<object> $consumer
+     * @param list<list<ReflectionNamedType>> $groups
+     * @return ServiceReference|string|null
+     */
+    private function contextualBindingPlan(DefinitionGraph $graph, ReflectionClass $consumer, array $groups, string $dependency, string $label): array|string|null
+    {
+        $binding = $graph->contextualBinding($consumer->getName(), $dependency);
+        if ($binding instanceof ContextualServiceReference) {
+            $binding = $binding->id;
+        }
+        if (!is_string($binding)) {
+            return "{$label} dependency '$dependency' has a dynamic contextual binding";
+        }
+        $candidate = $this->contextualCandidate($graph, $binding);
+        if (is_string($candidate)) {
+            return $candidate;
+        }
+
+        return $candidate !== null && $this->classSatisfiesAnyGroup($consumer, $candidate['class'], $groups)
+            ? ['kind' => 'service', 'id' => $candidate['id']]
+            : null;
     }
 
     /** @return array{id: string, class: class-string}|string|null */
@@ -225,31 +246,15 @@ final class StaticCompoundTypePlanner
         array $groups,
         string $label,
     ): array|string|null {
-        foreach ($groups as $group) {
-            foreach ($group as $named) {
-                if ($named->isBuiltin()) {
-                    continue;
-                }
-                $dependency = $this->normalizeType($consumer, $named->getName());
-                if ($dependency === null || !$graph->hasContextualBinding($consumer->getName(), $dependency)) {
-                    continue;
-                }
+        foreach (array_merge(...$groups) as $named) {
+            $dependency = $this->normalizeType($consumer, $named->getName());
+            if ($named->isBuiltin() || $dependency === null || !$graph->hasContextualBinding($consumer->getName(), $dependency)) {
+                continue;
+            }
 
-                $binding = $graph->contextualBinding($consumer->getName(), $dependency);
-                if (!is_string($binding)) {
-                    return "{$label} dependency '$dependency' has a dynamic contextual binding";
-                }
-
-                $candidate = $this->contextualCandidate($graph, $binding);
-                if (is_string($candidate)) {
-                    return $candidate;
-                }
-                if ($candidate === null) {
-                    continue;
-                }
-                if ($this->classSatisfiesAnyGroup($consumer, $candidate['class'], $groups)) {
-                    return ['kind' => 'service', 'id' => $candidate['id']];
-                }
+            $plan = $this->contextualBindingPlan($graph, $consumer, $groups, $dependency, $label);
+            if ($plan !== null) {
+                return $plan;
             }
         }
 
@@ -266,8 +271,14 @@ final class StaticCompoundTypePlanner
             return ['known' => false, 'class' => null];
         }
         $seen[$id] = true;
+        $definition = $graph->definitions()[$id] ?? null;
+        if ($definition instanceof InputDefinition) {
+            return class_exists($id) || interface_exists($id)
+                ? ['known' => true, 'class' => $id]
+                : ['known' => false, 'class' => null];
+        }
 
-        return $this->classFromDefinition($graph, $graph->definitions()[$id] ?? null, $seen);
+        return $this->classFromDefinition($graph, $definition, $seen);
     }
 
     /**
@@ -297,22 +308,6 @@ final class StaticCompoundTypePlanner
         }
 
         return ['kind' => 'service', 'id' => $id];
-    }
-
-    /**
-     * @param list<list<ReflectionNamedType>> $groups
-     * @return list<ReflectionNamedType>
-     */
-    private function flattenGroups(array $groups): array
-    {
-        $types = [];
-        foreach ($groups as $group) {
-            foreach ($group as $named) {
-                $types[] = $named;
-            }
-        }
-
-        return $types;
     }
 
     /** @return list<ReflectionNamedType> */

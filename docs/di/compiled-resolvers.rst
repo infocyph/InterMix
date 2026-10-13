@@ -27,6 +27,37 @@ Strict compilation rejects unsupported definitions.
 
 Hybrid compilation records frozen fallback requirements explicitly. Runtime-only closures or opaque metadata are not silently serialized into generated PHP.
 
+Declared scoped inputs
+----------------------
+
+Inputs are native compiled entries. Declaring an input does not require a dynamic
+fallback or a release identity. Its consumers and aliases can also compile when
+their remaining features are supported.
+
+.. code-block:: php
+
+   $builder = ContainerBuilder::create('app')
+       ->input(ExecutionId::class);
+   $report = $builder->compile($path, strict: true);
+
+   // At bootstrap, source the expected graph from immutable deployment metadata.
+   $runtime = ContainerBuilder::loadProductionArtifact($path, $deployment['intermix_graph']);
+   $runtime->withinScope(
+       'job',
+       static fn ($active) => $active->get(ExecutionId::class),
+       [ExecutionId::class => $executionId],
+   );
+
+Record the report's graph identity in deployment metadata during the build.
+Input values belong to the active scope. Missing inputs, undeclared seeds and
+resolution outside a scope fail closed. Nested scopes require their own seeds;
+explicit scope-context attachments share their owner's seeds. Singleton
+construction cannot capture a scoped input.
+
+Runtime factories and unsupported lifecycle hooks retain their frozen fallback
+and matching release identity requirements. Existing manifest validation also
+applies to input-bearing artifacts.
+
 Validation
 ----------
 

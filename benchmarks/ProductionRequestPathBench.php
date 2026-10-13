@@ -48,6 +48,18 @@ final class ProductionRequestPathBench
         );
     }
 
+    #[Revs(1000)]
+    public function benchCompiledDeclaredInput(): void
+    {
+        static $runtime;
+        $runtime ??= $this->declaredInputRuntime();
+        $this->sink = $runtime->withinScope(
+            'request',
+            static fn(ProductionContainer $active): object => $active->get(ProductionRequestMiddle::class),
+            [ProductionRequestLeaf::class => new ProductionRequestLeaf()],
+        );
+    }
+
     #[Revs(500)]
     public function benchCompiledPrivateInject(): void
     {
@@ -153,6 +165,18 @@ final class ProductionRequestPathBench
             $runtime->get('root');
         }
         $this->sink = $runtime->get('root');
+    }
+
+    #[Revs(1000)]
+    public function benchDynamicDeclaredInput(): void
+    {
+        static $runtime;
+        $runtime ??= $this->declaredInputBuilder('dynamic-input')->build();
+        $this->sink = $runtime->withinScope(
+            'request',
+            static fn(Container $active): object => $active->get(ProductionRequestMiddle::class),
+            [ProductionRequestLeaf::class => new ProductionRequestLeaf()],
+        );
     }
 
     #[Revs(500)]
@@ -307,6 +331,26 @@ final class ProductionRequestPathBench
             ->autowire(ProductionRequestController::class, ProductionRequestController::class, lifetime: LifetimeEnum::Transient);
 
         return $this->production($builder);
+    }
+
+    private function declaredInputBuilder(string $purpose): ContainerBuilder
+    {
+        return ContainerBuilder::create($this->alias($purpose))
+            ->input(ProductionRequestLeaf::class)
+            ->autowire(ProductionRequestMiddle::class, ProductionRequestMiddle::class, lifetime: LifetimeEnum::Scoped);
+    }
+
+    private function declaredInputRuntime(): ProductionContainer
+    {
+        $path = $this->artifactPath();
+
+        try {
+            $report = $this->declaredInputBuilder('compiled-input')->compile($path, strict: true);
+
+            return ContainerBuilder::loadProductionArtifact($path, $report['graph']);
+        } finally {
+            $this->removeArtifact($path);
+        }
     }
 
     private function hybridRuntime(): ProductionContainer

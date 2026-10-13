@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Infocyph\CacheLayer\Integration\Runwire\RunwireIntegration as CacheLayerRunwireIntegration;
+use Infocyph\InterMix\DI\Build\StaticRuntimeGenerator;
 use Infocyph\InterMix\DI\ContainerBuilder;
 use Infocyph\InterMix\DI\RuntimeContainerInterface;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
@@ -16,6 +17,23 @@ use Infocyph\Runwire\RuntimeContext;
 use LogicException;
 
 final class RunwireBridgeScopedLeaf {}
+
+beforeEach(function (): void {
+    $this->runwireArtifacts = [];
+});
+
+afterEach(function (): void {
+    foreach ($this->runwireArtifacts as $path) {
+        foreach (glob($path . '.builds/*/*') ?: [] as $file) {
+            unlink($file);
+        }
+        foreach (glob($path . '.builds/*') ?: [] as $directory) {
+            rmdir($directory);
+        }
+        rmdir($path . '.builds');
+        unlink($path);
+    }
+});
 
 function runwireBridgeContext(): RuntimeContext
 {
@@ -31,24 +49,34 @@ function runwireBridgeContext(): RuntimeContext
     );
 }
 
-function runwireBridgeContainer(): RuntimeContainerInterface
+function runwireBridgeContainer(string $loader = 'dynamic'): RuntimeContainerInterface
 {
     $builder = ContainerBuilder::create(uniqid('runwire_bridge_', true));
     RunwireIntegration::registerInputs($builder);
 
-    return $builder
-        ->autowire(
+    $builder->autowire(
             'leaf',
             RunwireBridgeScopedLeaf::class,
             lifetime: LifetimeEnum::Scoped,
-        )
-        ->build();
+        );
+    if ($loader === 'dynamic') {
+        return $builder->build();
+    }
+
+    $path = sys_get_temp_dir() . '/intermix-runwire-bridge-' . bin2hex(random_bytes(8)) . '.php';
+    test()->runwireArtifacts = [...test()->runwireArtifacts, $path];
+    $report = $builder->compile($path);
+    expect($report['skipped'])->toBe([]);
+
+    return $loader === 'compiled'
+        ? ContainerBuilder::loadProductionArtifact($path, $report['graph'])
+        : new StaticRuntimeGenerator()->loadPrevalidated($path, $report['digest']);
 }
 
-it('shares Runwire identities and one logical DI scope through child work', function (): void {
+it('shares Runwire identities and one logical DI scope through child work', function (string $loader): void {
     $runtime = runwireBridgeContext();
     $request = RequestContext::create($runtime);
-    $container = runwireBridgeContainer();
+    $container = runwireBridgeContainer($loader);
     $bridge = new RunwireIntegration($container, ownsCacheLayerLifecycle: true);
     $bridge->bind($runtime);
 
@@ -104,12 +132,12 @@ it('shares Runwire identities and one logical DI scope through child work', func
     }
 
     expect(CacheLayerRunwireIntegration::runtime())->toBeNull();
-});
+})->with(['dynamic', 'compiled', 'prevalidated']);
 
-it('keeps downstream CacheLayer lifecycle with the designated owner', function (): void {
+it('keeps downstream CacheLayer lifecycle with the designated owner', function (string $loader): void {
     $runtime = runwireBridgeContext();
     CacheLayerRunwireIntegration::bind($runtime);
-    $bridge = new RunwireIntegration(runwireBridgeContainer());
+    $bridge = new RunwireIntegration(runwireBridgeContainer($loader));
     $bridge->bind($runtime);
 
     try {
@@ -119,12 +147,12 @@ it('keeps downstream CacheLayer lifecycle with the designated owner', function (
     } finally {
         CacheLayerRunwireIntegration::release($runtime);
     }
-});
+})->with(['dynamic', 'compiled', 'prevalidated']);
 
-it('rejects mismatched and completed Runwire request contexts', function (): void {
+it('rejects mismatched and completed Runwire request contexts', function (string $loader): void {
     $runtime = runwireBridgeContext();
     $other = runwireBridgeContext();
-    $bridge = new RunwireIntegration(runwireBridgeContainer());
+    $bridge = new RunwireIntegration(runwireBridgeContainer($loader));
     $bridge->bind($runtime);
 
     try {
@@ -146,12 +174,12 @@ it('rejects mismatched and completed Runwire request contexts', function (): voi
     } finally {
         $bridge->release($runtime);
     }
-});
+})->with(['dynamic', 'compiled', 'prevalidated']);
 
-it('rejects a coroutine scope when the bound runtime lacks Runwire coroutine capability', function (): void {
+it('rejects a coroutine scope when the bound runtime lacks Runwire coroutine capability', function (string $loader): void {
     $runtime = RuntimeContext::standalone();
     $request = RequestContext::create($runtime);
-    $bridge = new RunwireIntegration(runwireBridgeContainer());
+    $bridge = new RunwireIntegration(runwireBridgeContainer($loader));
     $bridge->bind($runtime);
 
     try {
@@ -166,13 +194,13 @@ it('rejects a coroutine scope when the bound runtime lacks Runwire coroutine cap
         $bridge->release($runtime);
         $request->complete();
     }
-});
+})->with(['dynamic', 'compiled', 'prevalidated']);
 
-it('rejects a downstream CacheLayer binding owned by another Runwire runtime', function (): void {
+it('rejects a downstream CacheLayer binding owned by another Runwire runtime', function (string $loader): void {
     $runtime = runwireBridgeContext();
     $other = runwireBridgeContext();
     CacheLayerRunwireIntegration::bind($other);
-    $bridge = new RunwireIntegration(runwireBridgeContainer(), ownsCacheLayerLifecycle: true);
+    $bridge = new RunwireIntegration(runwireBridgeContainer($loader), ownsCacheLayerLifecycle: true);
 
     try {
         expect(fn() => $bridge->bind($runtime))
@@ -180,13 +208,13 @@ it('rejects a downstream CacheLayer binding owned by another Runwire runtime', f
     } finally {
         CacheLayerRunwireIntegration::release($other);
     }
-});
+})->with(['dynamic', 'compiled', 'prevalidated']);
 
 
-it('allows identical Runwire binding and rejects a different live runtime', function (): void {
+it('allows identical Runwire binding and rejects a different live runtime', function (string $loader): void {
     $runtime = runwireBridgeContext();
     $other = runwireBridgeContext();
-    $bridge = new RunwireIntegration(runwireBridgeContainer());
+    $bridge = new RunwireIntegration(runwireBridgeContainer($loader));
 
     $bridge->bind($runtime);
     $bridge->bind($runtime);
@@ -198,4 +226,4 @@ it('allows identical Runwire binding and rejects a different live runtime', func
     } finally {
         $bridge->release($runtime);
     }
-});
+})->with(['dynamic', 'compiled', 'prevalidated']);

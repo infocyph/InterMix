@@ -8,7 +8,6 @@
 .windsurf export-ignore
 benchmarks export-ignore
 docs export-ignore
-examples export-ignore
 graphify-out export-ignore
 static-analysis export-ignore
 tests export-ignore

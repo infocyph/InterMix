@@ -34,6 +34,8 @@ abstract class ProductionContainer implements RuntimeContainerInterface
      */
     private array $fallbackDefinitions = [];
 
+    private bool $lateFallback = false;
+
     private ?ProductionInvocationPlanner $productionInvocationPlanner = null;
 
     private ?ProductionScopeStore $productionScopes = null;
@@ -56,7 +58,7 @@ abstract class ProductionContainer implements RuntimeContainerInterface
 
     final public function captureScopeContext(): ScopeContext
     {
-        $fallbackContext = $this->fallback?->captureScopeContext();
+        $fallbackContext = $this->fallback === null ? null : $this->dynamic()->captureScopeContext();
         [$captured, $scope] = $this->scopeStore()->capture($this->scope, $fallbackContext);
         $this->scope = $scope;
         $this->refreshScopeActivity();
@@ -124,7 +126,7 @@ abstract class ProductionContainer implements RuntimeContainerInterface
     /** @return iterable<string, mixed> */
     final public function tagged(string $tag): iterable
     {
-        $scopeContext = $this->currentExecutionScope()->name === 'root'
+        $scopeContext = $this->compiledScope()->name === 'root'
             ? null
             : $this->captureScopeContext();
 
@@ -287,7 +289,9 @@ abstract class ProductionContainer implements RuntimeContainerInterface
     final protected function enterScope(string $scope, array $instances = []): static
     {
         $seeds = [];
+        $fallbackInstances = $instances;
         foreach ($instances as $id => $value) {
+            $id = (string) $id;
             if (!isset($this->validatedScopeSeedIds[$id])) {
                 $this->validateProductionScopeSeed($id, $value);
             }
@@ -295,6 +299,7 @@ abstract class ProductionContainer implements RuntimeContainerInterface
             $slot = $this->slotFor($id);
             if ($slot !== null) {
                 $seeds[$slot] = $value;
+                unset($fallbackInstances[$id]);
             }
         }
 
@@ -309,7 +314,7 @@ abstract class ProductionContainer implements RuntimeContainerInterface
             $this->refreshScopeActivity();
         }
 
-        $this->fallback?->enterScope($scope, $instances);
+        $this->fallback?->enterScope($scope, $fallbackInstances);
 
         return $this;
     }
@@ -487,12 +492,7 @@ abstract class ProductionContainer implements RuntimeContainerInterface
         int &$failureCount,
     ): void {
         $failureCount += $failure->cleanupFailureCount;
-        foreach ($failure->cleanupFailures as $cleanupFailure) {
-            if (count($failures) >= 32) {
-                break;
-            }
-            $failures[] = $cleanupFailure;
-        }
+        array_push($failures, ...array_slice($failure->cleanupFailures, 0, 32 - count($failures)));
     }
 
     private function assertTaggedScope(?ScopeContext $scopeContext): void
@@ -536,15 +536,6 @@ abstract class ProductionContainer implements RuntimeContainerInterface
         );
     }
 
-    private function currentExecutionScope(): ScopeState
-    {
-        if (!$this->contextScopesActive || !$this->productionScopes instanceof ProductionScopeStore) {
-            return $this->scope;
-        }
-
-        return $this->productionScopes->current($this->scope);
-    }
-
     private function detachScopeContext(string $context, ScopeState $scope, bool $synchronizeFallback): void
     {
         if (!$this->productionScopes instanceof ProductionScopeStore) {
@@ -561,16 +552,17 @@ abstract class ProductionContainer implements RuntimeContainerInterface
 
     private function dynamic(): ConfigurationContainer
     {
-        if ($this->fallback instanceof ConfigurationContainer) {
-            return $this->fallback;
+        if (!$this->fallback instanceof ConfigurationContainer) {
+            $fallback = new ConfigurationContainer('intermix.production.dynamic.' . spl_object_id($this));
+            $this->installFallbackBridges($fallback);
+            $this->fallback = $fallback;
+            $this->lateFallback = true;
+        }
+        if ($this->lateFallback) {
+            ProductionFallbackState::synchronizeScopes($this->fallback, $this->compiledScope(), $this->compiledIds());
         }
 
-        $fallback = new ConfigurationContainer('intermix.production.dynamic.' . spl_object_id($this));
-        $this->installFallbackBridges($fallback);
-        $this->synchronizeFallbackScopes($fallback);
-        $this->fallback = $fallback;
-
-        return $fallback;
+        return $this->fallback;
     }
 
     private function hookRuntime(string $id): ConfigurationContainer
@@ -590,7 +582,7 @@ abstract class ProductionContainer implements RuntimeContainerInterface
             $fallback->bindFactory(
                 $id,
                 fn(): mixed => $this->get($id),
-                LifetimeEnum::Transient,
+                $this->compiledLifetimeFor($id) === LifetimeEnum::Scoped ? LifetimeEnum::Scoped : LifetimeEnum::Transient,
             );
         }
     }
@@ -652,11 +644,6 @@ abstract class ProductionContainer implements RuntimeContainerInterface
         return $this->productionScopes ??= new ProductionScopeStore();
     }
 
-    private function synchronizeFallbackScopes(ConfigurationContainer $fallback): void
-    {
-        ProductionFallbackState::synchronizeScopes($fallback, $this->currentExecutionScope());
-    }
-
     /**
      * @param array<int, string> $compiledIds
      * @return iterable<string, mixed>
@@ -701,7 +688,7 @@ abstract class ProductionContainer implements RuntimeContainerInterface
 
             return;
         }
-        if ($this->fallback instanceof ConfigurationContainer) {
+        if ($this->fallback instanceof ConfigurationContainer && $this->slotFor($id) === null) {
             $this->fallback->assertValidScopeSeeds([$id => $instance]);
             $this->validatedScopeSeedIds[$id] = true;
 

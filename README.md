@@ -52,7 +52,7 @@ Optional integrations:
 
 ~~~bash
 composer require infocyph/cachelayer:^4.0
-composer require infocyph/runwire:^2.1
+composer require infocyph/runwire:^2.1.1
 composer require opis/closure:^4.5
 ~~~
 
@@ -195,9 +195,13 @@ $runtime = ContainerBuilder::loadProductionArtifact(
 Record `compile()`'s `graph` in immutable deployment metadata and pass that
 expected identity at bootstrap. This path still validates the artifact digest,
 build identity, ABI, PHP version, graph and environment. It rejects artifacts
-that require inputs, runtime factories, hooks or other fallback configuration;
+that require runtime factories, hooks or other fallback configuration;
 use the configured builder's `production()` for those applications. A standalone
 runtime supports its compiled graph and has no dynamic configuration fallback.
+
+Declared `input()` entries compile natively with scoped lifetime. Supply them
+through `withinScope()` seeds; missing inputs and undeclared seeds fail closed.
+Inputs require an active scope and cannot be captured by singleton construction.
 
 ## Definition cache
 

@@ -279,36 +279,25 @@ trait MacroMix
 
         $macro = static::$macros[$method];
 
-        if ($macro instanceof Closure) {
-            $result = null;
-            $closure = $macro;
-
-            $isStaticClosure = static::$macroIsStaticClosure[$method]
-                ??= new ReflectionFunction($macro)->isStatic();
-
-            if ($bind === null && !$isStaticClosure) {
+        if ($macro instanceof Closure && !(static::$macroIsStaticClosure[$method]
+            ??= new ReflectionFunction($macro)->isStatic())) {
+            if ($bind === null) {
                 throw new BadMethodCallException(
                     sprintf('Cannot call non-static macro %s::%s() statically.', static::class, $method),
                 );
             }
-            if ($bind !== null && !$isStaticClosure) {
-                if (!(static::$macroIsBindableClosure[$method] ?? false)) {
-                    throw new BadMethodCallException(
-                        sprintf('Unable to bind macro %s::%s().', static::class, $method),
-                    );
-                }
-                $bound = $macro->bindTo($bind, static::class);
-                if (!$bound instanceof Closure) {
-                    throw new BadMethodCallException(
-                        sprintf('Unable to bind macro %s::%s().', static::class, $method),
-                    );
-                }
-                $closure = $bound;
+            if (!(static::$macroIsBindableClosure[$method] ?? false)) {
+                throw new BadMethodCallException(
+                    sprintf('Unable to bind macro %s::%s().', static::class, $method),
+                );
             }
-
-            $result = $closure(...$parameters);
-
-            return $result ?? $bind ?? static::class;
+            $bound = $macro->bindTo($bind, static::class);
+            if (!$bound instanceof Closure) {
+                throw new BadMethodCallException(
+                    sprintf('Unable to bind macro %s::%s().', static::class, $method),
+                );
+            }
+            $macro = $bound;
         }
 
         $result = $macro(...$parameters);

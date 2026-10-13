@@ -67,7 +67,7 @@ jobs:
       matrix:
         php-version: ["8.4", "8.5"]
     steps:
-      - name: Checkout InterMix 11.0 candidate
+      - name: Checkout InterMix candidate
         uses: actions/checkout@v7
         with:
           path: current

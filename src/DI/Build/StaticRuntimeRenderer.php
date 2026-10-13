@@ -15,7 +15,8 @@ use Infocyph\InterMix\DI\Support\LifetimeEnum;
  * @phpstan-type FactoryPlan array{kind: 'factory', class: class-string, method: string|null, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
  * @phpstan-type InvocationPlan array{kind: 'invocation', class: class-string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, invocation: MethodPlan, dependencies: list<string>}
  * @phpstan-type ValuePlan array{kind: 'value', code: string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
- * @phpstan-type ServicePlan AliasPlan|ClassPlan|FactoryPlan|InvocationPlan|ValuePlan
+ * @phpstan-type InputPlan array{kind: 'input', lifetime: LifetimeEnum::Scoped, arguments: array{}, properties: array{}, dependencies: array{}}
+ * @phpstan-type ServicePlan AliasPlan|ClassPlan|FactoryPlan|InvocationPlan|ValuePlan|InputPlan
  * @internal
  */
 final class StaticRuntimeRenderer
@@ -29,14 +30,12 @@ final class StaticRuntimeRenderer
         $guardCaptive = new StaticScopeAccessRenderer()->requiresCaptiveGuard($plans);
         $invocationRenderer = new StaticInvocationRenderer();
         $lifecycleRenderer = new StaticLifecycleHookRenderer();
-        $returnRenderer = new StaticReturnRenderer();
         $source = "<?php\n\ndeclare(strict_types=1);\n\n";
         $source .= "use Infocyph\\InterMix\\DI\\ProductionContainer;\n";
         $source .= "use Infocyph\\InterMix\\DI\\Support\\LifetimeEnum;\n\n";
         $source .= "return new class extends ProductionContainer\n{\n";
         $source .= $this->renderFactorySingletonProperties($plans);
         $source .= $invocationRenderer->renderSingletonProperties($plans);
-        $source .= $returnRenderer->renderProperties($plans);
         $source .= $lifecycleRenderer->renderValueSingletonProperties($graph, $plans);
         $source .= $this->renderSingletonProperties($plans, $slots);
         $dispatchRenderer = new StaticRuntimeDispatchRenderer();
@@ -46,7 +45,6 @@ final class StaticRuntimeRenderer
         $source .= $this->renderCompiledIds($plans);
         $source .= $this->renderCompiledLifetimes($plans);
         $source .= $this->renderCompiledScopedDefinitions($plans);
-        $source .= $returnRenderer->renderDispatch($plans, $slots);
         $source .= $this->renderDefinitionMap($graph, $plans);
         $source .= $this->renderFreshMap($plans, $slots);
         $source .= $this->renderFreshMethods($plans, $slots);
@@ -95,30 +93,18 @@ final class StaticRuntimeRenderer
      * @param ClassPlan $plan
      * @param array<string, int> $slots
      */
-    private function classInitializationStatements(array $plan, array $slots): string
+    private function classServiceStatements(array $plan, array $slots): string
     {
-        return '        $instance = ' . $this->classConstruction($plan, $slots) . ";\n"
+        $source = '        $instance = ' . $this->classConstruction($plan, $slots) . ";\n"
             . new StaticRuntimeIslandRenderer()->propertyStatements($plan['properties'], $slots);
-    }
-
-    /**
-     * @param ClassPlan $plan
-     * @param array<string, int> $slots
-     */
-    private function classServiceStatements(array $plan, array $slots, int $slot): string
-    {
-        $source = $this->classInitializationStatements($plan, $slots);
         $postMethod = $plan['postMethod'];
         if (!is_array($postMethod)) {
             return $source;
         }
 
-        return $source . new StaticReturnRenderer()->invocationStatement(
-            $plan,
-            $postMethod,
-            $slots,
-            $slot,
-        );
+        $expression = new StaticRuntimeIslandRenderer()->methodExpression($plan['class'], $postMethod, $slots);
+
+        return $source . "\n        {$expression};\n";
     }
 
     /**
@@ -191,45 +177,43 @@ final class StaticRuntimeRenderer
                 $slot,
                 $id,
                 $plan['lifetime'],
-                $this->classServiceStatements($plan, $slots, $slot),
+                $this->classServiceStatements($plan, $slots),
                 $guardCaptive,
             );
         }
 
         $source = "    private function s{$slot}(): mixed\n    {\n";
-        $source .= $this->renderSeedGuard($slot, $plan['lifetime'], $id, $guardCaptive);
-        $hasSetup = $plan['properties'] !== [] || $plan['postMethod'] !== null;
-        $construction = $hasSetup ? null : $this->classConstruction($plan, $slots);
-
+        $source .= new StaticScopeAccessRenderer()->seedGuard($slot, $plan['lifetime'], $id, $guardCaptive);
         if ($plan['lifetime'] === LifetimeEnum::Scoped) {
             $source .= "        if (isset(\$scope->resolved[{$slot}])) {\n";
             $source .= "            return \$scope->resolved[{$slot}];\n";
             $source .= "        }\n\n";
-            $source .= $this->renderScopeGuard($plan['lifetime'], $id);
-            if ($hasSetup) {
-                $source .= $this->classServiceStatements($plan, $slots, $slot);
-                $source .= "\n        return \$scope->resolved[{$slot}] = \$instance;\n";
-            } else {
-                $source .= "        return \$scope->resolved[{$slot}] = {$construction};\n";
-            }
+            $source .= new StaticScopeAccessRenderer()->constructionGuard($plan['lifetime'], $id);
+            $source .= $this->renderClassReturn($plan, $slots, "\$scope->resolved[{$slot}] = ");
         } elseif ($plan['lifetime'] === LifetimeEnum::Singleton) {
-            if ($hasSetup) {
-                $source .= "        if (\$this->v{$slot} !== null) {\n";
-                $source .= "            return \$this->v{$slot};\n";
-                $source .= "        }\n\n";
-                $source .= $this->classServiceStatements($plan, $slots, $slot);
-                $source .= "\n        return \$this->v{$slot} = \$instance;\n";
-            } else {
-                $source .= "        return \$this->v{$slot} ??= {$construction};\n";
-            }
-        } elseif ($hasSetup) {
-            $source .= $this->classServiceStatements($plan, $slots, $slot);
-            $source .= "\n        return \$instance;\n";
+            $source .= "        if (\$this->v{$slot} !== null) {\n";
+            $source .= "            return \$this->v{$slot};\n";
+            $source .= "        }\n\n";
+            $source .= $this->renderClassReturn($plan, $slots, "\$this->v{$slot} = ");
         } else {
-            $source .= "        return {$construction};\n";
+            $source .= $this->renderClassReturn($plan, $slots);
         }
 
         return $source . "    }\n\n";
+    }
+
+    /**
+     * @param ClassPlan $plan
+     * @param array<string, int> $slots
+     */
+    private function renderClassReturn(array $plan, array $slots, string $assignment = ''): string
+    {
+        if ($plan['properties'] === [] && $plan['postMethod'] === null) {
+            return '        return ' . $assignment . $this->classConstruction($plan, $slots) . ";\n";
+        }
+
+        return $this->classServiceStatements($plan, $slots)
+            . "\n        return {$assignment}\$instance;\n";
     }
 
     /** @param array<string, ServicePlan> $plans */
@@ -268,7 +252,7 @@ final class StaticRuntimeRenderer
     {
         $ids = [];
         foreach ($plans as $id => $plan) {
-            if ($plan['lifetime'] === LifetimeEnum::Scoped) {
+            if ($plan['lifetime'] === LifetimeEnum::Scoped && $plan['kind'] !== 'alias') {
                 $ids[] = (string) $id;
             }
         }
@@ -394,13 +378,13 @@ final class StaticRuntimeRenderer
         }
 
         $source = "    private function s{$slot}(): mixed\n    {\n";
-        $source .= $this->renderSeedGuard($slot, $plan['lifetime'], $id, $guardCaptive);
+        $source .= new StaticScopeAccessRenderer()->seedGuard($slot, $plan['lifetime'], $id, $guardCaptive);
 
         if ($plan['lifetime'] === LifetimeEnum::Scoped) {
             $source .= "        if (array_key_exists({$slot}, \$scope->resolved)) {\n";
             $source .= "            return \$scope->resolved[{$slot}];\n";
             $source .= "        }\n\n";
-            $source .= $this->renderScopeGuard($plan['lifetime'], $id);
+            $source .= new StaticScopeAccessRenderer()->constructionGuard($plan['lifetime'], $id);
             $source .= "        return \$scope->resolved[{$slot}] = {$expression};\n";
         } elseif ($plan['lifetime'] === LifetimeEnum::Singleton) {
             $source .= "        if (array_key_exists({$slot}, \$this->factorySingletons)) {\n";
@@ -467,30 +451,24 @@ final class StaticRuntimeRenderer
             }
             $slot = $slots[$id];
             $source .= "    private function f{$slot}(): object\n    {\n";
-            $source .= $this->classInitializationStatements($plan, $slots);
+            $source .= '        $instance = ' . $this->classConstruction($plan, $slots) . ";\n"
+            . new StaticRuntimeIslandRenderer()->propertyStatements($plan['properties'], $slots);
             $source .= "\n        return \$instance;\n    }\n\n";
         }
 
         return $source;
     }
 
-    private function renderScopeGuard(LifetimeEnum $lifetime, string $id): string
+    private function renderInputMethod(string $id, int $slot, bool $guardCaptive): string
     {
-        return new StaticScopeAccessRenderer()->constructionGuard($lifetime, $id);
-    }
+        $message = var_export("Required scoped input '{$id}' was not supplied.", true);
 
-    private function renderSeedGuard(
-        int $slot,
-        LifetimeEnum $lifetime,
-        string $id,
-        bool $guardCaptive,
-    ): string {
-        return new StaticScopeAccessRenderer()->seedGuard(
-            $slot,
-            $lifetime,
-            $id,
-            $guardCaptive,
-        );
+        return "    private function s{$slot}(): mixed\n"
+            . "    {\n"
+            . new StaticScopeAccessRenderer()->seedGuard($slot, LifetimeEnum::Scoped, $id, $guardCaptive)
+            . new StaticScopeAccessRenderer()->constructionGuard(LifetimeEnum::Scoped, $id)
+            . "        throw new \\Infocyph\\InterMix\\Exceptions\\ContainerException({$message});\n"
+            . "    }\n\n";
     }
 
     /**
@@ -544,6 +522,7 @@ final class StaticRuntimeRenderer
                     $graph->hasResolvedHook($id),
                     $guardCaptive,
                 ),
+                'input' => $this->renderInputMethod($id, $slots[$id], $guardCaptive),
                 'value' => $this->renderValueMethod(
                     $graph,
                     $id,
@@ -667,8 +646,8 @@ final class StaticRuntimeRenderer
 
         return "    private function s{$slot}(): mixed\n"
             . "    {\n"
-            . $this->renderSeedGuard($slot, $plan['lifetime'], $id, $guardCaptive)
-            . $this->renderScopeGuard($plan['lifetime'], $id)
+            . new StaticScopeAccessRenderer()->seedGuard($slot, $plan['lifetime'], $id, $guardCaptive)
+            . new StaticScopeAccessRenderer()->constructionGuard($plan['lifetime'], $id)
             . '        return ' . $plan['code'] . ";\n"
             . "    }\n\n";
     }

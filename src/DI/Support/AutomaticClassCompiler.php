@@ -93,25 +93,18 @@ final class AutomaticClassCompiler
         ReflectionParameter $parameter,
         array &$resolvedTypes,
     ): ?string {
-        if ($parameter->isVariadic()) {
-            return "constructor parameter '{$parameter->getName()}' is variadic";
-        }
-        if ($parameter->getAttributes() !== []) {
-            return "constructor parameter '{$parameter->getName()}' has attributes";
-        }
-
         $type = $parameter->getType();
-        if ($type instanceof ReflectionUnionType || $type instanceof ReflectionIntersectionType) {
-            return "constructor parameter '{$parameter->getName()}' has a union or intersection type";
+        $unsupported = match (true) {
+            $parameter->isVariadic() => 'is variadic',
+            $parameter->getAttributes() !== [] => 'has attributes',
+            $type instanceof ReflectionUnionType, $type instanceof ReflectionIntersectionType => 'has a union or intersection type',
+            default => null,
+        };
+        if ($unsupported !== null) {
+            return "constructor parameter '{$parameter->getName()}' {$unsupported}";
         }
         if (!$type instanceof ReflectionNamedType || $type->isBuiltin()) {
-            if ($parameter->isDefaultValueAvailable() && $this->isExportable($parameter->getDefaultValue())) {
-                return null;
-            }
-
-            return $parameter->allowsNull()
-                ? null
-                : "constructor parameter '{$parameter->getName()}' cannot be represented safely";
+            return $this->defaultParameterIssue($parameter);
         }
 
         $dependency = $this->normalizedDependencyType($class, $type->getName());
@@ -131,6 +124,19 @@ final class AutomaticClassCompiler
         $resolvedTypes[$dependency] = true;
 
         return null;
+    }
+
+    private function defaultParameterIssue(ReflectionParameter $parameter): ?string
+    {
+        if ($parameter->isDefaultValueAvailable()) {
+            return BoundedValueInspector::isScalarNullArray($parameter->getDefaultValue())
+                ? null
+                : "constructor parameter '{$parameter->getName()}' has a non-exportable default";
+        }
+
+        return $parameter->allowsNull()
+            ? null
+            : "constructor parameter '{$parameter->getName()}' cannot be represented safely";
     }
 
     /**
@@ -188,11 +194,6 @@ final class AutomaticClassCompiler
         }
 
         return false;
-    }
-
-    private function isExportable(mixed $value): bool
-    {
-        return BoundedValueInspector::isScalarNullArray($value);
     }
 
     /**

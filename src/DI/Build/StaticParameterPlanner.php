@@ -112,11 +112,6 @@ final class StaticParameterPlanner
         return new StaticInjectPlanner()->parameterArgument($graph, $parameter);
     }
 
-    private function isExportable(mixed $value): bool
-    {
-        return BoundedValueInspector::isScalarNullArray($value);
-    }
-
     /** @param ReflectionClass<object> $class */
     private function normalizedDependencyType(ReflectionClass $class, string $type): ?string
     {
@@ -192,8 +187,10 @@ final class StaticParameterPlanner
         if ($attributePlan !== null) {
             return $attributePlan;
         }
-        if ($parameter->isDefaultValueAvailable() && $this->isExportable($parameter->getDefaultValue())) {
-            return ['kind' => 'value', 'code' => var_export($parameter->getDefaultValue(), true)];
+        if ($parameter->isDefaultValueAvailable()) {
+            return BoundedValueInspector::isScalarNullArray($parameter->getDefaultValue())
+                ? ['kind' => 'value', 'code' => var_export($parameter->getDefaultValue(), true)]
+                : "{$label} parameter '{$name}' has a non-exportable default";
         }
         if ($parameter->allowsNull()) {
             return ['kind' => 'value', 'code' => 'null'];
@@ -228,7 +225,7 @@ final class StaticParameterPlanner
         if (!array_key_exists($name, $supplied)) {
             return null;
         }
-        if (!$this->isExportable($supplied[$name])) {
+        if (!BoundedValueInspector::isScalarNullArray($supplied[$name])) {
             return "{$label} parameter '{$name}' has a non-exportable supplied value";
         }
 

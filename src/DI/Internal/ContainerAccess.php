@@ -8,6 +8,7 @@ use Infocyph\InterMix\DI\Container;
 use Infocyph\InterMix\DI\Invoker\CompiledCall;
 use Infocyph\InterMix\DI\Invoker\GenericCall;
 use Infocyph\InterMix\DI\Invoker\InjectedCall;
+use Infocyph\InterMix\DI\Managers\InvocationManager;
 use Infocyph\InterMix\DI\Resolver\Repository;
 
 /**
@@ -27,6 +28,11 @@ final class ContainerAccess extends Container
     public static function graph(Container $container, ?string $warmFromId = null, bool $clear = false): array
     {
         return $container->exportGraph($warmFromId, $clear);
+    }
+
+    public static function invocationManager(Container $container): InvocationManager
+    {
+        return $container->invocationManager;
     }
 
     public static function repository(Container $container): Repository

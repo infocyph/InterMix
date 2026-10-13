@@ -72,7 +72,7 @@ final class StaticRuntimeArtifactMetadata
             true,
         );
         $ids = array_values(array_filter(
-            array_keys($reasons),
+            array_map(static fn(int|string $id): string => (string) $id, array_keys($reasons)),
             static fn(string $id): bool => isset($defined[$id]),
         ));
         sort($ids, SORT_STRING);
@@ -287,6 +287,11 @@ final class StaticRuntimeArtifactMetadata
         if ($manifest['build'] !== basename(dirname($artifactPath))) {
             throw new ContainerException('Static runtime activation pointer does not match its build manifest.');
         }
+        $build = $manifest['build'];
+        unset($manifest['build']);
+        if (!hash_equals($build, $this->hashIdentity($manifest))) {
+            throw new ContainerException('Static runtime manifest does not match its immutable build identity.');
+        }
     }
 
     /** @param array<array-key, mixed> $manifest */
@@ -303,20 +308,16 @@ final class StaticRuntimeArtifactMetadata
             throw new ContainerException('Static runtime manifest has invalid entry collections.');
         }
 
-        foreach ($compiled as $id) {
-            if (!is_string($id)) {
-                throw new ContainerException('Static runtime manifest has invalid compiled IDs.');
-            }
+        if (!array_is_list($compiled) || array_any($compiled, static fn($id): bool => !is_string($id))) {
+            throw new ContainerException('Static runtime manifest has invalid compiled IDs.');
         }
-        foreach ($skipped as $id => $reason) {
-            if (!is_string($id) || !is_string($reason)) {
+        foreach ($skipped as $reason) {
+            if (!is_string($reason)) {
                 throw new ContainerException('Static runtime manifest has invalid skipped entries.');
             }
         }
-        foreach ($fallbackIds as $id) {
-            if (!is_string($id)) {
-                throw new ContainerException('Static runtime manifest has invalid fallback IDs.');
-            }
+        if (!array_is_list($fallbackIds) || array_any($fallbackIds, static fn($id): bool => !is_string($id))) {
+            throw new ContainerException('Static runtime manifest has invalid fallback IDs.');
         }
     }
 

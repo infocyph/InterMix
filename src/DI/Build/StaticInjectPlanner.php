@@ -31,31 +31,19 @@ final class StaticInjectPlanner
             return [];
         }
 
-        $parameters = [];
-        foreach ($method->getParameters() as $parameter) {
-            $parameters[$parameter->getName()] = $parameter;
-        }
-
         $planned = [];
-        foreach ($values as $name => $value) {
-            if (!is_string($name) || !isset($parameters[$name])) {
+        foreach ($method->getParameters() as $parameter) {
+            $name = $parameter->getName();
+            if (!array_key_exists($name, $values)) {
                 continue;
             }
-
-            $parameter = $parameters[$name];
-            $type = $parameter->getType();
-            if ($type !== null && (!$type instanceof ReflectionNamedType || !$type->isBuiltin())) {
-                return "method parameter '{$name}' has typed method-level #[Inject] semantics";
-            }
-            if ($type === null && $graph->hasDefinition($name)) {
-                continue;
-            }
-
-            $argument = $this->methodValuePlan($graph, $value, $name);
+            $argument = $this->methodParameterPlan($graph, $parameter, $values[$name]);
             if (is_string($argument)) {
                 return $argument;
             }
-            $planned[$name] = $argument;
+            if ($argument !== null) {
+                $planned[$name] = $argument;
+            }
         }
 
         return $planned;
@@ -84,16 +72,25 @@ final class StaticInjectPlanner
             ?? "parameter '{$parameter->getName()}' has an unresolved #[Inject] target '{$target}'";
     }
 
-    private function isExportable(mixed $value): bool
+    /** @return ServiceArgument|string|null */
+    private function methodParameterPlan(DefinitionGraph $graph, ReflectionParameter $parameter, mixed $value): array|string|null
     {
-        return BoundedValueInspector::isScalarNullArray($value);
+        $name = $parameter->getName();
+        $type = $parameter->getType();
+        if ($type !== null && (!$type instanceof ReflectionNamedType || !$type->isBuiltin())) {
+            return "method parameter '{$name}' has typed method-level #[Inject] semantics";
+        }
+
+        return $type === null && $graph->hasDefinition($name)
+            ? null
+            : $this->methodValuePlan($graph, $value, $name);
     }
 
     /** @return ServiceArgument|string */
     private function methodValuePlan(DefinitionGraph $graph, mixed $value, string $parameter): array|string
     {
         if (!is_string($value)) {
-            if (!$this->isExportable($value)) {
+            if (!BoundedValueInspector::isScalarNullArray($value)) {
                 return "method parameter '{$parameter}' has a non-exportable #[Inject] value";
             }
 
