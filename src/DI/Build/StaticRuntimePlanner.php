@@ -18,7 +18,7 @@ use Psr\Container\ContainerInterface;
 use ReflectionClass;
 
 /**
- * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
+ * @phpstan-type ServiceArgument array{kind: 'service', id: string, bind?: class-string, nullable?: bool}|array{kind: 'value', code: string, bind?: class-string, nullable?: bool}
  * @phpstan-type PropertyPlan array{declaring: class-string<object>, property: string, static: bool, argument: ServiceArgument|null, runtime?: 'attribute'|'assign'}
  * @phpstan-type MethodPlan array{method: string, arguments: list<ServiceArgument>, dependencies: list<string>, runtime?: bool}
  * @phpstan-type AliasPlan array{kind: 'alias', target: string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
@@ -32,7 +32,12 @@ use ReflectionClass;
  */
 final class StaticRuntimePlanner
 {
-    /** @return array<string, ServicePlan> */
+    /**
+     * Expand explicit plans with reachable implicit classes before final availability and cycle
+     * pruning.
+     *
+     * @return array<string, ServicePlan>
+     */
     public function dependencyPlans(DefinitionGraph $graph): array
     {
         [$plans, $skipped] = $this->buildPlans($graph);
@@ -40,7 +45,12 @@ final class StaticRuntimePlanner
         return $this->expandImplicitClasses($graph, $plans, $skipped);
     }
 
-    /** @return array{plans: array<string, ServicePlan>, skipped: array<string, string>} */
+    /**
+     * Build native plans, remove unavailable or cyclic dependencies and retain skip reasons for
+     * fallback validation.
+     *
+     * @return array{plans: array<string, ServicePlan>, skipped: array<string, string>}
+     */
     public function plan(DefinitionGraph $graph): array
     {
         [$plans, $skipped] = $this->buildPlans($graph);
@@ -184,21 +194,22 @@ final class StaticRuntimePlanner
         array $plans,
         array &$skipped,
     ): array {
-        $pending = array_values($plans);
-        while (($plan = array_pop($pending)) !== null) {
-            foreach ($plan['dependencies'] as $dependency) {
-                if ($this->isKnownDependency($graph, $plans, $skipped, $dependency)) {
-                    continue;
-                }
-                $implicit = $this->implicitDependencyPlan($graph, $dependency);
-                if (is_string($implicit)) {
-                    $skipped[$dependency] = $implicit;
-
-                    continue;
-                }
-                $plans[$dependency] = $implicit;
-                $pending[] = $implicit;
+        $pending = [];
+        foreach ($plans as $plan) {
+            array_push($pending, ...$plan['dependencies']);
+        }
+        while (($dependency = array_pop($pending)) !== null) {
+            if ($this->isKnownDependency($graph, $plans, $skipped, $dependency)) {
+                continue;
             }
+            $implicit = $this->implicitDependencyPlan($graph, $dependency);
+            if (is_string($implicit)) {
+                $skipped[$dependency] = $implicit;
+
+                continue;
+            }
+            $plans[$dependency] = $implicit;
+            array_push($pending, ...$implicit['dependencies']);
         }
 
         return $plans;
@@ -423,15 +434,16 @@ final class StaticRuntimePlanner
      */
     private function pruneUnavailableDependencies(array $plans, array &$skipped): array
     {
+        $dependencies = array_map(static fn(array $plan): array => $plan['dependencies'], $plans);
         do {
             $changed = false;
-            foreach ($plans as $id => $plan) {
-                foreach ($plan['dependencies'] as $dependency) {
+            foreach ($dependencies as $id => $required) {
+                foreach ($required as $dependency) {
                     if (isset($plans[$dependency])) {
                         continue;
                     }
                     $skipped[$id] = "dependency '$dependency' is not statically compiled";
-                    unset($plans[$id]);
+                    unset($plans[$id], $dependencies[$id]);
                     $changed = true;
 
                     break;

@@ -23,6 +23,8 @@ use ReflectionUnionType;
 final class AutomaticClassCompiler
 {
     /**
+     * Try generating a direct class resolver; unsupported class features leave resolution dynamic.
+     *
      * @param DefinitionGraph $graph Immutable build-time container state.
      * @param string $definition Registered class-string definition.
      * @return array{code: string|null, signature: array<string, mixed>|null, reason: string}

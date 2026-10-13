@@ -20,19 +20,30 @@ trait ResolvesMissingServices
     /** @var list<callable(string, Container): void> */
     private array $onMissingHooks = [];
 
-    /** @internal */
+    /**
+     * Check whether legacy misses can be handled by registered callbacks.
+     *
+     * @internal
+     */
     public function hasMissingHooks(): bool
     {
         return $this->onMissingHooks !== [];
     }
 
-    /** @internal */
+    /**
+     * Identify a missing-hook failure whose original exception must be preserved.
+     *
+     * @internal
+     */
     public function isOnMissingFailure(Throwable $throwable): bool
     {
         return $this->onMissingFailures !== null
             && isset($this->onMissingFailures[$throwable]);
     }
 
+    /**
+     * Register legacy missing-entry callbacks while enforcing mutable configuration.
+     */
     public function onMissing(callable $hook): void
     {
         $this->checkIfLocked();
@@ -41,6 +52,8 @@ trait ResolvesMissingServices
     }
 
     /**
+     * Run miss handlers with recursion protection and verify that resolution became possible.
+     *
      * @internal
      * @phpstan-impure
      */

@@ -93,14 +93,14 @@ trait ResolvesNumericAndVariadicParameters
             }
 
             if (array_key_exists($key, $sequential)) {
-                $processed[$paramName] = $sequential[$key];
+                $processed[$paramName] = $this->suppliedParameterValue($param, $sequential[$key]);
 
                 continue;
             }
 
             $data = $applyAttribute ? $this->resolveParameterAttribute($param) : ['isResolved' => false, 'inject' => false, 'value' => null];
             if ($data['isResolved']) {
-                $data['inject'] && $processed[$paramName] = $data['value'];
+                $data['inject'] && $processed[$paramName] = $this->suppliedParameterValue($param, $data['value']);
 
                 continue;
             }

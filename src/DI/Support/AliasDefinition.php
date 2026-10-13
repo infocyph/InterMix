@@ -9,6 +9,9 @@ use InvalidArgumentException;
 /** @internal */
 final readonly class AliasDefinition
 {
+    /**
+     * Represent an identifier redirect whose resolution follows the target entry.
+     */
     public function __construct(public string $target)
     {
         if ($this->target === '') {

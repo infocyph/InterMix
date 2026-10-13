@@ -45,6 +45,9 @@ abstract class ProductionContainer implements RuntimeContainerInterface
     /** @var array<string, true> */
     private array $validatedScopeSeedIds = [];
 
+    /**
+     * Initialize root scope state and install bridges for an explicitly supplied fallback.
+     */
     public function __construct(private ?ConfigurationContainer $fallback = null)
     {
         $this->scope = new ScopeState('root');
@@ -54,8 +57,14 @@ abstract class ProductionContainer implements RuntimeContainerInterface
         }
     }
 
+    /**
+     * Map a compiled identifier to its immutable slot, or null when it has no native plan.
+     */
     abstract protected function slotFor(string $id): ?int;
 
+    /**
+     * Capture an active native scope and its matching fallback scope for in-process propagation.
+     */
     final public function captureScopeContext(): ScopeContext
     {
         $fallbackContext = $this->fallback === null ? null : $this->dynamic()->captureScopeContext();
@@ -66,7 +75,11 @@ abstract class ProductionContainer implements RuntimeContainerInterface
         return $captured;
     }
 
-    /** @param array<int|string, mixed> $arguments */
+    /**
+     * Use a supported compiled invocation recipe, otherwise delegate to the runtime invoker.
+     *
+     * @param array<int|string, mixed> $arguments
+     */
     final public function invoke(callable $callable, array $arguments = []): mixed
     {
         $result = null;
@@ -77,7 +90,11 @@ abstract class ProductionContainer implements RuntimeContainerInterface
         return $this->dynamic()->invoke($callable, $arguments);
     }
 
-    /** @param array<int|string, mixed> $arguments */
+    /**
+     * Construct a fresh instance through the runtime invoker without reusing lifetime caches.
+     *
+     * @param array<int|string, mixed> $arguments
+     */
     final public function make(string $class, array $arguments = []): object
     {
         return $this->dynamic()->make($class, $arguments);
@@ -123,7 +140,11 @@ abstract class ProductionContainer implements RuntimeContainerInterface
         $this->throwCleanupFailures($failures, $failureCount);
     }
 
-    /** @return iterable<string, mixed> */
+    /**
+     * Yield tagged values lazily and enforce the originating scope while iterating.
+     *
+     * @return iterable<string, mixed>
+     */
     final public function tagged(string $tag): iterable
     {
         $scopeContext = $this->compiledScope()->name === 'root'
@@ -138,7 +159,11 @@ abstract class ProductionContainer implements RuntimeContainerInterface
         );
     }
 
-    /** @param array<string, mixed> $instances */
+    /**
+     * Validate seeds, execute work and close the scope even when the callback fails.
+     *
+     * @param array<string, mixed> $instances
+     */
     final public function withinScope(string $scope, callable $callback, array $instances = []): mixed
     {
         $this->enterScope($scope, $instances);
@@ -156,6 +181,9 @@ abstract class ProductionContainer implements RuntimeContainerInterface
         return $result;
     }
 
+    /**
+     * Attach a container-owned native and fallback scope for the duration of the callback.
+     */
     final public function withinScopeContext(ScopeContext $scopeContext, callable $callback): mixed
     {
         [$scope, $fallbackContext] = $this->scopeStore()->unwrap($scopeContext);
@@ -186,6 +214,9 @@ abstract class ProductionContainer implements RuntimeContainerInterface
         }
     }
 
+    /**
+     * Delegate an unsupported property attribute to the shared runtime injection algorithm.
+     */
     final protected function applyCompiledRuntimePropertyAttribute(
         object $instance,
         string $declaringClass,
@@ -194,6 +225,9 @@ abstract class ProductionContainer implements RuntimeContainerInterface
         $this->runtimeIslandResolver()->applyAttributedProperty($instance, $declaringClass, $propertyName);
     }
 
+    /**
+     * Reject scoped dependency capture by singleton construction on the same carrier.
+     */
     final protected function assertCompiledScopedResolution(string $id): void
     {
         if (!$this->compiledSingletonResolutionActive) {
@@ -208,7 +242,11 @@ abstract class ProductionContainer implements RuntimeContainerInterface
         }
     }
 
-    /** @param class-string $declaringClass */
+    /**
+     * Assign a reflected property, including inaccessible or static properties.
+     *
+     * @param class-string $declaringClass
+     */
     final protected function assignCompiledRuntimeProperty(
         object $instance,
         string $declaringClass,
@@ -219,22 +257,35 @@ abstract class ProductionContainer implements RuntimeContainerInterface
         $property->setValue($property->isStatic() ? null : $instance, $value);
     }
 
-    /** @return array<int, string> */
+    /**
+     * Declare identifiers with native slots; generated artifacts override the empty default.
+     *
+     * @return array<int, string>
+     */
     protected function compiledIds(): array
     {
         return [];
     }
 
+    /**
+     * Expose a native entry's lifetime, or null when no compiled plan exists.
+     */
     protected function compiledLifetimeFor(string $id): ?LifetimeEnum
     {
         return null;
     }
 
+    /**
+     * Try a compiled invocation return, distinguishing an unsupported recipe from a null result.
+     */
     protected function compiledReturn(string $id, mixed &$returned): bool
     {
         return false;
     }
 
+    /**
+     * Select the current carrier's native scope while retaining the sequential fast path.
+     */
     final protected function compiledScope(): ScopeState
     {
         if (!$this->contextScopesActive || !$this->productionScopes instanceof ProductionScopeStore) {
@@ -244,24 +295,44 @@ abstract class ProductionContainer implements RuntimeContainerInterface
         return $this->productionScopes->current($this->scope);
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * Expose already constructed native singletons for fallback synchronization.
+     *
+     * @return array<string, mixed>
+     */
     protected function compiledSingletonValues(): array
     {
         return [];
     }
 
-    /** @return array<string, mixed>|null */
+    /**
+     * Try native eager tag resolution; null requests generic tag dispatch.
+     *
+     * @return array<string, mixed>|null
+     */
     protected function compiledTagged(string $tag): ?array
     {
         return null;
     }
 
-    /** @return iterable<string, callable(): mixed>|null */
+    /**
+     * Try native deferred tag resolution; null requests generic tag dispatch.
+     *
+     * @return iterable<string, callable(): mixed>|null
+     */
     protected function compiledTaggedLazy(string $tag): ?iterable
     {
         return null;
     }
 
+    /**
+     * Apply frozen injection and conversion policies when materializing a late runtime invoker.
+     */
+    protected function configureRuntimeInvoker(ConfigurationContainer $runtime): void {}
+
+    /**
+     * Cache a scoped result and prevent conflicting construction by attached carriers.
+     */
     final protected function constructCompiledScoped(
         ScopeState $scope,
         int $slot,
@@ -275,17 +346,27 @@ abstract class ProductionContainer implements RuntimeContainerInterface
         return $this->scopeStore()->constructScoped($scope, $slot, $id, $resolver);
     }
 
+    /**
+     * Run matching fallback hooks after successful native construction.
+     */
     final protected function dispatchCompiledResolvedHooks(string $id, mixed $value): void
     {
         $this->hookRuntime($id)->getRepository()->dispatchResolvedHooks($id, $value);
     }
 
+    /**
+     * Run matching fallback hooks before native construction.
+     */
     final protected function dispatchCompiledResolvingHooks(string $id): void
     {
         $this->hookRuntime($id)->getRepository()->dispatchResolvingHooks($id);
     }
 
-    /** @param array<string, mixed> $instances */
+    /**
+     * Validate declared seeds, map native slots and enter matching native and fallback scopes.
+     *
+     * @param array<string, mixed> $instances
+     */
     final protected function enterScope(string $scope, array $instances = []): static
     {
         $seeds = [];
@@ -319,17 +400,28 @@ abstract class ProductionContainer implements RuntimeContainerInterface
         return $this;
     }
 
+    /**
+     * Resolve through the fallback's declaration contract, without legacy class discovery.
+     */
     final protected function fallbackGet(string $id): mixed
     {
         return $this->dynamic()->strictGet($id);
     }
 
+    /**
+     * Check fallback declaration presence without constructing or discovering classes.
+     */
     final protected function fallbackHas(string $id): bool
     {
         return $this->dynamic()->strictHas($id);
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * Combine native and fallback tagged values, preferring native entries with matching
+     * identifiers.
+     *
+     * @return array<string, mixed>
+     */
     final protected function findByTag(string $tag): array
     {
         $matches = $this->compiledTagged($tag);
@@ -349,7 +441,11 @@ abstract class ProductionContainer implements RuntimeContainerInterface
         return $matches;
     }
 
-    /** @return iterable<string, callable(): mixed> */
+    /**
+     * Yield native and fallback resolvers once per identifier.
+     *
+     * @return iterable<string, callable(): mixed>
+     */
     final protected function findByTagLazy(string $tag): iterable
     {
         $compiledIds = $this->taggedIds($tag);
@@ -374,17 +470,27 @@ abstract class ProductionContainer implements RuntimeContainerInterface
         }
     }
 
+    /**
+     * Try a fresh native construction recipe, returning null when unsupported.
+     */
     protected function freshCompiled(string $class): ?object
     {
         return null;
     }
 
+    /**
+     * Try a fresh native method recipe, preserving null as a successful result.
+     */
     protected function freshCompiledInvocation(string $class, string $method, mixed &$result): bool
     {
         return false;
     }
 
-    /** @param array<int|string, mixed> $parameters */
+    /**
+     * Try a fresh native method recipe with explicit runtime argument overrides.
+     *
+     * @param array<int|string, mixed> $parameters
+     */
     protected function freshCompiledInvocationWithParameters(
         string $class,
         string $method,
@@ -394,6 +500,9 @@ abstract class ProductionContainer implements RuntimeContainerInterface
         return false;
     }
 
+    /**
+     * Execute a method requiring runtime reflection through the shared injection island.
+     */
     final protected function invokeCompiledRuntimeMethod(
         object $instance,
         string $className,
@@ -402,21 +511,33 @@ abstract class ProductionContainer implements RuntimeContainerInterface
         return $this->runtimeIslandResolver()->invokeMethod($instance, $className, $methodName);
     }
 
+    /**
+     * Identify native declarations for bridge and seed validation.
+     */
     protected function isCompiledDefinition(string $id): bool
     {
         return false;
     }
 
+    /**
+     * Identify native scoped declarations eligible for execution-owned seeds.
+     */
     protected function isCompiledScopedDefinition(string $id): bool
     {
         return false;
     }
 
+    /**
+     * Report the fixed native runtime mode; dynamic bridges do not deoptimize the artifact.
+     */
     final protected function isDeoptimized(): bool
     {
         return false;
     }
 
+    /**
+     * Close the current native scope, run cleanup and restore its parent scope.
+     */
     final protected function leaveScope(): static
     {
         if (!$this->contextScopesActive || !$this->productionScopes instanceof ProductionScopeStore) {
@@ -434,11 +555,17 @@ abstract class ProductionContainer implements RuntimeContainerInterface
         return $this;
     }
 
+    /**
+     * Identify scope names whose generated cleanup contract requires fallback hooks.
+     */
     protected function requiresScopeLeaveHook(string $scope): bool
     {
         return false;
     }
 
+    /**
+     * Track singleton construction per carrier and always release the captive-dependency guard.
+     */
     final protected function resolveCompiledSingleton(callable $resolver): mixed
     {
         $owner = ExecutionContext::id() ?? "\0intermix.production.root";
@@ -459,6 +586,9 @@ abstract class ProductionContainer implements RuntimeContainerInterface
         }
     }
 
+    /**
+     * Return this runtime for container interfaces, otherwise resolve a fallback declaration.
+     */
     final protected function runtimeSelfOrFallback(string $id): mixed
     {
         if ($id === ContainerInterface::class || $id === RuntimeContainerInterface::class) {
@@ -468,6 +598,9 @@ abstract class ProductionContainer implements RuntimeContainerInterface
         return $this->fallbackGet($id);
     }
 
+    /**
+     * Recognize runtime container interfaces before consulting fallback declarations.
+     */
     final protected function runtimeSelfOrFallbackHas(string $id): bool
     {
         return $id === ContainerInterface::class
@@ -475,7 +608,11 @@ abstract class ProductionContainer implements RuntimeContainerInterface
             || $this->fallbackHas($id);
     }
 
-    /** @return array<int, string> */
+    /**
+     * Expose native identifiers associated with a tag; unknown tags use the empty default.
+     *
+     * @return array<int, string>
+     */
     protected function taggedIds(string $tag): array
     {
         return match ($tag) {
@@ -554,6 +691,7 @@ abstract class ProductionContainer implements RuntimeContainerInterface
     {
         if (!$this->fallback instanceof ConfigurationContainer) {
             $fallback = new ConfigurationContainer('intermix.production.dynamic.' . spl_object_id($this));
+            $this->configureRuntimeInvoker($fallback);
             $this->installFallbackBridges($fallback);
             $this->fallback = $fallback;
             $this->lateFallback = true;

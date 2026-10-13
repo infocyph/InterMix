@@ -15,6 +15,9 @@ use ReflectionUnionType;
 final class EnvironmentBindingSnapshot
 {
     /**
+     * Freeze reachable environment-selected implementations without constructing the dependency
+     * graph.
+     *
      * @param array<string, mixed> $definitions
      * @param array<string, array<string, mixed>> $contextualBindings
      * @return array<string, string>

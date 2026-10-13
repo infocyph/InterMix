@@ -14,6 +14,9 @@ final class ScopeCleanupException extends ContainerException
     public readonly array $cleanupFailures;
 
     /**
+     * Retain a bounded sample of cleanup failures while preserving their total count and original
+     * work failure.
+     *
      * @param list<Throwable> $cleanupFailures
      */
     public function __construct(

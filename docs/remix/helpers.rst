@@ -17,11 +17,11 @@ Load it manually when needed:
 - **tap()**     – covered in :ref:`remix.tap-proxy`.
 - **when()**    – conditionally apply callbacks to values.
 - **pipe()**    – passes a value through a callback and returns the callback’s result.
-- **measure()** – times a callback and returns its result plus elapsed ms.
+- **measure()** – returns a callback's result and writes elapsed milliseconds to a by-reference argument.
 - **retry()**   – runs a callback repeatedly until success or max attempts.
 
-For DI-oriented global helpers such as ``container()``, ``resolve()`` and ``direct()``,
-see :ref:`functions`.
+InterMix 11 has no DI container globals. Pass a runtime explicitly as described
+in :ref:`di.overview`. See :ref:`functions` for the optional helper list.
 
 pipe()
 ======
@@ -86,7 +86,7 @@ return the block’s result.
 retry()
 =======
 
-.. php:function:: retry(int $attempts, callable $callback, ?callable $shouldRetry = null, int $delayMs = 0, float $backoff = 1.0)
+.. php:function:: retry(int $attempts, callable $callback, ?callable $shouldRetry = null, int $delayMs = 0, float $backoff = 1.0): mixed
 
 **Goal**: Keep retrying a failing operation until it succeeds or the maximum number of attempts is reached.
 Ideal for flaky APIs, network calls, or transient database issues.
@@ -96,8 +96,8 @@ Parameters:
 - ``$attempts``: Maximum number of tries (must be ≥ 1).
 - ``$callback``: A callable that may throw on failure or return a result. Receives the current attempt number.
 - ``$shouldRetry`` *(optional)*: Callable like ``fn(Throwable $e): bool`` – decides if retry should continue after an exception.
-- ``$delayMs``: Initial delay before first retry (in milliseconds).
-- ``$backoff``: A multiplier applied to ``delayMs`` after each failure (e.g., ``1.5`` = +50% delay increase each time).
+- ``$delayMs``: Initial delay before the first retry, in milliseconds; defaults to zero. Negative values become zero.
+- ``$backoff``: Multiplier applied after each retry sleep; defaults to 1.0. Negative values become zero, and subsequent delays are truncated to integer milliseconds.
 
 **Behavior:**
 
@@ -116,10 +116,9 @@ Parameters:
 
 .. code-block:: php
 
-   $tries = 0;
    $val = retry(
        3,
-       fn($n) => (++$tries < 3)
+       static fn($n) => ($n < 3)
            ? throw new RuntimeException('fail')
            : 'ok',
        shouldRetry: fn($e) => $e instanceof RuntimeException,

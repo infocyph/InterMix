@@ -56,11 +56,17 @@ final class ContainerBuilder
     /** @var array<string, true> */
     private array $scopeLeaveHookScopes = [];
 
+    /**
+     * Create mutable configuration in a caller-selected container namespace.
+     */
     public function __construct(string $namespace = 'intermix.default')
     {
         $this->configuration = new ConfigurationContainer($namespace);
     }
 
+    /**
+     * Start a builder whose configuration remains mutable until finalized.
+     */
     public static function create(string $namespace = 'intermix.default'): self
     {
         return new self($namespace);
@@ -79,6 +85,9 @@ final class ContainerBuilder
         return new StaticRuntimeGenerator()->loadCompiled($path, $expectedGraphIdentity, $expectedEnvironment);
     }
 
+    /**
+     * Declare an identifier redirect without constructing the target service.
+     */
     public function alias(string $id, string $target): self
     {
         $this->assertIdentifier($target, 'Alias target');
@@ -88,6 +97,8 @@ final class ContainerBuilder
     }
 
     /**
+     * Declare a class recipe with snapshotted arguments, properties, lifetime and tags.
+     *
      * @param class-string $class
      * @param array<int|string, mixed> $arguments
      * @param array<int, string> $tags
@@ -115,6 +126,9 @@ final class ContainerBuilder
         return $this;
     }
 
+    /**
+     * Declare an interface override selected only in the matching environment.
+     */
     public function bindInterfaceForEnv(string $environment, string $interface, string $concrete): self
     {
         $this->assertMutable();
@@ -123,6 +137,9 @@ final class ContainerBuilder
         return $this;
     }
 
+    /**
+     * Finalize the graph and return an isolated runtime with locked configuration.
+     */
     public function build(): Container
     {
         $this->finalizeGraph();
@@ -130,6 +147,9 @@ final class ContainerBuilder
         return ContainerAccess::fork($this->configuration);
     }
 
+    /**
+     * Opt a definition into the explicitly configured persistent value cache.
+     */
     public function cacheDefinition(string $id): self
     {
         $this->assertMutable();
@@ -140,13 +160,21 @@ final class ContainerBuilder
         return $this;
     }
 
-    /** @return null|array{compiled: list<string>, skipped: array<string, string>, digest: string, graph: string, build: string, artifact: string} */
+    /**
+     * Expose the last static compilation report, or null before compilation.
+     *
+     * @return null|array{compiled: list<string>, skipped: array<string, string>, digest: string, graph: string, build: string, artifact: string}
+     */
     public function compilationReport(): ?array
     {
         return $this->compilationReport;
     }
 
-    /** @return array{compiled: list<string>, skipped: array<string, string>, digest: string, graph: string, build: string, artifact: string} */
+    /**
+     * Finalize and publish the static artifact; strict mode rejects skipped definitions.
+     *
+     * @return array{compiled: list<string>, skipped: array<string, string>, digest: string, graph: string, build: string, artifact: string}
+     */
     public function compile(string $path, bool $strict = false): array
     {
         $graph = $this->finalizeGraph();
@@ -183,6 +211,9 @@ final class ContainerBuilder
         return $this->compilationReport;
     }
 
+    /**
+     * Configure PSR-6 value caching with explicit namespace, generation and eligible entries.
+     */
     public function definitionCache(
         CacheItemPoolInterface $pool,
         string $namespace,
@@ -218,6 +249,23 @@ final class ContainerBuilder
         return $this->finalizeGraph();
     }
 
+    /**
+     * Opt into public static fromBoundValue conversion for single-class typed parameters.
+     *
+     * Disabled by default. Conversion must return an instance of the parameter's class;
+     * classes without the method retain their existing injection behavior.
+     */
+    public function enableAutoBind(bool $enable = true): self
+    {
+        $this->assertMutable();
+        $this->configuration->getRepository()->enableAutoBind($enable);
+
+        return $this;
+    }
+
+    /**
+     * Select resolution tracing verbosity; disabling tracing restores the off level.
+     */
     public function enableDebugTracing(
         bool $enable = true,
         TraceLevelEnum $level = TraceLevelEnum::Node,
@@ -230,6 +278,9 @@ final class ContainerBuilder
         return $this;
     }
 
+    /**
+     * Control storage of future class bindings without eagerly resolving existing definitions.
+     */
     public function enableLazyLoading(bool $lazy = true): self
     {
         $this->assertMutable();
@@ -238,6 +289,9 @@ final class ContainerBuilder
         return $this;
     }
 
+    /**
+     * Enable method attribute processing before the graph is finalized.
+     */
     public function enableMethodAttributes(bool $enable = true): self
     {
         $this->assertMutable();
@@ -246,6 +300,9 @@ final class ContainerBuilder
         return $this;
     }
 
+    /**
+     * Enable property attribute processing before the graph is finalized.
+     */
     public function enablePropertyAttributes(bool $enable = true): self
     {
         $this->assertMutable();
@@ -254,13 +311,21 @@ final class ContainerBuilder
         return $this;
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * Build an isolated runtime and export its optionally warmed dependency trace.
+     *
+     * @return array<string, mixed>
+     */
     public function exportGraph(?string $warmFromId = null, bool $clear = false): array
     {
         return ContainerAccess::graph($this->build(), $warmFromId, $clear);
     }
 
-    /** @param array<int, string> $tags */
+    /**
+     * Declare an exportable factory recipe or a closure that requires protected runtime fallback.
+     *
+     * @param array<int, string> $tags
+     */
     public function factory(
         string $id,
         Closure|FactoryDefinition $factory,
@@ -275,6 +340,9 @@ final class ContainerBuilder
         return $this;
     }
 
+    /**
+     * Finalize configuration and write deployment-specific paths for discoverable classes.
+     */
     public function generatePreload(string $path): self
     {
         $this->finalizeGraph();
@@ -283,6 +351,9 @@ final class ContainerBuilder
         return $this;
     }
 
+    /**
+     * Let a provider add declarations while this builder is still mutable.
+     */
     public function import(ServiceProviderInterface $provider): self
     {
         $this->assertMutable();
@@ -291,6 +362,9 @@ final class ContainerBuilder
         return $this;
     }
 
+    /**
+     * Declare an execution-owned scoped value that must be supplied by the active scope.
+     */
     public function input(string $id): self
     {
         $this->registerExplicit($id, new InputDefinition(), LifetimeEnum::Scoped);
@@ -298,6 +372,9 @@ final class ContainerBuilder
         return $this;
     }
 
+    /**
+     * Record a post-construction hook and its fallback requirement in the frozen graph.
+     */
     public function onResolved(string $id, callable $callback): self
     {
         $this->assertMutable();
@@ -307,6 +384,9 @@ final class ContainerBuilder
         return $this;
     }
 
+    /**
+     * Record a pre-construction hook and its fallback requirement in the frozen graph.
+     */
     public function onResolving(string $id, callable $callback): self
     {
         $this->assertMutable();
@@ -316,6 +396,9 @@ final class ContainerBuilder
         return $this;
     }
 
+    /**
+     * Record scope cleanup work for protected fallback execution.
+     */
     public function onScopeLeave(string $scope, callable $callback): self
     {
         $this->assertMutable();
@@ -325,6 +408,9 @@ final class ContainerBuilder
         return $this;
     }
 
+    /**
+     * Load the artifact against this finalized graph and lock its matching fallback runtime.
+     */
     public function production(string $path): ProductionContainer
     {
         $graph = $this->finalizeGraph();
@@ -342,6 +428,9 @@ final class ContainerBuilder
         }
     }
 
+    /**
+     * Load with an expected digest while retaining graph and fallback identity validation.
+     */
     public function productionPrevalidated(string $path, string $digest): ProductionContainer
     {
         $graph = $this->finalizeGraph();
@@ -360,6 +449,9 @@ final class ContainerBuilder
         }
     }
 
+    /**
+     * Associate an attribute type with its resolver before freezing configuration.
+     */
     public function registerAttributeResolver(string $attributeFqcn, string $resolverFqcn): self
     {
         $this->assertMutable();
@@ -371,6 +463,9 @@ final class ContainerBuilder
         return $this;
     }
 
+    /**
+     * Set the explicit non-empty identity required to authenticate opaque fallback behavior.
+     */
     public function releaseIdentity(string $identity): self
     {
         $this->assertMutable();
@@ -383,7 +478,11 @@ final class ContainerBuilder
         return $this;
     }
 
-    /** @param array<int, string>|null $tags */
+    /**
+     * Override lifetime or tags only for the specified environment.
+     *
+     * @param array<int, string>|null $tags
+     */
     public function setDefinitionMetaForEnv(
         string $environment,
         string $id,
@@ -406,6 +505,9 @@ final class ContainerBuilder
         return $this;
     }
 
+    /**
+     * Select the environment used when freezing bindings and definition metadata.
+     */
     public function setEnvironment(string $environment): self
     {
         $this->assertMutable();
@@ -414,6 +516,9 @@ final class ContainerBuilder
         return $this;
     }
 
+    /**
+     * Remove a declaration and its builder-owned cache and dynamic-service eligibility.
+     */
     public function unbind(string $id): self
     {
         $this->assertMutable();
@@ -424,7 +529,11 @@ final class ContainerBuilder
         return $this;
     }
 
-    /** @return array<int, string> */
+    /**
+     * Combine target, graph and cache issues; strict mode throws instead of returning issues.
+     *
+     * @return array<int, string>
+     */
     public function validate(bool $strict = false, bool $resolveFactories = false): array
     {
         $issues = [
@@ -441,6 +550,9 @@ final class ContainerBuilder
         return $issues;
     }
 
+    /**
+     * Declare a literal value without interpreting strings or arrays as executable recipes.
+     */
     public function value(string $id, mixed $value): self
     {
         $this->registerExplicit($id, new ValueDefinition($value));
@@ -448,7 +560,11 @@ final class ContainerBuilder
         return $this;
     }
 
-    /** @return array{hits: int, written: int, skipped: int, failed: int} */
+    /**
+     * Finalize the graph and persist eligible values without running resolution hooks.
+     *
+     * @return array{hits: int, written: int, skipped: int, failed: int}
+     */
     public function warmDefinitionCache(): array
     {
         $this->finalizeGraph();
@@ -456,6 +572,9 @@ final class ContainerBuilder
         return $this->configuration->definitions()->warmDefinitionCache();
     }
 
+    /**
+     * Start a consumer-specific override while the configuration is still mutable.
+     */
     public function when(string $consumer): ContextualBindingBuilder
     {
         $this->assertMutable();

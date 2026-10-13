@@ -61,8 +61,6 @@ trait Fence
      * If the class using this trait has `FENCE_KEYED = false`, this will be
      * an array with a single element `__single`.  Otherwise, this will be an
      * array of the strings used as the first argument to `instance()`.
-     */
-    /**
      * @return array<int, string>
      */
     final public static function getKeys(): array

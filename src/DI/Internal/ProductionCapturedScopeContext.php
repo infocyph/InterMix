@@ -10,6 +10,9 @@ use Infocyph\InterMix\Exceptions\ContainerException;
 /** @internal */
 final readonly class ProductionCapturedScopeContext implements ScopeContext
 {
+    /**
+     * Retain a native scope handle with its owner and optional matching fallback handle.
+     */
     public function __construct(
         private object $owner,
         private ScopeState $scope,
@@ -18,18 +21,29 @@ final readonly class ProductionCapturedScopeContext implements ScopeContext
 
     private function __clone(): void {}
 
+    /**
+     * Reject serialization because scope ownership and values are process-local.
+     */
     public function __serialize(): array
     {
         throw new ContainerException('Scope contexts are process-local and cannot be serialized.');
     }
 
-    /** @param array<array-key, mixed> $data */
+    /**
+     * Reject deserialization because scope handles cannot be reconstructed across processes.
+     *
+     * @param array<array-key, mixed> $data
+     */
     public function __unserialize(array $data): void
     {
         throw new ContainerException('Scope contexts are process-local and cannot be unserialized.');
     }
 
-    /** @return array{ScopeState, ScopeContext|null} */
+    /**
+     * Reject a different owner before exposing the native frame and fallback handle.
+     *
+     * @return array{ScopeState, ScopeContext|null}
+     */
     public function unwrap(object $owner): array
     {
         if ($this->owner !== $owner) {

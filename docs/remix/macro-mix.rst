@@ -37,7 +37,7 @@ Include the trait in any class:
        // Optional: serialize registry mutations
        public const ENABLE_LOCK = true;
 
-       protected string $color = 'gold';
+       public string $color = 'gold';
    }
 
 Registering a Macro
@@ -48,7 +48,7 @@ Registering a Macro
    public static function macro(string $name, callable $macro): void
 
 - ``$name``: method name you want to add.
-- ``$macro``: a callable or object. Closures are wrapped so that if they return
+- ``$macro``: a PHP callable, including a callable array or invokable object. If it returns
   ``null``, ``$this`` is returned instead for chaining.
 
 **Example:**
@@ -89,19 +89,20 @@ Any time you call an undefined method (static or instance), ``MacroMix`` checks
 its internal registry:
 
 - If the macro exists, it invokes it—binding ``$this`` if needed.
+- Static invocation requires a static closure or another callable that needs no instance binding.
 - If the macro returns ``null``, the trait yields ``$this`` (or the class name,
   if invoked statically).
 - If the macro is not found, it throws:
 
 .. code-block:: text
 
-   Exception: Method ClassName::missingMacro does not exist.
+   BadMethodCallException: Method ClassName::missingMacro does not exist.
 
 **Example:**
 
 .. code-block:: php
 
-   House::macro('floor', fn() => 'I am the floor');
+   House::macro('floor', static fn() => 'I am the floor');
    echo House::floor();  // “I am the floor”
 
 Loading from Configuration
@@ -137,6 +138,7 @@ Loading from Annotations
 
 - Scans public method PHPDoc for ``@Macro("name")``.
 - Registers the method under the given name.
+- Pass an object for instance methods. A class name is supported only for static methods; InterMix does not construct the mixin implicitly.
 
 **Example:**
 
@@ -153,7 +155,7 @@ Loading from Annotations
        }
    }
 
-   House::loadMacrosFromAnnotations(MyMixin::class);
+   House::loadMacrosFromAnnotations(new MyMixin());
 
    $h = new House();
    echo $h->shout('hello');  // “HELLO!”
@@ -190,7 +192,8 @@ Mixing in an Entire Class or Object
 
 - ``$mixin``: either an object instance or class name.
 - Public and protected methods are reflected.
-- Static methods wrap static invocation; non-static methods bind to instance.
+- Static methods invoke the reflected class; non-static methods invoke the supplied mixin object.
+- Pass an object when mixing instance methods; class-name input requires static methods.
 - ``$replace = false`` skips existing macro names.
 
 **Example:**
@@ -224,7 +227,7 @@ Results in:
 
 .. code-block:: text
 
-   Exception: Method App\House::nonexistent does not exist.
+   BadMethodCallException: Method App\House::nonexistent does not exist.
 
 Mutation Locking
 ================

@@ -75,14 +75,15 @@ when()
         mixed $value = null,
         ?callable $callback = null,
         ?callable $default = null
-    ): static|mixed
+    )
 
 **Behavior:**
 
 - **No arguments:** Returns a ``ConditionalProxy`` that captures the next property or method as the condition.
 - **One argument ``$value``:** Returns a proxy using ``$value`` as the condition.
 - **With ``$value`` and ``$callback``:**
-  - If ``$value`` is truthy (or ``$value()`` returns truthy), runs ``$callback($this, $value)`` and returns the result (or ``$this`` if null).
+  - A Closure condition is evaluated with the current object as its argument.
+  - If the resulting value is truthy, runs ``$callback($this, $value)`` and returns the result (or ``$this`` if null).
   - Otherwise, if a ``$default`` is provided, runs ``$default($this, $value)`` and returns that (or ``$this`` if null).
   - If neither applies, returns ``$this``.
 
@@ -106,13 +107,14 @@ unless()
         mixed $value = null,
         ?callable $callback = null,
         ?callable $default = null
-    ): static|mixed
+    )
 
 **Behavior:**
 
 Same as ``when()``, but with inverted condition:
 
-- If ``$value`` is falsy (or ``$value()`` returns falsy), run ``$callback($this, $value)``.
+- A Closure condition is evaluated with the current object as its argument.
+- If the resulting value is falsy, run ``$callback($this, $value)``.
 - Else, if ``$default`` is provided, run ``$default($this, $value)``.
 - Otherwise return ``$this``.
 

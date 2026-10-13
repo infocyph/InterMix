@@ -15,6 +15,9 @@ final class AttributeRegistry
     /** @var array<class-string, AttributeResolverInterface> */
     private array $map = [];
 
+    /**
+     * Associate attribute resolver instances with the container that resolves their dependencies.
+     */
     public function __construct(private readonly RuntimeContainerInterface $container) {}
 
     /**
@@ -68,6 +71,8 @@ final class AttributeRegistry
     }
 
     /**
+     * Expose registered attribute-to-resolver class mappings without resolving instances.
+     *
      * @return array<class-string, class-string<AttributeResolverInterface>>
      * @internal
      */
@@ -106,6 +111,8 @@ final class AttributeRegistry
     }
 
     /**
+     * List attribute types with explicit resolver registrations.
+     *
      * @return array<int, class-string> Registered attribute classes.
      * @internal
      */

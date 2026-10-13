@@ -117,6 +117,8 @@ final readonly class InjectedCall
     }
 
     /**
+     * Expose the shared class and parameter resolvers for deferred compiled fallback wiring.
+     *
      * @return array{ClassResolver, ParameterResolver} Active reflection-backed resolvers.
      * @internal
      */

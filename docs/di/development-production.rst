@@ -44,8 +44,13 @@ Record the ``graph`` returned by ``compile()`` in immutable deployment metadata.
 The loader validates the runtime digest, build identity, ABI, PHP version, expected graph and environment.
 Declared inputs compile natively and accept host-supplied seeds inside an active scope.
 It rejects artifacts that need runtime factories, hooks or other fallback configuration.
-Use the configured builder's ``production()`` for those graphs and for applications needing dynamic invocation or construction.
-The standalone runtime executes its compiled graph without a configuration fallback.
+Use the configured builder's ``production()`` for graphs that require fallback configuration.
+Source-free runtimes also support ``make()`` and ``invoke()``. Their runtime
+invoker retains the artifact's frozen injection, attribute and auto-binding
+options and resolves declared dependencies through the compiled runtime.
+It does not reconstruct the original builder or supply omitted dynamic definitions.
+
+See :ref:`di.compiled-resolvers` for ABI compatibility and trusted prevalidated loading.
 
 Reconfiguration
 ---------------

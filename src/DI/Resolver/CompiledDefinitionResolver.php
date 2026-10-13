@@ -15,6 +15,9 @@ namespace Infocyph\InterMix\DI\Resolver;
 final class CompiledDefinitionResolver extends DefinitionResolver
 {
     /**
+     * Prefer the active legacy compiled resolver and retain dynamic handling for unsupported
+     * definitions.
+     *
      * @param string $name Registered definition identifier.
      */
     #[\Override]

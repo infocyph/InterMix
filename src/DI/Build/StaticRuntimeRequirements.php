@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Build;
 
 /**
- * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
+ * @phpstan-type ServiceArgument array{kind: 'service', id: string, bind?: class-string, nullable?: bool}|array{kind: 'value', code: string, bind?: class-string, nullable?: bool}
  * @phpstan-type PropertyPlan array{declaring: class-string, property: string, static: bool, argument: ServiceArgument|null, runtime?: 'attribute'|'assign'}
  * @phpstan-type MethodPlan array{method: string, arguments: list<ServiceArgument>, dependencies: list<string>, parameterNames?: list<string>, static?: bool, bound?: bool, runtime?: bool}
  * @phpstan-type ServicePlan array{kind: string, properties: list<PropertyPlan>, postMethod?: MethodPlan|null, invocation?: MethodPlan}
@@ -14,6 +14,9 @@ namespace Infocyph\InterMix\DI\Build;
 final class StaticRuntimeRequirements
 {
     /**
+     * Collect unsupported definitions, runtime injection islands and lifecycle behavior requiring
+     * protected fallback.
+     *
      * @param array<string, ServicePlan> $plans
      * @param array<string, string> $skipped
      * @return array<string, string>

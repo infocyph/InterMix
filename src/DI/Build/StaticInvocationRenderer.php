@@ -7,7 +7,7 @@ namespace Infocyph\InterMix\DI\Build;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 
 /**
- * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
+ * @phpstan-type ServiceArgument array{kind: 'service', id: string, bind?: class-string, nullable?: bool}|array{kind: 'value', code: string, bind?: class-string, nullable?: bool}
  * @phpstan-type PropertyPlan array{declaring: class-string, property: string, static: bool, argument: ServiceArgument|null, runtime?: 'attribute'|'assign'}
  * @phpstan-type MethodPlan array{method: string, arguments: list<ServiceArgument>, dependencies: list<string>, runtime?: bool}
  * @phpstan-type InvocationPlan array{kind: 'invocation', class: class-string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, invocation: MethodPlan, dependencies: list<string>}
@@ -16,6 +16,9 @@ use Infocyph\InterMix\DI\Support\LifetimeEnum;
 final class StaticInvocationRenderer
 {
     /**
+     * Render invocation resolution with seed precedence, lifetime caching and optional lifecycle
+     * hooks.
+     *
      * @param InvocationPlan $plan
      * @param array<string, int> $slots
      */
@@ -49,7 +52,11 @@ final class StaticInvocationRenderer
         return $source . "    }\n\n";
     }
 
-    /** @param array<string, array{kind: string, lifetime: LifetimeEnum}> $plans */
+    /**
+     * Emit invocation singleton storage only when a plan requires it.
+     *
+     * @param array<string, array{kind: string, lifetime: LifetimeEnum}> $plans
+     */
     public function renderSingletonProperties(array $plans): string
     {
         foreach ($plans as $plan) {
@@ -59,17 +66,6 @@ final class StaticInvocationRenderer
         }
 
         return '';
-    }
-
-    /**
-     * @param ServiceArgument $argument
-     * @param array<string, int> $slots
-     */
-    private function argumentExpression(array $argument, array $slots): string
-    {
-        return $argument['kind'] === 'service'
-            ? '$this->s' . $slots[$argument['id']] . '()'
-            : $argument['code'];
     }
 
     private function cacheGuard(int $slot, LifetimeEnum $lifetime): string
@@ -143,7 +139,7 @@ final class StaticInvocationRenderer
     {
         $constructorArguments = [];
         foreach ($plan['arguments'] as $argument) {
-            $constructorArguments[] = $this->argumentExpression($argument, $slots);
+            $constructorArguments[] = StaticRuntimeIslandRenderer::argumentExpression($argument, $slots);
         }
 
         $class = '\\' . ltrim($plan['class'], '\\');

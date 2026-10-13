@@ -26,6 +26,8 @@ use ReflectionUnionType;
 final class StaticCompoundTypePlanner
 {
     /**
+     * Select a provably compatible contextual, declared or autowired dependency for compound types.
+     *
      * @param ReflectionClass<object> $consumer
      * @return ServiceReference|string|null
      */

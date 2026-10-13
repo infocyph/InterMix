@@ -53,6 +53,9 @@ class Container implements RuntimeContainerInterface
     /** @var array<string, true> */
     private array $validatedScopeSeedIds = [];
 
+    /**
+     * Create container-owned repository and invocation state with deferred invoker initialization.
+     */
     public function __construct(protected readonly string $instanceAlias = 'intermix.default')
     {
         $this->repository = new ConcurrentRepository($this, $this->instanceAlias);
@@ -60,12 +63,19 @@ class Container implements RuntimeContainerInterface
         $this->resolver = $this->resolverFactory();
     }
 
+    /**
+     * Capture an active, container-owned scope for propagation between in-process carriers.
+     */
     public function captureScopeContext(): ScopeContext
     {
         return $this->scopeContextRepository()->captureScopeContext();
     }
 
-    /** @return array<int|string, mixed> */
+    /**
+     * Capture a verbose resolution trace and restore the prior tracing settings after errors.
+     *
+     * @return array<int|string, mixed>
+     */
     public function debug(string $id): array
     {
         $tracer = $this->repository->tracer();
@@ -85,7 +95,11 @@ class Container implements RuntimeContainerInterface
         return $tracer->toArray();
     }
 
-    /** @throws \Exception|\Psr\Cache\InvalidArgumentException */
+    /**
+     * Resolve a declared entry, preserving missing-entry and construction-failure distinctions.
+     *
+     * @throws \Exception|\Psr\Cache\InvalidArgumentException
+     */
     public function get(string $id): mixed
     {
         try {
@@ -113,35 +127,57 @@ class Container implements RuntimeContainerInterface
         }
     }
 
-    /** @phpstan-impure */
+    /**
+     * Check declaration presence without constructing the service.
+     *
+     * @phpstan-impure
+     */
     public function has(string $id): bool
     {
         return $this->invocationManager->has($id);
     }
 
-    /** @param array<int|string, mixed> $arguments */
+    /**
+     * Resolve missing callable arguments through the container while honoring explicit arguments.
+     *
+     * @param array<int|string, mixed> $arguments
+     */
     public function invoke(callable $callable, array $arguments = []): mixed
     {
         return $this->invocationManager->invoke($callable, $arguments);
     }
 
-    /** @param array<int|string, mixed> $arguments */
+    /**
+     * Construct a fresh instance without reusing the service lifetime cache.
+     *
+     * @param array<int|string, mixed> $arguments
+     */
     public function make(string $class, array $arguments = []): object
     {
         return $this->invocationManager->make($class, $arguments);
     }
 
+    /**
+     * Create a tagged middleware pipeline that resolves stages when executed.
+     */
     public function pipeline(string $tag): TaggedPipeline
     {
         return new TaggedPipeline($this, $tag);
     }
 
+    /**
+     * Release the current carrier's scope state and run its cleanup hooks.
+     */
     public function resetCurrentExecutionScope(): void
     {
         $this->scopeContextRepository()->resetCurrentExecutionScope();
     }
 
-    /** @return iterable<string, mixed> */
+    /**
+     * Resolve tagged entries lazily; an iterator captured in a scope must remain in that scope.
+     *
+     * @return iterable<string, mixed>
+     */
     public function tagged(string $tag): iterable
     {
         $repository = $this->scopeContextRepository();
@@ -161,12 +197,19 @@ class Container implements RuntimeContainerInterface
         })();
     }
 
+    /**
+     * Reuse the container-owned tracer; tracing remains disabled until configured.
+     */
     public function tracer(): DebugTracer
     {
         return $this->repository->tracer();
     }
 
-    /** @param array<string, mixed> $instances */
+    /**
+     * Run work with validated scoped seeds and release the scope even when work fails.
+     *
+     * @param array<string, mixed> $instances
+     */
     public function withinScope(string $scope, callable $callback, array $instances = []): mixed
     {
         if ($instances !== []) {
@@ -187,6 +230,9 @@ class Container implements RuntimeContainerInterface
         return $result;
     }
 
+    /**
+     * Attach an active scope handle for the callback and detach it afterward.
+     */
     public function withinScopeContext(ScopeContext $scopeContext, callable $callback): mixed
     {
         $repository = $this->scopeContextRepository();
@@ -199,6 +245,9 @@ class Container implements RuntimeContainerInterface
         }
     }
 
+    /**
+     * Bind an identifier to another entry using the requested lifetime.
+     */
     protected function alias(string $id, string $target, LifetimeEnum $lifetime = LifetimeEnum::Singleton): self
     {
         $this->definitions()->bind($id, $target, $lifetime);
@@ -206,12 +255,19 @@ class Container implements RuntimeContainerInterface
         return $this;
     }
 
+    /**
+     * Access container-owned attribute registrations used during dependency injection.
+     */
     protected function attributeRegistry(): AttributeRegistry
     {
         return $this->repository->attributeRegistry();
     }
 
-    /** @param array<int, string> $tags */
+    /**
+     * Register a definition with lifetime and tags; locked configuration rejects mutations.
+     *
+     * @param array<int, string> $tags
+     */
     protected function bind(
         string $id,
         mixed $definition,
@@ -223,7 +279,11 @@ class Container implements RuntimeContainerInterface
         return $this;
     }
 
-    /** @param array<int, string> $tags */
+    /**
+     * Wrap a runtime closure for direct invocation with this configuration container.
+     *
+     * @param array<int, string> $tags
+     */
     protected function bindFactory(
         string $id,
         Closure $factory,
@@ -233,13 +293,21 @@ class Container implements RuntimeContainerInterface
         return $this->bind($id, new DirectFactory($factory, $this), $lifetime, $tags);
     }
 
-    /** @return null|array{path: string, fingerprint: string, compiled: array<int, string>, skipped: array<string, string>} */
+    /**
+     * Expose the most recent compilation result, or null before compilation.
+     *
+     * @return null|array{path: string, fingerprint: string, compiled: array<int, string>, skipped: array<string, string>}
+     */
     protected function compilationReport(): ?array
     {
         return $this->compilationReport;
     }
 
-    /** @throws ContainerException|ReflectionException */
+    /**
+     * Write the legacy compiled resolver and optionally activate it on this configuration.
+     *
+     * @throws ContainerException|ReflectionException
+     */
     protected function compileTo(string $path, bool $load = false): self
     {
         $compiled = new CompiledResolverGenerator()->generate($this, $path);
@@ -252,6 +320,9 @@ class Container implements RuntimeContainerInterface
         return $this;
     }
 
+    /**
+     * Copy configuration into another runtime without sharing resolved execution state.
+     */
     protected function copyConfigurationInto(self $runtime, bool $locked): void
     {
         $this->repository->copyConfigurationTo($runtime->repository);
@@ -263,13 +334,17 @@ class Container implements RuntimeContainerInterface
         }
     }
 
+    /**
+     * Reuse the definition manager; validate the configuration host only on first use.
+     */
     protected function definitions(): DefinitionManager
     {
-        $host = $this->configurationHost();
-
-        return $this->definitionManager ??= new DefinitionManager($this->repository, $host);
+        return $this->definitionManager ??= new DefinitionManager($this->repository, $this->configurationHost());
     }
 
+    /**
+     * Control how future class bindings are stored without eagerly resolving existing entries.
+     */
     protected function enableLazyLoading(bool $lazy = true): self
     {
         $this->repository->enableLazyLoading($lazy);
@@ -277,7 +352,11 @@ class Container implements RuntimeContainerInterface
         return $this;
     }
 
-    /** @param array<string, mixed> $instances */
+    /**
+     * Push an execution scope with supplied seeds; scope names cannot repeat in its ancestry.
+     *
+     * @param array<string, mixed> $instances
+     */
     protected function enterScope(string $scope, array $instances = []): self
     {
         $this->repository->enterScope($scope, $instances);
@@ -285,7 +364,11 @@ class Container implements RuntimeContainerInterface
         return $this;
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * Return the traced dependency graph, optionally resolving an entry before exporting.
+     *
+     * @return array<string, mixed>
+     */
     protected function exportGraph(?string $warmFromId = null, bool $clear = false): array
     {
         if ($warmFromId !== null) {
@@ -295,12 +378,19 @@ class Container implements RuntimeContainerInterface
         return $this->repository->tracer()->dependencyGraph($clear);
     }
 
+    /**
+     * Start a closure binding whose lifetime is selected before registration.
+     */
     protected function factory(string $id, Closure $factory): PendingFactoryBinding
     {
         return new PendingFactoryBinding($this->configurationHost(), $id, $factory);
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * Resolve all entries currently associated with the tag.
+     *
+     * @return array<string, mixed>
+     */
     protected function findByTag(string $tag): array
     {
         $matches = [];
@@ -311,7 +401,11 @@ class Container implements RuntimeContainerInterface
         return $matches;
     }
 
-    /** @return iterable<string, callable(): mixed> */
+    /**
+     * Yield deferred resolvers so each tagged entry is constructed only when requested.
+     *
+     * @return iterable<string, callable(): mixed>
+     */
     protected function findByTagLazy(string $tag): iterable
     {
         foreach ($this->repository->getIdsByTag($tag) as $id) {
@@ -332,7 +426,11 @@ class Container implements RuntimeContainerInterface
         return $runtime;
     }
 
-    /** @internal */
+    /**
+     * Materialize the deferred invoker once and reject invalid resolver implementations.
+     *
+     * @internal
+     */
     protected function getCurrentResolver(): CompiledCall|InjectedCall|GenericCall
     {
         if ($this->resolver instanceof Closure) {
@@ -356,22 +454,35 @@ class Container implements RuntimeContainerInterface
         return $this->resolver;
     }
 
-    /** @internal */
+    /**
+     * Expose internal configuration and resolution state to trusted library collaborators.
+     *
+     * @internal
+     */
     protected function getRepository(): Repository
     {
         return $this->repository;
     }
 
+    /**
+     * Reuse the container-owned invocation manager and its lifetime guards.
+     */
     protected function invocation(): InvocationManager
     {
         return $this->invocationManager;
     }
 
+    /**
+     * Check whether an identifier has completed resolution, without resolving it.
+     */
     protected function isResolved(string $id): bool
     {
         return $this->repository->isResolved($id);
     }
 
+    /**
+     * Run cleanup for the current scope and restore its parent.
+     */
     protected function leaveScope(): self
     {
         $this->repository->leaveScope();
@@ -379,6 +490,9 @@ class Container implements RuntimeContainerInterface
         return $this;
     }
 
+    /**
+     * Prevent subsequent mutations of this container's configuration.
+     */
     protected function lock(): self
     {
         $this->repository->lock();
@@ -386,6 +500,9 @@ class Container implements RuntimeContainerInterface
         return $this;
     }
 
+    /**
+     * Register a callback that may supply definitions when legacy resolution misses.
+     */
     protected function onMissing(callable $callback): self
     {
         $this->repository->onMissing($callback);
@@ -393,6 +510,9 @@ class Container implements RuntimeContainerInterface
         return $this;
     }
 
+    /**
+     * Register a callback invoked after a service finishes construction.
+     */
     protected function onResolved(string $id, callable $callback): self
     {
         $this->repository->onResolved($id, $callback);
@@ -400,6 +520,9 @@ class Container implements RuntimeContainerInterface
         return $this;
     }
 
+    /**
+     * Register a callback invoked before a service begins construction.
+     */
     protected function onResolving(string $id, callable $callback): self
     {
         $this->repository->onResolving($id, $callback);
@@ -407,6 +530,9 @@ class Container implements RuntimeContainerInterface
         return $this;
     }
 
+    /**
+     * Register cleanup work for the named scope.
+     */
     protected function onScopeLeave(string $scope, callable $callback): self
     {
         $this->repository->onScopeLeave($scope, $callback);
@@ -414,21 +540,27 @@ class Container implements RuntimeContainerInterface
         return $this;
     }
 
+    /**
+     * Reuse the options manager; validate the configuration host only on first use.
+     */
     protected function options(): OptionsManager
     {
-        $host = $this->configurationHost();
-
-        return $this->optionsManager ??= new OptionsManager($this->repository, $host);
+        return $this->optionsManager ??= new OptionsManager($this->repository, $this->configurationHost());
     }
 
+    /**
+     * Reuse the registration manager; validate the configuration host only on first use.
+     */
     protected function registration(): RegistrationManager
     {
-        $host = $this->configurationHost();
-
-        return $this->registrationManager ??= new RegistrationManager($this->repository, $host);
+        return $this->registrationManager ??= new RegistrationManager($this->repository, $this->configurationHost());
     }
 
-    /** @param array<int, string> $tags */
+    /**
+     * Register a service reused within each scope; omitted definitions use the identifier.
+     *
+     * @param array<int, string> $tags
+     */
     protected function scoped(string $id, mixed $definition = null, array $tags = []): self
     {
         $this->definitions()->bind($id, $definition ?? $id, LifetimeEnum::Scoped, $tags);
@@ -436,6 +568,9 @@ class Container implements RuntimeContainerInterface
         return $this;
     }
 
+    /**
+     * Select environment overrides and invalidate resolution state affected by the change.
+     */
     protected function setEnvironment(string $env): self
     {
         $this->repository->setEnvironment($env);
@@ -444,6 +579,8 @@ class Container implements RuntimeContainerInterface
     }
 
     /**
+     * Switch the injection strategy and invalidate cached resolution configuration.
+     *
      * @param class-string<InjectedCall|GenericCall> $resolverClass
      * @internal
      */
@@ -458,7 +595,11 @@ class Container implements RuntimeContainerInterface
         $this->resolver = $this->resolverFactory();
     }
 
-    /** @param array<int, string> $tags */
+    /**
+     * Register a service reused by the container; omitted definitions use the identifier.
+     *
+     * @param array<int, string> $tags
+     */
     protected function singleton(string $id, mixed $definition = null, array $tags = []): self
     {
         $this->definitions()->bind($id, $definition ?? $id, LifetimeEnum::Singleton, $tags);
@@ -466,7 +607,11 @@ class Container implements RuntimeContainerInterface
         return $this;
     }
 
-    /** @param array<int, string> $tags */
+    /**
+     * Register a service rebuilt for each resolution; omitted definitions use the identifier.
+     *
+     * @param array<int, string> $tags
+     */
     protected function transient(string $id, mixed $definition = null, array $tags = []): self
     {
         $this->definitions()->bind($id, $definition ?? $id, LifetimeEnum::Transient, $tags);
@@ -474,6 +619,9 @@ class Container implements RuntimeContainerInterface
         return $this;
     }
 
+    /**
+     * Remove a definition and invalidate the resolution state associated with it.
+     */
     protected function unbind(string $id): self
     {
         $this->definitions()->unbind($id);
@@ -481,6 +629,9 @@ class Container implements RuntimeContainerInterface
         return $this;
     }
 
+    /**
+     * Validate a legacy resolver against this configuration before activating it.
+     */
     protected function useCompiled(string $path): self
     {
         $compiled = new CompiledResolverGenerator()->load($this, $path);
@@ -490,6 +641,9 @@ class Container implements RuntimeContainerInterface
         return $this;
     }
 
+    /**
+     * Activate a legacy resolver using the caller's expected artifact fingerprint.
+     */
     protected function usePrevalidated(string $path, string $fingerprint): self
     {
         $compiled = new CompiledResolverGenerator()->loadPrevalidated($path, $fingerprint);
@@ -499,7 +653,11 @@ class Container implements RuntimeContainerInterface
         return $this;
     }
 
-    /** @return array<int, string> */
+    /**
+     * Report invalid targets, optionally resolve factories, and throw when strict validation fails.
+     *
+     * @return array<int, string>
+     */
     protected function validate(bool $strict = false, bool $resolveFactories = false): array
     {
         $issues = $this->validateDefinitionTargets();
@@ -513,7 +671,11 @@ class Container implements RuntimeContainerInterface
         return $issues;
     }
 
-    /** @param array<string, mixed> $instances */
+    /**
+     * Reject seeds for undeclared, aliased or non-scoped entries before entering a scope.
+     *
+     * @param array<string, mixed> $instances
+     */
     protected function validateScopeSeeds(array $instances): void
     {
         foreach ($instances as $id => $_instance) {
@@ -531,6 +693,9 @@ class Container implements RuntimeContainerInterface
         }
     }
 
+    /**
+     * Store a singleton binding using the legacy definition interpretation rules.
+     */
     protected function value(string $id, mixed $value): self
     {
         $this->definitions()->bind($id, $value, LifetimeEnum::Singleton);
@@ -538,6 +703,9 @@ class Container implements RuntimeContainerInterface
         return $this;
     }
 
+    /**
+     * Begin a dependency override restricted to the specified consuming class.
+     */
     protected function when(string $consumer): ContextualBindingBuilder
     {
         return new ContextualBindingBuilder($this, $this->repository, $consumer);

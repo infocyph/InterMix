@@ -11,11 +11,17 @@ final class TaggedPipeline
 {
     private mixed $passable = null;
 
+    /**
+     * Associate a middleware tag with the runtime that will resolve its stages.
+     */
     public function __construct(
         private readonly RuntimeContainerInterface $container,
         private readonly string $tag,
     ) {}
 
+    /**
+     * Set the payload forwarded through the tagged middleware chain.
+     */
     public function send(mixed $passable): self
     {
         $this->passable = $passable;
@@ -24,6 +30,9 @@ final class TaggedPipeline
     }
 
     /**
+     * Transform the payload through tagged callable, handle or process stages in registration
+     * order.
+     *
      * @throws ContainerException
      */
     public function thenReturn(): mixed

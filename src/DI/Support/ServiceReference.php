@@ -11,6 +11,9 @@ use InvalidArgumentException;
  */
 final readonly class ServiceReference
 {
+    /**
+     * Represent an explicit dependency lookup rather than a literal string argument.
+     */
     public function __construct(public string $id)
     {
         if ($this->id === '') {

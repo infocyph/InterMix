@@ -43,6 +43,10 @@ final class ExecutionContext
     /** @var WeakMap<object, string>|null */
     private static ?WeakMap $objectCarrierIds = null;
 
+    /**
+     * Return a stable live-carrier identity, or null for ordinary sequential execution; Fibers are
+     * held weakly.
+     */
     public static function id(): ?string
     {
         $fiber = Fiber::getCurrent();

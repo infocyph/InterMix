@@ -8,6 +8,8 @@ namespace Infocyph\InterMix\DI\Support;
 final readonly class AutowireDefinition
 {
     /**
+     * Store an explicit class recipe with constructor and property overrides for compilation.
+     *
      * @param class-string $class
      * @param array<int|string, mixed> $arguments
      * @param array<string, mixed> $properties

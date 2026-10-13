@@ -30,30 +30,55 @@ trait ManagesDefinitionCache
 
     private int $definitionCacheRevision = 0;
 
+    /**
+     * Provide the container namespace used to isolate persistent cache keys.
+     */
     abstract public function getAlias(): string;
 
+    /**
+     * Provide the selected environment used to isolate persistent cache keys.
+     */
     abstract public function getEnvironment(): ?string;
 
-    /** @internal */
+    /**
+     * Notify the configuration owner when persistent cache settings change.
+     *
+     * @internal
+     */
     abstract public function notifyConfigurationMutation(): void;
 
+    /**
+     * Reject persistent cache configuration changes after runtime configuration is locked.
+     */
     abstract protected function checkIfLocked(): void;
 
+    /**
+     * Expose the configured PSR-6 pool, or null when persistent caching is disabled.
+     */
     public function getDefinitionCache(): ?CacheItemPoolInterface
     {
         return $this->definitionCache;
     }
 
+    /**
+     * Check whether an entry was explicitly opted into persistent value caching.
+     */
     public function isDefinitionCacheEligible(string $id): bool
     {
         return isset($this->definitionCacheEligibleIds[$id]);
     }
 
+    /**
+     * Check whether cache failures may fall back to normal definition resolution.
+     */
     public function isDefinitionCacheFailOpen(): bool
     {
         return $this->definitionCacheFailOpen;
     }
 
+    /**
+     * Build a deterministic PSR-6 key isolated by namespace, generation, environment and revision.
+     */
     public function makeDefinitionCacheKey(string $definition): string
     {
         if ($this->definitionCacheNamespace !== null) {
@@ -85,12 +110,18 @@ trait ManagesDefinitionCache
             . substr(hash('xxh128', $definition . "\0" . ($this->getEnvironment() ?? 'default')), 0, 16);
     }
 
+    /**
+     * Invalidate the cached key prefix after a local configuration revision.
+     */
     public function rotateDefinitionCacheGeneration(): void
     {
         ++$this->definitionCacheRevision;
         $this->definitionCachePrefix = null;
     }
 
+    /**
+     * Configure the pool and cache isolation policy, rejecting empty explicit identities.
+     */
     public function setDefinitionCache(
         CacheItemPoolInterface $cache,
         ?string $generation = null,
@@ -129,6 +160,9 @@ trait ManagesDefinitionCache
         $this->definitionCachePrefix = null;
     }
 
+    /**
+     * Opt an entry into or out of explicit-only persistent caching.
+     */
     public function setDefinitionCacheEligible(string $id, bool $eligible = true): void
     {
         $this->checkIfLocked();
@@ -141,11 +175,17 @@ trait ManagesDefinitionCache
         unset($this->definitionCacheEligibleIds[$id]);
     }
 
+    /**
+     * Reject objects and unbounded structures from persistent definition value storage.
+     */
     public function shouldPersistDefinitionValue(mixed $value): bool
     {
         return BoundedValueInspector::isScalarNullArray($value);
     }
 
+    /**
+     * Require a configured pool and, in explicit-only mode, the entry's eligibility.
+     */
     public function usesDefinitionCacheFor(string $id): bool
     {
         return $this->definitionCache !== null

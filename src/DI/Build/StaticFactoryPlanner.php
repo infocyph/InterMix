@@ -8,13 +8,18 @@ use Infocyph\InterMix\DI\Support\FactoryDefinition;
 use Infocyph\InterMix\DI\Support\ServiceReference;
 
 /**
- * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
+ * @phpstan-type ServiceArgument array{kind: 'service', id: string, bind?: class-string, nullable?: bool}|array{kind: 'value', code: string, bind?: class-string, nullable?: bool}
  * @phpstan-type FactoryPlan array{kind: 'factory', class: class-string, method: string|null, lifetime: \Infocyph\InterMix\DI\Support\LifetimeEnum, arguments: list<ServiceArgument>, properties: list<array{declaring: class-string, property: string, static: bool, argument: ServiceArgument}>, dependencies: list<string>}
  * @internal
  */
 final class StaticFactoryPlanner
 {
-    /** @return FactoryPlan */
+    /**
+     * Translate an exportable constructor or static factory into literal and service-slot
+     * arguments.
+     *
+     * @return FactoryPlan
+     */
     public function plan(DefinitionGraph $graph, string $id, FactoryDefinition $definition): array
     {
         $arguments = [];

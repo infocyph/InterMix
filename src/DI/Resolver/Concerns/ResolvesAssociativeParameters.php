@@ -31,6 +31,20 @@ trait ResolvesAssociativeParameters
         }
     }
 
+    private function autoBindParameter(ReflectionParameter $parameter, mixed $value): mixed
+    {
+        $type = $parameter->getType();
+        if (!$type instanceof \ReflectionNamedType || $type->isBuiltin()) {
+            return $value;
+        }
+
+        $class = ReflectionResource::getClassReflection(
+            $this->normalizeSelfParent($type->getName(), $parameter->getDeclaringClass()),
+        )->getName();
+
+        return self::bindValue($class, $value, $type->allowsNull());
+    }
+
     /**
      * @param array<int, ReflectionParameter> $availableParams
      * @param array<int|string, mixed> $suppliedParameters
@@ -124,10 +138,31 @@ trait ResolvesAssociativeParameters
         return AttributeResolution::Unresolved;
     }
 
+    /** @param array<int, array<int, \ReflectionNamedType>> $groups */
+    private function resolveCompatibleDefinition(ReflectionParameter $parameter, array $groups): mixed
+    {
+        $definition = $this->resolveByDefinitionType($parameter->getName(), $parameter);
+        if ($definition === AttributeResolution::Unresolved) {
+            return $definition;
+        }
+        if ($this->satisfiesAnyTypeGroup($definition, $groups, $parameter)) {
+            return $definition;
+        }
+        if ($this->repository->isAutoBindEnabled()) {
+            $bound = $this->autoBindParameter($parameter, $definition);
+            // A converted result has already passed the single-class check in bindValue().
+            if ($bound !== $definition) {
+                return $bound;
+            }
+        }
+
+        return AttributeResolution::Unresolved;
+    }
+
     /**
      * @param array<int, array<int, \ReflectionNamedType>> $groups
      */
-    private function resolveContextualGroups(ReflectionFunctionAbstract $reflector, array $groups): mixed
+    private function resolveContextualGroups(ReflectionFunctionAbstract $reflector, ReflectionParameter $parameter, array $groups): mixed
     {
         if ($groups === [] || !$this->repository->hasContextualBindings()) {
             return AttributeResolution::Unresolved;
@@ -151,9 +186,11 @@ trait ResolvesAssociativeParameters
                 $consumer,
                 ReflectionResource::getClassReflection($name),
             );
-            if ($resolved !== AttributeResolution::Unresolved
-                && $this->satisfiesAnyTypeGroupsForDeclaring($resolved, $groups, $declaring)
-            ) {
+            if ($resolved === AttributeResolution::Unresolved) {
+                continue;
+            }
+            $resolved = $this->suppliedParameterValue($parameter, $resolved);
+            if ($this->satisfiesAnyTypeGroupsForDeclaring($resolved, $groups, $declaring)) {
                 return $resolved;
             }
         }
@@ -166,12 +203,12 @@ trait ResolvesAssociativeParameters
         mixed $attributeValue,
     ): mixed {
         if (!is_string($attributeValue)) {
-            return $attributeValue;
+            return $this->suppliedParameterValue($param, $attributeValue);
         }
 
         $definition = $this->resolveByDefinitionType($attributeValue, $param);
         if ($definition !== AttributeResolution::Unresolved) {
-            return $definition;
+            return $this->suppliedParameterValue($param, $definition);
         }
 
         if (function_exists($attributeValue)) {
@@ -239,8 +276,11 @@ trait ResolvesAssociativeParameters
     private function satisfiesTypeGroup(mixed $value, array $group, ?ReflectionClass $declaring): bool
     {
         foreach ($group as $named) {
+            if ($value === null && $named->allowsNull()) {
+                continue;
+            }
             if ($named->isBuiltin()) {
-                if ($named->getName() === 'null' && $value === null) {
+                if (self::acceptsBuiltinValue($value, $named->getName())) {
                     continue;
                 }
 
@@ -254,6 +294,11 @@ trait ResolvesAssociativeParameters
         }
 
         return true;
+    }
+
+    private function suppliedParameterValue(ReflectionParameter $parameter, mixed $value): mixed
+    {
+        return $this->repository->isAutoBindEnabled() ? $this->autoBindParameter($parameter, $value) : $value;
     }
 
     /**
@@ -271,21 +316,17 @@ trait ResolvesAssociativeParameters
     ): mixed {
         $paramName = $param->getName();
         if (array_key_exists($paramName, $suppliedParameters)) {
-            return $suppliedParameters[$paramName];
+            return $this->suppliedParameterValue($param, $suppliedParameters[$paramName]);
         }
 
         $groups = $this->extractTypeGroups($param);
-        if ($groups !== []) {
-            $contextual = $this->resolveContextualGroups($reflector, $groups);
-            if ($contextual !== AttributeResolution::Unresolved) {
-                return $contextual;
-            }
+        $contextual = $this->resolveContextualGroups($reflector, $param, $groups);
+        if ($contextual !== AttributeResolution::Unresolved) {
+            return $contextual;
         }
 
-        $definition = $this->resolveByDefinitionType($paramName, $param);
-        if ($definition !== AttributeResolution::Unresolved
-            && $this->satisfiesAnyTypeGroup($definition, $groups, $param)
-        ) {
+        $definition = $this->resolveCompatibleDefinition($param, $groups);
+        if ($definition !== AttributeResolution::Unresolved) {
             return $definition;
         }
 

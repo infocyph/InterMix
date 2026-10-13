@@ -12,11 +12,17 @@ final readonly class Inject
     /** @var array<int|string, mixed> */
     private array $parameters;
 
+    /**
+     * Store attribute arguments for either parameter injection or method argument overrides.
+     */
     public function __construct(mixed ...$parameters)
     {
         $this->parameters = $parameters;
     }
 
+    /**
+     * Expose the raw method argument payload, which may require runtime normalization.
+     */
     public function getMethodArguments(int|string|null $key = null): mixed
     {
         return $key !== null
@@ -24,6 +30,9 @@ final readonly class Inject
             : $this->parameters;
     }
 
+    /**
+     * Expose the target and optional payload used to resolve an annotated parameter.
+     */
     public function getParameterData(int|string|null $key = null): mixed
     {
         $firstKey = array_key_first($this->parameters);

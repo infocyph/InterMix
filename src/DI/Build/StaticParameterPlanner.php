@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Build;
 
 use Infocyph\InterMix\DI\Internal\BoundedValueInspector;
+use Infocyph\InterMix\DI\Resolver\ParameterResolver;
 use Infocyph\InterMix\DI\Support\ServiceReference;
 use Infocyph\InterMix\DI\Support\ValueDefinition;
+use Infocyph\InterMix\Internal\ReflectionResource;
 use ReflectionClass;
 use ReflectionFunctionAbstract;
 use ReflectionIntersectionType;
@@ -15,12 +17,15 @@ use ReflectionParameter;
 use ReflectionUnionType;
 
 /**
- * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
+ * @phpstan-type ServiceArgument array{kind: 'service', id: string, bind?: class-string, nullable?: bool}|array{kind: 'value', code: string, bind?: class-string, nullable?: bool}
  * @internal
  */
 final class StaticParameterPlanner
 {
     /**
+     * Plan ordered argument expressions and dependencies, returning a reason when runtime work is
+     * required.
+     *
      * @param ReflectionClass<object> $consumer
      * @param array<int|string, mixed> $supplied
      * @param array<string, ServiceArgument> $attributeArguments
@@ -62,6 +67,7 @@ final class StaticParameterPlanner
             if (is_string($argument)) {
                 return $argument;
             }
+            $argument = $this->autoBindArgument($graph, $consumer, $parameter, $argument);
             if ($argument['kind'] === 'service' && !isset($seenDependencies[$argument['id']])) {
                 $seenDependencies[$argument['id']] = true;
                 $dependencies[] = $argument['id'];
@@ -73,6 +79,8 @@ final class StaticParameterPlanner
     }
 
     /**
+     * Plan constructor arguments using explicit overrides or registered resources.
+     *
      * @param ReflectionClass<object> $class
      * @param array<int|string, mixed> $supplied
      * @return array{arguments: list<ServiceArgument>, dependencies: list<string>}|string
@@ -110,6 +118,54 @@ final class StaticParameterPlanner
         }
 
         return new StaticInjectPlanner()->parameterArgument($graph, $parameter);
+    }
+
+    /**
+     * @param ReflectionClass<object> $consumer
+     * @param ServiceArgument $argument
+     * @return ServiceArgument
+     */
+    private function autoBindArgument(
+        DefinitionGraph $graph,
+        ReflectionClass $consumer,
+        ReflectionParameter $parameter,
+        array $argument,
+    ): array {
+        $type = $parameter->getType();
+        if (!$graph->autoBindEnabled() || !$type instanceof ReflectionNamedType || $type->isBuiltin()) {
+            return $argument;
+        }
+
+        $class = $this->normalizedDependencyType($consumer, $type->getName());
+        if ($class !== null && (class_exists($class) || interface_exists($class))
+            && ParameterResolver::supportsAutoBinding($class)
+        ) {
+            $argument['bind'] = $class;
+            $argument['nullable'] = $type->allowsNull();
+        }
+
+        return $argument;
+    }
+
+    /** @return array{kind: 'service', id: string}|null */
+    private function namedDefinitionPlan(DefinitionGraph $graph, ReflectionParameter $parameter): ?array
+    {
+        $type = $parameter->getType();
+        if (!$graph->hasDefinition($parameter->getName())
+            || ($type !== null && (!$type instanceof ReflectionNamedType || !$type->isBuiltin()))
+        ) {
+            return null;
+        }
+
+        $definition = $graph->definitions()[$parameter->getName()];
+        if ($type !== null && $definition instanceof ValueDefinition
+            && !ParameterResolver::acceptsBuiltinValue($definition->value, $type->getName())
+            && !($definition->value === null && $type->allowsNull())
+        ) {
+            return null;
+        }
+
+        return ['kind' => 'service', 'id' => $parameter->getName()];
     }
 
     /** @param ReflectionClass<object> $class */
@@ -170,7 +226,7 @@ final class StaticParameterPlanner
             return $suppliedPlan;
         }
 
-        $untypedDefinition = $this->untypedDefinitionPlan($graph, $parameter);
+        $untypedDefinition = $this->namedDefinitionPlan($graph, $parameter);
         if ($untypedDefinition !== null) {
             return $untypedDefinition;
         }
@@ -251,6 +307,15 @@ final class StaticParameterPlanner
             return $this->typedServicePlan($graph, $consumer->getName(), $dependency, $label);
         }
         if ($graph->hasDefinition($parameter->getName())) {
+            $definition = $graph->definitions()[$parameter->getName()];
+            if ($definition instanceof ValueDefinition
+                && !($definition->value instanceof $dependency)
+                && !($definition->value === null && $type->allowsNull())
+                && !($graph->autoBindEnabled() && ParameterResolver::supportsAutoBinding(ReflectionResource::getClassReflection($dependency)->getName()))
+            ) {
+                return $this->typedServicePlan($graph, $consumer->getName(), $dependency, $label);
+            }
+
             return ['kind' => 'service', 'id' => $parameter->getName()];
         }
 
@@ -318,15 +383,5 @@ final class StaticParameterPlanner
         }
 
         return null;
-    }
-
-    /** @return array{kind: 'service', id: string}|null */
-    private function untypedDefinitionPlan(DefinitionGraph $graph, ReflectionParameter $parameter): ?array
-    {
-        if ($parameter->getType() !== null || !$graph->hasDefinition($parameter->getName())) {
-            return null;
-        }
-
-        return ['kind' => 'service', 'id' => $parameter->getName()];
     }
 }

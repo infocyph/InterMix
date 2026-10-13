@@ -69,6 +69,18 @@ class OptionsManager implements ArrayAccess
     }
 
     /**
+     * Opt into public static fromBoundValue conversion before configuration is locked.
+     *
+     * Disabled by default; compatible objects and nullable null arguments pass through unchanged.
+     */
+    public function enableAutoBind(bool $enable = true): self
+    {
+        $this->repository->enableAutoBind($enable);
+
+        return $this;
+    }
+
+    /**
      * Enables or disables debug tracing for the container.
      *
      * Node tracing records the outer graph; verbose tracing records every

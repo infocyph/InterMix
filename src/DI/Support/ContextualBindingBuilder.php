@@ -14,7 +14,11 @@ final class ContextualBindingBuilder
 {
     private ?string $dependency = null;
 
-    /** @internal */
+    /**
+     * Associate consumer-specific overrides with their mutable configuration owner and repository.
+     *
+     * @internal
+     */
     public function __construct(
         private readonly Container|ContainerBuilder $owner,
         private readonly Repository $repository,
@@ -43,6 +47,9 @@ final class ContextualBindingBuilder
         return $this->owner;
     }
 
+    /**
+     * Use the supplied class when resolving the selected dependency for this consumer.
+     */
     public function giveClass(string $class): Container|ContainerBuilder
     {
         if ($class === '' || (!class_exists($class) && !interface_exists($class))) {
@@ -52,6 +59,9 @@ final class ContextualBindingBuilder
         return $this->store($class);
     }
 
+    /**
+     * Resolve this consumer's dependency through an explicit runtime or exportable factory.
+     */
     public function giveFactory(Closure|FactoryDefinition $factory): Container|ContainerBuilder
     {
         return $this->store(
@@ -61,6 +71,9 @@ final class ContextualBindingBuilder
         );
     }
 
+    /**
+     * Redirect this consumer's dependency to another declared service identifier.
+     */
     public function giveReference(string $id): Container|ContainerBuilder
     {
         if ($id === '') {
@@ -70,11 +83,17 @@ final class ContextualBindingBuilder
         return $this->store(new ServiceReference($id));
     }
 
+    /**
+     * Supply a literal without interpreting it as a factory or class recipe.
+     */
     public function giveValue(mixed $value): Container|ContainerBuilder
     {
         return $this->store(new ValueDefinition($value));
     }
 
+    /**
+     * Select the dependency that the next contextual binding will replace.
+     */
     public function needs(string $dependency): self
     {
         if ($dependency === '') {

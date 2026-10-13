@@ -11,13 +11,15 @@ use ReflectionNamedType;
 use ReflectionProperty;
 
 /**
- * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
+ * @phpstan-type ServiceArgument array{kind: 'service', id: string, bind?: class-string, nullable?: bool}|array{kind: 'value', code: string, bind?: class-string, nullable?: bool}
  * @phpstan-type PropertyPlan array{declaring: class-string<object>, property: string, static: bool, argument: ServiceArgument|null, runtime?: 'attribute'|'assign'}
  * @internal
  */
 final class StaticPropertyPlanner
 {
     /**
+     * Plan property assignments and runtime attribute islands, retaining unsupported reasons.
+     *
      * @param ReflectionClass<object> $class
      * @param array<string, mixed> $supplied
      * @return array{properties: list<PropertyPlan>, dependencies: list<string>}

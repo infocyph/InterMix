@@ -24,13 +24,15 @@ InterMix 11 separates configuration from execution:
   factory, alias, and host-input definitions.
 - **Invocation** — Resolve services, construct fresh objects, invoke callables,
   inject attributes, and discover tagged services through one runtime contract.
+- **Automatic parameter binding** — Opt into class-defined conversion of scalar
+  bindings into typed objects, including in source-free compiled runtimes.
 - **Scoped execution** — Isolate request and job state, seed declared inputs, and
   propagate explicit scope contexts across structured Fiber or coroutine work.
 - **Compiled production runtime** — Generate and validate immutable resolution
-  artifacts while retaining narrow fallbacks for dynamic behavior.
+  artifacts with native scoped inputs while retaining narrow fallbacks for dynamic behavior.
 - **Definition caching** — Warm eligible factory results through a caller-owned
   PSR-6 pool, including CacheLayer 4, with bounded and fail-open persistence.
-- **Runwire integration** — Accept the host's active Runwire 2.1 runtime and
+- **Runwire integration** — Accept the host's active Runwire 2.1.1+ runtime and
   request/task context, forward it to compatible capabilities such as
   CacheLayer, and leave worker and event-loop ownership with the host.
 - **Closure serialization** — Serialize versioned Closure payloads with
@@ -143,6 +145,13 @@ foreach ($runtime->tagged('listener') as $id => $listener) {
 }
 ~~~
 
+Named arguments match parameter names directly, preserving supplied zero, false,
+and nullable null values. To convert an identifier such as `['logger' => 32]`
+into a typed `Logger` parameter, opt in with `$builder->enableAutoBind()` and
+define a public static `Logger::fromBoundValue(mixed $value): static` method.
+Conversion is disabled by default. See [runtime invocation](docs/di/invocation.rst)
+for the contract, error handling, and scope ownership rules.
+
 ## Scopes
 
 Declare request/job supplied values before finalization, then seed them when a scope begins:
@@ -196,12 +205,17 @@ Record `compile()`'s `graph` in immutable deployment metadata and pass that
 expected identity at bootstrap. This path still validates the artifact digest,
 build identity, ABI, PHP version, graph and environment. It rejects artifacts
 that require runtime factories, hooks or other fallback configuration;
-use the configured builder's `production()` for those applications. A standalone
-runtime supports its compiled graph and has no dynamic configuration fallback.
+use the configured builder's `production()` for those applications. Source-free
+runtimes also support `make()` and `invoke()` with the artifact's frozen injection,
+attribute, and auto-binding options. They do not reconstruct the original builder.
 
 Declared `input()` entries compile natively with scoped lifetime. Supply them
 through `withinScope()` seeds; missing inputs and undeclared seeds fail closed.
 Inputs require an active scope and cannot be captured by singleton construction.
+
+InterMix 11.2 uses compiled artifact ABI 3. Recompile older artifacts before
+upgrading. See [compiled runtimes](docs/di/compiled-resolvers.rst) for trusted
+prevalidated loading and [11.2 release notes](docs/release-11.2.rst) for migration details.
 
 ## Definition cache
 

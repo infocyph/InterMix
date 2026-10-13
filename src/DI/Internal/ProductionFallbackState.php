@@ -11,6 +11,8 @@ use Throwable;
 final class ProductionFallbackState
 {
     /**
+     * Snapshot fallback declarations once before native bridges replace them.
+     *
      * @param array<int, string> $compiledIds
      * @param array<string, array{exists: bool, definition: mixed, lifetime: \Infocyph\InterMix\DI\Support\LifetimeEnum, tags: array<int, string>}> $existing
      * @return array<string, array{exists: bool, definition: mixed, lifetime: \Infocyph\InterMix\DI\Support\LifetimeEnum, tags: array<int, string>}>
@@ -37,6 +39,8 @@ final class ProductionFallbackState
     }
 
     /**
+     * Restore bridge-owned declarations while preserving explicit fallback overrides.
+     *
      * @param array<string, array{exists: bool, definition: mixed, lifetime: \Infocyph\InterMix\DI\Support\LifetimeEnum, tags: array<int, string>}> $snapshots
      * @param array<string, mixed> $bridges
      * @return array<string, true>
@@ -68,7 +72,11 @@ final class ProductionFallbackState
         return $overridden;
     }
 
-    /** @param array<int, string> $compiledIds */
+    /**
+     * Mirror active scope ancestry into a late fallback while keeping native seeds out of it.
+     *
+     * @param array<int, string> $compiledIds
+     */
     public static function synchronizeScopes(ConfigurationContainer $fallback, ScopeState $current, array $compiledIds): void
     {
         if ($current->name === 'root' || $fallback->getRepository()->getScope() !== 'root') {
@@ -90,6 +98,8 @@ final class ProductionFallbackState
     }
 
     /**
+     * Copy cached native results into fallback state without overwriting explicit overrides.
+     *
      * @param array<string, true> $overridden
      * @param array<string, mixed> $singletons
      * @param array<int, string> $ids

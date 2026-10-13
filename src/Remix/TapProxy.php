@@ -27,6 +27,8 @@ class TapProxy
      * Proxy a method call to the target, then return the target.
      */
     /**
+     * Invoke the target for its side effect and return the target to preserve fluent chaining.
+     *
      * @param array<int, mixed> $parameters
      */
     public function __call(string $method, array $parameters): mixed

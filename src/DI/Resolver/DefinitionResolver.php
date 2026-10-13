@@ -35,25 +35,42 @@ class DefinitionResolver
     /** @var (Closure(): array{ClassResolver, ParameterResolver})|null */
     private ?Closure $resolverFactory = null;
 
+    /**
+     * Associate definition recipe execution with the owning repository's lifetime and cache state.
+     */
     public function __construct(protected readonly Repository $repository) {}
 
-    /** @throws ContainerException|InvalidArgumentException|ReflectionException */
+    /**
+     * Resolve a recipe with ancestry tracking and normal resolution-hook dispatch.
+     *
+     * @throws ContainerException|InvalidArgumentException|ReflectionException
+     */
     public function resolve(string $name): mixed
     {
         return $this->resolveTracked($name, false);
     }
 
+    /**
+     * Resolve an eligible value without dispatching runtime resolution hooks.
+     */
     public function resolveForDefinitionCacheWarmup(string $name): mixed
     {
         return $this->resolveTracked($name, true);
     }
 
-    /** @param Closure(): array{ClassResolver, ParameterResolver} $resolverFactory */
+    /**
+     * Defer reflection resolver initialization until a dynamic recipe requires it.
+     *
+     * @param Closure(): array{ClassResolver, ParameterResolver} $resolverFactory
+     */
     public function setResolverFactory(Closure $resolverFactory): void
     {
         $this->resolverFactory = $resolverFactory;
     }
 
+    /**
+     * Install shared class and parameter resolvers for dynamic definition recipes.
+     */
     public function setResolverInstance(
         ClassResolver $classResolver,
         ParameterResolver $parameterResolver,
@@ -62,7 +79,11 @@ class DefinitionResolver
         $this->parameterResolver = $parameterResolver;
     }
 
-    /** @throws ContainerException|ReflectionException|InvalidArgumentException */
+    /**
+     * Dispatch explicit and legacy recipe forms, rejecting missing declared scoped inputs.
+     *
+     * @throws ContainerException|ReflectionException|InvalidArgumentException
+     */
     protected function resolveDefinition(string $name): mixed
     {
         $definition = $this->repository->getFunctionDefinition($name);

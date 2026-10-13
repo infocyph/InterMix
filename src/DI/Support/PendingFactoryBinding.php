@@ -10,6 +10,9 @@ use Infocyph\InterMix\Exceptions\ContainerException;
 
 final readonly class PendingFactoryBinding
 {
+    /**
+     * Retain the closure and identifier until its registration lifetime is chosen.
+     */
     public function __construct(
         private ConfigurationContainer $container,
         private string $id,
@@ -17,6 +20,8 @@ final readonly class PendingFactoryBinding
     ) {}
 
     /**
+     * Bind the pending closure with the requested lifetime and tags.
+     *
      * @param array<int, string> $tags
      * @throws ContainerException
      */
@@ -26,6 +31,8 @@ final readonly class PendingFactoryBinding
     }
 
     /**
+     * Register the pending closure once per active execution scope.
+     *
      * @param array<int, string> $tags
      * @throws ContainerException
      */
@@ -35,6 +42,8 @@ final readonly class PendingFactoryBinding
     }
 
     /**
+     * Register the pending closure once per container lifetime.
+     *
      * @param array<int, string> $tags
      * @throws ContainerException
      */
@@ -44,6 +53,8 @@ final readonly class PendingFactoryBinding
     }
 
     /**
+     * Register the pending closure for fresh execution on every resolution.
+     *
      * @param array<int, string> $tags
      * @throws ContainerException
      */

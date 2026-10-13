@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Infocyph\InterMix\DI\Build;
 
 /**
- * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
+ * @phpstan-type ServiceArgument array{kind: 'service', id: string, bind?: class-string, nullable?: bool}|array{kind: 'value', code: string, bind?: class-string, nullable?: bool}
  * @phpstan-type PropertyPlan array{declaring: class-string, property: string, static: bool, argument: ServiceArgument|null, runtime?: 'attribute'|'assign'}
  * @phpstan-type MethodPlan array{method: string, arguments: list<ServiceArgument>, dependencies: list<string>, static?: bool, runtime?: bool}
  * @internal
@@ -13,6 +13,27 @@ namespace Infocyph\InterMix\DI\Build;
 final class StaticRuntimeIslandRenderer
 {
     /**
+     * Render one planned argument, preserving native slot lookup before optional value conversion.
+     *
+     * @param ServiceArgument $argument
+     * @param array<string, int> $slots
+     */
+    public static function argumentExpression(array $argument, array $slots, ?string $expression = null): string
+    {
+        $expression ??= $argument['kind'] === 'service'
+            ? '$this->s' . $slots[$argument['id']] . '()'
+            : $argument['code'];
+
+        return isset($argument['bind'])
+            ? '\\Infocyph\\InterMix\\DI\\Resolver\\ParameterResolver::bindValue('
+                . var_export($argument['bind'], true) . ', ' . $expression . ', '
+                . (($argument['nullable'] ?? false) ? 'true' : 'false') . ')'
+            : $expression;
+    }
+
+    /**
+     * Render direct method dispatch or the shared runtime bridge for unsupported reflection work.
+     *
      * @param MethodPlan $method
      * @param array<string, int> $slots
      */
@@ -32,7 +53,7 @@ final class StaticRuntimeIslandRenderer
 
         $arguments = [];
         foreach ($method['arguments'] as $argument) {
-            $arguments[] = $this->argumentExpression($argument, $slots);
+            $arguments[] = self::argumentExpression($argument, $slots);
         }
 
         $target = ($method['static'] ?? false)
@@ -43,6 +64,8 @@ final class StaticRuntimeIslandRenderer
     }
 
     /**
+     * Render direct assignments or runtime property bridges according to each planned property.
+     *
      * @param list<PropertyPlan> $properties
      * @param array<string, int> $slots
      */
@@ -68,7 +91,7 @@ final class StaticRuntimeIslandRenderer
             if (!is_array($argument)) {
                 continue;
             }
-            $value = $this->argumentExpression($argument, $slots);
+            $value = self::argumentExpression($argument, $slots);
             if ($runtime === 'assign') {
                 $source .= '        $this->assignCompiledRuntimeProperty('
                     . $instance . ', '
@@ -89,16 +112,5 @@ final class StaticRuntimeIslandRenderer
         }
 
         return $source;
-    }
-
-    /**
-     * @param ServiceArgument $argument
-     * @param array<string, int> $slots
-     */
-    private function argumentExpression(array $argument, array $slots): string
-    {
-        return $argument['kind'] === 'service'
-            ? '$this->s' . $slots[$argument['id']] . '()'
-            : $argument['code'];
     }
 }

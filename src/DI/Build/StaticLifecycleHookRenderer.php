@@ -12,11 +12,17 @@ use Infocyph\InterMix\DI\Support\LifetimeEnum;
  */
 final class StaticLifecycleHookRenderer
 {
+    /**
+     * Check whether native construction must dispatch matching fallback lifecycle callbacks.
+     */
     public function hasResolutionHooks(DefinitionGraph $graph, string $id): bool
     {
         return $graph->hasResolvingHook($id) || $graph->hasResolvedHook($id);
     }
 
+    /**
+     * Emit class resolution with native lifetime caching and protected lifecycle hook dispatch.
+     */
     public function renderClassMethod(
         DefinitionGraph $graph,
         int $slot,
@@ -53,6 +59,9 @@ final class StaticLifecycleHookRenderer
         return $source . "\n        return \$instance;\n    }\n\n";
     }
 
+    /**
+     * Emit value or factory resolution with null-preserving caches and lifecycle hooks.
+     */
     public function renderExpressionMethod(
         DefinitionGraph $graph,
         int $slot,
@@ -90,6 +99,9 @@ final class StaticLifecycleHookRenderer
         return $source . "\n        return \$value;\n    }\n\n";
     }
 
+    /**
+     * Emit the scope-name predicate that activates matching fallback cleanup callbacks.
+     */
     public function renderScopeLeaveHooks(DefinitionGraph $graph): string
     {
         $scopes = $graph->scopeLeaveHookScopes();
@@ -99,7 +111,7 @@ final class StaticLifecycleHookRenderer
         sort($scopes, SORT_STRING);
         $values = implode(', ', array_map(static fn(string $scope): string => var_export($scope, true), $scopes));
 
-        return "    protected function requiresScopeLeaveHook(string \$scope): bool\n"
+        return "    /** {@inheritDoc} */\n    protected function requiresScopeLeaveHook(string \$scope): bool\n"
             . "    {\n"
             . "        return match (\$scope) {\n"
             . "            {$values} => true,\n"
@@ -108,7 +120,11 @@ final class StaticLifecycleHookRenderer
             . "    }\n\n";
     }
 
-    /** @param array<string, ServicePlan> $plans */
+    /**
+     * Emit value singleton storage only when lifecycle hooks require construction tracking.
+     *
+     * @param array<string, ServicePlan> $plans
+     */
     public function renderValueSingletonProperties(DefinitionGraph $graph, array $plans): string
     {
         foreach ($plans as $rawId => $plan) {

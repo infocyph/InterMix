@@ -17,6 +17,9 @@ final readonly class SignedClosureSerializer
 
     private const string PREFIX = 'imxcs2.';
 
+    /**
+     * Require a non-empty signing key and a positive envelope-size limit in bytes.
+     */
     public function __construct(
         #[\SensitiveParameter]
         private string $key,
@@ -30,6 +33,9 @@ final readonly class SignedClosureSerializer
         }
     }
 
+    /**
+     * Encode a closure with an HMAC signature covering its serialized body.
+     */
     public function serialize(Closure $closure): string
     {
         self::requireOpis();
@@ -39,6 +45,9 @@ final readonly class SignedClosureSerializer
         return self::PREFIX . base64_encode($signature) . '.' . base64_encode($serialized);
     }
 
+    /**
+     * Enforce the envelope-size bound and verify its HMAC before executing closure deserialization.
+     */
     public function unserialize(string $payload): Closure
     {
         if (strlen($payload) > $this->maxPayloadSize) {

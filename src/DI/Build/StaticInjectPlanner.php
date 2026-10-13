@@ -11,12 +11,14 @@ use ReflectionNamedType;
 use ReflectionParameter;
 
 /**
- * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
+ * @phpstan-type ServiceArgument array{kind: 'service', id: string, bind?: class-string, nullable?: bool}|array{kind: 'value', code: string, bind?: class-string, nullable?: bool}
  * @internal
  */
 final class StaticInjectPlanner
 {
     /**
+     * Plan explicit method injection arguments, returning a reason when a target is unsupported.
+     *
      * @return array<string, ServiceArgument>|string
      */
     public function methodArguments(DefinitionGraph $graph, ReflectionMethod $method): array|string
@@ -49,7 +51,11 @@ final class StaticInjectPlanner
         return $planned;
     }
 
-    /** @return array{kind: 'service', id: string}|string|null */
+    /**
+     * Plan a parameter injection target; null means no applicable explicit target.
+     *
+     * @return array{kind: 'service', id: string}|string|null
+     */
     public function parameterArgument(DefinitionGraph $graph, ReflectionParameter $parameter): array|string|null
     {
         $attribute = $parameter->getAttributes(Inject::class)[0] ?? null;

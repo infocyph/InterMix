@@ -10,6 +10,9 @@ use Stringable;
 /** @internal */
 final class ServiceId
 {
+    /**
+     * Normalize integer and stringable identifiers and reject empty or unsupported values.
+     */
     public static function from(mixed $value): string
     {
         if (is_int($value) || $value instanceof Stringable) {

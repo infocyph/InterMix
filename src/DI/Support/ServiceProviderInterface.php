@@ -8,5 +8,8 @@ use Infocyph\InterMix\DI\ContainerBuilder;
 
 interface ServiceProviderInterface
 {
+    /**
+     * Add declarations to the supplied mutable builder without owning runtime execution.
+     */
     public function register(ContainerBuilder $builder): void;
 }

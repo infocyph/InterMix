@@ -19,6 +19,8 @@ final class LogicalScopeState
     public bool $retained = false;
 
     /**
+     * Create a shareable scope frame containing execution-owned seeds and resolved entries.
+     *
      * @param array<string, mixed> $seeds
      * @param array<string, mixed> $resolvedScoped
      */
@@ -29,6 +31,9 @@ final class LogicalScopeState
         public array $resolvedScoped = [],
     ) {}
 
+    /**
+     * Invalidate retained handles and release references to seeds, resolved values and ancestors.
+     */
     public function close(): void
     {
         $this->closed = true;
@@ -43,6 +48,9 @@ final class LogicalScopeState
         $this->seeds = [];
     }
 
+    /**
+     * Check this frame and its ancestors to prevent duplicate active scope names.
+     */
     public function contains(string $scope): bool
     {
         for ($current = $this; $current instanceof self; $current = $current->parent) {

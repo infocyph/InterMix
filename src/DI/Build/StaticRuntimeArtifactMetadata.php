@@ -22,7 +22,7 @@ use JsonException;
  */
 final class StaticRuntimeArtifactMetadata
 {
-    public const int ABI = 2;
+    public const int ABI = 3;
 
     public const int INTERMIX_MAJOR = 11;
 
@@ -30,7 +30,11 @@ final class StaticRuntimeArtifactMetadata
 
     public const string RUNTIME_NAME = 'runtime.php';
 
-    /** @param array<string, mixed> $manifest */
+    /**
+     * Encode manifest metadata deterministically and wrap JSON failures as container errors.
+     *
+     * @param array<string, mixed> $manifest
+     */
     public function encode(array $manifest): string
     {
         try {
@@ -47,6 +51,9 @@ final class StaticRuntimeArtifactMetadata
     }
 
     /**
+     * Describe genuine runtime requirements and hash an explicitly supplied opaque-release
+     * identity.
+     *
      * @param array<string, mixed> $plans
      * @param array<string, string> $skipped
      * @return array{
@@ -62,7 +69,7 @@ final class StaticRuntimeArtifactMetadata
         array $skipped,
         ?string $releaseIdentity,
     ): array {
-        /** @var array<string, array{kind: string, properties: list<array{declaring: class-string, property: string, static: bool, argument: array{kind: 'service', id: string}|array{kind: 'value', code: string}|null, runtime?: 'assign'|'attribute'}>, postMethod?: array{method: string, arguments: list<array{kind: 'service', id: string}|array{kind: 'value', code: string}>, dependencies: list<string>, parameterNames?: list<string>, static?: bool, bound?: bool, runtime?: bool}|null, invocation?: array{method: string, arguments: list<array{kind: 'service', id: string}|array{kind: 'value', code: string}>, dependencies: list<string>, parameterNames?: list<string>, static?: bool, bound?: bool, runtime?: bool}}> $plans */
+        /** @var array<string, array{kind: string, properties: list<array{declaring: class-string, property: string, static: bool, argument: array{kind: 'service', id: string, bind?: class-string, nullable?: bool}|array{kind: 'value', code: string, bind?: class-string, nullable?: bool}|null, runtime?: 'assign'|'attribute'}>, postMethod?: array{method: string, arguments: list<array{kind: 'service', id: string, bind?: class-string, nullable?: bool}|array{kind: 'value', code: string, bind?: class-string, nullable?: bool}>, dependencies: list<string>, parameterNames?: list<string>, static?: bool, bound?: bool, runtime?: bool}|null, invocation?: array{method: string, arguments: list<array{kind: 'service', id: string, bind?: class-string, nullable?: bool}|array{kind: 'value', code: string, bind?: class-string, nullable?: bool}>, dependencies: list<string>, parameterNames?: list<string>, static?: bool, bound?: bool, runtime?: bool}}> $plans */
         $reasons = new StaticRuntimeRequirements()->fallbackReasons($graph, $plans, $skipped);
         $defined = array_fill_keys(
             array_map(
@@ -92,6 +99,8 @@ final class StaticRuntimeArtifactMetadata
     }
 
     /**
+     * Hash canonical frozen configuration and native plans without executing opaque callbacks.
+     *
      * @param array<string, array<string, mixed>> $plans
      * @param array<string, string> $skipped
      */
@@ -137,6 +146,7 @@ final class StaticRuntimeArtifactMetadata
             'resolving_hooks' => $resolvingHooks,
             'scope_hooks' => $scopeHooks,
             'injection' => $graph->injectionEnabled(),
+            'auto_bind' => $graph->autoBindEnabled(),
             'method_attributes' => $graph->methodAttributesEnabled(),
             'property_attributes' => $graph->propertyAttributesEnabled(),
             'default_method' => $graph->defaultMethod(),
@@ -144,6 +154,9 @@ final class StaticRuntimeArtifactMetadata
     }
 
     /**
+     * Validate manifest shape, runtime versions and immutable build identity without hashing
+     * runtime contents.
+     *
      * @return array{
      *   abi: int,
      *   intermix_major: int,
@@ -172,6 +185,8 @@ final class StaticRuntimeArtifactMetadata
     }
 
     /**
+     * Validate compatibility and reject runtime contents whose digest differs from the manifest.
+     *
      * @return array{
      *   abi: int,
      *   intermix_major: int,
@@ -203,6 +218,8 @@ final class StaticRuntimeArtifactMetadata
     }
 
     /**
+     * Derive the immutable build identity from canonical manifest metadata before publication.
+     *
      * @param array{
      *   abi: int,
      *   intermix_major: int,

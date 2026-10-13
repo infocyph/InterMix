@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Internal;
 
+use Infocyph\InterMix\DI\Resolver\ParameterResolver;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\DI\RuntimeContainerInterface;
 use Infocyph\InterMix\Internal\ReflectionResource;
@@ -21,7 +22,11 @@ final class ProductionInvocationPlanner
     /** @var array<string, list<string>|false> */
     private array $plans = [];
 
-    /** @param array<int, string> $compiledIds */
+    /**
+     * Associate a bounded callable plan cache with the repository and supported native identifiers.
+     *
+     * @param array<int, string> $compiledIds
+     */
     public function __construct(
         private readonly Repository $repository,
         array $compiledIds,
@@ -29,7 +34,11 @@ final class ProductionInvocationPlanner
         $this->compiledIds = array_fill_keys($compiledIds, true);
     }
 
-    /** @param array<int|string, mixed> $arguments */
+    /**
+     * Try a native callable recipe, distinguishing unsupported calls from successful null results.
+     *
+     * @param array<int|string, mixed> $arguments
+     */
     public function invoke(
         callable $callable,
         array $arguments,
@@ -123,9 +132,7 @@ final class ProductionInvocationPlanner
             }
 
             $dependency = $type->getName();
-            if (in_array($dependency, ['self', 'parent', 'static'], true)
-                || !isset($this->compiledIds[$dependency])
-            ) {
+            if ($this->requiresParameterResolution($dependency, $parameter->getName())) {
                 return null;
             }
 
@@ -133,5 +140,15 @@ final class ProductionInvocationPlanner
         }
 
         return $dependencies;
+    }
+
+    private function requiresParameterResolution(string $dependency, string $parameter): bool
+    {
+        return in_array($dependency, ['self', 'parent', 'static'], true)
+            || !isset($this->compiledIds[$dependency])
+            || $this->repository->hasFunctionReference($parameter)
+            || ($this->repository->isAutoBindEnabled() && ParameterResolver::supportsAutoBinding(
+                ReflectionResource::getClassReflection($dependency)->getName(),
+            ));
     }
 }

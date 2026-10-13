@@ -8,7 +8,7 @@ use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\Internal\ReflectionResource;
 
 /**
- * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
+ * @phpstan-type ServiceArgument array{kind: 'service', id: string, bind?: class-string, nullable?: bool}|array{kind: 'value', code: string, bind?: class-string, nullable?: bool}
  * @phpstan-type PropertyPlan array{declaring: class-string<object>, property: string, static: bool, argument: ServiceArgument|null, runtime?: 'attribute'|'assign'}
  * @phpstan-type MethodPlan array{method: string, arguments: list<ServiceArgument>, dependencies: list<string>, runtime?: bool}
  * @phpstan-type InvocationPlan array{kind: 'invocation', class: class-string<object>, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, invocation: MethodPlan, dependencies: list<string>}
@@ -16,7 +16,11 @@ use Infocyph\InterMix\Internal\ReflectionResource;
  */
 final class StaticInvocationPlanner
 {
-    /** @return InvocationPlan|string */
+    /**
+     * Plan a callable definition's construction and invocation, retaining unsupported reasons.
+     *
+     * @return InvocationPlan|string
+     */
     public function plan(DefinitionGraph $graph, string $id, string $className, string $methodName): array|string
     {
         if (!class_exists($className)) {

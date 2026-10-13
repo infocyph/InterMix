@@ -11,13 +11,15 @@ use ReflectionMethod;
 use ReflectionParameter;
 
 /**
- * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
+ * @phpstan-type ServiceArgument array{kind: 'service', id: string, bind?: class-string, nullable?: bool}|array{kind: 'value', code: string, bind?: class-string, nullable?: bool}
  * @phpstan-type MethodPlan array{method: string, arguments: list<ServiceArgument>, dependencies: list<string>, parameterNames?: list<string>, static?: bool, runtime?: bool}
  * @internal
  */
 final class StaticMethodPlanner
 {
     /**
+     * Plan a requested method with supplied overrides, returning a reason when unsupported.
+     *
      * @param ReflectionClass<object> $class
      * @param array<int|string, mixed> $supplied
      * @return MethodPlan|string
@@ -42,6 +44,8 @@ final class StaticMethodPlanner
     }
 
     /**
+     * Plan the configured or attributed post-construction method, or null when none applies.
+     *
      * @param ReflectionClass<object> $class
      * @return MethodPlan|null
      */

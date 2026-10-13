@@ -17,6 +17,9 @@ final readonly class RuntimeIslandResolver
 
     private PropertyResolver $propertyResolver;
 
+    /**
+     * Associate runtime-only injection work with the repository used by the compiled container.
+     */
     public function __construct(private Repository $repository)
     {
         [$classResolver, $this->parameterResolver] = new InjectedCall($repository)->reflectionResolvers();
@@ -24,6 +27,9 @@ final readonly class RuntimeIslandResolver
         $this->propertyResolver->setClassResolverInstance($classResolver);
     }
 
+    /**
+     * Resolve a property attribute through the same algorithm as dynamic injection.
+     */
     public function applyAttributedProperty(object $instance, string $declaringClass, string $propertyName): void
     {
         $property = ReflectionResource::getClassReflection($declaringClass)->getProperty($propertyName);
@@ -36,6 +42,9 @@ final readonly class RuntimeIslandResolver
         );
     }
 
+    /**
+     * Assign a reflected property, preserving static and inaccessible-property semantics.
+     */
     public function assignProperty(
         object $instance,
         string $declaringClass,
@@ -46,6 +55,9 @@ final readonly class RuntimeIslandResolver
         $property->setValue($property->isStatic() ? null : $instance, $value);
     }
 
+    /**
+     * Resolve runtime method arguments and invoke the reflected method on its target.
+     */
     public function invokeMethod(object $instance, string $className, string $methodName): mixed
     {
         $method = ReflectionResource::getClassReflection($className)->getMethod($methodName);
