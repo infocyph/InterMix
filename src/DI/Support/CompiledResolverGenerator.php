@@ -328,6 +328,7 @@ final class CompiledResolverGenerator
             'class_resources' => $classResourceShape,
             'contextual_bindings' => $graph->contextualBindingShape(),
             'attribute_types' => $graph->registeredAttributeTypes(),
+            'auto_bind' => $graph->autoBindEnabled(),
             'method_attributes' => $graph->methodAttributesEnabled(),
             'property_attributes' => $graph->propertyAttributesEnabled(),
             'default_method' => $graph->defaultMethod(),

@@ -11,7 +11,7 @@ use ReflectionNamedType;
 use ReflectionParameter;
 
 /**
- * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
+ * @phpstan-type ServiceArgument array{kind: 'service', id: string, bind?: class-string, nullable?: bool}|array{kind: 'value', code: string, bind?: class-string, nullable?: bool}
  * @internal
  */
 final class StaticInjectPlanner

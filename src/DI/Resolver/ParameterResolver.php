@@ -33,6 +33,8 @@ class ParameterResolver
     use ResolvesNumericAndVariadicParameters;
     use ResolvesParameterAttributes;
 
+    private const int AUTO_BIND_PLAN_CACHE_LIMIT = 1024;
+
     private const int INJECT_CACHE_LIMIT = 1024;
 
     private const int PARAM_ATTRIBUTE_PLAN_CACHE_LIMIT = 4096;
@@ -40,6 +42,9 @@ class ParameterResolver
     private const int RESOLUTION_PLAN_CACHE_LIMIT = 2048;
 
     private const int TYPE_GROUP_CACHE_LIMIT = 4096;
+
+    /** @var array<class-string, bool> Immutable method support only; never bound values or results. */
+    private static array $autoBindPlanCache = [];
 
     private readonly InvocationManager $invocationManager;
 
@@ -63,6 +68,79 @@ class ParameterResolver
     public function __construct(private readonly Repository $repository)
     {
         $this->invocationManager = ContainerAccess::invocationManager($repository->container());
+    }
+
+    /**
+     * Check builtin parameter compatibility without coercing configured scalar values.
+     *
+     * @internal
+     */
+    public static function acceptsBuiltinValue(mixed $value, string $type): bool
+    {
+        return match ($type) {
+            'mixed' => true,
+            'null' => $value === null,
+            'true' => $value === true,
+            'false' => $value === false,
+            'float' => is_float($value) || is_int($value),
+            'iterable' => is_iterable($value),
+            'callable' => is_callable($value),
+            'object' => is_object($value),
+            default => get_debug_type($value) === $type,
+        };
+    }
+
+    /**
+     * Convert a bound value without caching execution-owned results; invalid conversions fail closed.
+     *
+     * @param class-string $class
+     * @internal
+     */
+    public static function bindValue(string $class, mixed $value, bool $nullable = false): mixed
+    {
+        if ($value instanceof $class || ($nullable && $value === null)) {
+            return $value;
+        }
+        if (!self::supportsAutoBinding($class)) {
+            return $value;
+        }
+
+        $resolved = $class::fromBoundValue($value);
+        if (!$resolved instanceof $class) {
+            throw new ContainerException("Auto-binding {$class}::fromBoundValue must return an instance of {$class}.");
+        }
+
+        return $resolved;
+    }
+
+    /**
+     * Detect and validate the class-defined conversion convention without executing user code.
+     *
+     * @param class-string $class
+     * @internal
+     */
+    public static function supportsAutoBinding(string $class): bool
+    {
+        if (isset(self::$autoBindPlanCache[$class])) {
+            return self::$autoBindPlanCache[$class];
+        }
+        self::evictCacheKeyIfNeeded(self::$autoBindPlanCache, $class, self::AUTO_BIND_PLAN_CACHE_LIMIT);
+        $reflection = ReflectionResource::getClassReflection($class);
+        if (!$reflection->hasMethod('fromBoundValue')) {
+            return self::$autoBindPlanCache[$class] = false;
+        }
+
+        $method = $reflection->getMethod('fromBoundValue');
+        $parameters = $method->getParameters();
+        if (!$method->isPublic() || !$method->isStatic() || $method->isAbstract()
+            || count($parameters) !== 1 || $parameters[0]->isPassedByReference()
+        ) {
+            throw new ContainerException(
+                "Auto-binding requires {$class}::fromBoundValue to be public, static and accept one value by value.",
+            );
+        }
+
+        return self::$autoBindPlanCache[$class] = true;
     }
 
     /**
@@ -212,6 +290,22 @@ class ParameterResolver
     }
 
     /**
+     * @template TKey of string
+     * @template TValue
+     * @param array<TKey, TValue> $cache
+     * @param TKey $key
+     */
+    private static function evictCacheKeyIfNeeded(array &$cache, string $key, int $limit): void
+    {
+        if (!isset($cache[$key]) && count($cache) >= $limit) {
+            $firstKey = array_key_first($cache);
+            if (is_string($firstKey)) {
+                unset($cache[$firstKey]);
+            }
+        }
+    }
+
+    /**
      * @param array<int|string, mixed> $parameters
      */
     private function alreadyExist(string $className, array $parameters): bool
@@ -261,20 +355,6 @@ class ParameterResolver
     }
 
     /**
-     * @template TValue
-     * @param array<string, TValue> $cache
-     */
-    private function evictCacheKeyIfNeeded(array &$cache, string $key, int $limit): void
-    {
-        if (!isset($cache[$key]) && count($cache) >= $limit) {
-            $firstKey = array_key_first($cache);
-            if (is_string($firstKey)) {
-                unset($cache[$firstKey]);
-            }
-        }
-    }
-
-    /**
      * @return array<int, array<int, ReflectionNamedType>>
      */
     private function extractTypeGroups(ReflectionParameter $parameter): array
@@ -290,7 +370,7 @@ class ParameterResolver
         }
 
         $groups = $this->buildTypeGroups($parameter);
-        $this->evictCacheKeyIfNeeded($this->typeGroupCache, $key, self::TYPE_GROUP_CACHE_LIMIT);
+        self::evictCacheKeyIfNeeded($this->typeGroupCache, $key, self::TYPE_GROUP_CACHE_LIMIT);
         $this->typeGroupCache[$key] = $groups;
 
         return $groups;
@@ -449,7 +529,7 @@ class ParameterResolver
      */
     private function rememberInject(string $key, array $value): array
     {
-        $this->evictCacheKeyIfNeeded($this->injectCache, $key, self::INJECT_CACHE_LIMIT);
+        self::evictCacheKeyIfNeeded($this->injectCache, $key, self::INJECT_CACHE_LIMIT);
         $this->injectCache[$key] = $value;
 
         return $value;
@@ -467,7 +547,7 @@ class ParameterResolver
      */
     private function rememberParameterAttributePlan(string $key, array $value): array
     {
-        $this->evictCacheKeyIfNeeded(
+        self::evictCacheKeyIfNeeded(
             $this->parameterAttributePlanCache,
             $key,
             self::PARAM_ATTRIBUTE_PLAN_CACHE_LIMIT,
@@ -483,7 +563,7 @@ class ParameterResolver
      */
     private function rememberResolutionPlan(string $key, array $value): array
     {
-        $this->evictCacheKeyIfNeeded($this->resolutionPlanCache, $key, self::RESOLUTION_PLAN_CACHE_LIMIT);
+        self::evictCacheKeyIfNeeded($this->resolutionPlanCache, $key, self::RESOLUTION_PLAN_CACHE_LIMIT);
         $this->resolutionPlanCache[$key] = $value;
 
         return $value;

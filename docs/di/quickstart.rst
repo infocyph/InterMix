@@ -7,6 +7,7 @@ Quick start
 .. code-block:: php
 
    use Infocyph\InterMix\DI\ContainerBuilder;
+   use Infocyph\InterMix\DI\Support\ServiceProviderInterface;
    use Infocyph\InterMix\DI\Support\LifetimeEnum;
 
    final class Clock {}
@@ -33,14 +34,6 @@ Quick start
            lifetime: LifetimeEnum::Scoped,
        );
 
-   $runtime = $builder->build();
-
-   $service = $runtime->withinScope(
-       'request-1',
-       static fn ($active) => $active->get(Service::class),
-       [RequestContext::class => new RequestContext('request-1')],
-   );
-
 Providers are imported before finalization:
 
 .. code-block:: php
@@ -54,5 +47,17 @@ Providers are imported before finalization:
    }
 
    $builder->import(new AppProvider());
+
+Build only after registration and provider imports are complete:
+
+.. code-block:: php
+
+   $runtime = $builder->build();
+
+   $service = $runtime->withinScope(
+       'request-1',
+       static fn ($active) => $active->get(Service::class),
+       [RequestContext::class => new RequestContext('request-1')],
+   );
 
 Use compile() plus production() when deploying a generated runtime.

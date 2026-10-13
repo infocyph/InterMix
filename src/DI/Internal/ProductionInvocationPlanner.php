@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Infocyph\InterMix\DI\Internal;
 
+use Infocyph\InterMix\DI\Resolver\ParameterResolver;
 use Infocyph\InterMix\DI\Resolver\Repository;
 use Infocyph\InterMix\DI\RuntimeContainerInterface;
 use Infocyph\InterMix\Internal\ReflectionResource;
@@ -131,9 +132,7 @@ final class ProductionInvocationPlanner
             }
 
             $dependency = $type->getName();
-            if (in_array($dependency, ['self', 'parent', 'static'], true)
-                || !isset($this->compiledIds[$dependency])
-            ) {
+            if ($this->requiresParameterResolution($dependency, $parameter->getName())) {
                 return null;
             }
 
@@ -141,5 +140,15 @@ final class ProductionInvocationPlanner
         }
 
         return $dependencies;
+    }
+
+    private function requiresParameterResolution(string $dependency, string $parameter): bool
+    {
+        return in_array($dependency, ['self', 'parent', 'static'], true)
+            || !isset($this->compiledIds[$dependency])
+            || $this->repository->hasFunctionReference($parameter)
+            || ($this->repository->isAutoBindEnabled() && ParameterResolver::supportsAutoBinding(
+                ReflectionResource::getClassReflection($dependency)->getName(),
+            ));
     }
 }

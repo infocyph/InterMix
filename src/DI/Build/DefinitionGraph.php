@@ -60,6 +60,7 @@ final readonly class DefinitionGraph
         private bool $injectionEnabled,
         private bool $methodAttributes,
         private bool $propertyAttributes,
+        private bool $autoBind,
     ) {}
 
     /**
@@ -125,7 +126,16 @@ final readonly class DefinitionGraph
             injectionEnabled: !ContainerAccess::resolver($repository->container()) instanceof GenericCall,
             methodAttributes: $repository->isMethodAttributeEnabled(),
             propertyAttributes: $repository->isPropertyAttributeEnabled(),
+            autoBind: $repository->isAutoBindEnabled(),
         );
+    }
+
+    /**
+     * Check whether frozen parameter plans permit class-defined value conversion.
+     */
+    public function autoBindEnabled(): bool
+    {
+        return $this->autoBind;
     }
 
     /**

@@ -35,7 +35,7 @@ Container and ProductionContainer share the runtime contract:
 * captureScopeContext()/withinScopeContext() for borrowed child work.
 * resetCurrentExecutionScope() for explicit host cleanup.
 
-No public runtime configuration manager exists in 11.0.
+No public runtime configuration manager exists in InterMix 11.
 
 Dynamic and production runtimes
 -------------------------------

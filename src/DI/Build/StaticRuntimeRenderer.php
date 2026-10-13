@@ -7,7 +7,7 @@ namespace Infocyph\InterMix\DI\Build;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 
 /**
- * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
+ * @phpstan-type ServiceArgument array{kind: 'service', id: string, bind?: class-string, nullable?: bool}|array{kind: 'value', code: string, bind?: class-string, nullable?: bool}
  * @phpstan-type PropertyPlan array{declaring: class-string, property: string, static: bool, argument: ServiceArgument|null, runtime?: 'attribute'|'assign'}
  * @phpstan-type MethodPlan array{method: string, arguments: list<ServiceArgument>, dependencies: list<string>, parameterNames?: list<string>, static?: bool, runtime?: bool}
  * @phpstan-type AliasPlan array{kind: 'alias', target: string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
@@ -36,6 +36,7 @@ final class StaticRuntimeRenderer
         $source .= "use Infocyph\\InterMix\\DI\\ProductionContainer;\n";
         $source .= "use Infocyph\\InterMix\\DI\\Support\\LifetimeEnum;\n\n";
         $source .= "return new class extends ProductionContainer\n{\n";
+        $source .= $this->renderInvokerConfiguration($graph);
         $source .= $this->renderFactorySingletonProperties($plans);
         $source .= $invocationRenderer->renderSingletonProperties($plans);
         $source .= $lifecycleRenderer->renderValueSingletonProperties($graph, $plans);
@@ -67,17 +68,6 @@ final class StaticRuntimeRenderer
     }
 
     /**
-     * @param ServiceArgument $argument
-     * @param array<string, int> $slots
-     */
-    private function argumentExpression(array $argument, array $slots): string
-    {
-        return $argument['kind'] === 'service'
-            ? '$this->s' . $slots[$argument['id']] . '()'
-            : $argument['code'];
-    }
-
-    /**
      * @param ClassPlan $plan
      * @param array<string, int> $slots
      */
@@ -85,7 +75,7 @@ final class StaticRuntimeRenderer
     {
         $arguments = [];
         foreach ($plan['arguments'] as $argument) {
-            $arguments[] = $this->argumentExpression($argument, $slots);
+            $arguments[] = StaticRuntimeIslandRenderer::argumentExpression($argument, $slots);
         }
 
         return 'new \\' . ltrim($plan['class'], '\\') . '(' . implode(', ', $arguments) . ')';
@@ -117,7 +107,7 @@ final class StaticRuntimeRenderer
     {
         $arguments = [];
         foreach ($plan['arguments'] as $argument) {
-            $arguments[] = $this->argumentExpression($argument, $slots);
+            $arguments[] = StaticRuntimeIslandRenderer::argumentExpression($argument, $slots);
         }
 
         $class = '\\' . ltrim($plan['class'], '\\');
@@ -470,6 +460,31 @@ final class StaticRuntimeRenderer
             . new StaticScopeAccessRenderer()->seedGuard($slot, LifetimeEnum::Scoped, $id, $guardCaptive)
             . new StaticScopeAccessRenderer()->constructionGuard(LifetimeEnum::Scoped, $id)
             . "        throw new \\Infocyph\\InterMix\\Exceptions\\ContainerException({$message});\n"
+            . "    }\n\n";
+    }
+
+    private function renderInvokerConfiguration(DefinitionGraph $graph): string
+    {
+        $options = [
+            'injection' => $graph->injectionEnabled(),
+            'methodAttributes' => $graph->methodAttributesEnabled(),
+            'propertyAttributes' => $graph->propertyAttributesEnabled(),
+            'defaultMethod' => $graph->defaultMethod(),
+        ];
+        if (!$graph->autoBindEnabled() && $options === [
+            'injection' => true, 'methodAttributes' => false, 'propertyAttributes' => false, 'defaultMethod' => null,
+        ]) {
+            return '';
+        }
+        $arguments = [];
+        foreach ($options as $name => $value) {
+            $arguments[] = $name . ': ' . var_export($value, true);
+        }
+
+        return "    /** {@inheritDoc} */\n"
+            . "    protected function configureRuntimeInvoker(\\Infocyph\\InterMix\\DI\\Internal\\ConfigurationContainer \$runtime): void\n    {\n"
+            . '        $runtime->options()->enableAutoBind(' . var_export($graph->autoBindEnabled(), true) . ')->setOptions('
+            . implode(', ', $arguments) . ");\n"
             . "    }\n\n";
     }
 

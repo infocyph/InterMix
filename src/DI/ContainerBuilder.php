@@ -250,6 +250,20 @@ final class ContainerBuilder
     }
 
     /**
+     * Opt into public static fromBoundValue conversion for single-class typed parameters.
+     *
+     * Disabled by default. Conversion must return an instance of the parameter's class;
+     * classes without the method retain their existing injection behavior.
+     */
+    public function enableAutoBind(bool $enable = true): self
+    {
+        $this->assertMutable();
+        $this->configuration->getRepository()->enableAutoBind($enable);
+
+        return $this;
+    }
+
+    /**
      * Select resolution tracing verbosity; disabling tracing restores the off level.
      */
     public function enableDebugTracing(

@@ -22,7 +22,7 @@ use JsonException;
  */
 final class StaticRuntimeArtifactMetadata
 {
-    public const int ABI = 2;
+    public const int ABI = 3;
 
     public const int INTERMIX_MAJOR = 11;
 
@@ -69,7 +69,7 @@ final class StaticRuntimeArtifactMetadata
         array $skipped,
         ?string $releaseIdentity,
     ): array {
-        /** @var array<string, array{kind: string, properties: list<array{declaring: class-string, property: string, static: bool, argument: array{kind: 'service', id: string}|array{kind: 'value', code: string}|null, runtime?: 'assign'|'attribute'}>, postMethod?: array{method: string, arguments: list<array{kind: 'service', id: string}|array{kind: 'value', code: string}>, dependencies: list<string>, parameterNames?: list<string>, static?: bool, bound?: bool, runtime?: bool}|null, invocation?: array{method: string, arguments: list<array{kind: 'service', id: string}|array{kind: 'value', code: string}>, dependencies: list<string>, parameterNames?: list<string>, static?: bool, bound?: bool, runtime?: bool}}> $plans */
+        /** @var array<string, array{kind: string, properties: list<array{declaring: class-string, property: string, static: bool, argument: array{kind: 'service', id: string, bind?: class-string, nullable?: bool}|array{kind: 'value', code: string, bind?: class-string, nullable?: bool}|null, runtime?: 'assign'|'attribute'}>, postMethod?: array{method: string, arguments: list<array{kind: 'service', id: string, bind?: class-string, nullable?: bool}|array{kind: 'value', code: string, bind?: class-string, nullable?: bool}>, dependencies: list<string>, parameterNames?: list<string>, static?: bool, bound?: bool, runtime?: bool}|null, invocation?: array{method: string, arguments: list<array{kind: 'service', id: string, bind?: class-string, nullable?: bool}|array{kind: 'value', code: string, bind?: class-string, nullable?: bool}>, dependencies: list<string>, parameterNames?: list<string>, static?: bool, bound?: bool, runtime?: bool}}> $plans */
         $reasons = new StaticRuntimeRequirements()->fallbackReasons($graph, $plans, $skipped);
         $defined = array_fill_keys(
             array_map(
@@ -146,6 +146,7 @@ final class StaticRuntimeArtifactMetadata
             'resolving_hooks' => $resolvingHooks,
             'scope_hooks' => $scopeHooks,
             'injection' => $graph->injectionEnabled(),
+            'auto_bind' => $graph->autoBindEnabled(),
             'method_attributes' => $graph->methodAttributesEnabled(),
             'property_attributes' => $graph->propertyAttributesEnabled(),
             'default_method' => $graph->defaultMethod(),

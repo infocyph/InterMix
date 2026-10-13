@@ -1,7 +1,7 @@
 .. _process-state-11.0:
 
 ================================================
-InterMix 11.0 process-state inventory
+InterMix 11 process-state inventory
 ================================================
 
 Runtime ownership
@@ -12,12 +12,19 @@ InterMix 11 has no process-global container alias registry. Finalized Container 
 Execution carriers
 ------------------
 
-Fiber carrier identity uses the live Fiber object ID without retaining a Fiber registry. Swoole/OpenSwoole object carrier identities use WeakMap and WeakReference ownership. The former strong last-Fiber fast path is absent.
+Live Fiber objects map to monotonically assigned carrier identities through a
+WeakMap, preventing identity reuse without retaining terminated Fibers.
+Swoole/OpenSwoole object carrier identities use WeakMap and WeakReference
+ownership. The former strong last-Fiber fast path is absent.
 
 Bounded metadata
 ----------------
 
 Fence class/extension capability caches are bounded to 256 entries. Retained reflection and diagnostic metadata remain subject to explicit cache limits/reset contracts. Request, tenant, principal, return-value, and scope objects are not process-global metadata.
+
+The auto-binding converter-support cache is bounded to 1,024 class entries. It
+stores immutable method-support booleans only, including negative lookups, and
+never retains supplied parameter values or converted objects.
 
 Optional providers
 ------------------

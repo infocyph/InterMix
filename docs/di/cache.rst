@@ -37,4 +37,4 @@ Safety
 
 Cache namespace and generation are explicit. InterMix does not clear unrelated pool entries. Cyclic, too-deep, too-broad, object-containing, or otherwise unsupported values remain usable in-process but bypass external persistence.
 
-When CacheLayer 4 and Runwire 2.1 are used together, the host-owned runtime/request/coroutine context is forwarded through the documented integration boundary rather than recreated by InterMix.
+When CacheLayer 4 and Runwire 2.1.1+ are used together, the host-owned runtime/request/coroutine context is forwarded through the documented integration boundary rather than recreated by InterMix.

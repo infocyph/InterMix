@@ -33,6 +33,8 @@ class Repository
 
     private ?AttributeRegistry $attributeRegistry = null;
 
+    private bool $autoBind = false;
+
     /** @var array<string, array<string, mixed>> */
     private array $classResource = [];
 
@@ -223,6 +225,7 @@ class Repository
         $target->definitionMetaByEnv = $this->definitionMetaByEnv;
         $target->enableMethodAttribute = $this->enableMethodAttribute;
         $target->enablePropertyAttribute = $this->enablePropertyAttribute;
+        $target->autoBind = $this->autoBind;
         $target->environment = $this->environment;
         $target->functionReference = $this->functionReference;
         $target->functionReference[ContainerInterface::class] = $target->container;
@@ -276,6 +279,16 @@ class Repository
         foreach ($this->onResolvingHooks[$id] ?? [] as $hook) {
             $hook($id);
         }
+    }
+
+    /**
+     * Set class-defined parameter conversion policy and invalidate resolution caches.
+     */
+    public function enableAutoBind(bool $enable = true): void
+    {
+        $this->checkIfLocked();
+        $this->autoBind = $enable;
+        $this->invalidateResolutionConfiguration();
     }
 
     /**
@@ -810,6 +823,14 @@ class Repository
     public function hasScopeSeeds(): bool
     {
         return $this->scopeSeeds !== [];
+    }
+
+    /**
+     * Check whether named class parameters may use the fromBoundValue conversion convention.
+     */
+    public function isAutoBindEnabled(): bool
+    {
+        return $this->autoBind;
     }
 
     /**

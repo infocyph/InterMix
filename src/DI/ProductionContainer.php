@@ -326,6 +326,11 @@ abstract class ProductionContainer implements RuntimeContainerInterface
     }
 
     /**
+     * Apply frozen injection and conversion policies when materializing a late runtime invoker.
+     */
+    protected function configureRuntimeInvoker(ConfigurationContainer $runtime): void {}
+
+    /**
      * Cache a scoped result and prevent conflicting construction by attached carriers.
      */
     final protected function constructCompiledScoped(
@@ -686,6 +691,7 @@ abstract class ProductionContainer implements RuntimeContainerInterface
     {
         if (!$this->fallback instanceof ConfigurationContainer) {
             $fallback = new ConfigurationContainer('intermix.production.dynamic.' . spl_object_id($this));
+            $this->configureRuntimeInvoker($fallback);
             $this->installFallbackBridges($fallback);
             $this->fallback = $fallback;
             $this->lateFallback = true;

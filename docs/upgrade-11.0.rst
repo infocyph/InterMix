@@ -84,6 +84,9 @@ ServiceProviderInterface::register() receives ContainerBuilder.
 
 .. code-block:: php
 
+   use Infocyph\InterMix\DI\ContainerBuilder;
+   use Infocyph\InterMix\DI\Support\ServiceProviderInterface;
+
    final class AppProvider implements ServiceProviderInterface
    {
        public function register(ContainerBuilder $builder): void

@@ -7,7 +7,7 @@ namespace Infocyph\InterMix\DI\Build;
 use Infocyph\InterMix\DI\Support\LifetimeEnum;
 
 /**
- * @phpstan-type ServiceArgument array{kind: 'service', id: string}|array{kind: 'value', code: string}
+ * @phpstan-type ServiceArgument array{kind: 'service', id: string, bind?: class-string, nullable?: bool}|array{kind: 'value', code: string, bind?: class-string, nullable?: bool}
  * @phpstan-type PropertyPlan array{declaring: class-string, property: string, static: bool, argument: ServiceArgument|null, runtime?: 'attribute'|'assign'}
  * @phpstan-type MethodPlan array{method: string, arguments: list<ServiceArgument>, dependencies: list<string>, parameterNames?: list<string>, static?: bool, runtime?: bool}
  * @phpstan-type AliasPlan array{kind: 'alias', target: string, lifetime: LifetimeEnum, arguments: list<ServiceArgument>, properties: list<PropertyPlan>, dependencies: list<string>}
@@ -60,17 +60,6 @@ final class StaticFreshInvocationRenderer
         }
 
         return $source . $methods . $parameterizedMethods;
-    }
-
-    /**
-     * @param ServiceArgument $argument
-     * @param array<string, int> $slots
-     */
-    private function argumentExpression(array $argument, array $slots): string
-    {
-        return $argument['kind'] === 'service'
-            ? '$this->s' . $slots[$argument['id']] . '()'
-            : $argument['code'];
     }
 
     /**
@@ -155,7 +144,7 @@ final class StaticFreshInvocationRenderer
     {
         $constructorArguments = [];
         foreach ($recipe['arguments'] as $argument) {
-            $constructorArguments[] = $this->argumentExpression($argument, $slots);
+            $constructorArguments[] = StaticRuntimeIslandRenderer::argumentExpression($argument, $slots);
         }
 
         $class = '\\' . ltrim($recipe['class'], '\\');
@@ -187,7 +176,7 @@ final class StaticFreshInvocationRenderer
     {
         $constructorArguments = [];
         foreach ($recipe['arguments'] as $argument) {
-            $constructorArguments[] = $this->argumentExpression($argument, $slots);
+            $constructorArguments[] = StaticRuntimeIslandRenderer::argumentExpression($argument, $slots);
         }
 
         $class = '\\' . ltrim($recipe['class'], '\\');
@@ -212,9 +201,10 @@ final class StaticFreshInvocationRenderer
         $names = $recipe['invocation']['parameterNames'] ?? [];
         foreach ($recipe['invocation']['arguments'] as $index => $argument) {
             $name = var_export($names[$index], true);
-            $fallback = $this->argumentExpression($argument, $slots);
+            $fallback = StaticRuntimeIslandRenderer::argumentExpression($argument, $slots);
+            $supplied = StaticRuntimeIslandRenderer::argumentExpression($argument, $slots, '$parameters[' . $name . ']');
             $arguments[] = "array_key_exists({$name}, \$parameters)"
-                . " ? \$parameters[{$name}] : {$fallback}";
+                . " ? {$supplied} : {$fallback}";
         }
 
         $target = ($recipe['invocation']['static'] ?? false)

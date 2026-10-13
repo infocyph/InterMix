@@ -22,6 +22,8 @@ Configuration
      - Service alias.
    * - input(id)
      - Host-supplied scoped input.
+   * - enableAutoBind(enable)
+     - Opt into static fromBoundValue conversion for class parameters; disabled by default.
    * - when(consumer)
      - Contextual binding builder.
    * - import(provider)
@@ -30,6 +32,8 @@ Configuration
      - Configure external definition caching.
    * - compile(path, strict)
      - Generate a frozen production artifact.
+   * - ContainerBuilder::loadProductionArtifact(path, graph, environment)
+     - Load a fully native artifact without rebuilding configuration.
 
 Runtime
 -------

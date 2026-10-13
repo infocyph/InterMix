@@ -56,6 +56,7 @@ before a **new** instance is created.
 
 - **Instance inspection** – ``hasInstance()``, ``countInstances()``, ``getInstances()``, ``getKeys()``
 - **Cache management** – ``clearInstances()`` for testing
+- **Reset** – ``reset()`` clears instances and restores the class-declared limit
 - **Runtime limit override** – ``setLimit()`` for dynamic configuration
 - **Input validation** – clear errors for malformed requirements and invalid limits
 
@@ -115,6 +116,7 @@ current factory itself expects a zero-argument constructor.
     namespace App;
 
     use Infocyph\InterMix\Fence\Limit;
+    use Infocyph\InterMix\Exceptions\LimitExceededException;
 
     class ReportCache
     {
@@ -124,7 +126,11 @@ current factory itself expects a zero-argument constructor.
     // By default, Limit uses 2. Override at runtime:
     ReportCache::instance("rA");
     ReportCache::instance("rB");
-    ReportCache::instance("rC");           // throws LimitExceededException if >2 and setLimit not called
+    try {
+        ReportCache::instance("rC");      // limit of 2 reached
+    } catch (LimitExceededException $e) {
+        // Increase the limit explicitly if the application permits it.
+    }
     ReportCache::setLimit(3);              // Override to accept 3
     ReportCache::instance("rC");           // now allowed
 
@@ -142,7 +148,8 @@ The wrapper traits supply static helpers:
 - ``getInstances()`` → array(key → instance)
 - ``getKeys()`` → array of slots/keys
 - ``clearInstances()`` → resets to empty
-- ``setLimit(int $n)`` (only on ``Limit``)
+- ``reset()`` → clears instances and restores the class-declared limit
+- ``setLimit(int $n)`` → overrides the limit on any Fence consumer; keys still follow FENCE_KEYED
 
 Exceptions
 ----------
@@ -171,6 +178,8 @@ Defining classes::
     use Infocyph\InterMix\Fence\Single;
     use Infocyph\InterMix\Fence\Multi;
     use Infocyph\InterMix\Fence\Limit;
+    use Infocyph\InterMix\Exceptions\LimitExceededException;
+    use Infocyph\InterMix\Exceptions\RequirementException;
 
     class Config {
         use Single;
@@ -207,7 +216,11 @@ Creating and inspecting instances::
     ReportCache::instance("rA");
     ReportCache::instance("rB");
     // Next line throws LimitExceededException (limit=2 by default):
-    ReportCache::instance("rC");
+    try {
+        ReportCache::instance("rC");
+    } catch (LimitExceededException $e) {
+        // Expected while the limit is 2.
+    }
 
     // Change limit to 3:
     ReportCache::setLimit(3);
