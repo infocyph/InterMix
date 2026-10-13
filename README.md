@@ -240,8 +240,36 @@ InterMix does not create or own a Runwire runtime. The host supplies its existin
 
 InterMix 11 intentionally removes mutable runtime configuration, manager proxies, process-global container lookup, descriptor-style invocation, and manual scope lifecycle APIs. See docs/upgrade-11.0.rst for the migration table.
 
-## Quality and performance
+## Security
 
-The release gates use PHPForge QA/analysis, PHP 8.4 and 8.5, stable/lowest dependency lanes, clean production install, Swoole/OpenSwoole scope-carrier checks, component regression measurements, and representative persistent-host acceptance.
+Do not disclose suspected vulnerabilities in a public issue, discussion or pull request. Follow [SECURITY.md](SECURITY.md) and use [GitHub private vulnerability reporting](https://github.com/infocyph/InterMix/security/advisories/new).
 
-License: MIT.
+InterMix is protected by [PHPForge](https://github.com/infocyph/PHPForge), which provides automated tests, static and taint analysis, dependency auditing, architecture checks and release-readiness gates. Automated controls do not replace responsible disclosure or manual review.
+
+
+---
+
+<div align="center">
+  <sub><strong>Made with ❤️ for the PHP community</strong></sub><br />
+  <sub><a href="LICENSE">MIT Licensed</a></sub><br />
+  <a href="https://docs.infocyph.com/projects/InterMix/">Documentation</a> •
+  <a href="SECURITY.md">Security</a> •
+  <a href="CODE_OF_CONDUCT.md">Code of Conduct</a> •
+  <a href="CONTRIBUTING.md">Contributing</a><br />
+  <span title="Issue templates" aria-label="Issue templates">🗂️</span>
+  <a href="https://github.com/infocyph/InterMix/issues/new?template=bug_report.yml">Bug</a> •
+  <a href="https://github.com/infocyph/InterMix/issues/new?template=feature_request.yml">Feature</a> •
+  <a href="https://github.com/infocyph/InterMix/issues/new?template=docs_improvement.yml">Documentation</a> •
+  <a href="https://github.com/infocyph/InterMix/issues/new?template=question.yml">Question</a> •
+  <a href="https://github.com/infocyph/InterMix/issues/new?template=ci_failure.yml">CI failure</a><br />
+  <span title="Pull request templates" aria-label="Pull request templates">🔀</span>
+  <a href="https://github.com/infocyph/InterMix/compare/main...HEAD?quick_pull=1&amp;template=PULL_REQUEST_TEMPLATE.md">General</a> •
+  <a href="https://github.com/infocyph/InterMix/compare/main...HEAD?quick_pull=1&amp;template=bug_fix.md">Bug fix</a> •
+  <a href="https://github.com/infocyph/InterMix/compare/main...HEAD?quick_pull=1&amp;template=feature.md">Feature</a> •
+  <a href="https://github.com/infocyph/InterMix/compare/main...HEAD?quick_pull=1&amp;template=refactor.md">Refactor</a> •
+  <a href="https://github.com/infocyph/InterMix/compare/main...HEAD?quick_pull=1&amp;template=performance.md">Performance</a> •
+  <a href="https://github.com/infocyph/InterMix/compare/main...HEAD?quick_pull=1&amp;template=security_reliability.md">Security &amp; reliability</a> •
+  <a href="https://github.com/infocyph/InterMix/compare/main...HEAD?quick_pull=1&amp;template=documentation.md">Documentation</a> •
+  <a href="https://github.com/infocyph/InterMix/compare/main...HEAD?quick_pull=1&amp;template=maintenance.md">Maintenance</a>
+</div>
+
