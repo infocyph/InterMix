@@ -15,6 +15,9 @@ use JsonException;
 final class StaticRuntimeGenerator
 {
     /**
+     * Publish an immutable runtime and manifest with deterministic graph, digest and build
+     * identities.
+     *
      * @return array{
      *   runtime: ProductionContainer,
      *   compiled: list<string>,
@@ -91,6 +94,10 @@ final class StaticRuntimeGenerator
         ];
     }
 
+    /**
+     * Validate manifest, content, environment, graph and any required fallback identity before
+     * loading.
+     */
     public function load(
         string $filePath,
         ?ConfigurationContainer $fallback = null,
@@ -106,6 +113,10 @@ final class StaticRuntimeGenerator
         return $this->attachFallback($this->loadRuntime($artifactPath), $fallback);
     }
 
+    /**
+     * Load without a source graph only when deployment identity matches and no fallback is
+     * required.
+     */
     public function loadCompiled(
         string $filePath,
         string $expectedGraphIdentity,

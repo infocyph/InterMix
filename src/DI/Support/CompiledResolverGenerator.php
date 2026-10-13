@@ -21,6 +21,9 @@ final class CompiledResolverGenerator
     private const int ARTIFACT_FORMAT = 3;
 
     /**
+     * Publish a validated legacy resolver with deterministic fingerprints and explicit skip
+     * reasons.
+     *
      * @param Container $container Fully registered source container.
      * @param string $filePath Trusted build-artifact destination.
      * @return array{

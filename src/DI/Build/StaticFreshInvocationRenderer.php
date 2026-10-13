@@ -23,6 +23,8 @@ use Infocyph\InterMix\DI\Support\LifetimeEnum;
 final class StaticFreshInvocationRenderer
 {
     /**
+     * Emit fresh construction and method recipes without reusing declared service lifetime caches.
+     *
      * @param array<string, ServicePlan> $plans
      * @param array<string, int> $slots
      */
@@ -97,7 +99,7 @@ final class StaticFreshInvocationRenderer
      */
     private function renderDispatch(array $grouped): string
     {
-        $source = "    protected function freshCompiledInvocation(\n";
+        $source = "    /** {@inheritDoc} */\n    protected function freshCompiledInvocation(\n";
         $source .= "        string \$class,\n";
         $source .= "        string \$method,\n";
         $source .= "        mixed &\$result,\n";
@@ -123,7 +125,7 @@ final class StaticFreshInvocationRenderer
      */
     private function renderParameterizedDispatch(array $grouped): string
     {
-        $source = "    protected function freshCompiledInvocationWithParameters(\n";
+        $source = "    /** {@inheritDoc} */\n    protected function freshCompiledInvocationWithParameters(\n";
         $source .= "        string \$class,\n";
         $source .= "        string \$method,\n";
         $source .= "        array \$parameters,\n";

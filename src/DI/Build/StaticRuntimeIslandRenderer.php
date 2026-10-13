@@ -13,6 +13,8 @@ namespace Infocyph\InterMix\DI\Build;
 final class StaticRuntimeIslandRenderer
 {
     /**
+     * Render direct method dispatch or the shared runtime bridge for unsupported reflection work.
+     *
      * @param MethodPlan $method
      * @param array<string, int> $slots
      */
@@ -43,6 +45,8 @@ final class StaticRuntimeIslandRenderer
     }
 
     /**
+     * Render direct assignments or runtime property bridges according to each planned property.
+     *
      * @param list<PropertyPlan> $properties
      * @param array<string, int> $slots
      */

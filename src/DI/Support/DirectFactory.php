@@ -13,11 +13,17 @@ use Infocyph\InterMix\DI\RuntimeContainerInterface;
  */
 final readonly class DirectFactory
 {
+    /**
+     * Retain a legacy closure and the configuration container passed directly to it.
+     */
     public function __construct(
         private Closure $factory,
         private RuntimeContainerInterface $container,
     ) {}
 
+    /**
+     * Execute the closure with its owning configuration container.
+     */
     public function resolve(): mixed
     {
         return ($this->factory)($this->container);

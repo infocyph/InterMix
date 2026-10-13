@@ -31,6 +31,9 @@ final class DebugTracer
 
     private int $seq = 0;
 
+    /**
+     * Initialize disabled or caller-selected tracing with an optional enabled-state listener.
+     */
     public function __construct(
         private TraceLevelEnum $level = TraceLevelEnum::Off,
         private bool $captureLocation = false,
@@ -42,6 +45,9 @@ final class DebugTracer
     /* ----------  spans  -------------------------------------------------- */
 
     /**
+     * Start a level-filtered span and return its completion callback; disabled tracing returns a
+     * no-op callback.
+     *
      * @param array<int|string, mixed> $context
      */
     public function beginSpan(
@@ -118,6 +124,9 @@ final class DebugTracer
     }
 
     /**
+     * Finish an active span with additional context; unknown or absent span identifiers are
+     * ignored.
+     *
      * @param array<int|string, mixed> $context
      */
     public function endSpan(?string $spanId, array $context = []): void
@@ -149,7 +158,11 @@ final class DebugTracer
 
     /* ----------  access / export  --------------------------------------- */
 
-    /** @return TraceEntry[] */
+    /**
+     * Finish pending spans and expose the recorded entries without clearing the buffer.
+     *
+     * @return TraceEntry[]
+     */
     public function getEntries(): array
     {
         $this->closeActiveSpans();
@@ -169,11 +182,17 @@ final class DebugTracer
         return $out;
     }
 
+    /**
+     * Check whether new trace entries include caller locations.
+     */
     public function isCaptureLocationEnabled(): bool
     {
         return $this->captureLocation;
     }
 
+    /**
+     * Check whether the current level records any resolution events.
+     */
     public function isEnabled(): bool
     {
         return $this->enabled;
@@ -181,6 +200,9 @@ final class DebugTracer
 
     /* --------------------------------------------------------------------- */
 
+    /**
+     * Expose the effective verbosity used to filter subsequent events.
+     */
     public function level(): TraceLevelEnum
     {
         return $this->level;
@@ -189,6 +211,8 @@ final class DebugTracer
     /* --------------------------------------------------------------------- */
 
     /**
+     * Record an event only when its verbosity is enabled.
+     *
      * @param array<int|string, mixed> $context
      */
     public function push(
@@ -242,6 +266,9 @@ final class DebugTracer
         $this->graphEdges[$edgeKey]['count']++;
     }
 
+    /**
+     * Toggle caller-location capture for subsequently recorded entries.
+     */
     public function setCaptureLocation(bool $enabled): self
     {
         $this->captureLocation = $enabled;
@@ -249,6 +276,9 @@ final class DebugTracer
         return $this;
     }
 
+    /**
+     * Change event verbosity and notify the enabled-state listener.
+     */
     public function setLevel(TraceLevelEnum $level): self
     {
         $this->level = $level;
@@ -263,6 +293,8 @@ final class DebugTracer
     /* ----- built-in formatters ------------------------------------------ */
 
     /**
+     * Finish pending spans, export event timing in microseconds and clear the trace buffer.
+     *
      * @return array<int, array{
      *   ts: string,
      *   level: string,

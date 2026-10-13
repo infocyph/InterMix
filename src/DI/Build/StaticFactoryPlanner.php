@@ -14,7 +14,12 @@ use Infocyph\InterMix\DI\Support\ServiceReference;
  */
 final class StaticFactoryPlanner
 {
-    /** @return FactoryPlan */
+    /**
+     * Translate an exportable constructor or static factory into literal and service-slot
+     * arguments.
+     *
+     * @return FactoryPlan
+     */
     public function plan(DefinitionGraph $graph, string $id, FactoryDefinition $definition): array
     {
         $arguments = [];

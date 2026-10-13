@@ -15,6 +15,8 @@ use DateTimeImmutable;
 final readonly class TraceEntry
 {
     /**
+     * Capture one resolution event with timing, caller-supplied context and optional location metadata.
+     *
      * @param array<int|string, mixed> $context
      */
     public function __construct(

@@ -19,6 +19,9 @@ use Infocyph\InterMix\Exceptions\ContainerException;
 final class StaticScopedConstructionGuard
 {
     /**
+     * Wrap generated scoped construction with ownership guards when shared execution can require
+     * them.
+     *
      * @param array<string, array{lifetime: LifetimeEnum}> $plans
      * @param array<string, int> $slots
      */

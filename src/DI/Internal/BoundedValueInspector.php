@@ -13,6 +13,9 @@ final class BoundedValueInspector
 
     public const int DEFAULT_MAX_VALUES = 100_000;
 
+    /**
+     * Accept only scalar, null and bounded nested arrays suitable for persistent value caching.
+     */
     public static function isScalarNullArray(
         mixed $value,
         int $maxDepth = self::DEFAULT_MAX_DEPTH,

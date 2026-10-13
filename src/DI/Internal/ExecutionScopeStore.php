@@ -15,6 +15,9 @@ final class ExecutionScopeStore
     /** @var array<string, ExecutionScopeState> */
     private array $states = [];
 
+    /**
+     * Reject leaving attached scopes or scopes with active children; mark the latter as draining.
+     */
     public function assertCanLeaveScope(string $context): void
     {
         $state = $this->states[$context] ?? null;
@@ -33,6 +36,9 @@ final class ExecutionScopeStore
         }
     }
 
+    /**
+     * Reject stale, foreign or non-current handles before consuming a scoped iterator.
+     */
     public function assertCurrentScopeContext(
         string $context,
         ScopeContext $scopeContext,
@@ -50,6 +56,9 @@ final class ExecutionScopeStore
         }
     }
 
+    /**
+     * Reject configuration mutation while another carrier or scope attachment is active.
+     */
     public function assertMutationSafe(?string $currentContext): void
     {
         if ($this->hasConcurrentActivity($currentContext)) {
@@ -59,6 +68,9 @@ final class ExecutionScopeStore
         }
     }
 
+    /**
+     * Attach an active owner-matching scope only when this carrier has no active scope.
+     */
     public function attachScopeContext(string $context, ScopeContext $scopeContext, object $owner): void
     {
         $scope = $this->unwrapScopeContext($scopeContext, $owner);
@@ -79,6 +91,9 @@ final class ExecutionScopeStore
         $state->attachedScope = $scope;
     }
 
+    /**
+     * Claim construction for this carrier; reject simultaneous construction by another carrier.
+     */
     public function beginScopedConstruction(string $context, string $scope, string $id): bool
     {
         $frame = $this->logicalScopeForName($context, $scope);
@@ -102,6 +117,9 @@ final class ExecutionScopeStore
         return true;
     }
 
+    /**
+     * Promote active fast-path state into an owner-bound, process-local scope handle.
+     */
     public function captureScopeContext(string $context, object $owner): ScopeContext
     {
         $state = $this->states[$context] ?? null;
@@ -122,6 +140,9 @@ final class ExecutionScopeStore
         return new CapturedScopeContext($owner, $scope);
     }
 
+    /**
+     * Detach this carrier's shared scope only after all nested scopes have closed.
+     */
     public function detachCurrentScopeContext(string $context): void
     {
         $state = $this->states[$context] ?? null;
@@ -136,6 +157,9 @@ final class ExecutionScopeStore
         unset($this->states[$context]);
     }
 
+    /**
+     * Release the specified attachment, rejecting mismatched handles or still-active nested scopes.
+     */
     public function detachScopeContext(string $context, ScopeContext $scopeContext, object $owner): void
     {
         $scope = $this->unwrapScopeContext($scopeContext, $owner);
@@ -153,6 +177,9 @@ final class ExecutionScopeStore
         unset($this->states[$context]);
     }
 
+    /**
+     * Release a construction claim only when it belongs to the specified carrier.
+     */
     public function endScopedConstruction(string $context, string $scope, string $id): void
     {
         $frame = $this->logicalScopeForName($context, $scope);
@@ -161,7 +188,11 @@ final class ExecutionScopeStore
         }
     }
 
-    /** @param array<string, mixed> $instances */
+    /**
+     * Push carrier-local scope state with seeds, rejecting repeated active names.
+     *
+     * @param array<string, mixed> $instances
+     */
     public function enterScope(string $context, string $scope, array $instances = []): void
     {
         $state = $this->states[$context] ??= new ExecutionScopeState();
@@ -182,6 +213,9 @@ final class ExecutionScopeStore
         }
     }
 
+    /**
+     * Return presence separately from a possibly null value and expose the current scope name.
+     */
     public function findCurrentResolvedScoped(string $context, string $id, string &$scope, mixed &$value): bool
     {
         $state = $this->states[$context] ?? null;
@@ -211,6 +245,9 @@ final class ExecutionScopeStore
         return true;
     }
 
+    /**
+     * Look up seeds in the current frame only, preserving explicitly supplied null values.
+     */
     public function findScopeSeed(string $context, string $id, mixed &$value): bool
     {
         $state = $this->states[$context] ?? null;
@@ -239,6 +276,9 @@ final class ExecutionScopeStore
         return true;
     }
 
+    /**
+     * Read a named scope's cached value; null also represents a missing entry.
+     */
     public function getResolvedScopedEntry(string $context, string $scope, string $id): mixed
     {
         $state = $this->states[$context] ?? null;
@@ -252,6 +292,9 @@ final class ExecutionScopeStore
         return $this->logicalScopeForName($context, $scope)?->resolvedScoped[$id] ?? null;
     }
 
+    /**
+     * Return the carrier's active scope name, defaulting to root when no state exists.
+     */
     public function getScope(string $context): string
     {
         $state = $this->states[$context] ?? null;
@@ -264,6 +307,9 @@ final class ExecutionScopeStore
             : $state->currentScope;
     }
 
+    /**
+     * Check whether this carrier entered a child below its attached scope.
+     */
     public function hasNestedScope(string $context): bool
     {
         $state = $this->states[$context] ?? null;
@@ -274,6 +320,9 @@ final class ExecutionScopeStore
             && $state->logicalCurrent !== $state->attachedScope;
     }
 
+    /**
+     * Validate the attachment before checking whether its nested scopes remain open.
+     */
     public function hasNestedScopeOnAttachment(string $context, ScopeContext $scopeContext, object $owner): bool
     {
         $scope = $this->unwrapScopeContext($scopeContext, $owner);
@@ -285,6 +334,9 @@ final class ExecutionScopeStore
         return $state->logicalCurrent !== $state->attachedScope;
     }
 
+    /**
+     * Check named-scope cache presence without treating a stored null as missing.
+     */
     public function hasResolvedScoped(string $context, string $scope, string $id): bool
     {
         $state = $this->states[$context] ?? null;
@@ -300,6 +352,9 @@ final class ExecutionScopeStore
         return $frame instanceof LogicalScopeState && array_key_exists($id, $frame->resolvedScoped);
     }
 
+    /**
+     * Check whether this carrier retains seeded execution state.
+     */
     public function hasScopeSeeds(string $context): bool
     {
         $state = $this->states[$context] ?? null;
@@ -312,21 +367,33 @@ final class ExecutionScopeStore
             : $state->scopeSeeds !== [];
     }
 
+    /**
+     * Check whether this carrier has allocated execution state.
+     */
     public function hasState(string $context): bool
     {
         return isset($this->states[$context]);
     }
 
+    /**
+     * Check whether the carrier is borrowing another execution's logical scope.
+     */
     public function isAttached(string $context): bool
     {
         return ($this->states[$context]->attachedScope ?? null) instanceof LogicalScopeState;
     }
 
+    /**
+     * Check whether any carrier state remains after execution cleanup.
+     */
     public function isEmpty(): bool
     {
         return $this->states === [];
     }
 
+    /**
+     * Close the current frame and restore its parent, rejecting unsafe shared-scope closure.
+     */
     public function leaveScope(string $context): void
     {
         $state = $this->states[$context] ?? null;
@@ -377,6 +444,9 @@ final class ExecutionScopeStore
         $this->states[$context] = $state;
     }
 
+    /**
+     * Reset every carrier through the same scope ownership checks used for individual resets.
+     */
     public function resetAll(): void
     {
         foreach (array_keys($this->states) as $context) {
@@ -384,6 +454,9 @@ final class ExecutionScopeStore
         }
     }
 
+    /**
+     * Release carrier-local state while respecting propagated scope ownership.
+     */
     public function resetScope(string $context): void
     {
         $state = $this->states[$context] ?? null;
@@ -399,6 +472,9 @@ final class ExecutionScopeStore
         $this->resetLogicalState($context, $state);
     }
 
+    /**
+     * Cache a result in the requested carrier-local scope, preserving null as a resolved value.
+     */
     public function setResolvedScoped(string $context, string $scope, string $id, mixed $value): void
     {
         $state = $this->states[$context] ??= new ExecutionScopeState();
@@ -416,6 +492,10 @@ final class ExecutionScopeStore
         $frame->resolvedScoped[$id] = $value;
     }
 
+    /**
+     * Replace fast-path scope identity; propagated logical scopes require leaving or resetting
+     * instead.
+     */
     public function setScope(string $context, string $scope): void
     {
         $state = $this->states[$context] ??= new ExecutionScopeState();

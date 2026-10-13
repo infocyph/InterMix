@@ -18,6 +18,8 @@ use ReflectionParameter;
 final class StaticMethodPlanner
 {
     /**
+     * Plan a requested method with supplied overrides, returning a reason when unsupported.
+     *
      * @param ReflectionClass<object> $class
      * @param array<int|string, mixed> $supplied
      * @return MethodPlan|string
@@ -42,6 +44,8 @@ final class StaticMethodPlanner
     }
 
     /**
+     * Plan the configured or attributed post-construction method, or null when none applies.
+     *
      * @param ReflectionClass<object> $class
      * @return MethodPlan|null
      */

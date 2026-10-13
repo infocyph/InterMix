@@ -16,7 +16,11 @@ use Infocyph\InterMix\Internal\ReflectionResource;
  */
 final class StaticInvocationPlanner
 {
-    /** @return InvocationPlan|string */
+    /**
+     * Plan a callable definition's construction and invocation, retaining unsupported reasons.
+     *
+     * @return InvocationPlan|string
+     */
     public function plan(DefinitionGraph $graph, string $id, string $className, string $methodName): array|string
     {
         if (!class_exists($className)) {

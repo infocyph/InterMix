@@ -27,6 +27,9 @@ final class ProductionScopeStore
     /** @var array<string, ProductionExecutionScopeState> */
     private array $states = [];
 
+    /**
+     * Identify the current carrier, including the sequential carrier after scope propagation.
+     */
     public function activeContext(): ?string
     {
         $context = ExecutionContext::id();
@@ -37,6 +40,9 @@ final class ProductionScopeStore
         return $this->rootContextActive ? self::ROOT_CONTEXT : null;
     }
 
+    /**
+     * Reject foreign or stale handles and iteration outside the handle's active carrier scope.
+     */
     public function assertCurrent(ScopeContext $scopeContext): void
     {
         [$scope] = $this->unwrap($scopeContext);
@@ -52,6 +58,9 @@ final class ProductionScopeStore
         }
     }
 
+    /**
+     * Borrow an active logical scope only when the receiving carrier has no active scope.
+     */
     public function attach(ScopeState $scope, ScopeState $sequentialScope): string
     {
         if ($scope->closed) {
@@ -84,7 +93,12 @@ final class ProductionScopeStore
         return $context;
     }
 
-    /** @return array{ProductionCapturedScopeContext, ScopeState} */
+    /**
+     * Create an owner-bound scope handle and promote sequential state when sharing first becomes
+     * necessary.
+     *
+     * @return array{ProductionCapturedScopeContext, ScopeState}
+     */
     public function capture(ScopeState $sequentialScope, ?ScopeContext $fallbackContext): array
     {
         $context = ExecutionContext::id();
@@ -116,6 +130,9 @@ final class ProductionScopeStore
         ];
     }
 
+    /**
+     * Cache a slot's value while rejecting construction already claimed by another carrier.
+     */
     public function constructScoped(ScopeState $scope, int $slot, string $id, callable $resolver): mixed
     {
         $carrier = $this->activeContext() ?? self::SEQUENTIAL_CONSTRUCTION_CONTEXT;
@@ -141,6 +158,9 @@ final class ProductionScopeStore
         }
     }
 
+    /**
+     * Select carrier-local scope state, using the supplied frame for unshared sequential execution.
+     */
     public function current(ScopeState $sequentialScope): ScopeState
     {
         $context = $this->activeContext();
@@ -153,7 +173,11 @@ final class ProductionScopeStore
         return $state->current ??= new ScopeState('root');
     }
 
-    /** @param callable(ScopeState): void $beforeClose */
+    /**
+     * Close nested scopes before releasing the borrowed frame and its attachment count.
+     *
+     * @param callable(ScopeState): void $beforeClose
+     */
     public function detach(string $context, ScopeState $scope, callable $beforeClose): void
     {
         $state = $this->states[$context] ?? null;
@@ -175,6 +199,8 @@ final class ProductionScopeStore
     }
 
     /**
+     * Push a carrier-local frame with slot and identifier seeds, rejecting duplicate active names.
+     *
      * @param array<int, mixed> $seeds
      * @param array<string, mixed> $rawSeeds
      */
@@ -189,6 +215,9 @@ final class ProductionScopeStore
         $state->current = new ScopeState($scope, $current, $seeds, $rawSeeds);
     }
 
+    /**
+     * Detect other carriers and scope attachments that make configuration mutation unsafe.
+     */
     public function hasConcurrentActivity(?string $currentContext): bool
     {
         foreach ($this->states as $context => $state) {
@@ -206,12 +235,19 @@ final class ProductionScopeStore
         return false;
     }
 
+    /**
+     * Check whether any propagated carrier state remains after cleanup.
+     */
     public function isEmpty(): bool
     {
         return $this->states === [];
     }
 
-    /** @param callable(ScopeState): void $beforeClose */
+    /**
+     * Run cleanup and close the current frame while enforcing scope ownership.
+     *
+     * @param callable(ScopeState): void $beforeClose
+     */
     public function leaveCurrent(ScopeState $sequentialScope, callable $beforeClose): ScopeState
     {
         $context = $this->activeContext();
@@ -225,6 +261,9 @@ final class ProductionScopeStore
     }
 
     /**
+     * Drain the current carrier and retain bounded cleanup errors without discarding their total
+     * count.
+     *
      * @param callable(ScopeState): void $beforeClose
      * @param list<\Throwable> $failures
      */
@@ -255,7 +294,11 @@ final class ProductionScopeStore
         return $sequentialScope;
     }
 
-    /** @return array{ScopeState, ScopeContext|null} */
+    /**
+     * Validate container ownership before exposing the native scope and optional fallback handle.
+     *
+     * @return array{ScopeState, ScopeContext|null}
+     */
     public function unwrap(ScopeContext $scopeContext): array
     {
         if (!$scopeContext instanceof ProductionCapturedScopeContext) {

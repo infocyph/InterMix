@@ -14,6 +14,9 @@ namespace Infocyph\InterMix\DI\Build;
 final class StaticRuntimeRequirements
 {
     /**
+     * Collect unsupported definitions, runtime injection islands and lifecycle behavior requiring
+     * protected fallback.
+     *
      * @param array<string, ServicePlan> $plans
      * @param array<string, string> $skipped
      * @return array<string, string>

@@ -63,6 +63,9 @@ final readonly class DefinitionGraph
     ) {}
 
     /**
+     * Snapshot effective repository configuration and explicit dynamic behavior for build-time
+     * planning.
+     *
      * @param array<int, string> $dynamicServiceIds
      * @param array<int, string> $resolvingHookIds
      * @param array<int, string> $resolvedHookIds
@@ -125,36 +128,59 @@ final readonly class DefinitionGraph
         );
     }
 
-    /** @return array<string, array<string, mixed>> */
+    /**
+     * Expose frozen class construction, method and property resources.
+     *
+     * @return array<string, array<string, mixed>>
+     */
     public function classResources(): array
     {
         return $this->classResources;
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * Read frozen resources for one class, defaulting to an empty map.
+     *
+     * @return array<string, mixed>
+     */
     public function classResourcesFor(string $class): array
     {
         return $this->classResources[$class] ?? [];
     }
 
-    /** @return array<string, array{on: callable, params: array<int|string, mixed>}> */
+    /**
+     * Expose frozen callable resources that may require dynamic fallback.
+     *
+     * @return array<string, array{on: callable, params: array<int|string, mixed>}>
+     */
     public function closureResources(): array
     {
         return $this->closureResources;
     }
 
+    /**
+     * Read a frozen consumer-specific dependency override; null also represents absence.
+     */
     public function contextualBinding(string $consumer, string $dependency): mixed
     {
         return $this->contextualBindings[$consumer][$dependency] ?? null;
     }
 
-    /** @return array<string, array<string, mixed>> */
+    /**
+     * Expose all frozen consumer-specific overrides for identity and dependency planning.
+     *
+     * @return array<string, array<string, mixed>>
+     */
     public function contextualBindings(): array
     {
         return $this->contextualBindings;
     }
 
-    /** @return array<string, array<int, string>> */
+    /**
+     * Expose sorted consumer and dependency identifiers without executable binding values.
+     *
+     * @return array<string, array<int, string>>
+     */
     public function contextualBindingShape(): array
     {
         $shape = [];
@@ -168,113 +194,184 @@ final readonly class DefinitionGraph
         return $shape;
     }
 
+    /**
+     * Expose the frozen optional post-construction method policy.
+     */
     public function defaultMethod(): ?string
     {
         return $this->defaultMethod;
     }
 
-    /** @return array<string, array{lifetime: LifetimeEnum, tags: array<int, string>}> */
+    /**
+     * Expose effective lifetime and tag metadata captured for this environment.
+     *
+     * @return array<string, array{lifetime: LifetimeEnum, tags: array<int, string>}>
+     */
     public function definitionMeta(): array
     {
         return $this->definitionMeta;
     }
 
-    /** @return array{lifetime: LifetimeEnum, tags: array<int, string>} */
+    /**
+     * Read frozen entry metadata, defaulting to singleton lifetime and no tags.
+     *
+     * @return array{lifetime: LifetimeEnum, tags: array<int, string>}
+     */
     public function definitionMetaFor(string $id): array
     {
         return $this->definitionMeta[$id] ?? ['lifetime' => LifetimeEnum::Singleton, 'tags' => []];
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * Expose frozen recipes without executing factories or resolving instances.
+     *
+     * @return array<string, mixed>
+     */
     public function definitions(): array
     {
         return $this->definitions;
     }
 
-    /** @return array<int, string> */
+    /**
+     * List identifiers explicitly marked as requiring runtime behavior.
+     *
+     * @return array<int, string>
+     */
     public function dynamicServiceIds(): array
     {
         return array_keys($this->dynamicServiceIds);
     }
 
+    /**
+     * Expose the environment selected when configuration was frozen.
+     */
     public function environment(): ?string
     {
         return $this->environment;
     }
 
-    /** @return array<string, string> */
+    /**
+     * Expose reachable interface implementations captured from environment overrides.
+     *
+     * @return array<string, string>
+     */
     public function environmentBindings(): array
     {
         return $this->environmentBindings;
     }
 
+    /**
+     * Read the frozen implementation for a type, or null when no override applies.
+     */
     public function environmentConcrete(string $type): ?string
     {
         return $this->environmentBindings[$type] ?? null;
     }
 
+    /**
+     * Check whether an attribute has an explicitly registered runtime resolver.
+     */
     public function hasAttributeType(string $type): bool
     {
         return isset($this->attributeResolvers[$type]);
     }
 
+    /**
+     * Check frozen override presence, preserving literal null bindings.
+     */
     public function hasContextualBinding(string $consumer, string $dependency): bool
     {
         return array_key_exists($dependency, $this->contextualBindings[$consumer] ?? []);
     }
 
+    /**
+     * Check frozen declaration presence, including literal null definitions.
+     */
     public function hasDefinition(string $id): bool
     {
         return isset($this->definitions[$id]) || array_key_exists($id, $this->definitions);
     }
 
+    /**
+     * Check whether an identifier has post-construction fallback callbacks.
+     */
     public function hasResolvedHook(string $id): bool
     {
         return isset($this->resolvedHookIds[$id]);
     }
 
+    /**
+     * Check whether an identifier has pre-construction fallback callbacks.
+     */
     public function hasResolvingHook(string $id): bool
     {
         return isset($this->resolvingHookIds[$id]);
     }
 
+    /**
+     * Check whether a scope has cleanup callbacks requiring protected fallback.
+     */
     public function hasScopeLeaveHook(string $scope): bool
     {
         return isset($this->scopeLeaveHookScopes[$scope]);
     }
 
+    /**
+     * Check whether the frozen runtime uses dependency injection rather than generic invocation.
+     */
     public function injectionEnabled(): bool
     {
         return $this->injectionEnabled;
     }
 
+    /**
+     * Check whether frozen method attribute processing participates in planning.
+     */
     public function methodAttributesEnabled(): bool
     {
         return $this->methodAttributes;
     }
 
+    /**
+     * Check whether frozen property attribute processing participates in planning.
+     */
     public function propertyAttributesEnabled(): bool
     {
         return $this->propertyAttributes;
     }
 
-    /** @return array<class-string, class-string> */
+    /**
+     * Expose frozen attribute-to-resolver class mappings.
+     *
+     * @return array<class-string, class-string>
+     */
     public function registeredAttributeResolvers(): array
     {
         return $this->attributeResolvers;
     }
 
-    /** @return array<int, string> */
+    /**
+     * List attribute types with frozen resolver registrations.
+     *
+     * @return array<int, string>
+     */
     public function registeredAttributeTypes(): array
     {
         return array_keys($this->attributeResolvers);
     }
 
+    /**
+     * Check whether the identifier was explicitly designated for runtime resolution.
+     */
     public function requiresDynamicService(string $id): bool
     {
         return isset($this->dynamicServiceIds[$id]);
     }
 
+    /**
+     * Detect opaque definitions, callbacks or resources that cannot be authenticated by native
+     * plans alone.
+     */
     public function requiresReleaseIdentity(): bool
     {
         return $this->hasOpaqueCallbacks()
@@ -283,19 +380,31 @@ final readonly class DefinitionGraph
             || $this->hasOpaqueClassResources();
     }
 
-    /** @return array<int, string> */
+    /**
+     * List entries with post-construction callbacks for manifest identity and fallback planning.
+     *
+     * @return array<int, string>
+     */
     public function resolvedHookIds(): array
     {
         return array_keys($this->resolvedHookIds);
     }
 
-    /** @return array<int, string> */
+    /**
+     * List entries with pre-construction callbacks for manifest identity and fallback planning.
+     *
+     * @return array<int, string>
+     */
     public function resolvingHookIds(): array
     {
         return array_keys($this->resolvingHookIds);
     }
 
-    /** @return array<int, string> */
+    /**
+     * List scopes with cleanup callbacks for manifest identity and fallback planning.
+     *
+     * @return array<int, string>
+     */
     public function scopeLeaveHookScopes(): array
     {
         return array_keys($this->scopeLeaveHookScopes);

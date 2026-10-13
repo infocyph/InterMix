@@ -35,6 +35,8 @@ final readonly class FactoryDefinition
     }
 
     /**
+     * Declare an exportable constructor recipe with literals and explicit service references.
+     *
      * @param class-string $class
      * @param array<int, scalar|array<array-key, mixed>|ServiceReference|null> $arguments
      */
@@ -44,6 +46,8 @@ final readonly class FactoryDefinition
     }
 
     /**
+     * Declare an exportable static method recipe; an empty method name is invalid.
+     *
      * @param class-string $class
      * @param array<int, scalar|array<array-key, mixed>|ServiceReference|null> $arguments
      */
@@ -56,6 +60,9 @@ final readonly class FactoryDefinition
         return new self($class, $method, $arguments);
     }
 
+    /**
+     * Replace service references using the active runtime before executing the recipe.
+     */
     public function resolve(RuntimeContainerInterface $container): mixed
     {
         $arguments = [];
@@ -75,7 +82,11 @@ final readonly class FactoryDefinition
         return new $class(...$arguments);
     }
 
-    /** @return array{class: class-string, method: string|null, arguments: array<int, mixed>} */
+    /**
+     * Expose literal and reference argument shapes for deterministic artifact identity.
+     *
+     * @return array{class: class-string, method: string|null, arguments: array<int, mixed>}
+     */
     public function signature(): array
     {
         $arguments = [];

@@ -10,6 +10,9 @@ use Infocyph\InterMix\DI\ProductionContainer;
 /** @internal */
 final class ProductionContainerAccess
 {
+    /**
+     * Attach a caller-supplied fallback through the protected production runtime boundary.
+     */
     public static function attachFallback(
         ProductionContainer $runtime,
         ConfigurationContainer $fallback,

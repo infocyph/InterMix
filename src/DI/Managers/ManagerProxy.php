@@ -149,6 +149,8 @@ trait ManagerProxy
     }
 
     /**
+     * Remove a binding through the owning manager's checked mutation path.
+     *
      * @param mixed $offset The offset to unset.
      */
     public function offsetUnset(mixed $offset): void

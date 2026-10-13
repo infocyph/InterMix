@@ -30,6 +30,10 @@ final class RunwireIntegration
 
     private ?RuntimeContext $runtimeContext = null;
 
+    /**
+     * Associate a runtime container with passed Runwire context; cache lifecycle ownership is
+     * explicit.
+     */
     public function __construct(
         private readonly RuntimeContainerInterface $container,
         private readonly bool $ownsCacheLayerLifecycle = false,
@@ -37,6 +41,9 @@ final class RunwireIntegration
         $this->scopeContextLocal = new TaskLocal();
     }
 
+    /**
+     * Declare the Runwire runtime, request and coroutine inputs needed by execution boundaries.
+     */
     public static function registerInputs(ContainerBuilder $builder): ContainerBuilder
     {
         return $builder
@@ -45,6 +52,9 @@ final class RunwireIntegration
             ->input(CoroutineScope::class);
     }
 
+    /**
+     * Bind one caller-owned runtime, rejecting replacement while request boundaries are active.
+     */
     public function bind(RuntimeContext $runtime): void
     {
         if ($this->runtimeContext === $runtime) {
@@ -61,6 +71,10 @@ final class RunwireIntegration
         $this->runtimeContext = $runtime;
     }
 
+    /**
+     * Check supplied coroutine cancellation only when the bound runtime supports Runwire
+     * coroutines.
+     */
     public function checkpoint(?CoroutineScope $scope = null): void
     {
         $runtime = $this->requireRuntime();
@@ -71,6 +85,10 @@ final class RunwireIntegration
         $scope->cancellation()->throwIfCancelled();
     }
 
+    /**
+     * Unbind a matching runtime only after active boundaries finish; optional cache ownership
+     * governs release.
+     */
     public function release(?RuntimeContext $runtime = null): void
     {
         $bound = $this->runtimeContext;
@@ -87,17 +105,25 @@ final class RunwireIntegration
         $this->runtimeContext = null;
     }
 
+    /**
+     * Expose the caller-bound context, or null while the integration is unbound.
+     */
     public function runtime(): ?RuntimeContext
     {
         return $this->runtimeContext;
     }
 
+    /**
+     * Query capabilities on the bound runtime, returning false while unbound.
+     */
     public function supports(RuntimeCapability $capability): bool
     {
         return $this->runtimeContext?->supports($capability) ?? false;
     }
 
     /**
+     * Validate request ownership and run work in an isolated scope with declared Runwire seeds.
+     *
      * @param callable(RuntimeContainerInterface): mixed $callback
      * @param array<string, mixed> $instances
      */

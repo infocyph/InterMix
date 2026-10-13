@@ -30,7 +30,11 @@ final class StaticRuntimeArtifactMetadata
 
     public const string RUNTIME_NAME = 'runtime.php';
 
-    /** @param array<string, mixed> $manifest */
+    /**
+     * Encode manifest metadata deterministically and wrap JSON failures as container errors.
+     *
+     * @param array<string, mixed> $manifest
+     */
     public function encode(array $manifest): string
     {
         try {
@@ -47,6 +51,9 @@ final class StaticRuntimeArtifactMetadata
     }
 
     /**
+     * Describe genuine runtime requirements and hash an explicitly supplied opaque-release
+     * identity.
+     *
      * @param array<string, mixed> $plans
      * @param array<string, string> $skipped
      * @return array{
@@ -92,6 +99,8 @@ final class StaticRuntimeArtifactMetadata
     }
 
     /**
+     * Hash canonical frozen configuration and native plans without executing opaque callbacks.
+     *
      * @param array<string, array<string, mixed>> $plans
      * @param array<string, string> $skipped
      */
@@ -144,6 +153,9 @@ final class StaticRuntimeArtifactMetadata
     }
 
     /**
+     * Validate manifest shape, runtime versions and immutable build identity without hashing
+     * runtime contents.
+     *
      * @return array{
      *   abi: int,
      *   intermix_major: int,
@@ -172,6 +184,8 @@ final class StaticRuntimeArtifactMetadata
     }
 
     /**
+     * Validate compatibility and reject runtime contents whose digest differs from the manifest.
+     *
      * @return array{
      *   abi: int,
      *   intermix_major: int,
@@ -203,6 +217,8 @@ final class StaticRuntimeArtifactMetadata
     }
 
     /**
+     * Derive the immutable build identity from canonical manifest metadata before publication.
+     *
      * @param array{
      *   abi: int,
      *   intermix_major: int,

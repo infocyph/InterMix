@@ -21,6 +21,8 @@ final class CompiledCall
     private ?InjectedCall $dynamicResolver = null;
 
     /**
+     * Create compiled definition dispatch while deferring dynamic reflection resolvers.
+     *
      * @param Repository $repository Container state shared with compiled and fallback resolution.
      */
     public function __construct(private readonly Repository $repository)
@@ -32,6 +34,8 @@ final class CompiledCall
     }
 
     /**
+     * Delegate class construction and explicit overrides to the lazily initialized dynamic invoker.
+     *
      * @param string|object $class Class name or object to resolve dynamically.
      * @param string|false|null $method Method to call, false to construct only, or null for configured behavior.
      * @param bool $make Whether to bypass resolved-instance reuse.
@@ -55,6 +59,8 @@ final class CompiledCall
     }
 
     /**
+     * Delegate callable argument injection to the lazily initialized dynamic invoker.
+     *
      * @param callable $closure Callable resolved by the dynamic fallback.
      * @param array<int|string, mixed> $params Explicit callable arguments.
      */
@@ -64,6 +70,8 @@ final class CompiledCall
     }
 
     /**
+     * Use compiled definition dispatch when installed, otherwise retain dynamic resolution.
+     *
      * @param string $name Registered definition identifier.
      */
     public function resolveByDefinition(string $name): mixed

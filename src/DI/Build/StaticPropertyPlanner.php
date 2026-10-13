@@ -18,6 +18,8 @@ use ReflectionProperty;
 final class StaticPropertyPlanner
 {
     /**
+     * Plan property assignments and runtime attribute islands, retaining unsupported reasons.
+     *
      * @param ReflectionClass<object> $class
      * @param array<string, mixed> $supplied
      * @return array{properties: list<PropertyPlan>, dependencies: list<string>}

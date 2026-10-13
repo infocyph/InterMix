@@ -19,6 +19,9 @@ class ClassResolver
     /** @var array<int|string, array<int, string>> Tracing-only class ancestry by carrier. */
     private array $classStacks = [];
 
+    /**
+     * Share repository, parameter and property resolution state for reflected class construction.
+     */
     public function __construct(
         private readonly Repository $repository,
         private readonly ParameterResolver $parameterResolver,
@@ -26,6 +29,9 @@ class ClassResolver
     ) {}
 
     /**
+     * Construct or reuse an instance and retain any requested post-construction method result
+     * separately.
+     *
      * @param ReflectionClass<object> $class
      * @param array<int|string, mixed> $constructorParameters
      * @param array<int|string, mixed> $methodParameters
@@ -94,6 +100,8 @@ class ClassResolver
     }
 
     /**
+     * Resolve the reflected class using current resources and return only its instance.
+     *
      * @param ReflectionClass<object> $class
      */
     public function resolveClassInstance(ReflectionClass $class): object
@@ -101,6 +109,10 @@ class ClassResolver
         return $this->resolve($class)->instance;
     }
 
+    /**
+     * Resolve an explicit injection target, returning the unresolved marker when no target is
+     * applicable.
+     */
     public function resolveInject(Inject $inject): mixed
     {
         $typeData = $inject->getParameterData();

@@ -12,6 +12,9 @@ use RuntimeException;
 final class AtomicFileWriter
 {
     /**
+     * Write and optionally validate a complete temporary file before atomically replacing the
+     * destination.
+     *
      * @param string $filePath Final artifact destination.
      * @param string $contents Complete generated contents.
      * @param null|callable(string): void $validate Receives the staged path before activation.

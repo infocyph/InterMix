@@ -11,6 +11,9 @@ use Infocyph\InterMix\Exceptions\ContainerException;
 /** @internal */
 trait ConcurrentScopeConstruction
 {
+    /**
+     * Claim scoped construction on the current carrier and reject conflicting shared construction.
+     */
     public function beginScopedConstruction(string $scope, string $id): bool
     {
         if ($this->scopeContextOwner === null) {
@@ -26,6 +29,9 @@ trait ConcurrentScopeConstruction
         return $store->beginScopedConstruction($context, $scope, $id);
     }
 
+    /**
+     * Claim singleton construction without allowing conflicting execution carriers.
+     */
     public function beginSingletonConstruction(string $id): bool
     {
         $context = ExecutionContext::id() ?? self::ROOT_CONTEXT;
@@ -45,6 +51,9 @@ trait ConcurrentScopeConstruction
         return true;
     }
 
+    /**
+     * Release the current carrier's scoped construction claim after success or failure.
+     */
     public function endScopedConstruction(string $scope, string $id): void
     {
         $store = $this->executionScopes;
@@ -54,6 +63,9 @@ trait ConcurrentScopeConstruction
         }
     }
 
+    /**
+     * Release the current carrier's singleton construction claim after success or failure.
+     */
     public function endSingletonConstruction(string $id): void
     {
         $context = ExecutionContext::id() ?? self::ROOT_CONTEXT;
@@ -62,6 +74,9 @@ trait ConcurrentScopeConstruction
         }
     }
 
+    /**
+     * Return the active scope and cached value while preserving null-versus-missing semantics.
+     */
     public function findCurrentResolvedScoped(string $id, string &$scope, mixed &$value): bool
     {
         $store = $this->executionScopes;
@@ -81,6 +96,9 @@ trait ConcurrentScopeConstruction
         return true;
     }
 
+    /**
+     * Detect shared logical state that needs construction ownership enforcement.
+     */
     public function requiresScopedConstructionGuard(): bool
     {
         return $this->scopeContextOwner !== null;

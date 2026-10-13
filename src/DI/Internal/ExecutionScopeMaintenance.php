@@ -10,6 +10,9 @@ use Infocyph\InterMix\Exceptions\ScopeCleanupException;
 /** @internal */
 trait ExecutionScopeMaintenance
 {
+    /**
+     * Detect other carriers or shared attachments that make configuration mutation unsafe.
+     */
     public function hasConcurrentActivity(?string $currentContext): bool
     {
         foreach ($this->states as $context => $state) {
@@ -27,16 +30,25 @@ trait ExecutionScopeMaintenance
         return false;
     }
 
+    /**
+     * Discard cached class results across carrier-local and shared logical frames.
+     */
     public function invalidateClass(string $class): void
     {
         $this->invalidateResolvedEntry($class);
     }
 
+    /**
+     * Discard cached definition results across carrier-local and shared logical frames.
+     */
     public function invalidateDefinition(string $id): void
     {
         $this->invalidateResolvedEntry($id);
     }
 
+    /**
+     * Clear scope resolution caches and construction claims after configuration changes.
+     */
     public function invalidateResolutionConfiguration(): void
     {
         foreach ($this->states as $state) {
@@ -49,6 +61,9 @@ trait ExecutionScopeMaintenance
     }
 
     /**
+     * Drain owned scopes or detach borrowed scopes while retaining a bounded cleanup failure
+     * sample.
+     *
      * @param callable(): void $leaveScope
      * @return array{failures: list<\Throwable>, count: int}
      */
@@ -81,6 +96,9 @@ trait ExecutionScopeMaintenance
         return ['failures' => $failures, 'count' => $failureCount];
     }
 
+    /**
+     * Select the frame to close and reject attached or child-owned scopes before cleanup runs.
+     */
     public function scopeForLeave(string $context): string
     {
         $state = $this->states[$context] ?? null;

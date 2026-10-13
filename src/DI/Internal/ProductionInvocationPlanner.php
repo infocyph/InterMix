@@ -21,7 +21,11 @@ final class ProductionInvocationPlanner
     /** @var array<string, list<string>|false> */
     private array $plans = [];
 
-    /** @param array<int, string> $compiledIds */
+    /**
+     * Associate a bounded callable plan cache with the repository and supported native identifiers.
+     *
+     * @param array<int, string> $compiledIds
+     */
     public function __construct(
         private readonly Repository $repository,
         array $compiledIds,
@@ -29,7 +33,11 @@ final class ProductionInvocationPlanner
         $this->compiledIds = array_fill_keys($compiledIds, true);
     }
 
-    /** @param array<int|string, mixed> $arguments */
+    /**
+     * Try a native callable recipe, distinguishing unsupported calls from successful null results.
+     *
+     * @param array<int|string, mixed> $arguments
+     */
     public function invoke(
         callable $callable,
         array $arguments,

@@ -27,6 +27,9 @@ final class ScopeState
     public array $returned = [];
 
     /**
+     * Create a native scope frame with slot-indexed seeds and identifier seeds for fallback
+     * bridging.
+     *
      * @param array<int, mixed> $seeds
      * @param array<string, mixed> $rawSeeds
      */
@@ -39,6 +42,9 @@ final class ScopeState
         $this->hasSeeds = $seeds !== [];
     }
 
+    /**
+     * Invalidate retained handles and release references to seeds, resolved values and ancestors.
+     */
     public function close(): void
     {
         $this->closed = true;
@@ -55,6 +61,9 @@ final class ScopeState
         $this->seeds = [];
     }
 
+    /**
+     * Check this frame and its ancestors to prevent duplicate active scope names.
+     */
     public function contains(string $name): bool
     {
         for ($scope = $this; $scope instanceof self; $scope = $scope->parent) {

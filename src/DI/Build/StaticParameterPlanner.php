@@ -21,6 +21,9 @@ use ReflectionUnionType;
 final class StaticParameterPlanner
 {
     /**
+     * Plan ordered argument expressions and dependencies, returning a reason when runtime work is
+     * required.
+     *
      * @param ReflectionClass<object> $consumer
      * @param array<int|string, mixed> $supplied
      * @param array<string, ServiceArgument> $attributeArguments
@@ -73,6 +76,8 @@ final class StaticParameterPlanner
     }
 
     /**
+     * Plan constructor arguments using explicit overrides or registered resources.
+     *
      * @param ReflectionClass<object> $class
      * @param array<int|string, mixed> $supplied
      * @return array{arguments: list<ServiceArgument>, dependencies: list<string>}|string

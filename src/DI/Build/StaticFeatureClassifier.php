@@ -9,7 +9,12 @@ use ReflectionClass;
 /** @internal */
 final class StaticFeatureClassifier
 {
-    /** @param ReflectionClass<object> $class */
+    /**
+     * Explain class features requiring runtime resolution, or return null when native planning is
+     * permitted.
+     *
+     * @param ReflectionClass<object> $class
+     */
     public function dynamicReason(DefinitionGraph $graph, ReflectionClass $class): ?string
     {
         if (!$graph->injectionEnabled()) {

@@ -16,6 +16,9 @@ use Infocyph\InterMix\DI\Support\LifetimeEnum;
 final class StaticInvocationRenderer
 {
     /**
+     * Render invocation resolution with seed precedence, lifetime caching and optional lifecycle
+     * hooks.
+     *
      * @param InvocationPlan $plan
      * @param array<string, int> $slots
      */
@@ -49,7 +52,11 @@ final class StaticInvocationRenderer
         return $source . "    }\n\n";
     }
 
-    /** @param array<string, array{kind: string, lifetime: LifetimeEnum}> $plans */
+    /**
+     * Emit invocation singleton storage only when a plan requires it.
+     *
+     * @param array<string, array{kind: string, lifetime: LifetimeEnum}> $plans
+     */
     public function renderSingletonProperties(array $plans): string
     {
         foreach ($plans as $plan) {

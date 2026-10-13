@@ -29,12 +29,19 @@ class InvocationManager
 
     private bool $singletonResolutionActive = false;
 
+    /**
+     * Associate invocation and lifetime tracking with one container and its repository.
+     */
     public function __construct(
         protected Repository $repository,
         protected Container $container,
     ) {}
 
-    /** @internal */
+    /**
+     * Reject singleton capture of scoped dependencies on the current execution carrier.
+     *
+     * @internal
+     */
     public function assertScopedResolutionAllowed(string $id): void
     {
         if (!$this->singletonResolutionActive) {
@@ -49,7 +56,12 @@ class InvocationManager
         }
     }
 
-    /** @throws ContainerException|ReflectionException|InvalidArgumentException */
+    /**
+     * Dispatch legacy definitions, callable resources or class methods through dependency
+     * injection.
+     *
+     * @throws ContainerException|ReflectionException|InvalidArgumentException
+     */
     public function call(string|Closure|callable $classOrClosure, string|bool|null $method = null): mixed
     {
         if (is_string($classOrClosure) && $this->repository->hasFunctionReference($classOrClosure)) {
@@ -67,7 +79,11 @@ class InvocationManager
         return $this->callClass($classOrClosure, $method);
     }
 
-    /** @throws ContainerException|InvalidArgumentException|ReflectionException */
+    /**
+     * Resolve native declarations with seed, lifetime-cache and captive-dependency enforcement.
+     *
+     * @throws ContainerException|InvalidArgumentException|ReflectionException
+     */
     public function get(string $id): mixed
     {
         $resolved = $this->repository->getResolvedSingletonEntry($id);
@@ -98,7 +114,11 @@ class InvocationManager
         return $this->resolveUncached($id, $lifetime, $alias, $scope);
     }
 
-    /** @internal 10.x fixture compatibility on ConfigurationContainer only. */
+    /**
+     * Retain legacy seed priority and class discovery while applying lifetime tracking.
+     *
+     * @internal 10.x fixture compatibility on ConfigurationContainer only.
+     */
     public function getLegacy(string $id): mixed
     {
         $seed = null;
@@ -140,7 +160,11 @@ class InvocationManager
         };
     }
 
-    /** @throws ContainerException|InvalidArgumentException|ReflectionException */
+    /**
+     * Resolve a declared service and expose its recorded post-construction method result.
+     *
+     * @throws ContainerException|InvalidArgumentException|ReflectionException
+     */
     public function getReturn(string $id): mixed
     {
         $resolved = $this->get($id);
@@ -148,7 +172,11 @@ class InvocationManager
         return $this->resolvedReturn($id, $resolved);
     }
 
-    /** @internal */
+    /**
+     * Expose a legacy resolution's post-construction method result when one was recorded.
+     *
+     * @internal
+     */
     public function getReturnLegacy(string $id): mixed
     {
         $resolved = $this->getLegacy($id);
@@ -156,12 +184,19 @@ class InvocationManager
         return $this->resolvedReturn($id, $resolved);
     }
 
+    /**
+     * Check declaration presence without constructing services or discovering arbitrary classes.
+     */
     public function has(string $id): bool
     {
         return $this->repository->hasFunctionReference($id);
     }
 
-    /** @internal */
+    /**
+     * Include legacy resources, cached entries, classes and environment-bound interfaces.
+     *
+     * @internal
+     */
     public function hasLegacy(string $id): bool
     {
         return $this->repository->hasFunctionReference($id)
@@ -171,13 +206,21 @@ class InvocationManager
             || (interface_exists($id) && $this->repository->getEnvConcrete($id) !== null);
     }
 
-    /** @param array<int|string, mixed> $arguments */
+    /**
+     * Inject missing callable arguments while preserving caller-supplied argument overrides.
+     *
+     * @param array<int|string, mixed> $arguments
+     */
     public function invoke(callable $callable, array $arguments = []): mixed
     {
         return ContainerAccess::resolver($this->container)->closureSettler($callable, $arguments);
     }
 
-    /** @param array<int|string, mixed> $arguments */
+    /**
+     * Construct a fresh class instance without returning its cached lifetime instance.
+     *
+     * @param array<int|string, mixed> $arguments
+     */
     public function make(string $class, array $arguments = []): object
     {
         $fresh = ContainerAccess::resolver($this->container)->classSettler(
@@ -190,7 +233,11 @@ class InvocationManager
         return $fresh->instance;
     }
 
-    /** @throws ContainerException|ReflectionException */
+    /**
+     * Resolve a definition recipe and unwrap its constructed instance for service callers.
+     *
+     * @throws ContainerException|ReflectionException
+     */
     protected function resolveDefinition(string $id): mixed
     {
         return $this->repository->fetchInstanceOrValue(

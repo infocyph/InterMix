@@ -32,7 +32,12 @@ use ReflectionClass;
  */
 final class StaticRuntimePlanner
 {
-    /** @return array<string, ServicePlan> */
+    /**
+     * Expand explicit plans with reachable implicit classes before final availability and cycle
+     * pruning.
+     *
+     * @return array<string, ServicePlan>
+     */
     public function dependencyPlans(DefinitionGraph $graph): array
     {
         [$plans, $skipped] = $this->buildPlans($graph);
@@ -40,7 +45,12 @@ final class StaticRuntimePlanner
         return $this->expandImplicitClasses($graph, $plans, $skipped);
     }
 
-    /** @return array{plans: array<string, ServicePlan>, skipped: array<string, string>} */
+    /**
+     * Build native plans, remove unavailable or cyclic dependencies and retain skip reasons for
+     * fallback validation.
+     *
+     * @return array{plans: array<string, ServicePlan>, skipped: array<string, string>}
+     */
     public function plan(DefinitionGraph $graph): array
     {
         [$plans, $skipped] = $this->buildPlans($graph);

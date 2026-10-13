@@ -40,6 +40,9 @@ final class ConcurrentRepository extends Repository
     /** @var array<string, string> */
     private array $singletonConstructing = [];
 
+    /**
+     * Reject iteration when the owner-bound scope is no longer current on this carrier.
+     */
     public function assertCurrentScopeContext(ScopeContext $scopeContext): void
     {
         $context = $this->activeExecutionContext();
@@ -53,6 +56,9 @@ final class ConcurrentRepository extends Repository
         $store->assertCurrentScopeContext($context, $scopeContext, $this->scopeContextOwner());
     }
 
+    /**
+     * Borrow an active container-owned scope without replacing this carrier's existing scope.
+     */
     public function attachScopeContext(ScopeContext $scopeContext): void
     {
         $physicalContext = ExecutionContext::id();
@@ -76,6 +82,9 @@ final class ConcurrentRepository extends Repository
         }
     }
 
+    /**
+     * Capture the active scope as a process-local handle owned by this repository.
+     */
     public function captureScopeContext(): ScopeContext
     {
         $physicalContext = ExecutionContext::id();
@@ -94,6 +103,9 @@ final class ConcurrentRepository extends Repository
         return $store->captureScopeContext($physicalContext, $this->scopeContextOwner());
     }
 
+    /**
+     * Release the borrowed scope after checking ownership and nested-scope state.
+     */
     public function detachScopeContext(ScopeContext $scopeContext): void
     {
         $physicalContext = ExecutionContext::id() ?? self::ROOT_CONTEXT;
@@ -114,6 +126,9 @@ final class ConcurrentRepository extends Repository
         $this->finishExecutionContext($store, $physicalContext);
     }
 
+    /**
+     * Release an attachment if it is still active on this carrier.
+     */
     public function detachScopeContextIfAttached(ScopeContext $scopeContext): void
     {
         $physicalContext = ExecutionContext::id() ?? self::ROOT_CONTEXT;
@@ -125,7 +140,11 @@ final class ConcurrentRepository extends Repository
         $this->detachScopeContext($scopeContext);
     }
 
-    /** @param array<string, mixed> $instances */
+    /**
+     * Push carrier-local state with seeds while preserving sequential root execution.
+     *
+     * @param array<string, mixed> $instances
+     */
     public function enterScope(string $scope, array $instances = []): void
     {
         $context = $this->activeExecutionContext();
@@ -146,6 +165,9 @@ final class ConcurrentRepository extends Repository
         }
     }
 
+    /**
+     * Invalidate class caches across sequential and carrier-local execution state.
+     */
     public function invalidateClass(string $class): void
     {
         parent::invalidateClass($class);
@@ -158,6 +180,9 @@ final class ConcurrentRepository extends Repository
         $this->executionScopes?->invalidateClass($class);
     }
 
+    /**
+     * Invalidate definition caches across sequential and carrier-local execution state.
+     */
     public function invalidateDefinition(string $id): void
     {
         parent::invalidateDefinition($id);
@@ -170,6 +195,9 @@ final class ConcurrentRepository extends Repository
         $this->executionScopes?->invalidateDefinition($id);
     }
 
+    /**
+     * Invalidate resolution metadata and all carrier-local cached results.
+     */
     public function invalidateResolutionConfiguration(): void
     {
         parent::invalidateResolutionConfiguration();
@@ -177,6 +205,9 @@ final class ConcurrentRepository extends Repository
         $this->executionScopes?->invalidateResolutionConfiguration();
     }
 
+    /**
+     * Run bounded cleanup, release carrier-local values and restore the parent frame.
+     */
     public function leaveScope(): void
     {
         $store = $this->executionScopes;
@@ -226,6 +257,9 @@ final class ConcurrentRepository extends Repository
         $this->resetSequentialExecutionScope();
     }
 
+    /**
+     * Drain or detach this carrier's execution scopes while retaining cleanup failures.
+     */
     public function resetScope(): void
     {
         $store = $this->executionScopes;
@@ -250,6 +284,9 @@ final class ConcurrentRepository extends Repository
         $this->currentScope = 'root';
     }
 
+    /**
+     * Reject unsafe concurrent mutation before changing the environment and resetting scope state.
+     */
     public function setEnvironment(string $env): void
     {
         if (parent::getEnvironment() === $env) {
@@ -267,6 +304,9 @@ final class ConcurrentRepository extends Repository
         $this->executionScopes = null;
     }
 
+    /**
+     * Cache the scoped result in the current carrier's execution state.
+     */
     public function setResolvedScoped(string $scope, string $id, mixed $value): void
     {
         $store = $this->executionScopes;
@@ -282,6 +322,9 @@ final class ConcurrentRepository extends Repository
         $this->resolvedScoped[$scope][$id] = $value;
     }
 
+    /**
+     * Change this carrier's fast-path scope name without replacing a propagated logical scope.
+     */
     public function setScope(string $scope): void
     {
         $store = $this->executionScopes;
@@ -300,6 +343,9 @@ final class ConcurrentRepository extends Repository
         $this->currentScope = $scope;
     }
 
+    /**
+     * Enforce both configuration locking and active-carrier mutation safety.
+     */
     protected function checkIfLocked(): void
     {
         parent::checkIfLocked();

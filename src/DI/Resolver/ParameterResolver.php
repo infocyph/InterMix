@@ -57,12 +57,17 @@ class ParameterResolver
     /** @var array<string, array<int, array<int, ReflectionNamedType>>> */
     private array $typeGroupCache = [];
 
+    /**
+     * Reuse the container's invocation guard while resolving reflected parameter dependencies.
+     */
     public function __construct(private readonly Repository $repository)
     {
         $this->invocationManager = ContainerAccess::invocationManager($repository->container());
     }
 
     /**
+     * Combine named, positional, default, attribute and variadic arguments in declaration order.
+     *
      * @param array<int|string, mixed> $suppliedParameters
      * @return array<int|string, mixed>
      */
@@ -118,6 +123,10 @@ class ParameterResolver
             : $processed;
     }
 
+    /**
+     * Prefer named declarations and seeds before compatible type declarations; preserve captive
+     * guards.
+     */
     public function resolveByDefinitionType(string $name, ReflectionParameter $parameter): mixed
     {
         $container = $this->repository->container();
@@ -152,6 +161,8 @@ class ParameterResolver
     }
 
     /**
+     * Resolve a consumer-specific override or return the unresolved marker when absent.
+     *
      * @param ReflectionClass<object> $dependency
      */
     public function resolveContextualDependency(string $consumer, ReflectionClass $dependency): mixed
@@ -192,6 +203,9 @@ class ParameterResolver
         return $binding;
     }
 
+    /**
+     * Complete the resolver wiring used for autowired class dependencies.
+     */
     public function setClassResolverInstance(ClassResolver $classResolver): void
     {
         $this->classResolver = $classResolver;

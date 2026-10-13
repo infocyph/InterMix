@@ -17,11 +17,17 @@ final class ClosureSerializer
 
     private const string PREFIX = 'imxc1.';
 
+    /**
+     * Recognize the unsigned format prefix without validating or decoding its body.
+     */
     public static function isEnvelope(string $payload): bool
     {
         return str_starts_with($payload, self::PREFIX);
     }
 
+    /**
+     * Encode a closure in the unsigned InterMix envelope; the Opis integration must be installed.
+     */
     public static function serialize(Closure $closure): string
     {
         self::requireOpis();
@@ -29,6 +35,9 @@ final class ClosureSerializer
         return self::PREFIX . base64_encode(opis_serialize($closure));
     }
 
+    /**
+     * Create a keyed serializer with an explicit payload-size bound in bytes.
+     */
     public static function signed(
         #[\SensitiveParameter]
         string $key,
@@ -37,6 +46,10 @@ final class ClosureSerializer
         return new SignedClosureSerializer($key, $maxPayloadSize);
     }
 
+    /**
+     * Decode a size-bounded unsigned closure from trusted input; this format provides no
+     * authentication.
+     */
     public static function unserialize(
         string $payload,
         int $maxPayloadSize = self::DEFAULT_MAX_PAYLOAD_SIZE,

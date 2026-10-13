@@ -9,7 +9,11 @@ use Infocyph\InterMix\DI\Internal\ExecutionScopeStore;
 /** @internal */
 trait ConcurrentScopeLookup
 {
-    /** @internal */
+    /**
+     * Read the current carrier's seed and return presence separately from a possibly null value.
+     *
+     * @internal
+     */
     public function findScopeSeed(string $id, mixed &$value): bool
     {
         $store = $this->executionScopes;
@@ -34,7 +38,11 @@ trait ConcurrentScopeLookup
         return true;
     }
 
-    /** @internal */
+    /**
+     * Read the named scope's cached value on the current carrier.
+     *
+     * @internal
+     */
     public function getResolvedScopedEntry(string $scope, string $id): mixed
     {
         $store = $this->executionScopes;
@@ -48,6 +56,9 @@ trait ConcurrentScopeLookup
         return $this->resolvedScoped[$scope][$id] ?? null;
     }
 
+    /**
+     * Expose the current carrier's active scope name, defaulting to root.
+     */
     public function getScope(): string
     {
         $store = $this->executionScopes;
@@ -61,7 +72,11 @@ trait ConcurrentScopeLookup
         return $this->currentScope;
     }
 
-    /** @internal */
+    /**
+     * Check current-carrier cache presence without treating null values as absent.
+     *
+     * @internal
+     */
     public function hasResolvedScoped(string $scope, string $id): bool
     {
         $store = $this->executionScopes;
@@ -75,7 +90,11 @@ trait ConcurrentScopeLookup
         return array_key_exists($id, $this->resolvedScoped[$scope] ?? []);
     }
 
-    /** @internal */
+    /**
+     * Check whether the current carrier retains supplied scope seeds.
+     *
+     * @internal
+     */
     public function hasScopeSeeds(): bool
     {
         $store = $this->executionScopes;

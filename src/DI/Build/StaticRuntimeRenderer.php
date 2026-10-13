@@ -22,6 +22,8 @@ use Infocyph\InterMix\DI\Support\LifetimeEnum;
 final class StaticRuntimeRenderer
 {
     /**
+     * Emit a source-free native container using immutable plans and slot assignments.
+     *
      * @param array<string, ServicePlan> $plans
      * @param array<string, int> $slots
      */
@@ -224,7 +226,7 @@ final class StaticRuntimeRenderer
             array_keys($plans),
         );
 
-        return "    protected function compiledIds(): array\n"
+        return "    /** {@inheritDoc} */\n    protected function compiledIds(): array\n"
             . "    {\n"
             . '        return ' . var_export($ids, true) . ";\n"
             . "    }\n\n";
@@ -233,7 +235,7 @@ final class StaticRuntimeRenderer
     /** @param array<string, ServicePlan> $plans */
     private function renderCompiledLifetimes(array $plans): string
     {
-        $source = "    protected function compiledLifetimeFor(string \$id): ?LifetimeEnum\n"
+        $source = "    /** {@inheritDoc} */\n    protected function compiledLifetimeFor(string \$id): ?LifetimeEnum\n"
             . "    {\n"
             . "        return match (\$id) {\n";
         foreach ($plans as $id => $plan) {
@@ -260,7 +262,7 @@ final class StaticRuntimeRenderer
             return '';
         }
 
-        return "    protected function isCompiledScopedDefinition(string \$id): bool\n"
+        return "    /** {@inheritDoc} */\n    protected function isCompiledScopedDefinition(string \$id): bool\n"
             . "    {\n"
             . '        return in_array($id, ' . var_export($ids, true) . ", true);\n"
             . "    }\n\n";
@@ -315,7 +317,7 @@ final class StaticRuntimeRenderer
             return '';
         }
 
-        $source = "    protected function compiledSingletonValues(): array\n    {\n        \$values = [];\n";
+        $source = "    /** {@inheritDoc} */\n    protected function compiledSingletonValues(): array\n    {\n        \$values = [];\n";
         foreach ($entries as $entry) {
             $id = var_export($entry['id'], true);
             $source .= "        if ({$entry['guard']}) {\n";
@@ -342,7 +344,7 @@ final class StaticRuntimeRenderer
         }
         $ids = implode(', ', array_map(static fn(string $id): string => var_export($id, true), $definitions));
 
-        return "    protected function isCompiledDefinition(string \$id): bool\n"
+        return "    /** {@inheritDoc} */\n    protected function isCompiledDefinition(string \$id): bool\n"
             . "    {\n"
             . "        return match (\$id) {\n"
             . "            {$ids} => true,\n"
@@ -429,7 +431,7 @@ final class StaticRuntimeRenderer
             return '';
         }
 
-        $source = "    protected function freshCompiled(string \$class): ?object\n    {\n        return match (\$class) {\n";
+        $source = "    /** {@inheritDoc} */\n    protected function freshCompiled(string \$class): ?object\n    {\n        return match (\$class) {\n";
         foreach ($fresh as $class => $construction) {
             $source .= '            ' . var_export($class, true) . " => {$construction},\n";
         }
@@ -558,7 +560,7 @@ final class StaticRuntimeRenderer
     /** @param array<string, int> $slots */
     private function renderSlotMap(array $slots): string
     {
-        $source = "    protected function slotFor(string \$id): ?int\n    {\n        return match (\$id) {\n";
+        $source = "    /** {@inheritDoc} */\n    protected function slotFor(string \$id): ?int\n    {\n        return match (\$id) {\n";
         foreach ($slots as $rawId => $slot) {
             $id = (string) $rawId;
             $source .= '            ' . var_export($id, true) . " => {$slot},\n";
@@ -586,14 +588,14 @@ final class StaticRuntimeRenderer
         }
         ksort($tags, SORT_STRING);
 
-        $source = "    protected function taggedIds(string \$tag): array\n    {\n        return match (\$tag) {\n";
+        $source = "    /** {@inheritDoc} */\n    protected function taggedIds(string \$tag): array\n    {\n        return match (\$tag) {\n";
         foreach ($tags as $tag => $ids) {
             $source .= '            ' . var_export($tag, true) . ' => ' . var_export($ids, true) . ",\n";
         }
         $source .= "            default => [],\n";
         $source .= "        };\n    }\n\n";
 
-        $source .= "    protected function compiledTagged(string \$tag): ?array\n    {\n        return match (\$tag) {\n";
+        $source .= "    /** {@inheritDoc} */\n    protected function compiledTagged(string \$tag): ?array\n    {\n        return match (\$tag) {\n";
         foreach ($tags as $tag => $ids) {
             $source .= '            ' . var_export($tag, true) . " => [\n";
             foreach ($ids as $id) {
@@ -607,7 +609,7 @@ final class StaticRuntimeRenderer
         $source .= "            default => null,\n";
         $source .= "        };\n    }\n\n";
 
-        $source .= "    protected function compiledTaggedLazy(string \$tag): ?iterable\n    {\n        return match (\$tag) {\n";
+        $source .= "    /** {@inheritDoc} */\n    protected function compiledTaggedLazy(string \$tag): ?iterable\n    {\n        return match (\$tag) {\n";
         foreach ($tags as $tag => $ids) {
             $source .= '            ' . var_export($tag, true) . " => [\n";
             foreach ($ids as $id) {

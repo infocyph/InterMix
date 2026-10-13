@@ -26,6 +26,9 @@ class ConditionalProxy
      * If a condition is already set, calls the method only if the condition is truthy; otherwise returns the original target.
      */
     /**
+     * Capture a deferred condition or invoke the target only when the captured condition permits
+     * it.
+     *
      * @param array<int, mixed> $parameters
      */
     public function __call(string $method, array $parameters): mixed

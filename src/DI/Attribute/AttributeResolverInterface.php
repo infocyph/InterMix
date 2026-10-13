@@ -18,6 +18,10 @@ use Reflector;
  */
 interface AttributeResolverInterface
 {
+    /**
+     * Resolve an attribute for its reflection target; use the unresolved marker to decline
+     * handling.
+     */
     public function resolve(
         object $attributeInstance,
         Reflector $target,

@@ -23,11 +23,16 @@ class PropertyResolver
     /** @var array<string, array{properties: list<ReflectionProperty>, attributed: bool}> */
     private array $propertyPlanCache = [];
 
+    /**
+     * Associate property processing with the repository's live resources and attribute policy.
+     */
     public function __construct(
         private readonly Repository $repository,
     ) {}
 
     /**
+     * Apply explicit overrides and registered properties before enabled attribute injection.
+     *
      * @param ReflectionClass<object> $class
      * @param array<string, mixed> $overrides
      * @throws ContainerException|ReflectionException|InvalidArgumentException
@@ -50,6 +55,9 @@ class PropertyResolver
     }
 
     /**
+     * Resolve one property's explicit or attributed value while preserving unresolved and null
+     * distinctions.
+     *
      * @param array<string, mixed> $registered
      * @internal
      */
@@ -76,6 +84,9 @@ class PropertyResolver
         }
     }
 
+    /**
+     * Complete the resolver wiring used to construct property injection dependencies.
+     */
     public function setClassResolverInstance(ClassResolver $classResolver): void
     {
         $this->classResolver = $classResolver;

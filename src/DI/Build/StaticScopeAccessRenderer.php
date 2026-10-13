@@ -9,6 +9,9 @@ use Infocyph\InterMix\DI\Support\LifetimeEnum;
 /** @internal */
 final class StaticScopeAccessRenderer
 {
+    /**
+     * Render rejection of scoped construction outside an active execution scope.
+     */
     public function constructionGuard(LifetimeEnum $lifetime, ?string $id = null): string
     {
         if ($lifetime !== LifetimeEnum::Scoped) {
@@ -25,7 +28,11 @@ final class StaticScopeAccessRenderer
             . "        }\n\n";
     }
 
-    /** @param array<string, array{kind: string, lifetime: LifetimeEnum}> $plans */
+    /**
+     * Detect singleton construction plans that require scoped-dependency capture checks.
+     *
+     * @param array<string, array{kind: string, lifetime: LifetimeEnum}> $plans
+     */
     public function requiresCaptiveGuard(array $plans): bool
     {
         return array_any(
@@ -35,6 +42,10 @@ final class StaticScopeAccessRenderer
         );
     }
 
+    /**
+     * Render scope-slot seed lookup with null preservation and optional singleton capture
+     * enforcement.
+     */
     public function seedGuard(
         int $slot,
         LifetimeEnum $lifetime,

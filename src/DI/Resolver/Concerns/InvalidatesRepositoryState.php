@@ -9,17 +9,27 @@ trait InvalidatesRepositoryState
 {
     private bool $hasPropertyResources = false;
 
+    /**
+     * Apply repository lock and concurrency checks before changing configuration.
+     */
     public function assertMutable(): void
     {
         $this->checkIfLocked();
     }
 
-    /** @internal */
+    /**
+     * Check whether explicit property resources require runtime property processing.
+     *
+     * @internal
+     */
     public function hasPropertyResources(): bool
     {
         return $this->hasPropertyResources;
     }
 
+    /**
+     * Clear class-derived resolution state after its resource configuration changes.
+     */
     public function invalidateClass(string $class): void
     {
         $this->notifyConfigurationMutation();
@@ -36,12 +46,18 @@ trait InvalidatesRepositoryState
         $this->rotateDefinitionCacheGeneration();
     }
 
+    /**
+     * Discard the legacy compiled resolver after a configuration change.
+     */
     public function invalidateCompiledResolvers(): void
     {
         $this->compiledResolver = null;
         $this->compiledResolverIds = [];
     }
 
+    /**
+     * Clear definition-derived values, lifetime metadata and compiled resolution state.
+     */
     public function invalidateDefinition(string $id): void
     {
         $this->notifyConfigurationMutation();
@@ -63,6 +79,9 @@ trait InvalidatesRepositoryState
         $this->rotateDefinitionCacheGeneration();
     }
 
+    /**
+     * Clear all resolution-derived caches and rotate persistent cache identity.
+     */
     public function invalidateResolutionConfiguration(): void
     {
         $this->notifyConfigurationMutation();

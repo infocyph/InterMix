@@ -29,12 +29,20 @@ class DefinitionManager implements ArrayAccess
 {
     use ManagerProxy;
 
+    /**
+     * Associate mutable definition management with its configuration host and repository.
+     */
     public function __construct(
         protected Repository $repository,
         protected ConfigurationContainer $container,
     ) {}
 
-    /** @param array<string, mixed> $definitions */
+    /**
+     * Register each supplied entry through the same binding and lock checks as individual
+     * definitions.
+     *
+     * @param array<string, mixed> $definitions
+     */
     public function addDefinitions(array $definitions): self
     {
         foreach ($definitions as $id => $definition) {
@@ -44,7 +52,11 @@ class DefinitionManager implements ArrayAccess
         return $this;
     }
 
-    /** @param array<int, string> $tags */
+    /**
+     * Store a definition, lifetime and tags using the legacy normalization rules.
+     *
+     * @param array<int, string> $tags
+     */
     public function bind(
         string $id,
         mixed $definition,
@@ -61,6 +73,9 @@ class DefinitionManager implements ArrayAccess
         return $this;
     }
 
+    /**
+     * Configure persistent definition values with generation and fail-open behavior.
+     */
     public function enableDefinitionCache(
         CacheItemPoolInterface $pool,
         ?string $generation = null,
@@ -71,28 +86,44 @@ class DefinitionManager implements ArrayAccess
         return $this;
     }
 
+    /**
+     * Check definition or callable resource presence without executing either.
+     */
     public function has(string $id): bool
     {
         return $this->repository->hasFunctionReference($id)
             || $this->repository->hasClosureResource($id);
     }
 
+    /**
+     * Access the host's shared invocation manager without creating independent runtime state.
+     */
     public function invocation(): InvocationManager
     {
         return $this->container->invocation();
     }
 
+    /**
+     * Access the host's lazily initialized options manager.
+     */
     public function options(): OptionsManager
     {
         return $this->container->options();
     }
 
+    /**
+     * Access the host's lazily initialized registration manager.
+     */
     public function registration(): RegistrationManager
     {
         return $this->container->registration();
     }
 
-    /** @param array<int, string>|null $tags */
+    /**
+     * Override selected lifetime or tag metadata for the specified environment.
+     *
+     * @param array<int, string>|null $tags
+     */
     public function setMetaForEnv(
         string $env,
         string $id,
@@ -104,6 +135,9 @@ class DefinitionManager implements ArrayAccess
         return $this;
     }
 
+    /**
+     * Remove a declaration and invalidate its associated repository state.
+     */
     public function unbind(string $id): self
     {
         $this->repository->removeDefinition(ServiceId::from($id));
@@ -112,6 +146,8 @@ class DefinitionManager implements ArrayAccess
     }
 
     /**
+     * Persist eligible values without invoking resolution hooks during warmup.
+     *
      * @return array{hits: int, written: int, skipped: int, failed: int}
      * @throws ContainerException|InvalidArgumentException|ReflectionException
      */

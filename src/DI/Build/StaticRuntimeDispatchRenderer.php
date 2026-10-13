@@ -12,12 +12,14 @@ use Psr\Container\ContainerInterface;
 final class StaticRuntimeDispatchRenderer
 {
     /**
+     * Emit native identifier dispatch with singleton capture tracking and fallback handling.
+     *
      * @param array<string, array{kind: string, lifetime: LifetimeEnum}> $plans
      * @param array<string, int> $slots
      */
     public function renderGet(array $plans, array $slots): string
     {
-        $source = "    public function get(string \$id): mixed\n    {\n";
+        $source = "    /** {@inheritDoc} */\n    public function get(string \$id): mixed\n    {\n";
         $source .= "        return match (\$id) {\n";
         foreach ($plans as $rawId => $plan) {
             $id = (string) $rawId;
@@ -36,10 +38,14 @@ final class StaticRuntimeDispatchRenderer
         return $source . "        };\n    }\n\n";
     }
 
-    /** @param array<string, array{kind: string, lifetime: LifetimeEnum}> $plans */
+    /**
+     * Emit declaration presence dispatch without constructing native services.
+     *
+     * @param array<string, array{kind: string, lifetime: LifetimeEnum}> $plans
+     */
     public function renderHas(array $plans): string
     {
-        $source = "    public function has(string \$id): bool\n    {\n";
+        $source = "    /** {@inheritDoc} */\n    public function has(string \$id): bool\n    {\n";
         $source .= "        return match (\$id) {\n";
 
         $ids = [];

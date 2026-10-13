@@ -141,6 +141,8 @@ class Repository
     }
 
     /**
+     * Store changed constructor, method or property metadata and invalidate derived class state.
+     *
      * @param array<string, mixed> $data
      */
     public function addClassResource(string $class, string $key, array $data): void
@@ -155,6 +157,8 @@ class Repository
     }
 
     /**
+     * Register a callable resource and invalidate previously resolved values for its alias.
+     *
      * @param array<int|string, mixed> $params
      */
     public function addClosureResource(string $alias, callable $function, array $params = []): void
@@ -164,11 +168,18 @@ class Repository
         $this->invalidateDefinition($alias);
     }
 
+    /**
+     * Reuse a container-owned registry, creating it only when attribute configuration is needed.
+     */
     public function attributeRegistry(): AttributeRegistry
     {
         return $this->attributeRegistry ??= new AttributeRegistry($this->container);
     }
 
+    /**
+     * Store an environment-specific implementation and invalidate affected resolution
+     * configuration.
+     */
     public function bindInterfaceForEnv(string $env, string $interface, string $concrete): void
     {
         $this->checkIfLocked();
@@ -180,12 +191,19 @@ class Repository
         $this->invalidateResolutionConfiguration();
     }
 
+    /**
+     * Expose the repository owner for internal dependency resolution and callback dispatch.
+     */
     public function container(): Container
     {
         return $this->container;
     }
 
-    /** @internal */
+    /**
+     * Copy declarations, resources and policies without copying resolved instances or scope values.
+     *
+     * @internal
+     */
     public function copyConfigurationTo(Repository $target): void
     {
         $target->classResource = $this->classResource;
@@ -232,6 +250,9 @@ class Repository
         }
     }
 
+    /**
+     * Invoke registered callbacks for this identifier after successful construction.
+     */
     public function dispatchResolvedHooks(string $id, mixed $value): void
     {
         if (!$this->hasHooks) {
@@ -243,6 +264,9 @@ class Repository
         }
     }
 
+    /**
+     * Invoke registered callbacks for this identifier before construction.
+     */
     public function dispatchResolvingHooks(string $id): void
     {
         if (!$this->hasHooks) {
@@ -269,6 +293,9 @@ class Repository
         $this->invalidateResolutionConfiguration();
     }
 
+    /**
+     * Change method attribute policy and invalidate cached resolution configuration.
+     */
     public function enableMethodAttribute(bool $enable): void
     {
         $this->checkIfLocked();
@@ -280,6 +307,9 @@ class Repository
         $this->invalidateResolutionConfiguration();
     }
 
+    /**
+     * Change property attribute policy and invalidate cached resolution configuration.
+     */
     public function enablePropertyAttribute(bool $enable): void
     {
         $this->checkIfLocked();
@@ -292,6 +322,8 @@ class Repository
     }
 
     /**
+     * Push sequential scope state and retain supplied seeds only for that execution.
+     *
      * @param array<string, mixed> $instances
      */
     public function enterScope(string $scope, array $instances = []): void
@@ -307,6 +339,9 @@ class Repository
         }
     }
 
+    /**
+     * Unwrap construction metadata while preserving literal values unchanged.
+     */
     public function fetchInstanceOrValue(mixed $value): mixed
     {
         return $value instanceof ClassResolution ? $value->instance : $value;
@@ -334,12 +369,17 @@ class Repository
         return true;
     }
 
+    /**
+     * Expose the container namespace used by persistent cache identity.
+     */
     public function getAlias(): string
     {
         return $this->alias;
     }
 
     /**
+     * Expose base lifetime and tag declarations before environment overrides.
+     *
      * @return array<string, array{lifetime: LifetimeEnum, tags: array<int, string>}>
      */
     public function getAllDefinitionMeta(): array
@@ -348,6 +388,8 @@ class Repository
     }
 
     /**
+     * Expose explicit class construction, method and property resources.
+     *
      * @return array<string, array<string, mixed>>
      */
     public function getClassResource(): array
@@ -356,6 +398,8 @@ class Repository
     }
 
     /**
+     * Read explicit resources for one class, using an empty map when none are registered.
+     *
      * @return array<string, mixed>
      */
     public function getClassResourceFor(string $class): array
@@ -364,6 +408,8 @@ class Repository
     }
 
     /**
+     * Expose registered callable resources and their supplied argument overrides.
+     *
      * @return array<string, array{on: callable, params: array<int|string, mixed>}>
      */
     public function getClosureResource(): array
@@ -372,6 +418,8 @@ class Repository
     }
 
     /**
+     * Read a callable resource by alias, or null when absent.
+     *
      * @return array{on: callable, params: array<int|string, mixed>}|null
      */
     public function getClosureResourceEntry(string $alias): ?array
@@ -379,17 +427,25 @@ class Repository
         return $this->closureResource[$alias] ?? null;
     }
 
+    /**
+     * Return the installed legacy resolver only for identifiers included in its compiled set.
+     */
     public function getCompiledResolver(string $id): ?Closure
     {
         return isset($this->compiledResolverIds[$id]) ? $this->compiledResolver : null;
     }
 
+    /**
+     * Read a consumer-specific dependency override; null also represents absence.
+     */
     public function getContextualBinding(string $consumer, string $dependency): mixed
     {
         return $this->contextualBindings[$consumer][$dependency] ?? null;
     }
 
     /**
+     * Expose sorted consumer and dependency identifiers without executable binding values.
+     *
      * @return array<string, array<int, string>>
      * @internal
      */
@@ -406,11 +462,17 @@ class Repository
         return $shape;
     }
 
+    /**
+     * Expose the optional method selected after class construction.
+     */
     public function getDefaultMethod(): ?string
     {
         return $this->defaultMethod;
     }
 
+    /**
+     * Resolve effective lifetime through aliases and expose the alias wrapper when present.
+     */
     public function getDefinitionLifetime(string $id, ?AliasDefinition &$alias = null): LifetimeEnum
     {
         $cached = $this->definitionLifetimeFor($id);
@@ -420,6 +482,8 @@ class Repository
     }
 
     /**
+     * Merge active environment overrides onto base lifetime and tag declarations.
+     *
      * @return array{lifetime: LifetimeEnum, tags: array<int, string>}
      */
     public function getDefinitionMeta(string $id): array
@@ -430,6 +494,9 @@ class Repository
         return $env === null ? $meta : ($this->definitionMetaByEnv[$env][$id] ?? []) + $meta;
     }
 
+    /**
+     * Read the active environment's interface implementation, or null when no binding applies.
+     */
     public function getEnvConcrete(?string $interface): ?string
     {
         if ($this->environment === null || $interface === null) {
@@ -439,17 +506,25 @@ class Repository
         return $this->conditionalBindings[$this->environment][$interface] ?? null;
     }
 
+    /**
+     * Expose the selected environment, or null before one is configured.
+     */
     public function getEnvironment(): ?string
     {
         return $this->environment;
     }
 
+    /**
+     * Read a registered recipe; use declaration presence checks to distinguish a null literal.
+     */
     public function getFunctionDefinition(string $id): mixed
     {
         return $this->functionReference[$id] ?? null;
     }
 
     /**
+     * Expose raw registered recipes without resolving their values.
+     *
      * @return array<string, mixed>
      */
     public function getFunctionReference(): array
@@ -458,6 +533,8 @@ class Repository
     }
 
     /**
+     * Select identifiers using base tags and the active environment's tag overrides.
+     *
      * @return array<int, string>
      */
     public function getIdsByTag(string $tag): array
@@ -491,6 +568,8 @@ class Repository
     }
 
     /**
+     * Expose attribute-to-resolver mappings without initializing an unused registry.
+     *
      * @return array<class-string, class-string<\Infocyph\InterMix\DI\Attribute\AttributeResolverInterface>>
      * @internal
      */
@@ -500,6 +579,8 @@ class Repository
     }
 
     /**
+     * List explicitly registered attribute types without initializing an unused registry.
+     *
      * @return array<int, class-string>
      * @internal
      */
@@ -509,6 +590,8 @@ class Repository
     }
 
     /**
+     * Expose cached definition results, including construction metadata where retained.
+     *
      * @return array<string, mixed>
      */
     public function getResolved(): array
@@ -517,6 +600,8 @@ class Repository
     }
 
     /**
+     * Expose the cache of resolved recipe values.
+     *
      * @return array<string, mixed>
      */
     public function getResolvedDefinition(): array
@@ -524,17 +609,25 @@ class Repository
         return $this->resolvedDefinition;
     }
 
+    /**
+     * Read a cached recipe value; null also represents a missing cache entry.
+     */
     public function getResolvedDefinitionEntry(string $key): mixed
     {
         return $this->resolvedDefinition[$key] ?? null;
     }
 
+    /**
+     * Read a cached definition result; null also represents a missing cache entry.
+     */
     public function getResolvedEntry(string $key): mixed
     {
         return $this->resolved[$key] ?? null;
     }
 
     /**
+     * List identifiers with post-construction callbacks for artifact fallback classification.
+     *
      * @return array<int, string>
      * @internal
      */
@@ -547,6 +640,8 @@ class Repository
     }
 
     /**
+     * Expose cached class construction results and any associated method returns.
+     *
      * @return array<string, ClassResolution>
      */
     public function getResolvedResource(): array
@@ -554,24 +649,37 @@ class Repository
         return $this->resolvedResource;
     }
 
+    /**
+     * Read cached construction metadata for one class, or null when absent.
+     */
     public function getResolvedResourceFor(string $class): ?ClassResolution
     {
         return $this->resolvedResource[$class] ?? null;
     }
 
-    /** @internal */
+    /**
+     * Read a named scope's result; null also represents a missing cached entry.
+     *
+     * @internal
+     */
     public function getResolvedScopedEntry(string $scope, string $id): mixed
     {
         return $this->resolvedScoped[$scope][$id] ?? null;
     }
 
-    /** @internal */
+    /**
+     * Read the singleton index; use its presence check to distinguish cached null values.
+     *
+     * @internal
+     */
     public function getResolvedSingletonEntry(string $key): mixed
     {
         return $this->resolvedSingleton[$key] ?? null;
     }
 
     /**
+     * List identifiers with pre-construction callbacks for artifact fallback classification.
+     *
      * @return array<int, string>
      * @internal
      */
@@ -583,12 +691,17 @@ class Repository
         );
     }
 
+    /**
+     * Expose the sequential execution's active scope name.
+     */
     public function getScope(): string
     {
         return $this->currentScope;
     }
 
     /**
+     * List scope names with registered cleanup callbacks.
+     *
      * @return array<int, string>
      * @internal
      */
@@ -597,90 +710,147 @@ class Repository
         return array_keys($this->onScopeLeaveHooks);
     }
 
+    /**
+     * Check callable resource presence without executing the resource.
+     */
     public function hasClosureResource(string $alias): bool
     {
         return array_key_exists($alias, $this->closureResource);
     }
 
-    /** @internal */
+    /**
+     * Check whether a legacy compiled dispatcher is installed.
+     *
+     * @internal
+     */
     public function hasCompiledResolvers(): bool
     {
         return $this->compiledResolver instanceof Closure;
     }
 
-    /** @internal */
+    /**
+     * Check consumer-specific override presence, preserving literal null bindings.
+     *
+     * @internal
+     */
     public function hasContextualBinding(string $consumer, string $dependency): bool
     {
         return array_key_exists($dependency, $this->contextualBindings[$consumer] ?? []);
     }
 
-    /** @internal */
+    /**
+     * Check whether any consumer-specific overrides are configured.
+     *
+     * @internal
+     */
     public function hasContextualBindings(): bool
     {
         return $this->contextualBindings !== [];
     }
 
+    /**
+     * Check declaration presence, including identifiers bound to literal null.
+     */
     public function hasFunctionReference(string $id): bool
     {
         return isset($this->functionReference[$id]) || array_key_exists($id, $this->functionReference);
     }
 
+    /**
+     * Check cached result presence, including results whose value is null.
+     */
     public function hasResolved(string $key): bool
     {
         return isset($this->resolved[$key]) || array_key_exists($key, $this->resolved);
     }
 
+    /**
+     * Check recipe-cache presence independently of the cached value.
+     */
     public function hasResolvedDefinition(string $key): bool
     {
         return array_key_exists($key, $this->resolvedDefinition);
     }
 
-    /** @internal */
+    /**
+     * Check whether class construction metadata has been cached.
+     *
+     * @internal
+     */
     public function hasResolvedResource(string $class): bool
     {
         return array_key_exists($class, $this->resolvedResource);
     }
 
-    /** @internal */
+    /**
+     * Check named-scope cache presence independently of a possibly null value.
+     *
+     * @internal
+     */
     public function hasResolvedScoped(string $scope, string $id): bool
     {
         return array_key_exists($id, $this->resolvedScoped[$scope] ?? []);
     }
 
-    /** @internal */
+    /**
+     * Check singleton index presence independently of a possibly null value.
+     *
+     * @internal
+     */
     public function hasResolvedSingleton(string $key): bool
     {
         return array_key_exists($key, $this->resolvedSingleton);
     }
 
-    /** @internal */
+    /**
+     * Check whether sequential execution retains any supplied scope seeds.
+     *
+     * @internal
+     */
     public function hasScopeSeeds(): bool
     {
         return $this->scopeSeeds !== [];
     }
 
+    /**
+     * Check how future legacy class bindings are normalized.
+     */
     public function isLazyLoading(): bool
     {
         return $this->lazyLoading;
     }
 
+    /**
+     * Check whether reflected method attributes participate in injection.
+     */
     public function isMethodAttributeEnabled(): bool
     {
         return $this->enableMethodAttribute;
     }
 
+    /**
+     * Check whether reflected property attributes participate in injection.
+     */
     public function isPropertyAttributeEnabled(): bool
     {
         return $this->enablePropertyAttribute;
     }
 
-    /** @internal */
+    /**
+     * Check completed resolution markers without constructing the entry.
+     *
+     * @internal
+     */
     public function isResolved(string $id): bool
     {
         return isset($this->resolvedIds[$id]);
     }
 
-    /** @internal */
+    /**
+     * Memoize seed eligibility for direct declared scoped entries; aliases cannot accept seeds.
+     *
+     * @internal
+     */
     public function isScopeSeedAllowed(string $id): bool
     {
         return $this->scopeSeedAllowedIds[$id] ??= array_key_exists($id, $this->functionReference)
@@ -688,11 +858,17 @@ class Repository
             && $this->getDirectDefinitionLifetime($id) === LifetimeEnum::Scoped;
     }
 
+    /**
+     * Read the tracer's enabled-state flag without initializing a tracer on the hot path.
+     */
     public function isTracingEnabled(): bool
     {
         return $this->tracingEnabled;
     }
 
+    /**
+     * Run sequential cleanup hooks, release scoped results and seeds, then restore the parent.
+     */
     public function leaveScope(): void
     {
         $scope = $this->currentScope;
@@ -708,18 +884,29 @@ class Repository
         $this->currentScope = is_string($previous) ? $previous : 'root';
     }
 
+    /**
+     * Freeze repository configuration while allowing ordinary runtime resolution.
+     */
     public function lock(): void
     {
         $this->isLocked = true;
     }
 
-    /** @internal */
+    /**
+     * Record successful resolution separately from the cached result's value.
+     *
+     * @internal
+     */
     public function markResolved(string $id): void
     {
         $this->resolvedIds[$id] = true;
     }
 
-    /** @internal */
+    /**
+     * Notify the builder that configuration-derived graph state must be refreshed.
+     *
+     * @internal
+     */
     public function notifyConfigurationMutation(): void
     {
         if ($this->configurationMutationListener instanceof Closure) {
@@ -727,6 +914,9 @@ class Repository
         }
     }
 
+    /**
+     * Append a post-construction callback while enforcing the configuration lock.
+     */
     public function onResolved(string $id, callable $hook): void
     {
         $this->checkIfLocked();
@@ -735,6 +925,9 @@ class Repository
         $this->onResolvedHooks[$id][] = $hook;
     }
 
+    /**
+     * Append a pre-construction callback while enforcing the configuration lock.
+     */
     public function onResolving(string $id, callable $hook): void
     {
         $this->checkIfLocked();
@@ -743,6 +936,9 @@ class Repository
         $this->onResolvingHooks[$id][] = $hook;
     }
 
+    /**
+     * Append cleanup work for a named scope while enforcing the configuration lock.
+     */
     public function onScopeLeave(string $scope, callable $hook): void
     {
         $this->checkIfLocked();
@@ -751,6 +947,9 @@ class Repository
         $this->onScopeLeaveHooks[$scope][] = $hook;
     }
 
+    /**
+     * Remove a declaration, its tag indexes and eligibility, then invalidate derived results.
+     */
     public function removeDefinition(string $id): void
     {
         $this->checkIfLocked();
@@ -778,6 +977,9 @@ class Repository
         $this->invalidateDefinition($id);
     }
 
+    /**
+     * Discard all sequential scope caches and seeds and restore the root frame.
+     */
     public function resetScope(): void
     {
         unset($this->resolvedScoped[$this->currentScope]);
@@ -787,6 +989,9 @@ class Repository
         $this->scopeSeeds = [];
     }
 
+    /**
+     * Change the cache namespace and invalidate configuration-derived state.
+     */
     public function setAlias(string $alias): void
     {
         $this->checkIfLocked();
@@ -800,6 +1005,8 @@ class Repository
     }
 
     /**
+     * Install a legacy dispatcher with its supported identifier set while configuration is mutable.
+     *
      * @param array<string, mixed> $ids
      * @internal
      */
@@ -811,6 +1018,8 @@ class Repository
     }
 
     /**
+     * Install or remove the builder's graph-invalidation callback.
+     *
      * @param (Closure(): void)|null $listener
      * @internal
      */
@@ -819,6 +1028,9 @@ class Repository
         $this->configurationMutationListener = $listener;
     }
 
+    /**
+     * Store a changed consumer-specific override and invalidate resolution configuration.
+     */
     public function setContextualBinding(string $consumer, string $dependency, mixed $give): void
     {
         $this->checkIfLocked();
@@ -832,6 +1044,9 @@ class Repository
         $this->invalidateResolutionConfiguration();
     }
 
+    /**
+     * Change the optional post-construction method and invalidate resolution configuration.
+     */
     public function setDefaultMethod(?string $method): void
     {
         $this->checkIfLocked();
@@ -876,6 +1091,8 @@ class Repository
     }
 
     /**
+     * Normalize base lifetime and tags, refresh indexes and invalidate affected results.
+     *
      * @param array{lifetime?: LifetimeEnum, tags?: array<int, scalar|null>} $meta
      */
     public function setDefinitionMeta(string $id, array $meta): void
@@ -897,6 +1114,8 @@ class Repository
     }
 
     /**
+     * Merge provided environment overrides and refresh affected lifetime and tag indexes.
+     *
      * @param array{lifetime?: LifetimeEnum, tags?: array<int, scalar|null>} $meta
      */
     public function setDefinitionMetaForEnv(string $env, string $id, array $meta): void
@@ -928,6 +1147,9 @@ class Repository
         $this->invalidateDefinition($id);
     }
 
+    /**
+     * Select overrides, invalidate resolved state and reset sequential scope identity.
+     */
     public function setEnvironment(string $env): void
     {
         if ($this->environment === $env) {
@@ -942,6 +1164,9 @@ class Repository
         $this->currentScope = 'root';
     }
 
+    /**
+     * Store a changed recipe and invalidate its previously derived resolution state.
+     */
     public function setFunctionReference(string $id, mixed $definition): void
     {
         $this->checkIfLocked();
@@ -955,6 +1180,9 @@ class Repository
         $this->invalidateDefinition($id);
     }
 
+    /**
+     * Cache a result and update its singleton index according to effective lifetime.
+     */
     public function setResolved(string $id, mixed $value): void
     {
         $this->resolved[$id] = $value;
@@ -967,26 +1195,41 @@ class Repository
         unset($this->resolvedSingleton[$id]);
     }
 
+    /**
+     * Cache a recipe result, retaining null as a valid cached value.
+     */
     public function setResolvedDefinition(string $defName, mixed $value): void
     {
         $this->resolvedDefinition[$defName] = $value;
     }
 
+    /**
+     * Cache constructed class metadata separately from definition-level results.
+     */
     public function setResolvedResource(string $className, ClassResolution $data): void
     {
         $this->resolvedResource[$className] = $data;
     }
 
+    /**
+     * Store a result under its execution scope rather than in the singleton index.
+     */
     public function setResolvedScoped(string $scope, string $id, mixed $value): void
     {
         $this->resolvedScoped[$scope][$id] = $value;
     }
 
+    /**
+     * Replace the sequential scope name without pushing or cleaning a frame.
+     */
     public function setScope(string $scope): void
     {
         $this->currentScope = $scope;
     }
 
+    /**
+     * Initialize tracing once and keep the hot-path enabled flag synchronized with its level.
+     */
     public function tracer(): DebugTracer
     {
         return $this->tracer ??= new DebugTracer(
@@ -996,11 +1239,17 @@ class Repository
         );
     }
 
+    /**
+     * Discard cached construction metadata for one class.
+     */
     public function unsetResolvedResource(string $className): void
     {
         unset($this->resolvedResource[$className]);
     }
 
+    /**
+     * Reject configuration mutation after the repository has been frozen.
+     */
     protected function checkIfLocked(): void
     {
         if ($this->isLocked) {

@@ -41,6 +41,8 @@ final class ReflectionResource
     ];
 
     /**
+     * Expose the configured bound and per-category counts of retained reflection metadata.
+     *
      * @return array{limit:int,classes:int,enums:int,functions:int,methods:int,total:int}
      * @internal
      */
@@ -61,7 +63,11 @@ final class ReflectionResource
         ];
     }
 
-    /** @internal */
+    /**
+     * Release all cached reflection metadata, including weakly held closure metadata.
+     *
+     * @internal
+     */
     public static function clearCache(): void
     {
         self::$reflectionCache = [
@@ -74,6 +80,8 @@ final class ReflectionResource
     }
 
     /**
+     * Normalize supported callable forms into cached function or method reflection metadata.
+     *
      * @param callable|array<array-key, mixed>|string|object $callable
      * @throws InvalidArgumentException|ReflectionException
      */
@@ -103,7 +111,11 @@ final class ReflectionResource
         throw new InvalidArgumentException('Invalid callable provided.');
     }
 
-    /** @return ReflectionClass<object> */
+    /**
+     * Reuse bounded reflection metadata for a named class.
+     *
+     * @return ReflectionClass<object>
+     */
     public static function getClassReflection(string|object $class): ReflectionClass
     {
         $className = is_object($class) ? $class::class : $class;
@@ -123,7 +135,11 @@ final class ReflectionResource
         return self::$reflectionCache['classes'][$className];
     }
 
-    /** @return ReflectionEnum<UnitEnum> */
+    /**
+     * Reuse bounded reflection metadata for a named enum.
+     *
+     * @return ReflectionEnum<UnitEnum>
+     */
     public static function getEnumReflection(string $enumName): ReflectionEnum
     {
         if (isset(self::$reflectionCache['enums'][$enumName])) {
@@ -142,6 +158,9 @@ final class ReflectionResource
         return self::$reflectionCache['enums'][$enumName];
     }
 
+    /**
+     * Reuse reflection metadata for named functions without retaining closure instances.
+     */
     public static function getFunctionReflection(string|Closure $function): ReflectionFunction
     {
         if ($function instanceof Closure) {
@@ -163,6 +182,8 @@ final class ReflectionResource
     }
 
     /**
+     * Dispatch class, enum, function or method reflection requests through bounded metadata caches.
+     *
      * @param string|object|callable|array{0: object|string, 1: string} $subject
      * @return ReflectionClass<object>|ReflectionEnum<UnitEnum>|ReflectionFunction|ReflectionMethod
      */
@@ -190,7 +211,11 @@ final class ReflectionResource
         throw new InvalidArgumentException('Invalid reflection subject.');
     }
 
-    /** @internal */
+    /**
+     * Set the per-category metadata bound; non-positive values disable eviction.
+     *
+     * @internal
+     */
     public static function setCacheLimit(int $limit): void
     {
         self::$cacheLimit = max(0, $limit);
