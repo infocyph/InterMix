@@ -2,8 +2,8 @@
 
 Date: 2026-10-30  
 Base revision: `2873c51` (`main`, tagged `11.2`)  
-Candidate state: uncommitted working tree  
-Decision: prepare **11.2.1** within the PR, with the cache-isolation fix below required before PR completion.
+Review branch: `patch/runwire-3` at `fc99c1bc2c1fab2154c8d73ce4c35b0e7329c2e7` (one commit ahead of `main` at the time of this review).  
+Decision: prepare **11.2.1** within a PR. Resolve the cache-isolation and Runwire cancellation findings below before PR completion.
 
 ## PR completion and ownership
 
@@ -62,6 +62,9 @@ only if implementation introduces a public contract change.
 | F4 | Required compatibility maintenance | Existing edits move the tested Runwire dependency and isolated consumer from `^2.1.1` to `^3.0`. | Reviewed and retained; installed 3.0 passes focused integration tests. |
 | F5 | Informational dependency maintenance | `doctrine/annotations` is abandoned, through development-only `phpbench/phpbench`. | Absent from the production installation. Follow upstream tooling; do not add consumer runtime conflicts or a local pin. |
 | F6 | Evidence correction | The previous draft named CacheLayer 4.0.1, omitted F1/F2, and claimed local verification was complete. | Replaced with current 4.0.2 evidence and explicit unresolved work. Historical dependency/advisory claims without a preserved baseline are not treated as verified findings. |
+| F7 | P1, release blocker | The Runwire bridge admits an already-cancelled or deadline-expired `RequestContext` when it is not completed, because `validateBoundary()` checks completion/runtime identity and optional coroutine cancellation but never the request cancellation token. | Confirmed by source and Runwire 3 token contract; executable regression and fix pending. |
+| F8 | P2, lifecycle ownership | With `ownsCacheLayerLifecycle: true`, the bridge may release an already-bound CacheLayer runtime it did not acquire, because `bindCacheLayer()` skips binding when the same runtime exists, but `release()` unconditionally forwards release for owners. | Source-confirmed ownership edge case; decide and test explicit ownership behavior before changing the contract. |
+| F9 | P2, identity-contract review | The legacy cache-key path conflates an unset environment with the literal `default` environment and an unset generation with the literal `default` generation. Additionally, the explicit namespace key ignores local revision rotation. | Source-confirmed key construction; cover null/literal collisions in F1. Verify the intended explicit-generation rotation contract before changing revision semantics. |
 
 Composer's live audit reports **zero known dependency advisories**. This does not
 prove that the library has no vulnerabilities. F1 is a confirmed isolation and
@@ -73,9 +76,12 @@ share a backend; no remote exploit or CVE classification is claimed.
 Owner: `src/DI/Resolver/Concerns/ManagesDefinitionCache.php`,
 `makeDefinitionCacheKey()`, explicit namespace branch around line 84.
 
-The legacy branch incorporates environment in its service-key digest. The explicit
-builder branch incorporates namespace, generation and service ID but omits
-`getEnvironment()`, despite the method's documented isolation contract.
+The legacy branch incorporates environment in its service-key digest but substitutes
+`default` when the environment is null. The explicit builder branch incorporates
+namespace, generation and service ID but omits `getEnvironment()`, despite the
+method's documented isolation contract. The legacy generation prefix also
+substitutes `default` when generation is null. These sentinel identities need
+unambiguous treatment.
 
 Reproduction, run from the repository root:
 
@@ -111,8 +117,11 @@ Implementation and acceptance:
    existing trait. Keep opaque PSR-6-safe keys and bounded key lengths. Use an
    unambiguous encoding so an unset environment cannot alias a literal environment
    string through a sentinel choice. Do not create a new cache subsystem.
-3. Test both construction orders, null and named environments, actual returned
-   values, factory invocation counts, and key inequality. Preserve reuse between
+3. Test both construction orders, null and named environments (including a
+   literal `default`), actual returned values, factory invocation counts, and key
+   inequality. Also test null versus literal `default` generation in the legacy
+   configuration path. For explicit keys, verify same-environment reuse is not
+   accidentally disrupted by builder-local configuration mutations. Preserve reuse between
    equivalent same-environment builders with different local aliases or declaration
    order, plus existing namespace/generation isolation and cached-null behavior.
 4. Do not fall back to an old environment-agnostic key: that would reintroduce the
@@ -158,6 +167,106 @@ weaker detector configuration.
 Run scope/compiler/serializer parity tests as applicable, then the full suite and
 representative benchmarks for any changed runtime hot paths. Prefer private
 helpers and existing owners; do not force a broad inheritance or wrapper layer.
+
+## F7: Runwire request cancellation and deadline admission
+
+Owner: `src/Integration/Runwire/RunwireIntegration.php`,
+`validateBoundary()`, `checkpoint()`, and
+`tests/Integration/RunwireBridgeIntegrationTest.php`.
+
+Runwire 3's `RequestContext` exposes a cancellation token whose
+`throwIfCancelled()` refreshes deadline expiry and throws the native
+`CancelledException`. The current InterMix boundary checks `completed()`,
+`runtime()` and, when supplied, the coroutine scope's cancellation. The request
+token is not checked; a caller may therefore enter user code after cancellation
+or deadline expiry, especially when no coroutine scope is passed. CacheLayer's
+own Runwire checkpoint checks request cancellation separately, so delegation
+cannot be assumed to happen at every InterMix request boundary.
+
+Acceptance:
+
+1. Add failing parameterized tests for a cancelled (but not completed) request
+   passed to `withinRequest()` with no coroutine scope and with an otherwise
+   live coroutine scope, using the existing dynamic/compiled/prevalidated
+   integration variants. Assert the callback does not run and no DI scope,
+   task-local value or CacheLayer context leaks.
+2. Add an expired-deadline case with controlled time/deadline construction where
+   the Runwire 3 API supports it; assert native reason/exception propagation.
+   Preserve the existing completed/mismatched-runtime checks and their errors.
+3. Propagate request cancellation at entry and at the public `checkpoint()`
+   boundary when an active request is available; do not create new cancellation
+   sources, complete requests, close scopes, or alter the host's failure mode.
+   Check provider contract tests before using any ambient context.
+4. Test nested child work, cancellation races, and exception-safe restoration of
+   borrowed contexts. Run focused bridge tests under published Runwire 3 and
+   full provider acceptance under PHP 8.4/8.5.
+
+## F8: downstream CacheLayer lifecycle acquisition
+
+Owner: `src/Integration/Runwire/RunwireIntegration.php`,
+`bindCacheLayer()` and `release()`.
+
+`ownsCacheLayerLifecycle: true` currently releases the downstream runtime
+after a successful InterMix bind even when CacheLayer was already bound to that
+exact runtime before the bridge was constructed. CacheLayer's static
+`release()` clears its worker binding and memoizer state. This can tear down a
+different integration's existing binding. The default borrower case already has
+a regression test; the explicitly owned, pre-bound case does not.
+
+Acceptance:
+
+1. Reproduce with a host pre-binding CacheLayer to runtime A, then an InterMix
+   bridge with `ownsCacheLayerLifecycle: true` binding and releasing A. Verify
+   whether the existing CacheLayer worker binding and memoizer state are retained
+   or erroneously cleared.
+2. Define the contract precisely: owning *the act of binding* must be
+   distinguishable from merely observing a compatible preexisting binding.
+   Prefer recording an actual acquisition in the current bridge; do not
+   globally refcount or introduce a new lifecycle manager.
+3. Test two borrower bridges and a single owner, duplicate bind/release,
+   conflict with runtime B, and release while request boundaries are active.
+   Preserve the host's explicit choice of lifecycle owner.
+
+## F9: explicit cache generation versus local revision
+
+The public repository trait exposes `rotateDefinitionCacheGeneration()`,
+which increments its local revision and resets the memoized prefix. The
+namespace-specific `makeDefinitionCacheKey()` branch hashes only namespace,
+explicit generation, and service ID, so an explicit key is unchanged by a
+local revision. The legacy branch includes revision in its prefix. This is a
+contract inconsistency, not sufficient evidence by itself to change the
+explicit cache's stable cross-builder identity.
+
+Acceptance:
+
+1. Establish whether revision rotation is an advertised operation on the
+   explicit builder cache. Review the builder, definition manager, docs and
+   all existing callers, including warmup and mutation paths.
+2. Add behavior tests for whichever contract is selected. If explicit generation
+   is the sole cross-builder invalidation mechanism, document it explicitly
+   and avoid mixing per-builder revision into stable deployment keys.
+3. Require an explicit cache-generation change to invalidate cross-builder
+   entries. Do not silently add a local revision to explicit keys, because
+   that would defeat current same-generation cache reuse between equivalent
+   builders.
+
+## Review boundaries and new evidence
+
+The 2026-10-30 connected GitHub review inspected the full tracked file inventory
+and the release-plan branch diff, then examined implementations and existing
+coverage for the builder, repository/cache trait, resolution, compiled runtime
+metadata/loading, Runwire bridge, closure serializers, workflow jobs and
+CacheLayer integration. Runwire's `RequestContext`, `CancellationToken` and
+`CoroutineScope`, plus CacheLayer's downstream Runwire integration, were used
+to verify the optional-provider boundaries.
+
+F7-F9 are source-level findings and targeted contract checks; **they have not
+been executed as new runtime regressions**. The older local test and benchmark
+evidence below belongs to the preceding audit, not to the review's exact branch
+SHA. The GitHub review observed no workflow runs for `patch/runwire-3` and
+no open PR with that head. Neither observation substitutes for final hosted
+validation. Do not interpret inspection of all tracked paths as line-by-line
+verification of every implementation.
 
 ## Review of existing edits
 
@@ -215,18 +324,21 @@ vulnerability was reproduced in the reviewed boundaries. Passing tests missed F1
 
 ## Remaining PR work and validation gates
 
-1. **Fix F1 and finish F2 semantic triage.** Add failing behavioral regressions
+1. **Fix F1 and F7, resolve F8/F9 contract decisions, and finish F2 semantic triage.** Add failing behavioral regressions
    first, make the smallest root-cause changes, consolidate valid repeated policy,
-   review generated output, and rerun affected validation. Keep this plan's status
-   synchronized with the resulting implementation.
+   review generated output, and rerun affected validation. Include request-level
+   cancellation/deadline regressions, lifecycle acquisition tests and the
+   null/literal-default cache identity cases. Keep this plan's status synchronized
+   with the resulting implementation.
 2. **Revalidate locally after implementation.** Run PHPForge's processor, detailed
    suite and final guard workflow. Build docs, validate workflows, rerun component
    benchmarks and compare meaningful hot-path changes with matched measurements.
    Align all current provider constraints/examples and verify Runwire 3.0 and
    CacheLayer 4.0.2 explicitly; do not expand the integration compatibility matrix.
 3. **Freeze a reviewable PR candidate.** Review the complete diff and commit only
-   the intended change set on the PR branch. Record the exact PR head SHA; current
-   changes are uncommitted.
+   the intended change set on the PR branch. Record the new exact PR head SHA;
+   the current review branch is already committed, but no fix or new CI evidence
+   has yet been recorded for F1/F7.
 4. **Validate the exact PR head SHA on hosted CI.** Require PHP 8.4 and 8.5, stable/lowest
    dependency lanes, analysis, production install, documentation, release regression,
    provider acceptance, isolated consumers and Swoole/OpenSwoole scope carriers.
@@ -247,16 +359,17 @@ vulnerability was reproduced in the reviewed boundaries. Passing tests missed F1
    `infocyph/phpforge/.github/workflows/release.yml@main` is eligible; executing it
    is outside this plan.
 
-No hosted run validates the uncommitted candidate. The GitHub connector's
-commit-run lookup is restricted to PR-triggered runs and returned none for the
-base merge SHA; that is not evidence that other base workflows did or did not run.
-Historical run IDs from the previous draft are not used as current validation.
+No hosted run was observed for the reviewed `patch/runwire-3` branch head, and no
+open PR was found for that head. A later implementation commit and its exact
+PR head must be rechecked. Historical local measurements and run IDs are not
+proof of the final candidate's green CI or acceptance performance.
 
 Stop for any new advisory, identity/ownership/isolation regression, unexpected
 production dependency, archive leak, wrong output or resource-budget breach. For
 a single noisy performance outlier, rerun the unchanged exact SHA and inspect
 matched evidence before proposing a code change; preserve existing budgets.
 
-**Status: audit and Runwire version-edit review complete; cache-isolation repair,
-duplication follow-up, provider-target alignment and final PR validation remain
-open. Completion ends with PR handoff; merge and tag remain user-owned.**
+**Status: review and Runwire 3 version-edit inspection complete; F1/F7 release
+blockers, F2 duplication triage, F8/F9 contract checks, provider-target alignment,
+and exact-head PR validation remain open. Completion ends with PR handoff;
+merge and tag remain user-owned.**
