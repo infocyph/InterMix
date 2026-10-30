@@ -116,20 +116,7 @@ final class CompiledResolverGenerator
         if (preg_match('/^[a-f0-9]{32}$/D', $expectedFingerprint) !== 1) {
             throw new ContainerException('Prevalidated resolver fingerprint must be a lowercase xxh128 hexadecimal digest.');
         }
-        if (!is_file($filePath) || !is_readable($filePath)) {
-            throw new ContainerException("Compiled resolver artifact is not readable: '$filePath'.");
-        }
-
-        $artifact = require $filePath;
-        if (!is_array($artifact)) {
-            throw new ContainerException('Compiled resolver file must return an artifact array.');
-        }
-
-        $metadata = $artifact['metadata'] ?? null;
-        $resolver = $artifact['resolver'] ?? null;
-        if (!is_array($metadata) || !$resolver instanceof Closure) {
-            throw new ContainerException('Compiled resolver artifact is malformed.');
-        }
+        [$metadata, $resolver] = $this->readArtifact($filePath);
 
         $ids = $metadata['compiled'] ?? null;
         $this->assertFingerprintMap($ids);
@@ -382,20 +369,7 @@ final class CompiledResolverGenerator
      */
     private function loadAgainstGraph(DefinitionGraph $graph, string $filePath): array
     {
-        if (!is_file($filePath) || !is_readable($filePath)) {
-            throw new ContainerException("Compiled resolver artifact is not readable: '$filePath'.");
-        }
-
-        $artifact = require $filePath;
-        if (!is_array($artifact)) {
-            throw new ContainerException('Compiled resolver file must return an artifact array.');
-        }
-
-        $metadata = $artifact['metadata'] ?? null;
-        $resolver = $artifact['resolver'] ?? null;
-        if (!is_array($metadata) || !$resolver instanceof Closure) {
-            throw new ContainerException('Compiled resolver artifact is malformed.');
-        }
+        [$metadata, $resolver] = $this->readArtifact($filePath);
 
         $compiledFingerprints = $metadata['compiled'] ?? null;
         $this->assertFingerprintMap($compiledFingerprints);
@@ -420,6 +394,32 @@ final class CompiledResolverGenerator
         }
 
         return ['resolver' => $resolver, 'ids' => $compiledFingerprints];
+    }
+
+    /**
+     * Load the trusted compiled payload with the same shape validation for both
+     * deployment-validated and graph-validated resolution.
+     *
+     * @return array{array<string, mixed>, Closure}
+     */
+    private function readArtifact(string $filePath): array
+    {
+        if (!is_file($filePath) || !is_readable($filePath)) {
+            throw new ContainerException("Compiled resolver artifact is not readable: '$filePath'.");
+        }
+
+        $artifact = require $filePath;
+        if (!is_array($artifact)) {
+            throw new ContainerException('Compiled resolver file must return an artifact array.');
+        }
+
+        $metadata = $artifact['metadata'] ?? null;
+        $resolver = $artifact['resolver'] ?? null;
+        if (!is_array($metadata) || !$resolver instanceof Closure) {
+            throw new ContainerException('Compiled resolver artifact is malformed.');
+        }
+
+        return [$metadata, $resolver];
     }
 
     /**
