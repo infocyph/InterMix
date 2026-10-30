@@ -3,7 +3,7 @@
 Date: 2026-10-30  
 Base revision: `2873c51` (`main`, tagged `11.2`)  
 Review branch: `patch/runwire-3` at `fc99c1bc2c1fab2154c8d73ce4c35b0e7329c2e7` (one commit ahead of `main` at the time of this review).  
-Decision: prepare **11.2.1** within a PR. Resolve the cache-isolation and Runwire cancellation findings below before PR completion.
+Delivery: draft PR [#146](https://github.com/infocyph/InterMix/pull/146) on `patch/runwire-3`, targeting **11.2.1**. Regression implementations are committed; final exact-head validation and F2 review remain.
 
 ## PR completion and ownership
 
@@ -56,15 +56,15 @@ only if implementation introduces a public contract change.
 
 | ID | Priority | Verified finding | Status |
 | --- | --- | --- | --- |
-| F1 | P1, release blocker | Explicit definition-cache keys omit the selected environment. Two containers sharing a pool, namespace, generation and service ID can reuse another environment's cached value. | Reproduced; fix planned, runtime code unchanged by this audit. |
-| F2 | P2, engineering follow-up | PHPProbe reports 29 clone groups, 69 occurrences and 1,143 duplicated lines (4.49%). The configured detector passes, but the report still needs semantic triage and consolidation of valid repeated policy. | Open; candidate groups are not automatically 29 distinct defects. |
+| F1 | P1, release blocker | Explicit definition-cache keys omitted selected environment. Two containers sharing a pool, namespace, generation and service ID could reuse another environment's value. | **Implemented:** typed environment/service identity with regression cases for both construction orders, unset/literal names. Awaiting exact-head QA. |
+| F2 | P2, engineering follow-up | Baseline PHPProbe reports 29 clone groups, 69 occurrences and 1,143 duplicated lines (4.49%). Clone groups require semantic triage, not automatic consolidation. | **Partial:** duplicate trusted-artifact shape validation is now shared by both compiled resolver load paths. Rerun detector and triage remaining groups; no thresholds or suppressions changed. |
 | F3 | P2, package hygiene | Composer ZIP included an empty local `.aws/` directory. No credentials or other `.aws` files were present. | Fixed with `.aws export-ignore`; release archive assertions also check local/generated directories. Rebuilt ZIP is clean. |
 | F4 | Required compatibility maintenance | Existing edits move the tested Runwire dependency and isolated consumer from `^2.1.1` to `^3.0`. | Reviewed and retained; installed 3.0 passes focused integration tests. |
 | F5 | Informational dependency maintenance | `doctrine/annotations` is abandoned, through development-only `phpbench/phpbench`. | Absent from the production installation. Follow upstream tooling; do not add consumer runtime conflicts or a local pin. |
 | F6 | Evidence correction | The previous draft named CacheLayer 4.0.1, omitted F1/F2, and claimed local verification was complete. | Replaced with current 4.0.2 evidence and explicit unresolved work. Historical dependency/advisory claims without a preserved baseline are not treated as verified findings. |
-| F7 | P1, release blocker | The Runwire bridge admits an already-cancelled or deadline-expired `RequestContext` when it is not completed, because `validateBoundary()` checks completion/runtime identity and optional coroutine cancellation but never the request cancellation token. | Confirmed by source and Runwire 3 token contract; executable regression and fix pending. |
-| F8 | P2, lifecycle ownership | With `ownsCacheLayerLifecycle: true`, the bridge may release an already-bound CacheLayer runtime it did not acquire, because `bindCacheLayer()` skips binding when the same runtime exists, but `release()` unconditionally forwards release for owners. | Source-confirmed ownership edge case; decide and test explicit ownership behavior before changing the contract. |
-| F9 | P2, identity-contract review | The legacy cache-key path conflates an unset environment with the literal `default` environment and an unset generation with the literal `default` generation. Additionally, the explicit namespace key ignores local revision rotation. | Source-confirmed key construction; cover null/literal collisions in F1. Verify the intended explicit-generation rotation contract before changing revision semantics. |
+| F7 | P1, release blocker | The Runwire bridge admitted an already-cancelled or deadline-expired `RequestContext` when it was not completed. | **Implemented:** entry and explicit `checkpoint(request:)` validate the request cancellation token; added canceled/expired and live-coroutine regressions. Awaiting exact-head QA. |
+| F8 | P2, lifecycle ownership | A bridge opting into CacheLayer lifecycle ownership could release a compatible runtime binding it had not acquired. | **Implemented:** release only when the bridge actually acquired the downstream binding; added pre-bound and active-boundary tests. Awaiting exact-head QA. |
+| F9 | P2, identity-contract review | Legacy cache-key path conflated an unset environment/generation with literal `default` values; the explicit namespace key ignores local revision rotation. | **Implemented/decided:** legacy keys use unambiguous typed identities; explicit cache generation remains the cross-builder invalidation contract, not local revision. Documented and regression-tested; awaiting exact-head QA. |
 
 Composer's live audit reports **zero known dependency advisories**. This does not
 prove that the library has no vulnerabilities. F1 is a confirmed isolation and
@@ -290,8 +290,9 @@ verification of every implementation.
 
 ## Current verification evidence
 
-These results describe the audited working tree, **before implementing F1/F2**.
-They do not close those findings or certify an unpublished commit.
+These results are **historical evidence from the preceding local audit**, taken before the
+F1/F2/F7/F8/F9 implementation commits. They do not certify the current PR head.
+The exact-head hosted workflow and benchmark evidence must replace them.
 
 | Check | Current result |
 | --- | --- |
@@ -324,12 +325,12 @@ vulnerability was reproduced in the reviewed boundaries. Passing tests missed F1
 
 ## Remaining PR work and validation gates
 
-1. **Fix F1 and F7, resolve F8/F9 contract decisions, and finish F2 semantic triage.** Add failing behavioral regressions
-   first, make the smallest root-cause changes, consolidate valid repeated policy,
-   review generated output, and rerun affected validation. Include request-level
-   cancellation/deadline regressions, lifecycle acquisition tests and the
-   null/literal-default cache identity cases. Keep this plan's status synchronized
-   with the resulting implementation.
+1. **Validate implemented F1/F7/F8/F9 and finish F2 semantic triage.** Regression tests
+   were committed before the source fixes. Confirm all focused tests and generated
+   output on the final head, rerun the PHPProbe inventory, and classify the
+   remaining duplicated-policy groups. One artifact validation duplication was
+   consolidated in `CompiledResolverGenerator`; avoid speculative runtime
+   abstractions. Do not close findings until CI verifies the implementation.
 2. **Revalidate locally after implementation.** Run PHPForge's processor, detailed
    suite and final guard workflow. Build docs, validate workflows, rerun component
    benchmarks and compare meaningful hot-path changes with matched measurements.
@@ -369,7 +370,7 @@ production dependency, archive leak, wrong output or resource-budget breach. For
 a single noisy performance outlier, rerun the unchanged exact SHA and inspect
 matched evidence before proposing a code change; preserve existing budgets.
 
-**Status: review and Runwire 3 version-edit inspection complete; F1/F7 release
-blockers, F2 duplication triage, F8/F9 contract checks, provider-target alignment,
-and exact-head PR validation remain open. Completion ends with PR handoff;
-merge and tag remain user-owned.**
+**Status: draft PR #146 opened; F1/F7/F8/F9 root-cause changes and regression
+coverage committed, with provider minimum and docs aligned. F2 remains partly
+triaged. Exact-head PHPForge, provider, performance, soak, archive and compatibility
+CI are mandatory before declaring release readiness. Do not merge, tag or publish.**
