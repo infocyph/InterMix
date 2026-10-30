@@ -419,7 +419,7 @@ final class CompiledResolverGenerator
      * Load the trusted compiled payload with the same shape validation for both
      * deployment-validated and graph-validated resolution.
      *
-     * @return array{array<string, mixed>, Closure}
+     * @return array{array<array-key, mixed>, Closure}
      */
     private function readArtifact(string $filePath): array
     {
