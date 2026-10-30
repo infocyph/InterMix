@@ -397,6 +397,25 @@ final class CompiledResolverGenerator
     }
 
     /**
+     * @return array{version: string, reference: string|null}
+     */
+    private function packageIdentity(): array
+    {
+        $root = InstalledVersions::getRootPackage();
+        if ($root['name'] === 'infocyph/intermix') {
+            return ['version' => $root['pretty_version'], 'reference' => $root['reference']];
+        }
+        if (InstalledVersions::isInstalled('infocyph/intermix')) {
+            return [
+                'version' => InstalledVersions::getPrettyVersion('infocyph/intermix') ?? 'unknown',
+                'reference' => InstalledVersions::getReference('infocyph/intermix'),
+            ];
+        }
+
+        return ['version' => 'unknown', 'reference' => null];
+    }
+
+    /**
      * Load the trusted compiled payload with the same shape validation for both
      * deployment-validated and graph-validated resolution.
      *
@@ -420,25 +439,6 @@ final class CompiledResolverGenerator
         }
 
         return [$metadata, $resolver];
-    }
-
-    /**
-     * @return array{version: string, reference: string|null}
-     */
-    private function packageIdentity(): array
-    {
-        $root = InstalledVersions::getRootPackage();
-        if ($root['name'] === 'infocyph/intermix') {
-            return ['version' => $root['pretty_version'], 'reference' => $root['reference']];
-        }
-        if (InstalledVersions::isInstalled('infocyph/intermix')) {
-            return [
-                'version' => InstalledVersions::getPrettyVersion('infocyph/intermix') ?? 'unknown',
-                'reference' => InstalledVersions::getReference('infocyph/intermix'),
-            ];
-        }
-
-        return ['version' => 'unknown', 'reference' => null];
     }
 
     /**
