@@ -26,9 +26,9 @@ final class RunwireIntegration
 {
     private readonly TaskLocal $scopeContextLocal;
 
-    private int $activeBoundaries = 0;
-
     private bool $acquiredCacheLayerBinding = false;
+
+    private int $activeBoundaries = 0;
 
     private ?RuntimeContext $runtimeContext = null;
 
