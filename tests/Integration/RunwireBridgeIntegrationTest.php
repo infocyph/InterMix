@@ -300,3 +300,56 @@ it('does not release a compatible downstream CacheLayer binding it did not acqui
         CacheLayerRunwireIntegration::release($runtime);
     }
 })->with(['dynamic', 'compiled', 'prevalidated']);
+
+it('rejects cancelled request with an otherwise healthy coroutine scope', function (string $loader): void {
+    $runtime = runwireBridgeContext();
+    $request = RequestContext::create($runtime);
+    $request->cancel(CancellationReason::HOST_CANCELLED);
+    $bridge = new RunwireIntegration(runwireBridgeContainer($loader));
+    $bridge->bind($runtime);
+    $entered = false;
+
+    try {
+        expect(fn(): mixed => new CoroutineRuntime()->run(
+            static fn(CoroutineScope $scope): mixed => $bridge->withinRequest(
+                $request,
+                $scope,
+                static function () use (&$entered): void {
+                    $entered = true;
+                },
+            ),
+        ))->toThrow(CancelledException::class);
+        expect($entered)->toBeFalse();
+    } finally {
+        $bridge->release($runtime);
+        $request->complete();
+    }
+})->with(['dynamic', 'compiled', 'prevalidated']);
+
+it('keeps the acquired CacheLayer binding alive while an InterMix boundary is active', function (string $loader): void {
+    $runtime = runwireBridgeContext();
+    $request = RequestContext::create($runtime);
+    $bridge = new RunwireIntegration(
+        runwireBridgeContainer($loader),
+        ownsCacheLayerLifecycle: true,
+    );
+    $bridge->bind($runtime);
+
+    try {
+        $bridge->withinRequest(
+            $request,
+            null,
+            static function () use ($bridge, $runtime): void {
+                expect(fn() => $bridge->release($runtime))
+                    ->toThrow(LogicException::class, 'while InterMix boundaries are active');
+                expect(CacheLayerRunwireIntegration::runtime())->toBe($runtime);
+            },
+        );
+        expect(CacheLayerRunwireIntegration::runtime())->toBe($runtime);
+    } finally {
+        $bridge->release($runtime);
+        $request->complete();
+    }
+
+    expect(CacheLayerRunwireIntegration::runtime())->toBeNull();
+})->with(['dynamic', 'compiled', 'prevalidated']);
