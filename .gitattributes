@@ -1,5 +1,6 @@
 .github export-ignore
 .agents export-ignore
+.aws export-ignore
 .codex export-ignore
 .idea export-ignore
 .phpunit.cache export-ignore

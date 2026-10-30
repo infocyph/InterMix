@@ -17,7 +17,7 @@ use Infocyph\Runwire\RuntimeContext;
 use LogicException;
 
 /**
- * Optional host-owned Runwire 2.1 bridge for InterMix request/task scopes.
+ * Optional host-owned Runwire 3.0 bridge for InterMix request/task scopes.
  *
  * The bridge never creates a Runwire runtime, drives an event loop, completes a
  * request, or closes a borrowed coroutine scope. Those lifecycles stay with the host.

@@ -1,0 +1,262 @@
+# InterMix 11.2.1 audit and Runwire 3 release plan
+
+Date: 2026-10-30  
+Base revision: `2873c51` (`main`, tagged `11.2`)  
+Candidate state: uncommitted working tree  
+Decision: prepare **11.2.1** within the PR, with the cache-isolation fix below required before PR completion.
+
+## PR completion and ownership
+
+All implementation, review, validation and evidence collection in this plan must
+finish within the PR. Finalize the PR with a reviewable diff, the exact validated
+head SHA, check results and an updated findings checklist, then hand it over.
+
+Do not merge the PR, enable auto-merge, create or push a release tag, or publish a
+release. The user will manually merge and tag later. Merging, tagging and
+publication are outside this plan's execution and completion criteria.
+
+## Integration targets
+
+- Runwire **3** only: use `infocyph/runwire:^3.0` and validate the published 3.0
+  baseline. Do not retain or add Runwire 2.x compatibility lanes or shims.
+- CacheLayer **4.0.2** baseline only: use `infocyph/cachelayer:^4.0.2` and validate
+  4.0.2 explicitly. Do not retain or add acceptance lanes for earlier CacheLayer
+  versions. Apply the same minimum to current documentation examples and isolated
+  consumer installation commands, including the existing workflow's `^4.0` command.
+
+These are optional integration targets, not new production requirements. Stable
+and lowest dependency checks must respect these declared minimums. Historical
+release documents remain archival records, not additional supported test targets.
+
+## Scope and engineering constraints
+
+This review includes the existing changes to Composer, README, documentation,
+Runwire bridge PHPDoc, documentation configuration, release validation, and this
+plan. It follows `vendor/infocyph/phpforge/resources/engineering-principles.md`
+and its referenced `AGENTS.md` workflow.
+
+- Correctness, security, data integrity and operational stability are prerequisites.
+- Keep behavior in its existing cohesive owner. Prefer a small private helper over
+  a new abstraction when centralization is needed.
+- Preserve public parameter names, PSR contracts, compiler ABI 3, manifest/fallback
+  validation, and optional provider boundaries.
+- Workers, loops, runtime/request/coroutine objects, cancellation and provider
+  lifecycles remain host-owned. Propagate supplied identities without recreating
+  or closing host objects.
+- Keep existing detector scope, rules and thresholds. Do not suppress findings,
+  expand baselines, weaken assertions, or relax performance/resource budgets.
+- Measure meaningful hot-path changes using matched baseline/candidate workloads;
+  component benchmarks alone do not establish sustained host RPM.
+
+The version update and planned bug fix do not introduce a public capability or
+require an InterMix API/ABI break. A patch is appropriate. Reassess the version
+only if implementation introduces a public contract change.
+
+## Findings
+
+| ID | Priority | Verified finding | Status |
+| --- | --- | --- | --- |
+| F1 | P1, release blocker | Explicit definition-cache keys omit the selected environment. Two containers sharing a pool, namespace, generation and service ID can reuse another environment's cached value. | Reproduced; fix planned, runtime code unchanged by this audit. |
+| F2 | P2, engineering follow-up | PHPProbe reports 29 clone groups, 69 occurrences and 1,143 duplicated lines (4.49%). The configured detector passes, but the report still needs semantic triage and consolidation of valid repeated policy. | Open; candidate groups are not automatically 29 distinct defects. |
+| F3 | P2, package hygiene | Composer ZIP included an empty local `.aws/` directory. No credentials or other `.aws` files were present. | Fixed with `.aws export-ignore`; release archive assertions also check local/generated directories. Rebuilt ZIP is clean. |
+| F4 | Required compatibility maintenance | Existing edits move the tested Runwire dependency and isolated consumer from `^2.1.1` to `^3.0`. | Reviewed and retained; installed 3.0 passes focused integration tests. |
+| F5 | Informational dependency maintenance | `doctrine/annotations` is abandoned, through development-only `phpbench/phpbench`. | Absent from the production installation. Follow upstream tooling; do not add consumer runtime conflicts or a local pin. |
+| F6 | Evidence correction | The previous draft named CacheLayer 4.0.1, omitted F1/F2, and claimed local verification was complete. | Replaced with current 4.0.2 evidence and explicit unresolved work. Historical dependency/advisory claims without a preserved baseline are not treated as verified findings. |
+
+Composer's live audit reports **zero known dependency advisories**. This does not
+prove that the library has no vulnerabilities. F1 is a confirmed isolation and
+correctness defect with potential confidentiality consequences when environments
+share a backend; no remote exploit or CVE classification is claimed.
+
+## F1: reproduction and root-cause fix
+
+Owner: `src/DI/Resolver/Concerns/ManagesDefinitionCache.php`,
+`makeDefinitionCacheKey()`, explicit namespace branch around line 84.
+
+The legacy branch incorporates environment in its service-key digest. The explicit
+builder branch incorporates namespace, generation and service ID but omits
+`getEnvironment()`, despite the method's documented isolation contract.
+
+Reproduction, run from the repository root:
+
+```php
+<?php
+require 'vendor/autoload.php';
+
+use Infocyph\CacheLayer\Cache\Cache;
+use Infocyph\InterMix\DI\ContainerBuilder;
+
+$pool = Cache::memory('audit.' . bin2hex(random_bytes(4)));
+foreach (['staging', 'production'] as $environment) {
+    $container = ContainerBuilder::create('audit.' . $environment)
+        ->setEnvironment($environment)
+        ->definitionCache($pool, 'application', 'same-release')
+        ->factory('settings', static fn() => ['environment' => $environment])
+        ->cacheDefinition('settings')
+        ->build();
+    echo $environment . ': ' . $container->get('settings')['environment'] . "\n";
+}
+```
+
+Observed: `staging: staging`, then **`production: staging`**. Expected second
+result: `production: production`. Both environments also produced identical keys
+when inspected through the package's internal repository accessor.
+
+Implementation and acceptance:
+
+1. Add a regression in the existing builder/cache integration tests that fails on
+   the current implementation. Exercise one shared pool, identical explicit
+   namespace/generation/ID, and distinct selected environments.
+2. Include environment in the explicit key's deterministic hash input in the
+   existing trait. Keep opaque PSR-6-safe keys and bounded key lengths. Use an
+   unambiguous encoding so an unset environment cannot alias a literal environment
+   string through a sentinel choice. Do not create a new cache subsystem.
+3. Test both construction orders, null and named environments, actual returned
+   values, factory invocation counts, and key inequality. Preserve reuse between
+   equivalent same-environment builders with different local aliases or declaration
+   order, plus existing namespace/generation isolation and cached-null behavior.
+4. Do not fall back to an old environment-agnostic key: that would reintroduce the
+   defect. Document that the corrected identity causes a cache miss/repopulation;
+   hosts can rotate their generation and retire old entries using provider policy.
+5. Until fixed, applications sharing a backend should include their environment
+   in the explicit namespace or generation.
+6. Run focused cache tests, PHPForge processors and the full release guard. Compare
+   definition-cache component behavior and representative host results without
+   changing budgets. No public API or compiled ABI change is needed.
+
+## F2: duplication review and bounded consolidation
+
+Reproduce with `composer ic:test:duplicates`. The installed configuration uses
+`fail_on=error` and `error_duplicate_percentage=10`; the observed 4.49% is below
+that failure threshold. No threshold/configuration change is proposed.
+
+Prioritize actual repeated policy, including artifact parsing/shape checks in
+`CompiledResolverGenerator` (lines 114 and 383), repeated fresh-invocation dispatch
+rendering in `StaticFreshInvocationRenderer` (lines 89 and 115), and contextual
+binding-shape projection in `DefinitionGraph` (line 194) and `Repository`
+(line 465). Review all affected callers before selecting their owner.
+
+Triage the complete detector inventory by responsibility:
+
+| Clone groups | Review surface |
+| --- | --- |
+| 1, 9, 10 | Builder/repository configuration and lifecycle operations |
+| 2, 5, 14, 19, 20, 23 | Generated invocation/runtime/lifecycle source and benchmark setup |
+| 3, 4, 6, 7, 15, 16, 21, 25, 28, 29 | Sequential, concurrent and production scope state and cleanup |
+| 8, 17, 24, 26, 27 | Injection, reflection, ancestry cleanup and binding metadata |
+| 11, 13, 18, 22 | Artifact loading/publication and similarly shaped state updates |
+| 12 | Signed and unsigned closure parsing |
+
+For each valid same-policy duplicate, centralize it in the existing cohesive owner
+and update every affected call site. Preserve source-free behavior, cancellation,
+exception chaining, cleanup ordering and carrier isolation. Keep signed HMAC
+verification before deserialization; do not combine unrelated state mutations or
+security policies merely because normalized syntax looks alike. Document any
+false-positive classification with source semantics, without suppression or a
+weaker detector configuration.
+
+Run scope/compiler/serializer parity tests as applicable, then the full suite and
+representative benchmarks for any changed runtime hot paths. Prefer private
+helpers and existing owners; do not force a broad inheritance or wrapper layer.
+
+## Review of existing edits
+
+- `composer.json`: retain Runwire `^3.0`, CacheLayer `^4.0.2` and the updated
+  suggestion. Runwire and CacheLayer remain development dependencies and optional
+  consumer integrations. The ignored local lockfile already resolves the intended
+  published versions; no lockfile addition is proposed.
+- `README.md`, `docs/integrations.rst`, `docs/di/cache.rst`,
+  `docs/benchmark.rst`, and bridge PHPDoc: retain the current Runwire 3 guidance
+  and align current CacheLayer guidance with the 4.0.2 minimum.
+  Historical 11.0/11.2 release and upgrade documents retain their release-specific
+  compatibility statements.
+- `docs/conf.py`: retaining `plans/*` in Sphinx exclusions is appropriate for this
+  internal engineering plan. The public manual builds with warnings as errors.
+- `.github/workflows/release-validation.yml`: retain the isolated Runwire 3
+  consumer constraint and raise the isolated CacheLayer consumer constraint from
+  `^4.0` to `^4.0.2`. The provider acceptance job exercises behavior through the
+  full suite; the isolated consumer job separately checks installation boundaries.
+- `.gitattributes` and the archive assertion loop: exclude `.aws` and assert the
+  absence of local/generated payloads alongside the existing development exclusions.
+
+## Current verification evidence
+
+These results describe the audited working tree, **before implementing F1/F2**.
+They do not close those findings or certify an unpublished commit.
+
+| Check | Current result |
+| --- | --- |
+| PHPForge setup | `ic:doctor`, `ic:list-config`, `ic:active-config` completed; bundled configs resolved. |
+| Runtime | PHP 8.5.4; Xdebug absent; APCu and PDO SQLite available. APCu CLI explicitly enabled for the final guard and focused provider suite. |
+| Direct dependency registry comparison | All six direct packages current: Runwire 3.0, CacheLayer 4.0.2, PHPForge `dev-main a6a6b41`, Opis 4.5.0, PSR cache 3.0.0 and container 2.0.2. |
+| Composer validation/platform | `composer validate --strict` and `composer check-platform-reqs` passed. |
+| Live dependency audit | No advisories. One development-only abandoned package; the standalone full audit exits 1 for abandonment, while PHPForge reports its configured non-blocking warning. Production-only audit exits 0 with no advisories or abandoned packages. |
+| Processors | `composer ic:process` passed: Normalize, Rector, Pint and PHPCBF. Initial restricted Rector socket attempt was rerun successfully with local access. |
+| Detailed quality suite | `composer ic:tests:details` passed, including 584 tests / 3,610 assertions, PHPProbe, PHPStan, Psalm security analysis, Deptrac, PHPCS, Pint and Rector. Duplicate candidates remain as F2. |
+| Final release guard | `composer ic:release:guard` passed with APCu enabled: 584 tests / 3,610 assertions, runtime constraint/audit checks and quality detectors. |
+| Focused providers | Runwire 3.0 / CacheLayer 4.0.2: 42 tests / 171 assertions, including dynamic, compiled and prevalidated bridges, identity propagation, cancellation/deadlines and cache behavior. |
+| Component benchmarks | `composer ic:bench:quick` passed: 124 subjects, zero failures/errors, Xdebug and OPcache disabled. This is smoke evidence, not a matched sustained-RPM comparison. |
+| Documentation | Sphinx 8.2.3, isolated requirements environment, 40 sources, `-W --keep-going`: passed. |
+| Workflow syntax | All three tracked workflow YAML files parsed successfully. Hosted semantics remain a CI gate. |
+| Composer archive | 119 files, every runtime PHP source present, no local/generated/development payloads. SHA-256: `9e7e376f37e40b22772b8dcc78afd15dc71b053b2fdb0886a947632d7722e681`. |
+| Clean production consumer | Extracted archive `composer install --no-dev --classmap-authoritative` passed; value resolution and scoped-input smoke passed. Only PSR runtime dependencies installed; Runwire, CacheLayer, Opis and PHPForge absent. Its live production audit also returned no advisories or abandoned packages. |
+| Runwire-only consumer | A separate production consumer installed InterMix and Runwire 3.0 without CacheLayer, Opis or PHPForge. The bridge preserved exact runtime/request identities and left request completion with the caller. |
+
+Audit logs and temporary environments are under `/tmp/intermix-*`; they are local
+supporting evidence, not durable hosted release artifacts. The archive was built
+with Composer from the working tree, not `git archive HEAD`. Rebuild after any
+package-content change and again from the final immutable candidate.
+
+Source review concentrated on the provider boundary, scoped lifetime/capture and
+cleanup owners, bounded/weak caches, generated artifact validation/publication,
+closure authentication/deserialization, Fence and fluent helpers. Repository-wide
+configured detectors and tests supply broader coverage. No additional source
+vulnerability was reproduced in the reviewed boundaries. Passing tests missed F1.
+
+## Remaining PR work and validation gates
+
+1. **Fix F1 and finish F2 semantic triage.** Add failing behavioral regressions
+   first, make the smallest root-cause changes, consolidate valid repeated policy,
+   review generated output, and rerun affected validation. Keep this plan's status
+   synchronized with the resulting implementation.
+2. **Revalidate locally after implementation.** Run PHPForge's processor, detailed
+   suite and final guard workflow. Build docs, validate workflows, rerun component
+   benchmarks and compare meaningful hot-path changes with matched measurements.
+   Align all current provider constraints/examples and verify Runwire 3.0 and
+   CacheLayer 4.0.2 explicitly; do not expand the integration compatibility matrix.
+3. **Freeze a reviewable PR candidate.** Review the complete diff and commit only
+   the intended change set on the PR branch. Record the exact PR head SHA; current
+   changes are uncommitted.
+4. **Validate the exact PR head SHA on hosted CI.** Require PHP 8.4 and 8.5, stable/lowest
+   dependency lanes, analysis, production install, documentation, release regression,
+   provider acceptance, isolated consumers and Swoole/OpenSwoole scope carriers.
+   Swoole/OpenSwoole and PHP 8.4 are unavailable on the current local PHP runtime.
+5. **Complete representative acceptance and soak.** Preserve the configured
+   concurrency curve, dynamic/production/hybrid comparisons, seven alternating
+   short pairs, balanced five-minute pairs, 2% RPM budget, p99 and memory limits,
+   and 30-minute worker soak. Record correctness, expected failures/cancellation,
+   idle windows and artifacts. Local component checks do not close these gates.
+6. **Rebuild and smoke the final distributable.** Compare its entries with tracked
+   runtime files, require no local/development payloads, run an isolated `--no-dev`
+   consumer and production audit, and record the final digest.
+7. **Finalize the PR and hand off.** Record the final diff, resolved findings,
+   exact validated PR head SHA, CI/acceptance artifacts and archive digest in the
+   PR. Complete the work without merging, enabling auto-merge, tagging or
+   publishing. The user will manually merge and tag 11.2.1 later. Preserve the
+   existing tag workflow design where only
+   `infocyph/phpforge/.github/workflows/release.yml@main` is eligible; executing it
+   is outside this plan.
+
+No hosted run validates the uncommitted candidate. The GitHub connector's
+commit-run lookup is restricted to PR-triggered runs and returned none for the
+base merge SHA; that is not evidence that other base workflows did or did not run.
+Historical run IDs from the previous draft are not used as current validation.
+
+Stop for any new advisory, identity/ownership/isolation regression, unexpected
+production dependency, archive leak, wrong output or resource-budget breach. For
+a single noisy performance outlier, rerun the unchanged exact SHA and inspect
+matched evidence before proposing a code change; preserve existing budgets.
+
+**Status: audit and Runwire version-edit review complete; cache-isolation repair,
+duplication follow-up, provider-target alignment and final PR validation remain
+open. Completion ends with PR handoff; merge and tag remain user-owned.**

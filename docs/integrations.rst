@@ -8,7 +8,7 @@ not require Runwire or CacheLayer.
 Supported targets
 -----------------
 
-The InterMix 11.2 integration matrix targets ``infocyph/runwire:^2.1.1`` and
+The current InterMix integration matrix targets ``infocyph/runwire:^3.0`` and
 ``infocyph/cachelayer:^4.0``. Core definition caching remains a PSR-6 boundary;
 production InterMix code does not require CacheLayer.
 

@@ -25,7 +25,7 @@ benchmarks/ReleaseRegression.php compares the immutable 10.1.1 baseline with the
 Representative host acceptance
 ------------------------------
 
-benchmarks/HostAcceptance.php measures equivalent persistent-host request/job work using version-specific setup outside the measured loop. Dynamic mode is measured across the full concurrency curve, while generated production and hybrid-fallback modes are measured at the representative c32 point on PHP 8.4 and 8.5. Provider acceptance separately exercises the real Runwire 2.1.1+ and CacheLayer 4 host boundaries.
+benchmarks/HostAcceptance.php measures equivalent persistent-host request/job work using version-specific setup outside the measured loop. Dynamic mode is measured across the full concurrency curve, while generated production and hybrid-fallback modes are measured at the representative c32 point on PHP 8.4 and 8.5. Provider acceptance separately exercises the real Runwire 3.0 and CacheLayer 4 host boundaries.
 
 It records:
 
