@@ -411,7 +411,7 @@ jobs:
           composer config repositories.intermix path "$GITHUB_WORKSPACE/current"
           composer require infocyph/intermix:@dev --no-interaction --prefer-dist --no-progress
           case "${{ matrix.integration }}" in
-            cachelayer) composer require infocyph/cachelayer:^4.0 --no-interaction --prefer-dist --no-progress ;;
+            cachelayer) composer require infocyph/cachelayer:^4.0.2 --no-interaction --prefer-dist --no-progress ;;
             runwire) composer require infocyph/runwire:^3.0 --no-interaction --prefer-dist --no-progress ;;
             opis) composer require opis/closure:^4.5 --no-interaction --prefer-dist --no-progress ;;
           esac
