@@ -77,7 +77,7 @@ trait ManagesDefinitionCache
     }
 
     /**
-     * Build a deterministic PSR-6 key isolated by namespace, generation, environment and revision.
+     * Build deterministic PSR-6 keys: explicit identities use namespace/generation/environment; legacy identities also use local revision.
      */
     public function makeDefinitionCacheKey(string $definition): string
     {
@@ -91,7 +91,8 @@ trait ManagesDefinitionCache
                 )
                 . '.';
 
-            return $this->definitionCachePrefix . substr(hash('xxh128', $definition), 0, 16);
+            return $this->definitionCachePrefix
+                . substr(hash('xxh128', serialize([$definition, $this->getEnvironment()])), 0, 16);
         }
 
         $this->definitionCachePrefix ??= 'imx.'
@@ -99,7 +100,7 @@ trait ManagesDefinitionCache
             . '.' . substr(
                 hash(
                     'xxh128',
-                    ($this->definitionCacheGeneration ?? 'default') . "\0" . $this->definitionCacheRevision,
+                    serialize([$this->definitionCacheGeneration, $this->definitionCacheRevision]),
                 ),
                 0,
                 16,
@@ -107,11 +108,11 @@ trait ManagesDefinitionCache
             . '.';
 
         return $this->definitionCachePrefix
-            . substr(hash('xxh128', $definition . "\0" . ($this->getEnvironment() ?? 'default')), 0, 16);
+            . substr(hash('xxh128', serialize([$definition, $this->getEnvironment()])), 0, 16);
     }
 
     /**
-     * Invalidate the cached key prefix after a local configuration revision.
+     * Invalidate legacy cache identities after a local revision. Explicit keys remain stable per deployment generation.
      */
     public function rotateDefinitionCacheGeneration(): void
     {
