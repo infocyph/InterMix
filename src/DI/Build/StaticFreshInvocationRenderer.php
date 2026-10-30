@@ -56,7 +56,7 @@ final class StaticFreshInvocationRenderer
 
         $source = $this->renderDispatch($grouped);
         if ($parameterizedGrouped !== []) {
-            $source .= $this->renderParameterizedDispatch($parameterizedGrouped);
+            $source .= $this->renderDispatch($parameterizedGrouped, true);
         }
 
         return $source . $methods . $parameterizedMethods;
@@ -84,40 +84,25 @@ final class StaticFreshInvocationRenderer
     }
 
     /**
+     * Render either generated invocation dispatch using the same matching policy.
+     * The optional arguments affect generated source only, not runtime invocation.
+     *
      * @param array<string, array<string, int>> $grouped
      */
-    private function renderDispatch(array $grouped): string
+    private function renderDispatch(array $grouped, bool $withParameters = false): string
     {
-        $source = "    /** {@inheritDoc} */\n    protected function freshCompiledInvocation(\n";
+        $method = $withParameters
+            ? 'freshCompiledInvocationWithParameters'
+            : 'freshCompiledInvocation';
+        $prefix = $withParameters ? 'fip' : 'fi';
+        $arguments = $withParameters ? '$parameters, $result' : '$result';
+
+        $source = "    /** {@inheritDoc} */\n    protected function {$method}(\n";
         $source .= "        string \$class,\n";
         $source .= "        string \$method,\n";
-        $source .= "        mixed &\$result,\n";
-        $source .= "    ): bool {\n";
-        $source .= "        return match (\$class) {\n";
-        foreach ($grouped as $class => $methods) {
-            $source .= '            ' . var_export($class, true) . " => match (\$method) {\n";
-            foreach ($methods as $method => $index) {
-                $source .= '                ' . var_export($method, true)
-                    . " => \$this->fi{$index}(\$result),\n";
-            }
-            $source .= "                default => false,\n";
-            $source .= "            },\n";
+        if ($withParameters) {
+            $source .= "        array \$parameters,\n";
         }
-        $source .= "            default => false,\n";
-        $source .= "        };\n";
-
-        return $source . "    }\n\n";
-    }
-
-    /**
-     * @param array<string, array<string, int>> $grouped
-     */
-    private function renderParameterizedDispatch(array $grouped): string
-    {
-        $source = "    /** {@inheritDoc} */\n    protected function freshCompiledInvocationWithParameters(\n";
-        $source .= "        string \$class,\n";
-        $source .= "        string \$method,\n";
-        $source .= "        array \$parameters,\n";
         $source .= "        mixed &\$result,\n";
         $source .= "    ): bool {\n";
         $source .= "        return match (\$class) {\n";
@@ -125,7 +110,7 @@ final class StaticFreshInvocationRenderer
             $source .= '            ' . var_export($class, true) . " => match (\$method) {\n";
             foreach ($methods as $method => $index) {
                 $source .= '                ' . var_export($method, true)
-                    . " => \$this->fip{$index}(\$parameters, \$result),\n";
+                    . " => \$this->{$prefix}{$index}({$arguments}),\n";
             }
             $source .= "                default => false,\n";
             $source .= "            },\n";

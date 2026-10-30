@@ -351,7 +351,7 @@ jobs:
           git archive --format=tar.gz --output="$RUNNER_TEMP/intermix-release.tar.gz" HEAD
           mkdir "$RUNNER_TEMP/release"
           tar -xzf "$RUNNER_TEMP/intermix-release.tar.gz" -C "$RUNNER_TEMP/release"
-          for excluded in .github benchmarks docs tests vendor composer.lock; do
+          for excluded in .agents .aws .codex .github benchmarks docs graphify-out static-analysis tests var vendor composer.lock; do
             test ! -e "$RUNNER_TEMP/release/$excluded"
           done
           test -f "$RUNNER_TEMP/release/composer.json"
@@ -411,8 +411,8 @@ jobs:
           composer config repositories.intermix path "$GITHUB_WORKSPACE/current"
           composer require infocyph/intermix:@dev --no-interaction --prefer-dist --no-progress
           case "${{ matrix.integration }}" in
-            cachelayer) composer require infocyph/cachelayer:^4.0 --no-interaction --prefer-dist --no-progress ;;
-            runwire) composer require infocyph/runwire:^2.1.1 --no-interaction --prefer-dist --no-progress ;;
+            cachelayer) composer require infocyph/cachelayer:^4.0.2 --no-interaction --prefer-dist --no-progress ;;
+            runwire) composer require infocyph/runwire:^3.0 --no-interaction --prefer-dist --no-progress ;;
             opis) composer require opis/closure:^4.5 --no-interaction --prefer-dist --no-progress ;;
           esac
           composer dump-autoload --classmap-authoritative --no-interaction

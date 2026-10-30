@@ -17,7 +17,7 @@ use Infocyph\Runwire\RuntimeContext;
 use LogicException;
 
 /**
- * Optional host-owned Runwire 2.1 bridge for InterMix request/task scopes.
+ * Optional host-owned Runwire 3.0 bridge for InterMix request/task scopes.
  *
  * The bridge never creates a Runwire runtime, drives an event loop, completes a
  * request, or closes a borrowed coroutine scope. Those lifecycles stay with the host.
@@ -25,6 +25,8 @@ use LogicException;
 final class RunwireIntegration
 {
     private readonly TaskLocal $scopeContextLocal;
+
+    private bool $acquiredCacheLayerBinding = false;
 
     private int $activeBoundaries = 0;
 
@@ -72,17 +74,17 @@ final class RunwireIntegration
     }
 
     /**
-     * Check supplied coroutine cancellation only when the bound runtime supports Runwire
-     * coroutines.
+     * Check caller-supplied request cancellation/deadline and optional coroutine cancellation.
      */
-    public function checkpoint(?CoroutineScope $scope = null): void
+    public function checkpoint(?CoroutineScope $scope = null, ?RequestContext $request = null): void
     {
         $runtime = $this->requireRuntime();
-        if ($scope === null || !$runtime->supports(RuntimeCapability::RUNWIRE_COROUTINES)) {
-            return;
+        if ($request !== null) {
+            $this->validateRequest($request, $runtime);
         }
-
-        $scope->cancellation()->throwIfCancelled();
+        if ($scope !== null && $runtime->supports(RuntimeCapability::RUNWIRE_COROUTINES)) {
+            $scope->cancellation()->throwIfCancelled();
+        }
     }
 
     /**
@@ -99,9 +101,10 @@ final class RunwireIntegration
             throw new LogicException('Runwire runtime cannot be released while InterMix boundaries are active.');
         }
 
-        if ($this->ownsCacheLayerLifecycle && class_exists(CacheLayerRunwireIntegration::class)) {
+        if ($this->acquiredCacheLayerBinding && class_exists(CacheLayerRunwireIntegration::class)) {
             CacheLayerRunwireIntegration::release($bound);
         }
+        $this->acquiredCacheLayerBinding = false;
         $this->runtimeContext = null;
     }
 
@@ -219,6 +222,7 @@ final class RunwireIntegration
         }
         if ($this->ownsCacheLayerLifecycle && $bound === null) {
             CacheLayerRunwireIntegration::bind($runtime);
+            $this->acquiredCacheLayerBinding = true;
         }
     }
 
@@ -315,12 +319,7 @@ final class RunwireIntegration
     ): RuntimeContext {
         $runtime = $this->requireRuntime();
         if ($request !== null) {
-            if ($request->completed()) {
-                throw new LogicException('Completed Runwire request context cannot enter InterMix.');
-            }
-            if ($request->runtime() !== $runtime) {
-                throw new LogicException('Runwire request context is bound to a different runtime.');
-            }
+            $this->validateRequest($request, $runtime);
         }
         if ($scope !== null) {
             if (!$runtime->supports(RuntimeCapability::RUNWIRE_COROUTINES)) {
@@ -332,5 +331,17 @@ final class RunwireIntegration
         }
 
         return $runtime;
+    }
+
+    private function validateRequest(RequestContext $request, RuntimeContext $runtime): void
+    {
+        if ($request->completed()) {
+            throw new LogicException('Completed Runwire request context cannot enter InterMix.');
+        }
+        if ($request->runtime() !== $runtime) {
+            throw new LogicException('Runwire request context is bound to a different runtime.');
+        }
+
+        $request->cancellation->throwIfCancelled();
     }
 }

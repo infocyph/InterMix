@@ -31,8 +31,8 @@ InterMix 11 separates configuration from execution:
 - **Compiled production runtime** — Generate and validate immutable resolution
   artifacts with native scoped inputs while retaining narrow fallbacks for dynamic behavior.
 - **Definition caching** — Warm eligible factory results through a caller-owned
-  PSR-6 pool, including CacheLayer 4, with bounded and fail-open persistence.
-- **Runwire integration** — Accept the host's active Runwire 2.1.1+ runtime and
+  PSR-6 pool, including CacheLayer 4.0.2+, with bounded and fail-open persistence.
+- **Runwire integration** — Accept the host's active Runwire 3.0 runtime and
   request/task context, forward it to compatible capabilities such as
   CacheLayer, and leave worker and event-loop ownership with the host.
 - **Closure serialization** — Serialize versioned Closure payloads with
@@ -53,8 +53,8 @@ composer require infocyph/intermix
 Optional integrations:
 
 ~~~bash
-composer require infocyph/cachelayer:^4.0
-composer require infocyph/runwire:^2.1.1
+composer require infocyph/cachelayer:^4.0.2
+composer require infocyph/runwire:^3.0
 composer require opis/closure:^4.5
 ~~~
 

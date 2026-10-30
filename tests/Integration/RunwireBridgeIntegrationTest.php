@@ -10,8 +10,11 @@ use Infocyph\InterMix\DI\Support\LifetimeEnum;
 use Infocyph\InterMix\Integration\Runwire\RunwireIntegration;
 use Infocyph\Runwire\Coroutine\CoroutineRuntime;
 use Infocyph\Runwire\Coroutine\CoroutineScope;
+use Infocyph\Runwire\Exception\CancelledException;
 use Infocyph\Runwire\RequestContext;
+use Infocyph\Runwire\Runtime\Enum\CancellationReason;
 use Infocyph\Runwire\Runtime\Enum\RuntimeDriver;
+use Infocyph\Runwire\Runtime\RequestExecutionPolicy;
 use Infocyph\Runwire\RuntimeCapabilities;
 use Infocyph\Runwire\RuntimeContext;
 use LogicException;
@@ -226,4 +229,127 @@ it('allows identical Runwire binding and rejects a different live runtime', func
     } finally {
         $bridge->release($runtime);
     }
+})->with(['dynamic', 'compiled', 'prevalidated']);
+
+it('rejects cancelled request entry before invoking the callback', function (string $loader): void {
+    $runtime = runwireBridgeContext();
+    $request = RequestContext::create($runtime);
+    $request->cancel(CancellationReason::HOST_CANCELLED);
+    $bridge = new RunwireIntegration(runwireBridgeContainer($loader));
+    $bridge->bind($runtime);
+    $entered = false;
+
+    try {
+        expect(fn(): mixed => $bridge->withinRequest(
+            $request,
+            null,
+            static function () use (&$entered): void {
+                $entered = true;
+            },
+        ))->toThrow(CancelledException::class);
+        expect($entered)->toBeFalse();
+
+        expect(fn() => $bridge->checkpoint(request: $request))->toThrow(CancelledException::class);
+    } finally {
+        $bridge->release($runtime);
+        $request->complete();
+    }
+})->with(['dynamic', 'compiled', 'prevalidated']);
+
+it('rejects already-expired request deadlines without executing user work', function (string $loader): void {
+    $runtime = runwireBridgeContext();
+    $request = RequestContext::create(
+        $runtime,
+        new RequestExecutionPolicy(maxExecutionSeconds: 0.001),
+        startNanoseconds: 1,
+    );
+    $bridge = new RunwireIntegration(runwireBridgeContainer($loader));
+    $bridge->bind($runtime);
+    $entered = false;
+
+    try {
+        expect(fn(): mixed => $bridge->withinRequest(
+            $request,
+            null,
+            static function () use (&$entered): void {
+                $entered = true;
+            },
+        ))->toThrow(CancelledException::class);
+        expect($request->cancellation->reason())->toBe(CancellationReason::DEADLINE_EXCEEDED)
+            ->and($entered)->toBeFalse();
+    } finally {
+        $bridge->release($runtime);
+        $request->complete();
+    }
+})->with(['dynamic', 'compiled', 'prevalidated']);
+
+it('does not release a compatible downstream CacheLayer binding it did not acquire', function (string $loader): void {
+    $runtime = runwireBridgeContext();
+    CacheLayerRunwireIntegration::bind($runtime);
+    $bridge = new RunwireIntegration(
+        runwireBridgeContainer($loader),
+        ownsCacheLayerLifecycle: true,
+    );
+
+    try {
+        $bridge->bind($runtime);
+        $bridge->release($runtime);
+
+        expect(CacheLayerRunwireIntegration::runtime())->toBe($runtime);
+    } finally {
+        CacheLayerRunwireIntegration::release($runtime);
+    }
+})->with(['dynamic', 'compiled', 'prevalidated']);
+
+it('rejects cancelled request with an otherwise healthy coroutine scope', function (string $loader): void {
+    $runtime = runwireBridgeContext();
+    $request = RequestContext::create($runtime);
+    $request->cancel(CancellationReason::HOST_CANCELLED);
+    $bridge = new RunwireIntegration(runwireBridgeContainer($loader));
+    $bridge->bind($runtime);
+    $entered = false;
+
+    try {
+        expect(fn(): mixed => new CoroutineRuntime()->run(
+            static fn(CoroutineScope $scope): mixed => $bridge->withinRequest(
+                $request,
+                $scope,
+                static function () use (&$entered): void {
+                    $entered = true;
+                },
+            ),
+        ))->toThrow(CancelledException::class);
+        expect($entered)->toBeFalse();
+    } finally {
+        $bridge->release($runtime);
+        $request->complete();
+    }
+})->with(['dynamic', 'compiled', 'prevalidated']);
+
+it('keeps the acquired CacheLayer binding alive while an InterMix boundary is active', function (string $loader): void {
+    $runtime = runwireBridgeContext();
+    $request = RequestContext::create($runtime);
+    $bridge = new RunwireIntegration(
+        runwireBridgeContainer($loader),
+        ownsCacheLayerLifecycle: true,
+    );
+    $bridge->bind($runtime);
+
+    try {
+        $bridge->withinRequest(
+            $request,
+            null,
+            static function () use ($bridge, $runtime): void {
+                expect(fn() => $bridge->release($runtime))
+                    ->toThrow(LogicException::class, 'while InterMix boundaries are active');
+                expect(CacheLayerRunwireIntegration::runtime())->toBe($runtime);
+            },
+        );
+        expect(CacheLayerRunwireIntegration::runtime())->toBe($runtime);
+    } finally {
+        $bridge->release($runtime);
+        $request->complete();
+    }
+
+    expect(CacheLayerRunwireIntegration::runtime())->toBeNull();
 })->with(['dynamic', 'compiled', 'prevalidated']);
