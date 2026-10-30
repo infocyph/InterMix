@@ -57,7 +57,7 @@ only if implementation introduces a public contract change.
 | ID | Priority | Verified finding | Status |
 | --- | --- | --- | --- |
 | F1 | P1, release blocker | Explicit definition-cache keys omitted selected environment. Two containers sharing a pool, namespace, generation and service ID could reuse another environment's value. | **Implemented:** typed environment/service identity with regression cases for both construction orders, unset/literal names. Awaiting exact-head QA. |
-| F2 | P2, engineering follow-up | Baseline PHPProbe reports 29 clone groups, 69 occurrences and 1,143 duplicated lines (4.49%). Clone groups require semantic triage, not automatic consolidation. | **Partial:** duplicate trusted-artifact shape validation is now shared by both compiled resolver load paths. Rerun detector and triage remaining groups; no thresholds or suppressions changed. |
+| F2 | P2, engineering follow-up | Baseline PHPProbe reports 29 clone groups, 69 occurrences and 1,143 duplicated lines (4.49%). Clone groups require semantic triage, not automatic consolidation. | **Triaged:** consolidated compiled artifact shape validation and generated fresh-invocation dispatch into existing owners; classified remaining overlap as distinct lifecycle, security, reflection, or generation policies in the matrix below. No detector thresholds/suppressions changed. Exact-head QA pending. |
 | F3 | P2, package hygiene | Composer ZIP included an empty local `.aws/` directory. No credentials or other `.aws` files were present. | Fixed with `.aws export-ignore`; release archive assertions also check local/generated directories. Rebuilt ZIP is clean. |
 | F4 | Required compatibility maintenance | Existing edits move the tested Runwire dependency and isolated consumer from `^2.1.1` to `^3.0`. | Reviewed and retained; installed 3.0 passes focused integration tests. |
 | F5 | Informational dependency maintenance | `doctrine/annotations` is abandoned, through development-only `phpbench/phpbench`. | Absent from the production installation. Follow upstream tooling; do not add consumer runtime conflicts or a local pin. |
@@ -155,6 +155,32 @@ Triage the complete detector inventory by responsibility:
 | 8, 17, 24, 26, 27 | Injection, reflection, ancestry cleanup and binding metadata |
 | 11, 13, 18, 22 | Artifact loading/publication and similarly shaped state updates |
 | 12 | Signed and unsigned closure parsing |
+
+### F2 closure dispositions — original 29 detector groups
+
+The existing detector inventory (29 groups, 69 occurrences, 1,143 lines /
+4.49% before this development) was classified against implementation roles,
+ownership and public contracts. The group IDs below refer to the preceding
+inventory; **they are not a new detector measurement**. This is a bounded
+semantic disposition, not a requirement to eliminate every syntactic clone.
+
+| Original groups | Disposition | Behavior and ownership rationale |
+| --- | --- | --- |
+| 1, 9, 10 | Retain separated | Builder declarations, mutable repository state and configuration lifecycle share guard syntax but have different lock, mutation-invalidation and graph-freeze responsibilities. Extracting one common mutation funnel would change timing or add indirection to hot paths. |
+| 2, 5, 14, 19, 20, 23 | **Consolidate shared dispatch; retain distinct recipes** | `StaticFreshInvocationRenderer::renderDispatch()` now generates both parameterized and simple match dispatches through one private renderer, removing its duplicate policy without modifying the emitted dispatch shape. Other compiled recipes and benchmark fixtures intentionally have different static/runtime parameter ownership and validation purposes. |
+| 3, 4, 6, 7, 15, 16, 21, 25, 28, 29 | Retain separated | Sequential, concurrent and production scope stores have different carrier state, attachment ownership, cleanup chaining, seeding and nested-scope closure semantics. Their parallel code is intentional; a shared abstraction or cross-store helper adds per-resolution overhead and risks cancellation/cleanup order. |
+| 8, 17, 24, 26, 27 | Retain separated | Reflective injection, parameter handling and frozen binding metadata share traversal/normalization shapes but differ in visibility policy, runtime error contracts, binding scope and build-time side effects. `DefinitionGraph` and `Repository` each project contextual-binding shape from different state owners; a new shared class would create coupling without meaningful safety gain. |
+| 11, 13, 18, 22 | **Consolidate artifact shape check; retain different trust boundaries** | `CompiledResolverGenerator::readArtifact()` centralizes identical file/execution/metadata validation for its graph-based and deployment-validated loaders. Static runtime manifest validation, build activation and symlink-based publication remain separate from the legacy compiled resolver path because their identity checks and atomicity requirements differ. |
+| 12 | Retain separated (security) | Signed closures authenticate the HMAC **before** invoking Opis deserialization. Unsigned envelopes are explicitly trusted-only and use different error contracts. Combining the parsers would obscure this security boundary; the duplicated optional Opis guard does not justify widening the public API. |
+
+This accounts for all 29 identifiers in the original triage. There are **two
+bounded production refactors**, with no new class, no public signature change,
+no extra runtime scope lookup, no lowered testing threshold and no detector
+suppression. Compiler tests covering both normal and runtime-parameter dispatch,
+plus dynamic/compiled/prevalidated integration and the full PHPForge suite, are
+the acceptance gate. Rebaseline the post-change duplicate percentage only
+after a completed exact-head PHPProbe run; do not claim a new percentage
+without the detector's output.
 
 For each valid same-policy duplicate, centralize it in the existing cohesive owner
 and update every affected call site. Preserve source-free behavior, cancellation,
@@ -325,12 +351,12 @@ vulnerability was reproduced in the reviewed boundaries. Passing tests missed F1
 
 ## Remaining PR work and validation gates
 
-1. **Validate implemented F1/F7/F8/F9 and finish F2 semantic triage.** Regression tests
-   were committed before the source fixes. Confirm all focused tests and generated
-   output on the final head, rerun the PHPProbe inventory, and classify the
-   remaining duplicated-policy groups. One artifact validation duplication was
-   consolidated in `CompiledResolverGenerator`; avoid speculative runtime
-   abstractions. Do not close findings until CI verifies the implementation.
+1. **Verify implemented F1/F7/F8/F9 and completed F2 semantic triage.** Regression
+   tests were committed before the source fixes. The original 29 clone groups
+   now have dispositions above; artifact validation and generated invocation
+   dispatch have been consolidated without extra classes. Verify the refreshed
+   detector and generated-output behavior on the final head. Do not claim a
+   new duplicate percentage without measured output.
 2. **Revalidate locally after implementation.** Run PHPForge's processor, detailed
    suite and final guard workflow. Build docs, validate workflows, rerun component
    benchmarks and compare meaningful hot-path changes with matched measurements.
@@ -360,17 +386,29 @@ vulnerability was reproduced in the reviewed boundaries. Passing tests missed F1
    `infocyph/phpforge/.github/workflows/release.yml@main` is eligible; executing it
    is outside this plan.
 
-No hosted run was observed for the reviewed `patch/runwire-3` branch head, and no
-open PR was found for that head. A later implementation commit and its exact
-PR head must be rechecked. Historical local measurements and run IDs are not
-proof of the final candidate's green CI or acceptance performance.
+### Hosted acceptance evidence — last fully validated implementation SHA
+
+At `52a9866c6a5b9ae7338488bb0b4f9a8253d3744c`, hosted runs completed:
+
+- [Security & Standards #41080349566](https://github.com/infocyph/InterMix/actions/runs/41080349566): **success**, 13 passing jobs (including PHPForge QA/analysis PHP 8.4/8.5 and release regression); rerun of an initial PHP 8.5 Fiber measurement outlier passed on the unchanged SHA with sequential **-20.26%**, isolated Fiber **-7.56%**. Limits remained 3% and 5%.
+- [Swoole/OpenSwoole #41080348928](https://github.com/infocyph/InterMix/actions/runs/41080348928): **success**, all four carrier checks.
+- [Release Validation #41080348926](https://github.com/infocyph/InterMix/actions/runs/41080348926): **success**, all 12 representative host acceptance cells, both 30-minute persistent worker soaks, four isolated consumers, both provider lanes, archive smoke and source inventory. One Swoole job was intentionally skipped here because the separate compatibility workflow supplied the four passing checks.
+- PHP 8.4 persistent soak: **1,082,443.44 RPM**, p99 **1.156950 ms**, RSS growth **974,848 bytes**, PHP memory growth **0**, no unexpected failures; 29 expected failures/cancellations and idle windows. [Artifact](https://github.com/infocyph/InterMix/actions/runs/41080348926/artifacts/12991042370).
+- PHP 8.5 persistent soak: **1,047,233.36 RPM**, p99 **1.228948 ms**, RSS growth **1,052,672 bytes**, PHP memory growth **0**, no unexpected failures; 29 expected failures/cancellations and idle windows. [Artifact](https://github.com/infocyph/InterMix/actions/runs/41080348926/artifacts/12990229754).
+- Archive [artifact](https://github.com/infocyph/InterMix/actions/runs/41080348926/artifacts/12988787936); source [inventory](https://github.com/infocyph/InterMix/actions/runs/41080348926/artifacts/12989117549); regression and acceptance matrices remain available as linked workflow artifacts.
+
+**Do not transplant that SHA's green state onto subsequent changes.** The
+F2 generated-dispatch consolidation and this plan synchronization require a
+new exact-head validation. Until all required workflows finish, this is a
+**candidate**, not the final verified release commit. Do not merge or tag.
 
 Stop for any new advisory, identity/ownership/isolation regression, unexpected
 production dependency, archive leak, wrong output or resource-budget breach. For
 a single noisy performance outlier, rerun the unchanged exact SHA and inspect
 matched evidence before proposing a code change; preserve existing budgets.
 
-**Status: draft PR #146 opened; F1/F7/F8/F9 root-cause changes and regression
-coverage committed, with provider minimum and docs aligned. F2 remains partly
-triaged. Exact-head PHPForge, provider, performance, soak, archive and compatibility
-CI are mandatory before declaring release readiness. Do not merge, tag or publish.**
+**Status: draft PR #146 open; F1/F7/F8/F9 implemented with regression coverage,
+and F2 semantic triage completed with two bounded code consolidations. The previous
+candidate SHA passed all hosted gates. The final head must repeat exact-head
+PHPForge, provider, performance, soak, archive and compatibility CI after the
+F2 source change and this documentation update. Do not merge, tag or publish.**
