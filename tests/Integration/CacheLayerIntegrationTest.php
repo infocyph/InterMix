@@ -618,3 +618,56 @@ it('uses CacheLayer 4 APCu when the CLI backend is enabled', function (): void {
 
     expect($runtime->get('value'))->toBe(42);
 });
+
+
+it('isolates explicit definition cache values by selected environment in either order', function (?string $first, ?string $second): void {
+    $cache = Cache::memory('intermix.environment.' . bin2hex(random_bytes(8)));
+    $runs = 0;
+    $keys = [];
+
+    foreach ([$first, $second] as $environment) {
+        $builder = ContainerBuilder::create(uniqid('environment_', true));
+        if ($environment !== null) {
+            $builder->setEnvironment($environment);
+        }
+
+        $runtime = $builder
+            ->definitionCache($cache, 'shared-application', 'same-release')
+            ->factory('settings', static function () use (&$runs, $environment): array {
+                ++$runs;
+
+                return ['environment' => $environment];
+            })
+            ->cacheDefinition('settings')
+            ->build();
+
+        expect($runtime->get('settings'))->toBe(['environment' => $environment]);
+        $keys[] = ContainerAccess::repository($runtime)->makeDefinitionCacheKey('settings');
+    }
+
+    expect($runs)->toBe(2)
+        ->and($keys[0])->not->toBe($keys[1]);
+})->with([
+    ['staging', 'production'],
+    ['production', 'staging'],
+    [null, 'default'],
+    ['default', null],
+]);
+
+it('distinguishes unset and literal default environments and generations in legacy cache keys', function (): void {
+    $pool = new IntegrationCachePool();
+
+    $unsetEnvironment = new ConfigurationContainer('same-legacy-alias');
+    $unsetEnvironment->definitions()->enableDefinitionCache($pool);
+    $unsetKey = $unsetEnvironment->getRepository()->makeDefinitionCacheKey('settings');
+
+    $defaultEnvironment = new ConfigurationContainer('same-legacy-alias');
+    $defaultEnvironment->setEnvironment('default');
+    $defaultEnvironment->definitions()->enableDefinitionCache($pool);
+    expect($defaultEnvironment->getRepository()->makeDefinitionCacheKey('settings'))->not->toBe($unsetKey);
+
+    $literalGeneration = new ConfigurationContainer('same-legacy-alias');
+    $literalGeneration->definitions()->enableDefinitionCache($pool, 'default');
+    expect($literalGeneration->getRepository()->makeDefinitionCacheKey('settings'))->not->toBe($unsetKey);
+});
+
